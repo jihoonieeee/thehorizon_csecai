@@ -81,5 +81,11 @@
   "restriction_marking": "RESTRICTED",
   "restriction_placement": "footer_right",
   "extracted_at": "2026-05-27T12:06:34.833Z",
-  "source_file": "/Users/zhaoxintong/PycharmProjects/thehorizon/templates/AI x Security (for AISP projection) (1).pptx"
+  "source_file": "/Users/zhaoxintong/PycharmProjects/thehorizon/templates/AI x Security (for AISP projection) (1).pptx",
+  "assets": {
+    "dir": "lib/pipeline/slides/assets",
+    "content_background": "content_frame.png",
+    "cover_background": "cover.jpg",
+    "extracted_at": "2026-06-02T19:26:11.968Z"
+  }
 }

@@ -89,7 +89,7 @@ Key columns on sources:
 - title, url, publisher, author, date_published, source_type, full_text, summary
 - trust_tier — primary/high/medium/low/curated/unknown
 - tags (text[]) — array of allowed tag strings
-- main_category — one of the five threat categories or "uncategorised"
+- main_category — one of the four offensive threat categories, or "unclear_or_adjacent"
 - ai_specificity_score (0-100) — how AI-specific the content is
 - relevance_tier — core/adjacent/peripheral/off_topic
 - layer3_status — pass/review/reject (set by Layer 3 final gate)
@@ -101,11 +101,14 @@ Key columns on sources:
 
 ## Threat Categories
 
+Four offensive categories only (no defensive/governance category). Defensive or
+out-of-scope content falls to unclear_or_adjacent.
+
 traditional_ai_threats — attacks on ML models: data poisoning, model extraction, evasion, backdoors, adversarial examples
 llm_threats — LLM-specific: prompt injection, jailbreaks, RAG poisoning, data leakage, guardrail bypass
 agentic_ai_threats — AI agents and tool use: MCP risks, autonomous agent abuse, coding agent vulnerabilities
 ai_enabled_threats — AI as an attack tool: deepfakes, AI phishing, AI malware, voice cloning, disinformation
-ai_for_security — defensive use: SOC automation, AI vulnerability detection, secure development
+unclear_or_adjacent — relevant AI-security context that does not map to one of the four offensive categories
 
 
 ## Source Trust Tiers

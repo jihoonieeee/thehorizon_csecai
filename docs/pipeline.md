@@ -19,308 +19,290 @@ Outputs:
 
 ---
 
+## Canonical Layer Names
+
+```
+L1_INGEST              lib/pipeline/ingest/
+L2_CLEAN               lib/pipeline/clean/
+L3_VALIDATE_ARCHIVE    lib/pipeline/classify/  lib/pipeline/validate/  lib/pipeline/archive/
+L4_TAXONOMY            lib/pipeline/understand/
+L5A_RAWFACTS           lib/pipeline/rawfact/  lib/pipeline/evidence/
+L5B_ANALYTICS          lib/pipeline/analytics/
+L6_ANALYSIS_SYNTHESIS  lib/pipeline/analysis/  lib/pipeline/synthesis/
+L7_SLIDE_CONTENT       lib/pipeline/slides/generateSlideContent.js
+L8_SCRIPT_GENERATION   lib/pipeline/slides/generateSpeakerNotes.js
+L9_PPTX_EXPORT         lib/pipeline/slides/exportPptx.js
+```
+
+See `lib/pipeline/layers.js` for canonical constants, log prefix helpers, and LLM label builders.
+
+---
+
 ## End-to-End Flow
 
 ```
 [Ingestion Phase — daily cron]
 
- Layer 1 — Ingest
+ L1 — Ingest
     Connectors: arXiv, NVD, RSS feeds, LLM discovery
           ↓
- Layer 2 — Clean
+ L2 — Clean
     Text normalization, deduplication, structured content extraction
           ↓
- Layer 3 — Classify
+ L3 — Validate + Archive
     Validity checks, AI-relevance scoring, source typing, trust assessment, gate
 
 [Analysis Phase — on demand]
 
- Layer 4 — Understand
-    LLM taxonomy: source type, framework tags, claims, category candidates
+ L4 — Taxonomy
+    LLM understanding: source type, framework tags, claims, category candidates
           ↓
- Layer 5 — Classify Category
-    Deterministic: picks main_category from Layer 4 candidates
+    ┌─────────────────────────────────────────┐
+    │              (parallel)                  │
+    │                                          │
+ L5A — Rawfacts Branch            L5B — Analytics Branch
+    Evidence search (Anthropic)       Feature extraction
+    Evidence extraction               Aggregation
+    Scoring + Clustering              Derived metrics
+    Evidence packs                    Visualization specs
+    │                                          │
+    └──────────────┬──────────────────────────┘
+                   ↓ (converge)
+ L6 — Analysis + Synthesis
+    Evidence fusion (L5A + L5B into fused dossiers)
+    Category analysis (Anthropic → Gemini Pro, 4× per run)
+    Cross-category synthesis (Anthropic → Gemini Pro, 1× per run)
+    Presentation packet (deterministic)
           ↓
- Layer 6 — Synthesis  ──────────────────────────────────────┐
-    │                                                        │
-    ├── 6a. Rawfact Branch                                   │
-    │       Taxonomy → Evidence Cards → Score → Cluster      │
-    │                                                        │
-    ├── 6b. Analytics Branch                                 │
-    │       Taxonomy → Aggregation → Visualization Specs     │
-    │                                                        │
-    └── 6c. Analysis Layer ──────────────────────────────────┘
-            Dossiers → Category Analysis → Evidence Linking → QA
+ L7 — Slide Content Generation
+    Slide planning → LLM content per slide
           ↓
- Layer 7 — Slides
-    Deck Planning → Slide Content → Speaker Notes → Export
+ L8 — Script Generation
+    Speaker notes per slide (LLM)
           ↓
- Layer 8 — QA
-    Structural checks, citation validation, phrase audits
+ L9 — PPTX + Export
+    PptxGenJS → .pptx (speaker notes embedded)
+    + slide_deck_output.json  +  speaker_script_<mode>.md
+    + speaker_script_<mode>.txt  +  speaker_script_<mode>.docx
 ```
+
+---
+
+## Log label conventions
+
+All `process.stdout.write` calls use bracketed layer prefixes:
+
+| Prefix | Layer |
+|--------|-------|
+| `[L1-ingest]` | Ingest |
+| `[L2-clean]` | Clean |
+| `[L3-validate-archive]` | Validate + Archive |
+| `[L4-taxonomy]` | Taxonomy / Understanding |
+| `[L5A-rawfacts]` | Rawfacts Branch |
+| `[L5A-evidence-search]` | Evidence Search (sub-step of L5A) |
+| `[L5B-analytics]` | Analytics Branch |
+| `[L6-analysis-synthesis]` | Main synthesis orchestrator |
+| `[L6-analysis-dossier-fusion]` | Evidence fusion step |
+| `[L6-analysis-category-synthesis]` | Per-category analysis |
+| `[L6-analysis-cross-category]` | Cross-category synthesis |
+| `[L6-analysis-evidence-linking]` | Evidence ID resolution |
+| `[L6-analysis-qa]` | Analysis QA |
+| `[L6-analysis-presentation-packet]` | Presentation packet build |
+| `[L7-slide-content]` | Slide planning + content generation |
+| `[L8-script-generation]` | Speaker notes / script |
+| `[L9-pptx-export]` | PPTX and deck export |
+
+LLM `logLabel` values follow the pattern `L<n>-<step>-<detail>`, e.g.:
+- `L4-taxonomy-source-understanding`
+- `L5A-rawfacts-evidence-extraction`
+- `L5B-analytics-feature-extraction`
+- `L6-category-synthesis-<category>`
+- `L7-slide-content-<N>-<type>`
+- `L8-speaker-script-<N>`
 
 ---
 
 ## Layer Responsibilities
 
-### Layer 1 — Ingest
+### L1 — Ingest
 
-Collects raw sources from external connectors and normalises them into a common schema before any further processing.
+Collects raw sources from external connectors and normalises them into a common schema.
 
 **Connectors:**
-- `arxivConnector.js` — runs 6 targeted queries covering different AI security subtopics; rate-limited (3s between queries, 8s between weekly chunks during backfill)
-- `nvdConnector.js` — National Vulnerability Database CVE feed filtered for AI-relevant identifiers
-- `registryFeedConnector.js` — RSS/Atom feeds from trusted publishers (CISA, NCSC, vendor security blogs, etc.)
-- `llmDiscoveryConnector.js` — LLM-assisted source discovery using web-search-enabled Gemini; produces URL candidates for human-curated sources
+- `arxivConnector.js` — 6 targeted queries covering AI security subtopics; rate-limited (3s between queries)
+- `nvdConnector.js` — NVD CVE feed filtered for AI-relevant identifiers
+- `registryFeedConnector.js` — RSS/Atom feeds from trusted publishers (CISA, NCSC, vendor security blogs)
+- `llmDiscoveryConnector.js` — LLM-assisted source discovery using web-search-enabled Gemini
 
-Each source is normalised to a common shape: `title`, `url`, `publisher`, `date_published`, `full_text`, `summary`, `trust_tier`. Source IDs are derived from a sha256 hash of the canonical URL, making every ingest idempotent — re-ingesting the same URL upserts rather than duplicates.
+Each source is normalised to: `title`, `url`, `publisher`, `date_published`, `full_text`, `summary`, `trust_tier`. Source IDs are derived from a sha256 URL hash — re-ingesting the same URL upserts rather than duplicates.
 
 **Tooling:** deterministic connector code + Gemini for LLM discovery.
 
 ---
 
-### Layer 2 — Clean
+### L2 — Clean
 
 Normalises raw text and removes duplicates before classification.
 
 **Steps:**
-1. Strip HTML tags, LaTeX markup, and boilerplate. Collapse whitespace and normalise encoding. Extract code blocks and IOC patterns (CVE IDs, IP addresses, domains, hashes). Truncate to 10,000 characters.
+1. Strip HTML, LaTeX, boilerplate. Collapse whitespace. Extract code blocks and IOC patterns (CVEs, IPs, domains, hashes). Truncate to 10,000 chars.
 2. Exact deduplication on canonical URL, normalised title, and content hash.
-3. Near-duplicate detection using Jaccard title similarity (threshold ≥ 0.85). The higher-trust-tier source is kept when near-duplicates are found.
+3. Near-duplicate detection using Jaccard title similarity (≥ 0.85). Higher-trust source is kept.
 
 **Tooling:** fully deterministic.
 
 ---
 
-### Layer 3 — Classify
+### L3 — Validate + Archive
 
 Five deterministic sublayers validate each source and assign initial metadata. No LLM calls.
 
 | Sublayer | What it does |
 |----------|-------------|
-| 3.1 `sourceValidity` | Hard-fail flags (no URL, excluded publisher, duplicate URL). Soft flags (missing publisher, possible non-English, date before 2020, minimal text). |
-| 3.2 `aiRelevance` | Scores AI/cyber signal strength using weighted keyword dictionaries. Assigns `relevance_tier`: core ≥ 40, adjacent ≥ 20, peripheral ≥ 10, off-topic < 10. Also sets `ai_specificity_score` (0–100). |
-| 3.3 `dataTyping` | Rule-based assignment of `source_type` from 16 types (vulnerability, incident, research_finding, governance_signal, etc.) using URL patterns and publisher registry. |
-| 3.4 `trustAssessment` | Assigns `trust_tier` (primary / high / medium / low / curated / unknown) from a publisher registry. Primary: government agencies and AI labs. High: major security vendors and academic sources. |
-| 3.5 `finalGate` | Hard reject for off-topic or invalid sources. Sends remainder to `layer3_status: pass` or `review`. Sets `downstream_route` (`layer4 / layer4_with_review / discard`). Curated sources (trust_tier = curated) are never rejected. |
+| 3.1 `sourceValidity` | Hard-fail flags (no URL, excluded publisher, duplicate). Soft flags (missing publisher, non-English, date before 2020, minimal text). |
+| 3.2 `aiRelevance` | Scores AI/cyber signal strength using weighted keyword dictionaries. Assigns `relevance_tier`: core ≥ 40, adjacent ≥ 20, peripheral ≥ 10, off-topic < 10. |
+| 3.3 `dataTyping` | Rule-based `source_type` from 16 types using URL patterns and publisher registry. |
+| 3.4 `trustAssessment` | Assigns `trust_tier` (primary / high / medium / low / curated / unknown) from publisher registry. |
+| 3.5 `finalGate` | Rejects off-topic or invalid sources. Sets `layer3_status: pass/review/reject`. Curated sources are never rejected. |
 
 **Tooling:** fully deterministic.
 
 ---
 
-### Layer 4 — Understand
+### L4 — Taxonomy
 
-LLM deep understanding of each source. Produces taxonomy tags, a structured summary, and category candidates for Layer 5 to resolve.
+LLM enrichment of every source that passes L3. Assigns source type, framework tags, claims, entities, and category candidates.
 
-**LLM call:** `callLLM()` with provider rotation. Models: `gpt-4o-mini` (OpenAI primary/secondary), `llama-3.3-70b-versatile` (Groq, JSON mode — no json_schema), `gemini-2.0-flash` / `gemini-2.5-flash` (Gemini key 1/2). Trigger: any provider key present and `skipLlm=false`. Label: `Layer5-taxonomy`.
+**LLM call:** one call per source (concurrency: 5). Routes to Gemini 2.5 Flash → Groq → OpenRouter fallback.
 
-The system prompt includes the full controlled taxonomy registry (OWASP Top 10 for LLM, MITRE ATLAS, MITRE ATT&CK, NIST AI RMF, INTERNAL). The user prompt supplies: title, publisher, date, deterministic pre-classification hint, summary (≤500 chars), source text (≤2500 chars), and existing tags.
+**Output fields:**
+- `source_type` — one of 16 controlled types
+- `understanding.framework_tags[]` — AI attack technique tags (OWASP, MITRE ATLAS)
+- `understanding.attack_mappings[]` — ATT&CK operational technique tags
+- `understanding.governance_tags[]` — NIST AI RMF lenses
+- `understanding.category_candidates[]` — suggested main_category with confidence
+- `understanding.main_claims[]`, `key_entities[]`, `important_numbers[]`
 
-**Output fields added to source:**
-- `source_type` — one of 16 types
-- `understanding.source_summary` — 2–3 sentence analyst summary
-- `understanding.primary_subject` — ≤15 words
-- `understanding.main_claims` — 2–5 factual claims
-- `understanding.key_entities` — named systems, orgs, CVEs, groups
-- `understanding.important_numbers` — quantitative data points
-- `understanding.framework_tags` — validated controlled taxonomy tags (max 5)
-- `understanding.category_candidates` — ranked category suggestions for Layer 5
-- `taxonomy_version` — idempotency stamp (`taxonomy-v5.0`)
+**Version stamp:** `taxonomy_version: "taxonomy-v7.0"` (idempotency — already-stamped sources are skipped)
 
-**Fallback (no keys or `--no-llm`):** `deterministicFallback()` — uses rule-based source typing and keyword matching for category candidates.
-
-**Tooling:** LLM with deterministic post-processing (tag validation, schema enforcement, Groq output normalisation).
+See `docs/taxonomy-reference.md` for the full controlled vocabulary.
 
 ---
 
-### Layer 5 — Classify Category
+### L5A — Rawfacts Branch
 
-Deterministic. Picks exactly one `main_category` from the `category_candidates` produced by Layer 4. No LLM call.
+Runs in parallel with L5B after L4. Extracts concrete, verifiable evidence items from sources.
 
-**Decision logic (priority order):**
-1. Candidates with `confidence: "high"` → pick the first (highest framework_tag support).
-2. Multiple `"medium"` candidates → pick by `supporting_tags` count.
-3. Only `"low"` candidates → pick by `supporting_tags` count.
-4. No valid candidates → `unclear_or_adjacent`.
+**Sub-steps:**
+1. Rawfact taxonomy (operational relevance, novelty, sector, geography)
+2. Evidence eligibility gate
+3. Extraction profiles (per source type)
+4. Evidence item extraction (LLM, concurrency: 5) — `L5A-rawfacts-evidence-extraction`
+5. Normalize evidence items
+6. Score evidence items (multi-dimensional)
+7. Cluster evidence items (Jaccard dedup, threshold 0.40)
+8. Rescore with duplicate penalty
+9. Assemble evidence packs (grouped: critical, high, case_studies, statistics, mitigations, outlook_signals)
+10. Evidence QA
 
-If no LLM was used in Layer 4, and the source already has an existing `main_category` set, that value is preserved rather than overwritten by a keyword-only fallback.
+**Evidence search** (runs after step 10): calls Anthropic Claude → Gemini Pro once per active category to find authoritative external statistics, benchmarks, and reports. Label: `L5A-evidence-search-<category>`.
 
-**Output fields:** `main_category`, `classification_confidence`, `classify_version` (`classify-v6.0`).
-
-**Tooling:** fully deterministic.
-
----
-
-### Layer 6 — Synthesis
-
-Top-level orchestrator that runs three sub-branches in sequence: rawfact, analytics, and analysis. Contains no direct LLM calls — all LLM calls are delegated to branch files.
+**Version stamp:** `rawfact_version: "rawfact-v2.0"`
 
 ---
 
-#### Layer 6a — Rawfact Branch
+### L5B — Analytics Branch
 
-Extracts and ranks the most useful factual evidence from each source for later use in slides and analysis.
+Runs in parallel with L5A after L4. Produces corpus-level analytics and visualization specs.
 
-**Step 7.1A — Rawfact Taxonomy (LLM)**
+**Sub-steps:**
+1. Analytics eligibility gate
+2. Analytics profiles
+3. Feature extraction (LLM for full_analytics sources) — `L5B-analytics-feature-extraction`
+4. Normalize features
+5. Aggregate analytics (12 groups: corpus overview, threat patterns, maturity, timeline, etc.)
+6. Compute derived metrics (9 composite indexes: operationalisation, adversary adoption, agentic risk, etc.)
+7. Select analytics evidence (concise evidence for L6)
+8. Generate visualization specs (20 chart types)
+9. Analytics QA
 
-Assigns source-type-aware metadata to guide evidence extraction. The prompt is aware of source type and produces different fields depending on whether the source is a vulnerability disclosure, confirmed incident, research finding, governance signal, or other type. Outputs: `operational_relevance`, `novelty`, `impact_severity`, `impact_scope`, `sector`, `technology`, `source_type_context`.
-
-- LLM: `callLLM()`, all providers (Groq degrades to JSON mode). Concurrency: 5. Label: `Layer7.1A-taxonomy-<id>`.
-- Fallback: rule-based mapping from `source_type` and `trust_tier`.
-
-**Step 7.1B — Evidence Card Extraction (LLM)**
-
-Extracts a structured evidence card for high-priority sources only (those with `operational_relevance: very_high/high` or initial score `must_read/high`). Roughly 25% of sources receive evidence cards.
-
-Output per card: `evidence_card_title`, `short_summary`, `key_facts[]`, `numbers_statistics[]`, `attack_flow[]`, `impacts[]`, `why_it_matters`, `best_used_for[]`.
-
-- LLM: `callLLM()`, all providers. Concurrency: 5. Label: `Layer7.1B-evidence-<id>`.
-- Fallback: evidence card skipped (source not failed, just not extracted).
-
-**Step 7.1C — Rawfact Scoring (deterministic, two passes)**
-
-Scores each source on a 0–100 scale using a fully deterministic formula. Called twice per pipeline run — once before clustering and once after — so that clustering can identify the best representative before the duplicate penalty is applied.
-
-Score formula: `rawfact_score = common_base(0–40) + type_specific(0–45) + horizon_bonus(0–15) − penalties`
-
-- `common_base` (0–40): `source_credibility` (trust_tier → 0–10) + `ai_relevance` (ai_specificity_score + category confidence → 0–10) + `evidence_concreteness` (key_facts count + numbers + attack_flow → 0–10) + `citation_quality` (0–5) + `recency` (days since publish → 0–5)
-- `type_specific` (0–45): 15 separate scorers, one per source type (threat_intel_report, academic_paper, vulnerability_db, government_advisory, etc.). Each scorer weights different rawfact_taxonomy fields (operational_relevance, attack_vectors, technical_depth, CVE count, etc.).
-- `horizon_bonus` (0–15): bonus for AI-specific attack chains, multi-vector techniques, novel methods, or high `ai_specificity_score`.
-- `duplicate_penalty` (−10): applied in Pass 2 only to non-representative members of multi-source clusters.
-
-**Priority bands:** must_read ≥ 85 | high 70–84 | medium 50–69 | low 30–49 | archive_only < 30.
-
-**Step 7.1D — Jaccard Clustering (deterministic)**
-
-Groups related sources within the same threat category to identify duplicate coverage and select the best representative for each topic cluster.
-
-Algorithm:
-1. Tokenise titles: lowercase, strip punctuation, remove stop words (34-word list), filter tokens shorter than 4 characters.
-2. Compute pairwise Jaccard similarity for all source pairs within the same `main_category`. Cross-category pairs are never clustered.
-3. Link pairs with Jaccard ≥ 0.35 (SIMILARITY_THRESHOLD).
-4. Union-find merges transitively linked pairs into clusters.
-5. Cluster representative = member with highest `rawfact_score` from Pass 1.
-6. All other members marked `is_representative: false`.
-
-Output per source: `rawfact_cluster { cluster_id, cluster_size, representative_title, is_multi_source, is_representative, cluster_theme }`.
-
-After clustering, **Pass 2** of scoring applies the −10 duplicate penalty to non-representative members of multi-source clusters, then re-ranks priorities. This ensures the representative source retains its full score while near-duplicate coverage is demoted.
+**Version stamp:** `analytics_version: "analytics-v2.0"`
 
 ---
 
-#### Layer 6b — Analytics Branch
+### L6 — Analysis + Synthesis
 
-Processes every source into structured, chart-ready analytical data that describes patterns across the full corpus.
+Converges L5A and L5B outputs and produces the full intelligence brief.
 
-**Step 7.2A — Analytics Taxonomy (LLM)**
+**Steps:**
+1. **Evidence fusion** — combines L5A packs + L5B analytics into richly structured fused dossiers per category. IDs: `ev_*` (rawfact items), `agg_*` (analytics), `metric_*` (derived metrics), `viz_*` (viz specs).
+2. **Category analysis** — one Anthropic/Gemini Pro call per active category. Produces: `category_headline`, `biggest_happenings`, `top_insights`, `early_signals`, `recommendations`, `outlook`. Label: `L6-category-synthesis-<category>`.
+3. **Visualization matching** — attaches `recommended_visualization_ids` to insights, signals, and outlook using keyword rules.
+4. **Evidence linking** — resolves all evidence IDs to full citation objects.
+5. **QA** — deterministic + optional LLM fact-check. Rejects unsupported frequency claims, happenings without rawfact evidence, recommendations without evidence.
+6. **Cross-category synthesis** — one Anthropic/Gemini Pro call per run. Produces: `executive_summary`, `cross_category_patterns`, `overall_biggest_happenings`, `strategic_outlook`. Label: `L6-cross-category-synthesis`.
+7. **Presentation packet** — deterministic. Converts synthesis output to `presentation_packet` with `executive_overview`, `category_sections[]`, `cross_category`, `appendix`.
 
-Assigns controlled-vocabulary labels to each source for aggregation. The taxonomy uses 9 controlled vocabulary lists covering: `attack_vectors` (28+ values), `attack_surface` (21 values), `ai_layer` (12 values), `operational_status`, `threat_maturity`, `impact_scope`, `impact_type`, `signal_clusters` (20 values), and `recurring_themes` (12 values).
-
-- LLM: `callLLM()`, all providers (Groq degrades to JSON mode). Concurrency: 5. Label: `Layer7.2A-analytics-<id>`.
-- Fallback: deterministic mapping from `source_type` and `trust_tier`.
-
-**Step 7.2B — Analytics Aggregation (deterministic)**
-
-Aggregates per-source taxonomy fields into corpus-wide counts and distributions. No LLM involved.
-
-Outputs: `category_counts`, `source_type_counts`, `trust_tier_counts`, `attack_vector_frequency` (sorted by frequency), `signal_cluster_counts`, `maturity_distribution`, `ai_layer_distribution`, `monthly_timeline` (per YYYY-MM with by-category breakdown), `category_breakdown` (per category: top vectors, clusters, maturity spread, type distribution), `date_range`.
-
-**Step 7.2C — Visualization Specs (deterministic)**
-
-Generates 12+ chart-ready visualization specifications. Each spec has a stable `visualization_id` that is cited by the slides layer to assign charts to specific slides.
-
-Chart types: bar, stacked bar, heatmap, radar, matrix (category × maturity), timeline. Examples: `attack_vector_frequency` (bar), `maturity_distribution` (bar), `signal_cluster_radar` (radar), `monthly_source_timeline` (timeline), `category_maturity_matrix` (matrix), `category_vector_heatmap` (heatmap).
-
-**Optional LLM step (disabled by default):** `runVisualizationRecommendations()` — recommends which charts to use in which slide sections. Enabled with `skipVizRecommendation: false`. Falls back silently to an empty array.
+**Version stamps:** `analysis_version: "analysis-v2.0"`, `synthesis_version: "synthesis-v8.0"`
 
 ---
 
-#### Layer 6c — Analysis Layer
+### L7 — Slide Content Generation
 
-Uses rawfact evidence and analytics aggregates to produce category-level intelligence. One LLM call per active category. Groq is excluded here — citation-traced structured output requires `json_schema` support.
+Generates the content of each slide from the presentation packet. No new analysis — only translates packet content.
 
-**Step 8A — Dossier Builder (deterministic)**
+**LLM call:** one call per non-structural slide (concurrency: 3). Routes to Gemini 2.5 Pro/Flash. Label: `L7-slide-content-<N>-<type>`.
 
-Selects evidence to send to the LLM for each active category: up to 12 rawfact evidence items (ranked by `rawfact_score`, must_read first) and up to 4 analytics evidence items (top attack vectors, maturity distribution, signal cluster counts, monthly trend). Evidence items are assigned stable IDs in the format `raw_<source_id>` (rawfact) and `agg_<category>_<metric>` (analytics).
+**Slide types:** title, exec_overview, landscape, section_divider, category_content, cross_category, outlook, conclusion, appendix.
 
-**Step 8B — Category Analysis (LLM)**
-
-One LLM call per active category (minimum 2 sources required). Providers: OpenAI or Gemini only. Label: `Layer8B-<category>`.
-
-Produces per category: `overview` (2–3 sentences), `top_insights` (3–5 items, each with `insight` ≤25 words, `supporting_evidence_ids[]`, `confidence`, `implication`), `early_signals` (0–3 items with `signal`, `horizon`, `confidence`), `outlook` (6-month directional statement with `supporting_evidence_ids[]`), `analysis_confidence`.
-
-Every insight and early signal must reference evidence IDs from the dossier — the LLM cannot introduce unsupported claims.
-
-Fallback: `deterministicAnalysis()` — one insight per top rawfact item, confidence set to `low`.
-
-**Step 8C — Evidence Linking (deterministic)**
-
-Resolves all `evidence_id` references in the analysis output to full source objects. `raw_<id>` resolves to the rawfact source by ID. `agg_<cat>_<metric>` resolves to the matching analytics aggregate. Unresolvable IDs are silently dropped. Builds a `citations[]` list per analysis in the format "Publisher — Title (Date)".
-
-**Step 8D — Analysis QA (deterministic + optional LLM)**
-
-Deterministic pass: removes insights with no resolved evidence, insight text shorter than 15 words, or missing key fields. Downgrades `analysis_confidence` if retention rate falls below 50%. Optional LLM fact-check (disabled by default, `skipLlmQa: true`) calls all providers to verify each insight against its cited evidence summaries.
+**Deck structure:** 9 slides minimum (1 category); up to 3+2N+5 for N active categories.
 
 ---
 
-### Layer 7 — Slides
+### L8 — Script Generation
 
-Produces the final deck from synthesis output.
+Generates a presenter script for each content slide. Runs AFTER L7 — uses finalized slide content only, no new claims may be introduced.
 
-**Step 1 — Deck Planning (deterministic)**
+**LLM call:** one call per content slide (concurrency: 3). Routes to OpenAI gpt-4o-mini → Gemini Flash. Label: `L8-speaker-script-<N>`.
 
-Maps category analyses + dossiers + analytics into a dynamic slide structure. Slide count formula: 9 slides for 1 active category, 3+2N+5 for N active categories. Each planned slide is assigned `rawfact_evidence[]`, `analytics_evidence[]`, `visualization_ids[]`, a `speaker_note_intent`, and a `core_message`. Slide types: `title`, `executive_overview`, `category_deep_dive`, `category_evidence`, `cross_category`, `outlook`, `closing`, `section_divider`, `appendix`.
+**Script requirements:** 5-element structure (main point → reasoning → evidence significance → implication → transition). Length varies by slide type: 2–4 sentences for section dividers, up to 8–10 for category content. No hyperbole, no bullet restatement, no invented facts.
 
-**Step 2 — Slide Content Generation (LLM)**
+**Script QA** runs after generation (non-blocking): deterministic checks for sentence count, bullet overlap, invented numbers, exaggerated language; optional second-model tone and claim check.
 
-Generates structured content for each non-structural slide. Providers: OpenAI or Gemini only (Groq excluded — citation-traced structured output requires json_schema). Concurrency: 3. Label: `Layer7-slide<N>-<type>`.
-
-Output per slide: `title`, `headline` (≤20 words), `bullets[]` (≤15 words each), `evidence_callouts[]` (must copy evidence_id exactly from dossier), `citations[]`, `visualization_ids[]`.
-
-Deterministic fallback: `deterministicSlide()` — title + plan bullets + top evidence items.
-
-**Step 3 — Speaker Notes (LLM)**
-
-Runs after Step 2 — uses finalized slide content only. Produces 5–8 sentence plain-text paragraphs per slide. Providers: OpenAI or Gemini. Concurrency: 3. Label: `Layer7-notes-<N>`. Only run when `--detailed-notes` flag is passed.
-
-**Step 4 — Export (deterministic)**
-
-Writes outputs to `outputs/final/`:
-- `horizon_scan_deck.pptx` — rendered via `exportPptx.js` using the CSA template (`templates/AI x Security (for AISP projection) (1).pptx`). Canvas: 13.33"×7.5". Font: Aptos. CSA palette: accent1 `#3583C9`, accent2 `#9C62A7`, accent3 `#19BC9D`, accent4 `#FFAA22`, accent5 `#004987`, accent6 `#CC0033`.
-- `slide_deck_output.json` — raw slide objects
-- `speaker_script.md` — markdown speaker script
-
-**Tooling:** LLM for content generation, fully deterministic for planning and rendering.
+See `docs/prompts/L8_speaker_script_generation.md` for the canonical prompt spec.  
+See `docs/logic-layer7-slides.md` for full script requirements, tone rules, and QA details.
 
 ---
 
-### Layer 8 — QA
+### L9 — PPTX + Export
 
-Final quality gate before delivery. Fully deterministic — no LLM calls.
+Exports the final deck to multiple formats. Fully deterministic — no LLM.
 
-Four check modules:
+**Outputs (written to `outputs/final/`):**
+- `horizon_scan_deck.pptx` — via PptxGenJS using CSA template; speaker notes embedded in all slides
+- `slide_deck_output.json` — raw slide objects including `script_qa` results
+- `speaker_script_<mode>.md` — Markdown speaker script with talking points and evidence refs
+- `speaker_script_<mode>.txt` — plain-text speaker script (identical content to .docx)
+- `speaker_script_<mode>.docx` — DOCX speaker script (identical content to .txt)
 
-| Module | What it checks |
-|--------|---------------|
-| Viewpoint QA | No-op (viewpoints deprecated in favour of category_analyses). |
-| Slide QA | Every slide has a title and headline. Structural slides (title, section_divider, appendix) are exempt from content checks. Severity: error for missing title, warning for missing evidence callouts on deep-dive slides. |
-| Citation QA | Every `evidence_callout` in every slide references a valid `evidence_id` from the dossier. Coverage check: what percentage of must-read and high-priority sources appear in at least one slide. |
-| Number/Phrase QA | Percentage values in range 0–100, years in range 2020–2030, no banned filler phrases ("it is worth noting", "it is important to note", "in today's rapidly evolving landscape", etc.). |
+`mode` = `llm` when LLM was active, `deterministic` when `--no-llm` was passed.
 
-**Output:** `{ overall_pass, slide_qa, citation_qa, number_qa, summary: { errors, warnings, infos } }`.
+**Version stamp:** `deck_version: "deck-v7.1"`
 
 ---
 
-## Tooling Philosophy
+## LLM Call Budget (per analysis run)
 
-| Task | Tool |
-|------|------|
-| URL canonicalization, hashing, deduplication | Deterministic code |
-| Date filtering, schema validation | Deterministic code |
-| SQL aggregations, chart data generation | Deterministic code |
-| PPTX rendering from template | Deterministic code (PptxGenJS / python-pptx) |
-| Source understanding, framework mapping, fact extraction | LLM (OpenAI / Gemini primary; Groq for per-source steps) |
-| Category-level analysis, slide content drafting | LLM (OpenAI / Gemini only — Groq excluded) |
-| Speaker script | LLM (all providers) |
+| Layer | Task | Max calls | Primary model |
+|-------|------|-----------|--------------|
+| L4 | source_understanding | N (one per source) | Gemini 2.5 Flash |
+| L5A | evidence_extraction | N eligible | Gemini 2.5 Flash |
+| L5A | evidence_search | 4 (one per category) | Anthropic Claude Sonnet |
+| L5B | analytics_extraction | N full_analytics | Groq / Gemini Flash |
+| L6 | category_analysis | 4 (one per category) | Anthropic Claude Sonnet |
+| L6 | cross_category_synthesis | 1 | Anthropic Claude Sonnet |
+| L6 | final_qa (opt-in) | 4 | Gemini Pro |
+| L7 | slide_content | 1 per content slide | Gemini Pro/Flash |
+| L8 | speaker_notes (script generation) | 1 per content slide | OpenAI gpt-4o-mini → Gemini Flash |
 
-The pipeline does not ask the LLM to write a deck from scratch. It asks the LLM — given category-level insights, supporting rawfact evidence, analytics outputs, and visualization options — to produce content for a pre-planned slide structure backed by traceable evidence.
+Total frontier calls (L5A evidence + L6 category + L6 cross): **9 Anthropic calls** per run.

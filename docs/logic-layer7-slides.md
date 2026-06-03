@@ -1,374 +1,179 @@
-# Layer 7 — Slides
+# Layer 7–9 — Slides, Script, and Export
 
-**Orchestrator:** `lib/pipeline/slides/slidesLayer.js`
-**LLM calls:** Step 2 (slide content) and Step 3 (speaker notes). Steps 1 and 4 are fully deterministic.
-
----
-
-## Purpose
-
-Produce the final presentation deck from the synthesis result. Four steps: plan the deck structure, generate LLM content per slide, generate speaker notes, then export to PPTX/JSON/Markdown.
+**Orchestrator:** `lib/pipeline/slides/slidesLayer.js`  
+LLM calls: Step 2 (slide content, L7) and Step 3 (speaker scripts, L8). Steps 1, 3b, and 4 are fully deterministic.
 
 ---
 
-## Pipeline Steps
+## What this layer does
 
-```
-synthesisResult (from runSynthesisLayer)
-    │
-    ▼
-Step 1: planSlides()                  — deterministic deck structure
-    │
-    ▼
-Step 2: generateSlideContent()        — LLM content per content slide
-    │
-    ▼
-Step 3: generateSpeakerNotesForDeck() — LLM notes per slide (AFTER Step 2)
-    │
-    ▼
-Step 4: exportDeck()                  — write PPTX, JSON, Markdown
-```
+Layers 7–9 are the communication layer only. They do not perform analysis — they translate the presentation packet from Layer 6 into a slide deck with a presenter script.
 
-**Critical constraint:** Step 3 MUST run after Step 2. Speaker notes use finalized slide content only; no new claims may be introduced.
+The key design rule: **slides cite the presentation packet. They do not invent analysis.**
 
 ---
 
-## Step 1 — Deck Planner
+## Pipeline steps
 
-**File:** `lib/pipeline/slides/planSlides.js`
-**No LLM calls.** Fully deterministic.
+### Step 1 — Slide planning (planSlides, deterministic)
 
-Builds a dynamic slide plan from Layer 8 (analysis) outputs. Slide count is driven by active categories (categories with at least one source).
+Builds the deck structure from synthesis outputs. When `presentation_packet` is available (synthesis-v8.0+), it uses packet fields as the primary content source. Falls back to legacy category_analyses + dossiers.
 
-### Deck Structure
+**Deck structure (N active categories):**
+```
+Slide 1     Title
+Slide 2     Executive Overview        ← presentation_packet.executive_overview
+Slide 3     Threat Landscape          ← aggregates + viz specs
+Slides 4..  Section Divider + Category Content × N  ← packet.category_sections[n]
+Slide N+4   Cross-Category Convergence  ← packet.cross_category
+Slide N+5   Six-Month Outlook           ← packet.cross_category.strategic_outlook
+Slide N+6   Key Takeaways               ← packet.category_sections (high-conf insights + recs)
+Slide N+7   Appendix / Sources          ← packet.appendix.cited_sources
+```
 
-For N active categories:
+Source: `lib/pipeline/slides/planSlides.js`
 
-| Slide | Type | Description |
-|-------|------|-------------|
-| 1 | `title` | Title slide |
-| 2 | `executive_overview` | Top insight per category + source stats |
-| 3 | `threat_landscape` | Overall landscape with analytics |
-| 4, 6, 8, ... | `section_divider` | Category section header (one per category) |
-| 5, 7, 9, ... | `category_content` | Category analysis slide (one per category) |
-| 3+2N+1 | `cross_category` | Cross-category convergence |
-| 3+2N+2 | `outlook` | 6-month outlook + early signals |
-| 3+2N+3 | `conclusion` | Key takeaways |
-| 3+2N+4 | `appendix` | Sources and citations |
+### Step 2 — Slide content generation (L7, LLM)
 
-Total: 9 slides for 1 active category, up to 3+2N+5 for N categories.
+One LLM call per non-structural slide. Uses the planned slide object which includes:
+- `packet_section`: the specific section from the presentation packet
+- `rawfact_evidence` / `key_evidence`: evidence items with IDs
+- `visualization_ids`: available chart IDs
 
-### Planned Slide Fields
+**LLM instructions (strict):**
+1. Horizon-scan framing — what changed, what is the trend, what does it mean for defenders?
+2. Use ONLY analysis from the presentation packet — do not introduce new claims
+3. Headline: prefer `category_headline` or strongest `top_insight`; must state a finding or trajectory
+4. Bullets: `biggest_happenings` first (concrete events), then `top_insights` (analytical)
+5. Evidence callouts: cite `ev_*` or `raw_*` IDs from `key_evidence` — never invented
+6. `evidence_type` on insights drives bullet framing:
+   - `rawfact` → specific incident or demonstrated capability
+   - `analytics` → frequency/pattern claim (reference agg_* data)
+   - `mixed` → connect fact + pattern
+7. Early signals → flag as "Emerging signal:"
+8. Recommendations → action verbs ("Deploy", "Monitor", "Require")
 
-Each planned slide has:
-- `slide_number` — integer, 1-based
-- `slide_type` — one of the types above
-- `title` — slide title string
-- `rawfact_evidence[]` — top items from the category dossier (must_read/high priority)
-- `analytics_evidence[]` — category-specific analytics items
-- `visualization_ids[]` — refs to specs from `visualizationSpecs.js`
-- `speaker_note_intent` — plain-English description of what to convey
-- `category` — category key (for `category_content` slides only)
-- `core_message` — one-sentence instruction for the LLM content generator
+Structural slides (title, section_divider, appendix) are built deterministically — no LLM call.
+
+Source: `lib/pipeline/slides/generateSlideContent.js`
+
+### Step 3 — Script generation (L8, LLM)
+
+One LLM call per content slide. **Must run AFTER Step 2.** Uses finalized slide content as the sole input — no access to raw sources or dossiers.
+
+**Script requirements:**
+- 5-element structure: main point → reasoning → evidence significance → implication → transition
+- Covers what changed, not just what the threat is
+- References specific evidence by publisher, statistic, or CVE where present
+- Includes transition sentence to the next slide
+- No claims not present in the slide content
+
+**Length by slide type:**
+
+| Slide type | Target sentences |
+|-----------|-----------------|
+| title | 1–2 (intent only, no LLM) |
+| section_divider | 2–4 |
+| exec_overview | 6–8 |
+| landscape | 5–7 |
+| category_content | 8–10 |
+| cross_category | 7–9 |
+| outlook | 6–8 |
+| conclusion | 6–8 |
+| appendix | 1–2 (intent only, no LLM) |
+
+**Tone:** professional, objective, clear, direct. Spoken but not casual. No hyperbole, no persuasive rhetoric.
+
+See canonical prompt spec: `docs/prompts/L8_speaker_script_generation.md`  
+Source: `lib/pipeline/slides/generateSpeakerNotes.js`
+
+### Step 3b — Script QA (deterministic + optional second-model)
+
+Runs immediately after Step 3. Annotates each slide with a `script_qa` field. Non-blocking — QA issues are logged but do not stop export.
+
+**Deterministic checks:**
+- Sentence count matches slide type target
+- Script does not merely restate bullets (overlap ≥ 60%)
+- Transition or "so what" sentence present
+- No invented numbers (numbers in script not present in slide content)
+- No exaggerated language ("unprecedented", "shocking", etc.)
+- No overly long sentences (> 30 words)
+
+**Second-model checks** (enabled when `skipSecondModel=false`):
+- Unsupported claims
+- Tone assessment (professional / too_casual / too_dramatic / too_dry)
+- Transition detection
+
+Source: `lib/pipeline/scriptGeneration/qaScript.js`
+
+### Step 4 — Export (L9, deterministic)
+
+Exports the final deck to multiple formats. Fully deterministic — no LLM.
+
+**Outputs written to `outputs/final/`:**
+
+| File | Description |
+|------|-------------|
+| `horizon_scan_deck.pptx` | Styled PowerPoint via PptxGenJS. Speaker notes embedded in every slide. |
+| `slide_deck_output.json` | Raw slide objects including `script_qa` results |
+| `speaker_script_<mode>.md` | Markdown speaker script with talking points and evidence refs |
+| `speaker_script_<mode>.txt` | Plain-text speaker script — identical content to .docx |
+| `speaker_script_<mode>.docx` | DOCX speaker script — identical content to .txt |
+
+`mode` = `llm` when LLM was used, `deterministic` when `skipLlm=true`.
+
+The `.txt` and `.docx` files contain identical script content.
+
+Sources: `exportPptx.js`, `exportDeck.js`, `exportMarkdownDeck.js`
 
 ---
 
-## Step 2 — Slide Content Generation
+## PPTX speaker notes
 
-**File:** `lib/pipeline/slides/generateSlideContent.js`
-**LLM call:** Yes — one call per content slide (with deterministic fallback).
-
-| Property | Value |
-|----------|-------|
-| Function | `callLLM()` — provider rotation |
-| Keys | `OPENAI_API_KEY`, `OPENAI_API_KEY_2`, `GEMINI_API_KEY`, `GEMINI_API_KEY_2` |
-| **GROQ NOT USED** | Evidence callout evidence_ids require strict `json_schema`; Groq supports JSON mode only |
-| Output format | Structured JSON via `SLIDE_CONTENT_SCHEMA` |
-| Label | `"Layer7-slide<N>-<type>"` |
-| Concurrency | 3 parallel calls |
-| Trigger | Any OPENAI or GEMINI key AND `slide_type NOT IN (title, section_divider, appendix)` |
-| Fallback | `deterministicSlide()` — title + plan bullets + top evidence items |
-
-### System Prompt
-
-```
-You are generating content for a professional AI cybersecurity threat horizon scan briefing deck.
-
-Style: concise, strategic, evidence-backed. Suitable for government and conference presentations.
-Audience: cybersecurity executives, policy analysts, technical leads.
-
-## FIELD REQUIREMENTS
-
-title — return the provided slide title exactly.
-
-headline — ONE strategic claim (≤20 words). Not a description — an insight.
-  Good: "Prompt injection has moved from research to operational exploitation in 12 months."
-  Bad: "This slide covers prompt injection."
-
-bullets — 3–5 points (max 15 words each). Each must be a distinct, evidence-backed claim.
-  No bullet repeats the headline. No filler.
-
-evidence_callouts — 1–3 callouts. Each MUST trace to an evidence item from the dossier.
-  evidence_id: copy EXACTLY from the rawfact_evidence items provided.
-  key_fact: a SPECIFIC fact from that source (a number, name, or concrete claim from the evidence).
-  title, publisher, url: copy from the evidence item.
-  DO NOT invent facts. Only use what is in the evidence.
-
-citations — one string per cited source: "Publisher — Title (URL)"
-
-## ABSOLUTE RULES
-- Do not speculate or invent facts not in the provided analysis/evidence
-- Every evidence callout must reference an evidence_id from the dossier
-- Bullets max 5, max 15 words each
-- Return strict JSON only — no markdown, no preamble
-```
-
-### User Prompt — Category Content Slides
-
-Built by `buildCategoryPrompt(slidePlan)`:
-
-```
-SLIDE TITLE: <title>
-CATEGORY: <CATEGORY LABEL>
-CORE MESSAGE: <core_message>
-AVAILABLE VISUALIZATIONS: <visualization_ids, comma-separated>
-
-CATEGORY ANALYSIS:
-Overview: <analysis.overview>
-Top Insights:
-  [high] <insight> (evidence: <ids>)
-  ...
-Early Signals:
-  <signal> → <implication>
-Outlook: <statement>
-
-RAWFACT EVIDENCE (use evidence_id in callouts):
-[<evidence_id>] <title>
-  publisher=<publisher>  date=<date>  score=<score>  priority=<priority>
-  summary: <short_summary>
-  key facts: <key_facts>
-  stats: <numbers_statistics>
-  ...
-
-ANALYTICS EVIDENCE (cite analytics_id to reference):
-[<analytics_id>] <metric_name>: { <top entries> }
-
-Generate slide content. Every evidence callout MUST use an evidence_id from the dossier above.
-```
-
-### User Prompt — Cross-Category, Outlook, Conclusion, Executive Slides
-
-Built by `buildCrossOrOutlookPrompt(slidePlan)`:
-
-```
-SLIDE TITLE: <title>
-CORE MESSAGE: <core_message>
-AVAILABLE VISUALIZATIONS: <visualization_ids>
-
-[for cross_category slides:]
-CROSS-CATEGORY INSIGHTS:
-  [<category>] <signal/insight> → <implication>
-TOP SIGNAL CLUSTERS: <top 5 clusters with counts>
-TOP RECURRING THEMES: <top 5 themes with counts>
-
-[for outlook slides:]
-CATEGORY OUTLOOKS:
-  [<Category Label>] <outlook statement>
-EARLY SIGNALS:
-  [<Category Label>] <signal> → <implication>
-
-[for conclusion slides:]
-HIGH-CONFIDENCE INSIGHTS ACROSS CATEGORIES:
-  [<Category Label>] <insight>
-
-[for exec_overview slides:]
-TOP INSIGHT PER CATEGORY:
-  [<Category Label>] <insight>
-TOTAL SOURCES: <count>
-CATEGORY COUNTS: <JSON>
-TOP ATTACK VECTORS: <comma-separated>
-
-Generate slide content. Note: for cross-category/outlook/overview slides, evidence_callouts may be empty array [] if no specific rawfact items are available.
-```
-
-### Output Schema (`SLIDE_CONTENT_SCHEMA`)
-
-```json
-{
-  "title": "string",
-  "headline": "string (≤20 words)",
-  "bullets": ["string (≤15 words each)"],
-  "evidence_callouts": [
-    {
-      "evidence_id": "raw_<source_id>",
-      "title": "string",
-      "publisher": "string",
-      "url": "string",
-      "key_fact": "string"
-    }
-  ],
-  "citations": ["Publisher — Title (URL)"],
-  "visualization_ids": ["string"]
-}
-```
-
-### Deterministic Fallback
-
-```js
-deterministicSlide(slidePlan) {
-  title: slidePlan.title
-  headline: slidePlan.core_message || category analysis overview
-  bullets: top 3 insights from category analysis
-  evidence_callouts: top rawfact evidence items, up to 2
-  citations: []
-}
-```
+Every slide builder in `exportPptx.js` calls `s.addNotes(slide.speaker_notes)` where `speaker_notes` is present. This embeds the full L8 script into the PowerPoint speaker notes pane — accessible in Presenter View during delivery.
 
 ---
 
-## Step 3 — Speaker Notes
+## Visualization matching
 
-**File:** `lib/pipeline/slides/generateSpeakerNotes.js`
-**LLM call:** Yes — one call per content slide (with deterministic fallback).
+Slides reference visualization IDs (`visualization_ids[]` per slide). These IDs:
+- Come from the presentation packet's `recommended_visualizations` per section
+- Are validated against actual `visualization_specs` — only specs with data are used
+- Are matched to insights by keyword rules in `matchVisualizationsToInsights.js`
 
-MUST run AFTER Step 2. Uses finalized slide content only. No new claims may be introduced.
-
-| Property | Value |
-|----------|-------|
-| Function | `callLLM()` — provider rotation |
-| Keys | `OPENAI_API_KEY`, `OPENAI_API_KEY_2`, `GEMINI_API_KEY`, `GEMINI_API_KEY_2` |
-| Output format | Plain text (`parseJson: false`) |
-| Label | `"Layer7-notes-<slide_number>"` |
-| Concurrency | 3 parallel calls |
-| Trigger | Any OPENAI or GEMINI key AND `slide_type NOT IN (title, appendix)` |
-| Structural slides | `title` and `appendix` use `speaker_note_intent` directly, no LLM |
-
-### System Prompt
-
-```
-You are a senior cybersecurity intelligence analyst writing a presenter script for one slide in a strategic AI threat horizon scan briefing.
-
-Audience: cybersecurity executives, policy analysts, and technical leads.
-
-## TASK
-Write 5–8 sentences of natural spoken presenter notes.
-
-## REQUIREMENTS
-- Write as if speaking aloud — conversational but authoritative
-- Start with the headline in plain terms
-- Add depth bullets don't cover: context, backstory, analyst judgment
-- Reference specific evidence by publisher, statistic, or CVE where present
-- State strategic implication: "What this means for defenders is..."
-- Include one concrete recommendation or call-to-action where evidence supports it
-- End with a bridging sentence or clear "so what"
-- DO NOT introduce any claim not present in the provided slide content
-- DO NOT invent facts, numbers, or sources
-
-Return plain text only — a single paragraph. No JSON, no markdown.
-```
-
-### User Prompt
-
-Built by `buildPrompt(slide)`:
-
-```
-SLIDE <slide_number>: <title>
-TYPE: <slide_type>
-HEADLINE: <headline>
-
-BULLETS:
-- <bullet>
-- <bullet>
-...
-
-EVIDENCE CALLOUTS:
-• <publisher>: <key_fact>
-• ...
-
-CITATIONS:
-<citation 1>
-<citation 2>
-<citation 3>  (max 3)
-
-INTENT (what this slide should accomplish):
-<speaker_note_intent>
-
-Write the presenter script paragraph (5–8 sentences). Do not add claims not in the slide content above.
-```
-
-### Output
-
-Plain text string — a single paragraph of 5–8 spoken sentences.
-
-### Deterministic Fallback
-
-```js
-deterministicNotes(slide) {
-  return [
-    slide.headline || slide.title,
-    "Key points: " + slide.bullets.slice(0, 3).join("; "),  // if bullets exist
-    ev.publisher + " reports: " + ev.key_fact,              // if evidence_callouts
-    slide.speaker_note_intent,                              // if set
-  ].join(" ")
-}
-```
+A visualization is only included if the underlying data supports the claim on that slide.
 
 ---
 
-## Step 4 — Deck Export
+## What slides consume from the presentation packet
 
-**File:** `lib/pipeline/slides/exportDeck.js` → `exportPptx.js`, `exportMarkdownDeck.js`
-**No LLM calls.** Fully deterministic.
-
-### Formats
-
-| Format | Description | File |
-|--------|-------------|------|
-| `pptx` | Styled PowerPoint via PptxGenJS | `outputs/final/horizon_scan_deck.pptx` |
-| `json` | Raw slide objects | `outputs/final/slide_deck_output.json` |
-| `speaker_script` | Speaker notes Markdown | `outputs/final/speaker_script.md` |
-| `markdown` | Full deck Markdown | (in-memory only, returned in result) |
-| `all` | All of the above | |
-
-### PPTX Template
-
-Template: `templates/AI x Security (for AISP projection) (1).pptx`
-Profile: `templates/template_profile.json` (extracted by `profileTemplate.js`)
-
-**CSA Colour Palette:**
-| Accent | Hex | Use |
-|--------|-----|-----|
-| accent1 | `3583C9` | Primary blue, section bars |
-| accent2 | `9C62A7` | Purple |
-| accent3 | `19BC9D` | Teal |
-| accent4 | `FFAA22` | Amber, highlights |
-| accent5 | `004987` | Navy, title backgrounds |
-| accent6 | `CC0033` | Red, warnings |
-
-**Fonts:** Calibri Light (headings), Calibri (body), Segoe UI (title slide)
-**Canvas:** 13.33 × 7.5 inches (widescreen 16:9)
-
-### Visualizations in PPTX
-
-Slides with assigned `visualization_ids` have charts rendered as native PptxGenJS shapes via `renderVisualization.js`. No image embedding. Supported: `bar_chart`, `stacked_bar`, `heatmap`, `radar_chart`, `matrix`, `timeline`.
+| Slide type | Packet field used |
+|-----------|------------------|
+| exec_overview | `executive_overview.headline`, `key_judgments`, `category_headlines`, `high_risk_indexes` |
+| category_content | `category_sections[n]`: headline, biggest_happenings, top_insights, early_signals, recommendations, outlook, key_evidence |
+| cross_category | `cross_category.patterns`, `overall_biggest_happenings`, `overall_early_signals` |
+| outlook | `cross_category.strategic_outlook`, per-category `outlook.statement` |
+| conclusion | High-confidence insights + high-priority recommendations from `category_sections` |
+| appendix | `appendix.cited_sources`, `appendix.evidence_index` |
 
 ---
 
-## Layer Output
+## Slide output shape (per slide)
 
 ```js
 {
-  slide_plan: object[],     // planned slides from Step 1
-  slides: object[],         // finalized slides with content + speaker notes
-  exports: {
-    markdown?: string,
-    speaker_script?: string,
-    pptx?: { path, slide_count },
-    json?: object[],
-  },
-  counts: {
-    evidence_callouts_used: number,  // total evidence callouts across all slides
-  },
-  deck_version: "deck-v7.1",
+  slide_number,
+  slide_type,
+  title,
+  headline,           // ≤20 words, must state a finding or trajectory
+  bullets,            // 3–5 × ≤15 words each
+  evidence_callouts,  // 1–3, each with evidence_id + key_fact + publisher + url
+  citations,          // "Publisher — Title (URL)" strings
+  visualization_ids,  // chart IDs to render
+  speaker_notes,      // L8-generated script (plain text paragraph)
+  script_qa,          // { qa_pass, issues[], tone_assessment, has_transition, second_model_used }
+  category,
+  core_message,
+  packet_section,     // reference back to presentation_packet section
 }
 ```

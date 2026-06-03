@@ -62,6 +62,7 @@ function saveText(relPath, text) {
 
 import { loadSampleSources }       from "../lib/pipeline/ingest/loadSampleSources.js";
 import { runPipeline, RUNNER_VERSION } from "../lib/pipeline/runner/pipelineRunner.js";
+import { getTokenUsageSummary }     from "../lib/llm/llmRouter.js";
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -170,6 +171,34 @@ async function main() {
     if (qa.warnings > 10) {
       console.log(`    ... and ${qa.warnings - 10} more warnings`);
     }
+  }
+
+  // ── Token usage ──────────────────────────────────────────────────────────────
+  // Covers every routed LLM call (L4 understand, L5A/L5B extraction, L6 analysis,
+  // L7 slides, L8 scripts, QA). Note: the L5A evidence web-search calls go direct
+  // to the Anthropic web_search tool and are reported separately by that layer.
+  try {
+    const tu = getTokenUsageSummary();
+    const totalIn  = Object.values(tu.by_task || {}).reduce((n, t) => n + (t.input  || 0), 0);
+    const totalOut = Object.values(tu.by_task || {}).reduce((n, t) => n + (t.output || 0), 0);
+
+    console.log("\n╔══════════════════════════════════════════════════════╗");
+    console.log("║                    TOKEN USAGE                       ║");
+    console.log("╠══════════════════════════════════════════════════════╣");
+    console.log("  By task:");
+    for (const [task, s] of Object.entries(tu.by_task || {}).sort((a, b) => (b[1].input + b[1].output) - (a[1].input + a[1].output))) {
+      console.log(`    ${task.padEnd(26)} calls=${String(s.calls || 0).padStart(4)}  in=${String(s.input || 0).padStart(8)}  out=${String(s.output || 0).padStart(7)}`);
+    }
+    console.log("  By provider:");
+    for (const [prov, s] of Object.entries(tu.by_provider || {}).sort((a, b) => (b[1].input + b[1].output) - (a[1].input + a[1].output))) {
+      console.log(`    ${prov.padEnd(26)} calls=${String(s.calls || 0).padStart(4)}  in=${String(s.input || 0).padStart(8)}  out=${String(s.output || 0).padStart(7)}`);
+    }
+    console.log("╠══════════════════════════════════════════════════════╣");
+    console.log(`  TOTAL (routed): in=${totalIn}  out=${totalOut}  combined=${totalIn + totalOut}`);
+    console.log(`  Cache: ${tu.cache?.hits ?? 0} hits / ${tu.cache?.misses ?? 0} misses (${tu.cache?.hit_rate ?? "0%"})`);
+    console.log("╚══════════════════════════════════════════════════════╝");
+  } catch (err) {
+    console.log("  (token usage summary unavailable:", err.message, ")");
   }
 
   console.log("");
