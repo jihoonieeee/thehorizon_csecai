@@ -4,8 +4,8 @@
  * so the docs can never drift from the code (Validated AI Threat Taxonomy, June 2026).
  *
  * Emits:
- *   docs/taxonomy-reference.md   — per-domain tag tables + hierarchy + AI-enabled pairs
- *   docs/taxonomy-provenance.md  — per-tag reference/URL provenance + secondary dimensions
+ *   lib/config/taxonomy-reference.md   — per-domain tag tables + hierarchy + AI-enabled pairs
+ *   lib/config/taxonomy-provenance.md  — per-tag reference/URL provenance + secondary dimensions
  *
  * Usage: node scripts/generateTaxonomyDocs.js
  */
@@ -89,6 +89,9 @@ function provenanceTable() {
   return lines.join("\n");
 }
 
-fs.writeFileSync(path.join(ROOT, "docs/taxonomy-reference.md"), referenceTable());
-fs.writeFileSync(path.join(ROOT, "docs/taxonomy-provenance.md"), provenanceTable());
-console.log("Wrote docs/taxonomy-reference.md and docs/taxonomy-provenance.md");
+// Write to lib/config/ so generated taxonomy docs stay with the config they describe.
+// docs/ is reserved for non-generated files (PDF, SQL migrations).
+const OUT_DIR = path.join(ROOT, "lib/config");
+fs.writeFileSync(path.join(OUT_DIR, "taxonomy-reference.md"), referenceTable());
+fs.writeFileSync(path.join(OUT_DIR, "taxonomy-provenance.md"), provenanceTable());
+console.log("Wrote lib/config/taxonomy-reference.md and lib/config/taxonomy-provenance.md");
