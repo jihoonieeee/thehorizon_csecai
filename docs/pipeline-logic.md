@@ -16,6 +16,7 @@ Layer 3   Classify      ← validity gate, AI-relevance score, source type, trus
 Layer 4   Understand    ← LLM: threat taxonomy tags, source type refinement, category suggestion
 Layer 5A  Rawfact       ← evidence extraction per high-priority source (atomic facts + scoring)
 Layer 5B  Analytics     ← corpus aggregation, derived risk indexes, chart specs
+Layer 5C  Web Evidence  ← gap-driven web evidence + visuals (Tavily/SerpAPI/specialized), validated, packaged for analysis + slides
 Layer 5E  Ext. Evidence ← web search for authoritative external statistics (once per category)
 Layer 6   Analysis      ← LLM: per-category insights, happenings, signals, recommendations
 Layer 7   Slides        ← deterministic deck plan + LLM slide content + speaker notes
@@ -605,6 +606,30 @@ Evidence types: `frequency_distribution` | `timeline` | `maturity_distribution` 
 
 ### Summary
 The analytics branch treats the corpus as a dataset. It routes each source according to `source_type` — not all sources contribute to all analytics. Operational source types (incident, exploit, TI, adoption signal) provide the strongest evidence. Governance, ecosystem, and strategic signals provide context only. Every frequency count tracks which sources contributed. Every index exposes its formula and signals low confidence when sample size is small.
+
+---
+
+## Component 5C — Web Evidence Branch (Layer 5C)
+
+### Purpose
+A standalone branch that runs alongside 5A/5B and feeds Layer 6 + Layer 7. It is **gap-driven**: it reads the rawfact packs and analytics, works out what each category is missing (no case study, no walkthrough, no quantitative anchor, no visual, no operational/recent evidence, thin taxonomy tags), and searches the open web for exactly those gaps. It produces **verified evidence objects + visual assets**, not conclusions.
+
+### Flow (13 steps)
+needs → missions → queries → search (Tavily → SerpAPI → arXiv/GitHub/NVD/CISA → Gemini/Claude verification) → open + cache (HTML/PDF) → trace original source → extract evidence + visuals → validate (anti-hallucination gates) → classify + evaluate visuals → cluster/dedupe → select best → frontier QA (shortlist) → package for dossiers + slides → persist.
+
+### Evidence depth (Layer-6 gate)
+Only `concrete | detailed | walkthrough_grade` reach Layer 6. `thin` (vague/no-named-system/no-quote) is archived. `walkthrough_grade` requires a grounded, sequential attack chain — steps are never inferred.
+
+### Visuals
+Each visual gets a usefulness level (high/medium/low/not_useful) and a slide decision (embed/redraw/cite_only/manual_review/reject). Only embed/redraw enter automatic slides; redraw recreates charts from extractable values (never from pixels); every visual must bind to a claim. See `docs/reasoning-visual-usefulness.md` and `docs/reasoning-slide-visual-selection.md`.
+
+### Disable + degrade
+Off by default (`WEB_EVIDENCE_ENABLED=false`). Heavy tooling (Playwright/poppler/cheerio/readability/pdf-parse) is optional and lazy-imported; without it the branch runs with regex extraction and routes screenshot/PDF work to `manual_review`. Every failure is recorded; the run never crashes.
+
+### Detailed docs
+`docs/reasoning-web-evidence-branch.md`, `docs/reasoning-web-search-providers.md`, `docs/reasoning-visual-usefulness.md`, `docs/reasoning-slide-visual-selection.md`. DB: `docs/migrations/web-evidence-v1.sql`.
+
+> Layer 5C **discovers + extracts** gap-filling evidence; Layer 5E (below) **corroborates** existing categories with authoritative statistics. They are complementary.
 
 ---
 
