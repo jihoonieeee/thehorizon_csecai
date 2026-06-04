@@ -15,7 +15,7 @@ Design rule for the whole branch: **recall first, then triage.** Layer 1B optimi
 - Discovery missions (controlled IDs — see below).
 - Taxonomy-v9 primary tags + sub-techniques (for query generation).
 - Entity seeds extracted deterministically from the already-ingested feed corpus (CVEs, model names, tool names, actor names, attack names).
-- `ANTHROPIC_API_KEY` for the `web_search` tool. Without it, the branch returns an empty-but-well-formed result and the pipeline proceeds on fixed feeds only.
+- At least one search provider key — `TAVILY_API_KEY` (preferred), `SERPAPI_API_KEY`, or `ANTHROPIC_API_KEY`. With none configured, the branch returns an empty-but-well-formed result and the pipeline proceeds on fixed feeds only.
 
 ## Outputs
 
@@ -92,11 +92,23 @@ Routes (`route` + `route_reason` + `route_flags`):
 
 `dedupeCandidates.js` clusters by normalized URL, title similarity, quote fingerprint, and entity overlap. It keeps the **original** report (highest independence + trust), plus the **best technical explanation** and **best data/visual source** if they add detail; the rest become `derivative`/`syndicated` and route to `archive_only`. A cluster with ≥2 retained independent representatives sets `corroboration_status = independent_sources` (which can lift an early signal to *moderate*).
 
+## Search providers (the `searchFn` seam)
+
+Discovery search runs through a **provider router** (`discoverySearchRouter.js`), the default `searchFn` for `runWebDiscovery`. Each provider returns the same shape `{ candidates, grounded:{citations,search_results}, no_results, note }`, so the gates/triage/routing are provider-agnostic. Tests inject their own `searchFn`.
+
+- **Tavily** (`TAVILY_API_KEY`, + `_2.._4` for rotation) — primary general provider. Returns real URLs **and extracted page content**, so candidates get a real `verbatim_quote` (a sentence from the page, added to `citations.cited_text` for quote grounding) without a frontier model. Cheap, high-recall.
+- **SerpAPI** (`SERPAPI_API_KEY`) — engine-specialised breadth. Routes research/benchmark missions to **Google Scholar** and incident missions to **Google News**. Returns SERP rows (title/link/snippet) only, so candidates are flagged `fetch_pending` → `quote_status=missing_preclean` → `accept_with_review`, and Layer 2 fetches + cleans the page so Layer 4/5 can extract a real quote.
+- **Anthropic `web_search`** — fallback when Tavily/SerpAPI are unconfigured/quota-exhausted (and the engine behind Layer 5E corroboration).
+
+Routing: by source-class hint then availability (Scholar/News missions try SerpAPI first; otherwise Tavily first; Anthropic last). A provider that hits a quota/auth error is retired for the process and the next available one is used. Force one with `WEB_DISCOVERY_PROVIDER=tavily|serpapi|anthropic`. Because every provider URL is a genuine retrieval, the opened-URL gate is satisfied by construction — but a real URL still does not validate the *claim*, so the quote–claim gate and Layer 2 fetch still apply.
+
+Why a router instead of only Anthropic `web_search`: moving 12 missions × ~8 queries × retries onto cent-level HTTP search (Tavily/SerpAPI) is far cheaper and faster than driving each query through a frontier model, and it raises recall (full SERP, Scholar/News engines). The frontier model is reserved for the few moderate/strong early-signal QA calls.
+
 ## Model routing
 
 - Query generation: deterministic (no LLM). Optional cheap-LLM polish hook exists but is off by default.
+- Web search: **provider router** (Tavily → SerpAPI → Anthropic `web_search`), see above.
 - Candidate triage (`discovery_triage`): **Gemini Flash-Lite** — semantic AI-threat specificity, novelty, operationalization stage, marketing/defensive flags, taxonomy hint. Runs across many candidates, so it must stay cheap.
-- Web search itself: **Anthropic `web_search`** (`callAnthropicWebSearch`).
 - Early-signal QA (`discovery_early_signal_qa`): **Anthropic Sonnet**, *only* for moderate/strong signals — never across the full candidate set.
 
 The expensive models are never run across the whole web result set.

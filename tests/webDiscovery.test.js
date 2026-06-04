@@ -16,6 +16,9 @@ import { runWebDiscovery, enforceSourceClassQuotas } from "../lib/pipeline/disco
 import { buildDiscoveryQueries, buildEntitySeededQueries } from "../lib/pipeline/discovery/buildDiscoveryQueries.js";
 import { candidatesToSources } from "../lib/pipeline/discovery/candidateToSource.js";
 import { VALID_EARLY_SIGNAL_TYPE } from "../lib/config/webDiscoveryVocab.js";
+import { runTavilyQuery } from "../lib/pipeline/discovery/providers/tavily.js";
+import { runSerpApiQuery, serpEngineFor } from "../lib/pipeline/discovery/providers/serpapi.js";
+import { providerOrderFor, hasAnyDiscoveryProvider } from "../lib/pipeline/discovery/discoverySearchRouter.js";
 
 let passed = 0, failed = 0;
 async function test(name, fn) {
@@ -355,6 +358,82 @@ await test("accepted web candidates enter the Layer 2/3 normal path as sources",
   assert.equal(s.source_origin, "web_discovery");
   assert.ok(s.id && s.url, "normalized source must have id + url for Layer 2/3");
   assert.equal(s.discovery_mission, "new_tool_or_mcp_abuse");
+});
+
+// ── Search providers (Tavily / SerpAPI) — mocked fetch, no network ───────────
+console.log("\nsearch providers");
+
+function mockFetch(data, status = 200) {
+  return async () => ({ ok: status >= 200 && status < 300, status, json: async () => data });
+}
+
+await test("Tavily maps results to grounded candidates with a real quote", async () => {
+  process.env.TAVILY_API_KEY = process.env.TAVILY_API_KEY || "test-key";
+  const fetchImpl = mockFetch({
+    results: [{
+      title: "Prompt injection in GPT-4 Copilot via MCP tool output",
+      url: "https://example.com/pi-copilot",
+      content: "Researchers demonstrate a prompt injection attack against GPT-4 Copilot agents.",
+      raw_content: "Researchers demonstrate a reproducible prompt injection attack against GPT-4 Copilot MCP agents that exfiltrates secrets through tool output.",
+      published_date: "2026-05-20",
+    }],
+  });
+  const res = await runTavilyQuery({ mission: "new_tool_or_mcp_abuse", query: "q", family: "seed" }, { fetchImpl });
+  assert.equal(res.candidates.length, 1);
+  const c = res.candidates[0];
+  assert.ok(c.verbatim_quote.length >= 20, "should extract a real quote from content");
+  assert.equal(c.fetch_pending, false);
+  assert.equal(c.provider, "tavily");
+  assert.equal(res.grounded.search_results.length, 1);
+  assert.equal(res.grounded.citations.length, 1, "quote grounded as a citation");
+  // Normalizes to a confirmed, quote-present candidate.
+  const norm = mkCandidate(c);
+  assert.equal(norm.opened_url_confirmed, true);
+  assert.equal(norm.quote_status, "present");
+});
+
+await test("SerpAPI maps SERP rows to fetch-pending candidates (quote in Layer 2)", async () => {
+  process.env.SERPAPI_API_KEY = process.env.SERPAPI_API_KEY || "test-key";
+  const fetchImpl = mockFetch({
+    organic_results: [{
+      title: "Memory poisoning attack on GPT-4 MCP agents",
+      link: "https://example.com/memory-poisoning",
+      snippet: "A memory poisoning attack manipulates autonomous GPT-4 MCP agent decisions in a controlled study.",
+      date: "May 20, 2026",
+    }],
+  });
+  const res = await runSerpApiQuery(
+    { mission: "new_agentic_attack_surface", query: "q", family: "seed", source_class_hint: "vendor_research" },
+    { fetchImpl, engine: "google" },
+  );
+  assert.equal(res.candidates.length, 1);
+  const c = res.candidates[0];
+  assert.equal(c.fetch_pending, true, "SERP snippet only → page fetched later");
+  assert.equal(c.verbatim_quote, "");
+  assert.ok(c.summary.includes("memory poisoning"));
+  assert.equal(res.grounded.search_results.length, 1);
+  assert.equal(res.grounded.citations.length, 0, "no page-verified quote yet");
+  // A fetch-pending SERP candidate routes to accept_with_review, not reject.
+  const out = await triageOne({ ...c });
+  assert.equal(out.quote_status, "missing_preclean");
+  assert.ok(["accept", "accept_with_review"].includes(out.route), `route=${out.route}`);
+});
+
+await test("SerpAPI engine routing: scholar for research, news for incidents", () => {
+  assert.equal(serpEngineFor("research_paper"), "google_scholar");
+  assert.equal(serpEngineFor("benchmark_dataset"), "google_scholar");
+  assert.equal(serpEngineFor("incident_writeup"), "google_news");
+  assert.equal(serpEngineFor("news_report"), "google_news");
+  assert.equal(serpEngineFor("technical_blog"), "google");
+});
+
+await test("router prefers a forced provider and reports availability", () => {
+  process.env.TAVILY_API_KEY = process.env.TAVILY_API_KEY || "test-key";
+  assert.equal(hasAnyDiscoveryProvider(), true);
+  const prev = process.env.WEB_DISCOVERY_PROVIDER;
+  process.env.WEB_DISCOVERY_PROVIDER = "tavily";
+  assert.deepEqual(providerOrderFor("technical_blog"), ["tavily"]);
+  if (prev === undefined) delete process.env.WEB_DISCOVERY_PROVIDER; else process.env.WEB_DISCOVERY_PROVIDER = prev;
 });
 
 // ── Results ─────────────────────────────────────────────────────────────────────

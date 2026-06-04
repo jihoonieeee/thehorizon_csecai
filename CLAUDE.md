@@ -24,6 +24,11 @@ BLOB_READ_WRITE_TOKEN — Vercel Blob token for snapshot archives
 CRON_SECRET — bearer token required for all admin/mutation API endpoints
 OPENAI_API_KEY — used for source enrichment (gpt-4o-mini); primary LLM
 GEMINI_API_KEY — fallback LLM (gemini-2.5-flash); free tier is 20 req/day
+ANTHROPIC_API_KEY — frontier analysis layers + web_search (evidence/discovery fallback)
+TAVILY_API_KEY (+ _2.._4) — Layer 1B web discovery: primary search provider (returns page content)
+SERPAPI_API_KEY — Layer 1B web discovery: Google/Scholar/News breadth provider
+WEB_DISCOVERY_ENABLED=1 — opt-in switch for the Layer 1B/1C web-discovery branch
+WEB_DISCOVERY_PROVIDER — optional: force tavily | serpapi | anthropic
 
 
 ## Repository Structure

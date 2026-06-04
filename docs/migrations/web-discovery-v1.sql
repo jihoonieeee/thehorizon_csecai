@@ -72,6 +72,8 @@ CREATE TABLE IF NOT EXISTS web_discovery_candidates (
   discovery_mission          TEXT,
   search_query               TEXT,
   search_query_family        TEXT,
+  provider                   TEXT,            -- tavily | serpapi | anthropic
+  fetch_pending              BOOLEAN,         -- true = page not yet read (SERP snippet)
   opened_url                 TEXT,
   opened_url_confirmed        BOOLEAN,
   source_class               TEXT,
