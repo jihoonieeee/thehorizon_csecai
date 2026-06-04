@@ -26,3 +26,24 @@ dist-ssr
 .env
 .env.local
 .data
+
+# Generated pipeline run artifacts — never commit outputs
+outputs/
+!outputs/.gitkeep
+
+# LLM response cache
+.llm_cache/
+.cache/
+
+# Local Claude Code config / memory
+.claude/
+
+# Generated taxonomy docs (produced by scripts/generateTaxonomyDocs.js)
+lib/config/taxonomy-reference.md
+lib/config/taxonomy-provenance.md
+
+# macOS metadata
+**/.DS_Store
+
+# Office temp lock files
+**/~$*

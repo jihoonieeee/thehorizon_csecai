@@ -140,17 +140,21 @@ function printSourceResult(source) {
     console.log(`  numbers  : ${u.important_numbers.join(" | ")}`);
   }
 
-  // Framework tags
-  if (u.framework_tags?.length) {
-    console.log(`  tags (${u.framework_tags.length}):`);
-    for (const t of u.framework_tags) {
+  // Primary threat tags (Validated AI Threat Taxonomy)
+  console.log(`  domain   : ${u.primary_domain || "(none)"}  | validation: ${u.validation_status || "?"}`);
+  if (u.primary_threat_tags?.length) {
+    console.log(`  tags (${u.primary_threat_tags.length}):`);
+    for (const t of u.primary_threat_tags) {
       console.log(
-        `    ${confidenceIcon(t.confidence)} ${t.tag} [${t.framework}/${t.framework_ref}]` +
-        `  — ${truncate(t.evidence || "", 70)}`
+        `    ${confidenceIcon(t.confidence)} ${t.tag} [${t.domain}/${t.validation_status}]` +
+        `  — ${truncate(t.supporting_quote || "", 70)}`
       );
     }
   } else {
     console.log("  tags     : (none)");
+  }
+  if (u.secondary_dimensions?.length) {
+    console.log(`  secondary: ${u.secondary_dimensions.join(", ")}`);
   }
 
   // Category candidates
@@ -196,10 +200,10 @@ function printSummary(results, originalSources) {
     }
   }
 
-  // Framework tag frequency
+  // Primary threat tag frequency
   const tagDist = {};
   for (const s of results) {
-    for (const t of s.understanding?.framework_tags || []) {
+    for (const t of s.understanding?.primary_threat_tags || []) {
       tagDist[t.tag] = (tagDist[t.tag] || 0) + 1;
     }
   }
