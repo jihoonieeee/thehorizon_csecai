@@ -43,6 +43,7 @@ const NO_LLM        = flag("--no-llm");
 const NO_PERSIST    = flag("--no-persist");
 const DETAILED_NOTES = flag("--detailed-notes");
 const RUN_INGEST    = flag("--ingest");
+const WEB_DISCOVERY = flag("--web-discovery");  // Layer 1B/1C open-web source discovery
 const SOURCE_FILE   = argVal("--source-file");
 const DAYS          = parseInt(argVal("--days") || "90", 10);
 const DATE_START    = argVal("--start");
@@ -74,6 +75,7 @@ import { runPipeline, RUNNER_VERSION } from "../lib/pipeline/runner/pipelineRunn
 import { getTokenUsageSummary }     from "../lib/llm/llmRouter.js";
 import { collectRawSources }        from "../lib/pipeline/ingest/collectRawSources.js";
 import { saveSnapshotToDatabase }   from "../lib/storage/snapshotDatabase.js";
+import { persistDiscoveryResult }   from "../lib/storage/discoveryStore.js";
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -99,7 +101,8 @@ async function main() {
   // When --ingest is set, collect fresh sources from NVD / arXiv / RSS feeds for
   // the given date window, persist them to Supabase, and pass them directly to the
   // analysis pipeline. This makes the command self-contained (no prior backfill needed).
-  let explicitSources = null;
+  let explicitSources  = null;
+  let ingestSnapshotId = null;  // set when --ingest persists a snapshot; forwarded to runPipeline
 
   if (RUN_INGEST && !SOURCE_FILE) {
     const ingestWindow = (() => {
@@ -128,15 +131,25 @@ async function main() {
     })();
 
     console.log(`[ingest] Collecting sources: ${ingestWindow.start_utc.slice(0, 10)} → ${ingestWindow.end_utc.slice(0, 10)}`);
-    const ingestResult = await collectRawSources(ingestWindow);
+    if (WEB_DISCOVERY) console.log("[ingest] Web discovery (Layer 1B/1C) enabled");
+    const ingestResult = await collectRawSources(ingestWindow, { webDiscovery: WEB_DISCOVERY, skipLlm: NO_LLM });
     const ingestSources = ingestResult.sources.slice(0, LIMIT);
     console.log(
       `  → collected: raw=${ingestResult.pipeline_counts.raw} ` +
       `windowed=${ingestResult.pipeline_counts.within_publish_date_window} ` +
+      (WEB_DISCOVERY ? `web_discovered=${ingestResult.pipeline_counts.web_discovery_accepted} ` : "") +
       `deduped=${ingestResult.pipeline_counts.deduped} ` +
       `usable=${ingestResult.pipeline_counts.usable} ` +
       `capped=${ingestSources.length}`
     );
+    if (WEB_DISCOVERY && ingestResult.web_discovery) {
+      const wd = ingestResult.web_discovery;
+      console.log(
+        `  → web discovery: accepted=${wd.accepted_count} audit=${wd.audit_count} ` +
+        `rejected=${wd.rejected_count} archive_only=${wd.archive_only_count} ` +
+        `unsupported_queries=${(wd.unsupported_queries || []).length}`
+      );
+    }
 
     // Persist ingested sources to Supabase so they're queryable later
     if (!NO_PERSIST && ingestSources.length > 0) {
@@ -155,9 +168,21 @@ async function main() {
           discarded_count:               ingestResult.discarded_count || 0,
           sources:                       ingestSources,
         });
+        ingestSnapshotId = snap.snapshot_id;
         console.log(`  → saved snapshot ${snap.snapshot_id}`);
       } catch (err) {
         console.warn(`  → snapshot save failed: ${err.message} — continuing with in-memory sources`);
+      }
+    }
+
+    // Persist ALL web-discovery candidates (accepted + archive_only + reject) for
+    // audit. Graceful no-op until docs/migrations/web-discovery-v1.sql is applied.
+    if (!NO_PERSIST && ingestResult.web_discovery?.candidates_total > 0) {
+      try {
+        const res = await persistDiscoveryResult(ingestResult.web_discovery, { snapshotId: ingestSnapshotId });
+        console.log(`  → web discovery candidates persisted: ${res.written} (skipped ${res.skipped})`);
+      } catch (err) {
+        console.warn(`  → web discovery persist failed: ${err.message}`);
       }
     }
 
@@ -185,6 +210,7 @@ async function main() {
     detailedNotes:    DETAILED_NOTES,
     exportFormat:     FORMAT,
     outputPath:       FORMAT === "pptx" || FORMAT === "all" ? PPTX_OUT : null,
+    snapshotId:       ingestSnapshotId,
     onProgress:       (step, msg) => console.log(`  [${step}] ${msg}`),
   });
 

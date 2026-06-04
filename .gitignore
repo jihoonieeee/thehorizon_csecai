@@ -33,6 +33,10 @@ outputs/
 
 # LLM response cache
 .llm_cache/
+.cache/
+
+# Local Claude Code config / memory
+.claude/
 
 # Generated taxonomy docs (produced by scripts/generateTaxonomyDocs.js)
 lib/config/taxonomy-reference.md

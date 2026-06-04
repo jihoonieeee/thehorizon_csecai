@@ -51,7 +51,7 @@ Raw source objects array. Not yet persisted — held in memory through Layers 2�
 ### Failure Handling
 Individual connector failures are logged but do not abort the pipeline. The run proceeds with whatever sources were collected. arXiv adds an 8-second delay between weekly chunk requests and 3 seconds between queries to avoid rate limits.
 
-### Plain-English Summary
+### Summary
 Layer 1 is the data collector. It reaches out to multiple external sources — academic paper databases, government advisories, security feeds, and vulnerability databases — and normalises everything into a common format. The URL-based ID system means running the pipeline twice on the same day won't create duplicate records.
 
 ---
@@ -73,7 +73,7 @@ Raw source objects from Layer 1.
 ### Outputs
 Sources with `clean_text` field added. Passed to Layer 3.
 
-### Plain-English Summary
+### Summary
 Layer 2 strips the noise out of source text — removing HTML, fixing encoding, and pulling out any structured indicators. Everything downstream reads `clean_text`, not the raw scraped body.
 
 ---
@@ -193,7 +193,7 @@ Combines the outputs of 3.1–3.4 into a single routing decision:
 
 Rejected sources are returned with status but not dropped from the array — they are recorded for audit and not passed to Layer 4.
 
-### Plain-English Summary
+### Summary
 Layer 3 is the filter. It runs five fast, deterministic checks on every source and decides: is this structurally usable? Is it actually about AI security? What kind of intelligence object is it? How trustworthy is the publisher? Should it proceed, be flagged for review, or be discarded? The LLM is only called in Layer 3 when a source can't be typed by rules — which is uncommon. This keeps Layer 3 cheap and fast.
 
 ---
@@ -226,51 +226,97 @@ Choose one of five domains: `traditional_ai_threats`, `llm_threats`, `agentic_ai
 - `agentic_ai_threats` — only when the AI system acts through tools/MCP/memory/workflow/autonomy
 - `ai_enabled_threats` — only when AI materially changes attacker capability AND the ATT&CK operational technique is paired with an AI modifier
 
-**Step 4 — Assign primary threat tags:**
-Only from the Validated AI Threat Taxonomy. **62 primary tags** across 4 domains:
+**Step 4 — Assign primary tags (taxonomy-v9):**
+Only from the AI Threat Taxonomy v9 (docs/TAXONOMY.md). **39 primary tags** across 4 domains, using coded IDs:
 
-*Traditional AI Threats (11 tags):* `data_poisoning`, `model_poisoning`, `adversarial_evasion`, `adversarial_data`, `model_extraction`, `model_inversion`, `membership_inference`, `inference_api_abuse`, `model_denial_of_service`, `model_integrity_erosion`, `ai_supply_chain_compromise`
+*Traditional AI Threats (TAI01–TAI10):* `TAI01_data_poisoning`, `TAI02_model_poisoning`, `TAI03_adversarial_evasion`, `TAI04_adversarial_data`, `TAI05_model_extraction`, `TAI06_model_inversion`, `TAI07_membership_inference`, `TAI08_inference_api_abuse`, `TAI09_model_denial_of_service`, `TAI10_ai_supply_chain_compromise` — Framework: MITRE ATLAS
 
-*LLM Threats (16 tags):* `prompt_injection` (parent), `direct_prompt_injection`, `indirect_prompt_injection`, `multimodal_prompt_injection`, `rag_prompt_injection`, `jailbreak`, `guardrail_bypass`, `sensitive_information_disclosure`, `system_prompt_leakage`, `context_leakage`, `llm_supply_chain_compromise`, `improper_output_handling`, `vector_embedding_weaknesses`, `vector_database_exposure`, `unbounded_consumption`, `model_theft`
+*LLM Security Threats (LLM01–LLM10):* `LLM01_prompt_injection`, `LLM02_sensitive_information_disclosure`, `LLM03_llm_supply_chain`, `LLM04_data_model_poisoning`, `LLM05_improper_output_handling`, `LLM06_excessive_agency`, `LLM07_system_prompt_leakage`, `LLM08_vector_embedding_weaknesses`, `LLM09_misinformation`, `LLM10_unbounded_consumption` — Framework: OWASP LLM Top 10
 
-*Agentic AI Threats (20 tags):* Covering memory/context (`agent_memory_poisoning`, `agent_context_poisoning`, `memory_exfiltration`), tools/MCP (`tool_poisoning`, `tool_misuse`, `tool_hijacking`, `mcp_server_compromise`, `tool_supply_chain_compromise`), permissions (`agent_privilege_abuse`, `agent_credential_abuse`), execution (`unsafe_code_execution`, `sandbox_escape`), workflow (`workflow_poisoning`, `orchestration_compromise`), multi-agent (`agent_communication_poisoning`, `multi_agent_coordination_abuse`), identity (`agent_identity_spoofing`), human interface (`human_agent_manipulation`), plus `agent_prompt_injection` and `indirect_agent_prompt_injection`
+*Agentic AI Threats (ASI01–ASI10):* `ASI01_agent_goal_hijack`, `ASI02_tool_misuse_exploitation`, `ASI03_identity_privilege_abuse`, `ASI04_agentic_supply_chain_vulnerabilities`, `ASI05_unexpected_code_execution`, `ASI06_memory_context_poisoning`, `ASI07_insecure_inter_agent_communication`, `ASI08_cascading_failures`, `ASI09_human_agent_trust_exploitation`, `ASI10_rogue_agents` — Framework: OWASP Agentic AI Top 10
 
-*AI-Enabled Threats (15 tags):* Each paired with an ATT&CK operational technique + AI capability modifier: `ai_assisted_reconnaissance` (T1595), `ai_target_profiling` (T1589), `ai_assisted_vulnerability_research` (T1588.006), `ai_exploit_development` (T1587.004), `ai_malware_development` (T1587.001), `ai_payload_obfuscation` (T1027), `ai_command_generation` (T1059), `ai_assisted_phishing` (T1566), `ai_voice_impersonation`, `ai_deepfake_impersonation`, `synthetic_identity_abuse`, `ai_enabled_fraud`, `ai_generated_disinformation` (DISARM), `ai_attack_automation`, `ai_orchestrated_intrusion`
+*AI-Enabled Threats (AE01–AE09):* `AE01_ai_enabled_reconnaissance`, `AE02_ai_enabled_social_engineering`, `AE03_ai_enabled_vulnerability_research`, `AE04_ai_enabled_exploit_development`, `AE05_ai_enabled_malware_development`, `AE06_ai_enabled_evasion_obfuscation`, `AE07_ai_enabled_identity_abuse`, `AE08_ai_enabled_attack_orchestration`, `AE09_ai_enabled_disinformation_influence` — Framework: MITRE ATT&CK operational behaviors
+
+**Step 5 — Sub-techniques:** Optional more precise classification under a primary tag. e.g. `LLM01_prompt_injection` → sub-techniques: `direct_prompt_injection`, `indirect_prompt_injection`, `retrieval_augmented_prompt_injection`, etc. Each sub-technique requires its own supporting_quote. Sub-techniques are NOT primary tags — they are children.
+
+**Step 6 — AI-enabled overlay (new in v9):** This is the critical architectural innovation.
+
+AI-enabled threats (AE01–AE09) serve **two distinct roles**:
+1. **Primary domain** — when the source is mainly about AI being used as an offensive operational tool (deepfake fraud campaigns, AI phishing at scale, AI malware generation).
+2. **Cross-cutting overlay** — when AI materially enhances an attack that is primarily about LLM, Agentic, or Traditional AI threats. The overlay appears as metadata on sources with a different primary domain.
+
+Every source gets these fields regardless of primary_domain:
+- `ai_enabled: boolean` — true if AI materially enhances the attack
+- `ai_enabled_roles: AE01–AE09[]` — which AI-enabled operational roles apply (only when ai_enabled=true and primary_domain is not ai_enabled_threats)
+- `ai_capabilities[]` — controlled vocab: synthetic_text_generation, code_generation, automation, autonomous_planning, etc.
+- `automation_level` — human_assisted | semi_autonomous | autonomous | unknown
+- `autonomy_level` — human_assisted | semi_autonomous | autonomous | multi_agent | unknown
+
+**Example of dual-role pattern:**
+```json
+{
+  "primary_domain": "llm_threats",
+  "primary_tags": ["LLM01_prompt_injection"],
+  "sub_techniques": ["indirect_prompt_injection"],
+  "ai_enabled": true,
+  "ai_enabled_roles": ["AE02_ai_enabled_social_engineering"],
+  "ai_capabilities": ["synthetic_text_generation"]
+}
+```
+This source is primarily about LLM prompt injection, but AI is also used to generate the injected social engineering payload.
 
 **Assignment rules — all mandatory:**
-1. Use only tags from the assigned domain.
-2. Each tag requires a `supporting_quote` — a specific sentence from the source (≥20 chars).
-3. No keyword tagging — the source must substantively describe the threat behaviour.
-4. Secondary dimensions (`excessive_agency`, `misinformation`, `overreliance`, `resource_overload`, `cascading_hallucination`) go in `secondary_dimensions`, never as primary tags.
-5. For `ai_enabled_threats`: must supply a real ATT&CK technique as `operational_attack_mapping` + `T1588.007` as `ai_capability_modifier`. Placeholder "required per case" is invalid.
-6. Max 4 primary threat tags. Empty array is always correct if evidence is insufficient.
+1. Use only TAI01–TAI10, LLM01–LLM10, ASI01–ASI10, or AE01–AE09 coded IDs.
+2. Each primary tag requires `supporting_quote` ≥20 chars from the source text.
+3. Sub-techniques must belong to the selected primary tag (orphan sub-techniques are rejected).
+4. AI-enabled roles must be from AE01–AE09.
+5. Max 4 primary tags. Empty array is always correct if evidence is insufficient.
+6. Set primary_domain=ai_enabled_threats ONLY when the source is primarily about AI as an offensive tool, NOT when the subject is AI security (prompt injection, model poisoning, etc.).
 
-The system prompt also embeds disambiguation examples for all commonly confused tag pairs (e.g. `data_poisoning` vs `model_poisoning`, `jailbreak` vs `guardrail_bypass`, `model_extraction` [traditional ML] vs `model_theft` [LLM distillation]).
-
-**Step 5 — Secondary dimensions:** Optional qualifiers/impacts. Only from the 5 listed.
-
-**Step 6 — Category candidates:** Suggest 1–3 of the four threat categories with `supporting_tags`, `confidence` (high/medium/low), and `reason`. Defensive/governance-only content → `unclear_or_adjacent`.
+**Step 7 — Category candidates:** Suggest 1–3 of the four threat categories with `supporting_tags`, `confidence` (high/medium/low), and `reason`. Defensive/governance-only content → `unclear_or_adjacent`.
 
 ### Post-LLM Validation (taxonomyValidation.js)
 
-After the LLM responds, every proposed tag is validated deterministically:
-- Tag must exist in the registry and be a primary_threat (not a secondary dimension)
+After the LLM responds, every proposed primary tag, sub-technique, and AI-enabled role is validated deterministically:
+
+**Primary tag validation:**
+- Tag must exist in the v9 registry (TAI01–TAI10, LLM01–LLM10, ASI01–ASI10, AE01–AE09)
 - Assigned domain must match the tag's registered domain (mismatch → `rejected`)
-- `supporting_quote` must be ≥20 chars and not be generic AI-risk discourse (e.g. "responsible ai", "ai ethics") without adversarial signals
+- `supporting_quote` must be ≥20 chars and not be generic AI-risk discourse without adversarial signals
 - Source must have a traceable URL or ID
-- AI-enabled tags: `operational_attack_mapping` must be a real technique, not "required per case" (→ downgraded to `weak`)
+
+**Sub-technique validation:**
+- Sub-technique must exist in the registry
+- Must belong to one of the selected primary tags (orphan → `rejected`)
+- `supporting_quote` required
+
+**AI-enabled overlay validation:**
+- `ai_enabled_roles` must be from AE01–AE09
+- `ai_capabilities` must be from the controlled vocabulary
+- `ai_enabled=true` without any valid roles → caveated as weak
 
 **Validation outcomes:**
 - `validated` — all conditions met
-- `weak` — quote too short, generic language, or AI-enabled mapping is placeholder
+- `weak` — quote too short, generic language, or missing roles
 - `needs_manual_review` — no traceable source URL
-- `rejected` — wrong domain, not in registry, or is a secondary dimension
-
-Rejected tags are dropped. Weak/needs_manual_review tags are kept but flagged.
+- `rejected` — wrong domain, not in registry, or orphan sub-technique
 
 ### Second-Model QA (qaTaxonomyTags.js)
 
-An optional second LLM call uses a *different model* to independently verify the tags assigned by the first. It auto-triggers whenever any tag is `weak` or `needs_manual_review`. The second model receives the source text, all proposed tags with their supporting quotes, and a compact tag reference (all 62 tags with domain abbreviation and threat meaning). It can only remove tags, never add. Its decisions override the first model's output for flagged tags.
+An optional second LLM call uses a *different model* to independently verify the tags assigned by the first. It auto-triggers whenever any tag is `weak` or `needs_manual_review`. The second model receives:
+- Source text and summary
+- All proposed primary tags with supporting quotes
+- Proposed sub-techniques with their parent tags
+- AI-enabled overlay (ai_enabled_roles, ai_capabilities)
+- Compact tag reference (all 39 primary tags with domain and description)
+
+The second model checks:
+1. Primary tag correctness — does the source actually substantively describe this threat?
+2. Sub-technique correctness — does the sub-technique belong to the stated parent?
+3. AI-enabled overlay correctness — are the AE roles appropriate, or should ai_enabled=false?
+4. Whether the primary_domain is correct (ai_enabled as primary vs overlay distinction)
+
+The second model can only remove tags or flag the domain as wrong — it cannot add new tags.
 
 ### Category Classification (Layer 6 deterministic, classifyCategory.js)
 
@@ -284,17 +330,37 @@ After Layer 4, a deterministic step assigns `main_category` from the Layer 4 out
 ### Outputs
 Each source gains:
 - `source_type` (refined)
-- `primary_domain` 
-- `understanding` object containing: `source_summary`, `primary_subject`, `main_claims`, `key_entities`, `important_numbers`, `primary_threat_tags[]`, `secondary_dimensions[]`, `ai_enabled_mappings[]`, `taxonomy_evidence[]`, `validation_status`, `category_candidates[]`
+- `primary_domain`
+- `primary_tags[]` — validated primary tags in v9 coded-ID format
+- `sub_techniques[]` — validated sub-techniques with parent_tag references
+- `ai_enabled` — boolean overlay flag
+- `ai_enabled_roles[]` — AE01–AE09 roles when ai_enabled is true
+- `ai_capabilities[]` — controlled vocab of AI capabilities used
+- `automation_level`, `autonomy_level`
+- `taxonomy_validation_status` — validated | weak | needs_manual_review
+- `understanding` object containing: `source_summary`, `primary_subject`, `main_claims`, `key_entities`, `important_numbers`, `primary_tags[]`, `sub_techniques[]`, `taxonomy_evidence[]`, `category_candidates[]`
 - `main_category`
-- `classification_confidence`
-- `taxonomy_version` (idempotency stamp — already-processed sources are skipped)
+- `taxonomy_version` = "taxonomy-v9-2026-06" (idempotency stamp)
+
+### Database Storage
+New columns added by `docs/migrations/taxonomy-v9.sql`:
+- `primary_tags JSONB` — v9 coded primary tags
+- `sub_techniques JSONB` — sub-techniques per primary tag
+- `ai_enabled BOOLEAN`
+- `ai_enabled_roles JSONB` — AE01–AE09 roles
+- `ai_capabilities JSONB`
+- `automation_level TEXT`, `autonomy_level TEXT`
+- `taxonomy_version TEXT`
+- `taxonomy_validation_status TEXT`
+- `taxonomy_validation_reasons JSONB`
+
+Legacy columns (`intelligence`, `primary_domain`) are preserved for backward compatibility.
 
 ### Failure Handling
-If the LLM call fails or returns unparseable JSON → `deterministicFallback()` runs: keyword-based domain guess from title + summary + full_text, `primary_threat_tags: []`, `validation_status: needs_manual_review`. The source proceeds downstream with empty tags.
+If the LLM call fails or returns unparseable JSON → `deterministicFallback()` runs: keyword-based domain guess from title + summary + full_text, `primary_tags: []`, `taxonomy_validation_status: needs_manual_review`. The source proceeds downstream with empty tags.
 
-### Plain-English Summary
-Layer 4 is where every source is read and tagged. The LLM is given the entire 62-tag taxonomy, reads the source text, and says: "This source is about X, belongs to domain Y, and demonstrates threat behaviour Z (with this specific quote as evidence)." A deterministic validator then checks that every proposed tag actually exists in the registry, has a real quote backing it, and is assigned to the correct domain. A second model re-checks any uncertain tags. The result is a taxonomically consistent, evidence-backed classification for every source.
+### Summary
+Layer 4 is where every source is read and tagged against the v9 taxonomy. The LLM assigns primary tags (TAI/LLM/ASI/AE coded IDs), sub-techniques, and the AI-enabled overlay. A deterministic validator checks every tag, sub-technique, and role. A second model re-checks uncertain assignments. The AI-enabled dual-role architecture means a source about LLM prompt injection that also uses AI for social engineering correctly gets both: primary_domain=llm_threats AND ai_enabled=true with ai_enabled_roles=[AE02].
 
 ---
 
@@ -353,21 +419,57 @@ The main extraction call. The LLM is given the source text (first 5000 chars), t
 - Verifies `source_quote` against the source body: exact substring match OR ≥75% content-word overlap. Sets `quote_verified: true/false`, `quote_match` (method string)
 - Checks atomicity: flags compound claims (semicolon-separated clauses, colon with verb-bearing second clause, "and" ≥ 2 times). Sets `is_atomic: false` for compounds.
 
-**Step 6 — Evidence Scoring (deterministic):**
-Each item is scored 0–100 using 7 dimensions:
-- `source_authority` (0–15): trust_tier of parent source
-- `evidence_strength` (0–20): evidence_type base score + confidence modifier + numbers/entities bonuses + atomicity bonus + verbatim-verified bonus
-- `operational_relevance` (0–20): from rawfact_taxonomy + type boosts for incident/exploit
-- `horizon_significance` (0–20): novelty field + scope boosts for ecosystem/capability shifts
-- `actionability` (0–10): evidence_type (mitigation = 9; vulnerability = 8; strategic_signal = 3)
-- `corroboration` (0–10): trust_tier base (0–5) + cluster multi-source bonus (up to +5 for 4+ independent sources corroborating the same claim)
-- `recency` (0–5): age in days
+**Step 6 — Evidence Scoring (deterministic, source_type-aware):**
+Six-stage architecture. Gates control the band decision; the score supports it.
 
-**Penalties:** −10 for non-representative cluster duplicate, −10 for low confidence, −8 for speculative language (may/might/could + verb), −6 for ungrounded quote, −6 for non-atomic claim, −5 for no URL, −3 for no date.
+**Stage 1 — Hard Eligibility Gates (archive_only immediately if failed):**
+- No source URL
+- `quote_verified = false` with a checkable source body (ungrounded quote)
+- `is_atomic = false` (compound claim)
+- `fact.length < 20` (too short)
+- Speculative language (may/might/could + verb, possibly, potentially)
+- Generic opener (`AI can be used to…` under 60 chars)
+- Marketing language (best-in-class, industry-leading, revolutionary)
+- `source_type = unknown` AND `trust_tier = low`
+- `evidence_confidence = low` with no multi-source corroboration
 
-**Priority bands:** critical ≥85, high 70–84, medium 50–69, low 30–49, archive_only <30.
+**Stage 2 — Evidence Role Classification:**
+Each item receives an `evidence_role` from a controlled set: `real_world_incident`, `vulnerability_exposure`, `exploitability_signal`, `attacker_capability`, `adversary_adoption`, `quantitative_anchor`, `mitigation_or_defensive_priority`, `infrastructure_dependency`, `trust_boundary_change`, `strategic_shift`, `governance_context`, `societal_harm_case`, `ecosystem_context`, `background_context`.
 
-**Critical gate:** Score ≥85 AND source_authority ≥10 AND strength ≥14 AND (op_relevance ≥15 OR horizon ≥15) AND confidence ≠ low AND penalties ≤5 AND quote_verified ≠ false AND is_atomic ≠ false.
+**Stage 3 — Source-Type Criticality Paths:**
+Each `source_type` has a named criticality path with specific conditions. Failing the path caps the item at `high` even if the score is ≥ 80. Key paths:
+- `vulnerability:cve_with_named_component` — named entity + vuln/exploit evidence type + medium+ trust
+- `exploit_disclosure:reproducible_method` — exploit_chain or attack_method + medium+ trust
+- `incident:confirmed_real_world_impact` — incident/actor evidence type + entities or numbers
+- `threat_intel:observed_adversary_behaviour` — actor/adoption/exploit type + high trust OR multi-source
+- `research:empirical_with_operational_pathway` — numbers + new novelty + high operational relevance
+- `benchmark:headline_quantitative_anchor` — numeric benchmark_result type
+- `adversary_adoption:observed_adoption` — adversary_adoption or threat_actor_activity type
+
+Hard max bands by source type: `governance_signal` and `defensive_capability` are capped at high; `unknown` is capped at medium. All other types allow critical via their path.
+
+**Stage 4 — Source-Type-Specific Weighted Scoring (0–100):**
+Three groups with different dimension weights:
+
+*Operational* (vulnerability, exploit_disclosure, incident, threat_intelligence):
+threat_relevance 25 · evidence_concreteness 20 · operational_impact 20 · source_credibility 15 · corroboration 10 · recency 5 · analytical_usefulness 5
+
+*Horizon* (research_finding, benchmark_evaluation, capability_demonstration, adversary_adoption_signal, infrastructure_dependency_signal, strategic_signal):
+horizon_significance 25 · threat_relevance 20 · source_credibility 15 · operationalization_likelihood 15 · evidence_concreteness 15 · corroboration 5 · analytical_usefulness 5
+
+*Contextual* (defensive_capability, trust_boundary_shift, societal_harm_signal, governance_signal, ecosystem_signal):
+strategic_relevance 20 · source_credibility 15 · threat_relevance 15 · evidence_concreteness 15 · operational_implication 15 · corroboration 10 · analytical_usefulness 10
+
+Each dimension is scored 0–100. `source_credibility`: primary=100, curated=90, high=80, medium=60, low=30. `evidence_concreteness` rewards numbers (+15), entities (+15), verified quote (+15), atomic claim (+10), high confidence (+10); penalises low confidence (−25) and short facts (−15).
+
+**Stage 5 — Band Assignment (gates first, score second):**
+critical ≥ 80 AND criticality path passed | high ≥ 65 | medium ≥ 45 | low ≥ 25 | archive_only < 25.
+Score alone cannot produce critical — the criticality path gate must also pass.
+
+**Stage 6 — Scoring Explanation (always present):**
+Every item carries a `scoring_explanation` object: `source_type`, `evidence_role`, `criticality_path_passed` (named path or null), `key_positive_signals[]`, `downgrade_reasons[]`, `final_band_reason` (human-readable). This enables audit of every critical/high/medium decision.
+
+**Duplicate penalty (between Stage 4 and 5, second pass only):** −10 for non-representative cluster members.
 
 **Step 7 — Clustering (deterministic):**
 Jaccard-based deduplication at the item level. Items that share substantial content-word overlap, matching CVE/entity, or the same URL are grouped into clusters. One item per cluster is marked `is_representative: true`; others are non-representative.
@@ -398,134 +500,194 @@ Final quality pass: removes items with missing required fields, invalid evidence
 - Per-category: `evidence_packs` (bucketed: critical/high/supporting/stats/cases/mitigations/outlook)
 - Source-level: `rawfact_score_data` (best item score used as source-level priority)
 
-### Plain-English Summary
+### Summary
 The rawfact branch takes high-priority sources and drills down to the specific, verifiable facts inside them. Every fact must be backed by a verbatim sentence from the source. Facts are scored by how specific, credible, novel, and operationally relevant they are. Similar facts from different sources are detected and the duplicates are penalised. The result is a set of pre-bucketed evidence packs — critical findings, case studies, statistics, outlook signals — that the analysis layer can draw on directly.
 
 ---
 
-## Component 5B — Analytics Branch (9 steps)
+## Component 5B — Analytics Branch (source-type-aware-v1)
 
 ### Purpose
-Generate corpus-level quantitative analytics — not individual source facts, but patterns across all sources. Answers questions like: Which attack vectors appear most frequently? How operationalised are the threats? Are adversaries actually adopting AI? What are the derived risk indexes?
+Treat the corpus as a dataset and produce a small set of concrete, auditable deliverables. The analytics branch answers: what evidence do we have, which source types drive it, what is operationalised versus theoretical, where are adversaries adopting AI capabilities, and where is coverage thin?
 
-### How the Analytics Branch Processes Sources
+**Core principle:** The analytics branch does not draw strategic conclusions. It produces measured, caveated evidence for synthesis. Every metric tracks source IDs. Every index exposes its formula and confidence.
 
-**Step 1 — Analytics Eligibility (deterministic):**
-Not every source produces analytics. Sources are classified as `full_analytics` (receives LLM feature extraction), `limited_analytics` (deterministic only), or `excluded` (off-topic, rejected).
+### Source Type Routing
 
-**Step 2 — Analytics Profiles (deterministic):**
-Each source type has a profile controlling which analytics features are worth extracting for it. E.g. a `threat_intelligence` source emphasises attack vectors and adversary adoption stage; a `governance_signal` source emphasises governance functions and compliance implications.
+`source_type` is orthogonal to `main_category`. It describes what kind of intelligence object the source is. Different source types feed different analytics:
 
-**Step 3 — Analytics Feature Extraction (LLM + deterministic):**
-The key extraction step. The LLM is given the source and asked to assign values from controlled vocabularies:
+| Group | Source Types | What they feed |
+|-------|-------------|----------------|
+| Operational | incident, exploit_disclosure, vulnerability, threat_intelligence, adversary_adoption_signal | Operational claims, adversary adoption, attack vector frequency |
+| Horizon | research_finding, benchmark_evaluation, capability_demonstration, infrastructure_dependency_signal, strategic_signal | Capability pipeline, research-to-threat progression |
+| Contextual | defensive_capability, governance_signal, ecosystem_signal, societal_harm_signal, trust_boundary_shift | Defensive, governance, infrastructure analytics only |
 
-**What information is extracted per source:**
-- `attack_vectors[]` — from a 30-value controlled vocabulary (e.g. `prompt_injection`, `jailbreak`, `rag_poisoning`, `tool_hijacking`, `mcp_abuse`, `ai_assisted_phishing`, `deepfake_impersonation`)
-- `attack_surfaces[]` — from a 21-value controlled vocabulary (e.g. `prompt_layer`, `rag_pipeline`, `mcp_layer`, `agent_orchestration_layer`, `human_trust_layer`)
-- `ai_layers[]` — from 11 values (e.g. `foundation_model`, `llm_application`, `agentic_system`, `synthetic_media_system`)
-- `operational_status` — one of: theoretical, research_only, proof_of_concept, limited_operational_use, active_operational_use, mainstream_operational_use
-- `threat_maturity` — research/emerging/growing/operational/mainstream
-- `impact_scope` — individual/organization/sector/ecosystem/societal/global
-- `impact_types[]` — data_exposure, credential_theft, financial_loss, remote_code_execution, etc.
-- `signal_clusters[]` — semantic clusters (e.g. `prompt_injection_and_jailbreaks`, `agentic_tool_abuse`, `ai_assisted_malware`, `adversary_ai_adoption`) — up to 3 per source
-- `recurring_themes[]` — strategic cross-cutting themes (e.g. `operationalization`, `trust_boundary_failure`, `automation_of_offense`, `compression_of_defender_timelines`) — up to 3 per source
-- `sectors[]`, `geography[]`, `technologies[]`
-- Type-specific fields: `defensive_controls[]`, `governance_functions[]`, `adversary_adoption_stage`, `capability_stage`, `dependency_types[]`, `trust_boundary_shift_types[]`
+**Important routing rule:** governance, ecosystem, and strategic signals must not be used to claim adversary operational activity. Only incident, exploit_disclosure, threat_intelligence, and adversary_adoption_signal sources feed the adversary adoption distribution.
 
-**Deterministic fallback (no LLM):** Keyword matching on source text for sector/geography/technology inference. Attack vectors inferred from primary_threat_tags.
+### Source-Type Weights (for weighted frequency counts)
 
-**Step 4 — Normalisation (deterministic):** Values not in the controlled vocabulary are dropped. Ensures clean aggregation.
+| Source Type | Weight | Rationale |
+|------------|--------|-----------|
+| incident | 1.5 | Confirmed real-world activity — highest signal |
+| exploit_disclosure | 1.4 | Demonstrated working capability |
+| vulnerability | 1.3 | Concrete exploitable weakness |
+| threat_intelligence | 1.3 | Observed adversary behaviour |
+| adversary_adoption_signal | 1.2 | Specific adoption evidence |
+| capability_demonstration | 1.1 | Concrete PoC capability |
+| research_finding | 1.0 | Baseline |
+| benchmark_evaluation | 1.0 | Empirical result |
+| infrastructure_dependency_signal | 0.9 | Structural signal |
+| trust_boundary_shift | 0.9 | Structural signal |
+| defensive_capability | 0.8 | Context only |
+| governance_signal | 0.7 | Context only |
+| ecosystem_signal | 0.7 | Context only |
+| strategic_signal | 0.7 | Context only |
+| societal_harm_signal | 0.6 | Indirect signal |
+| unknown | 0.4 | Reduced weight |
 
-**Step 5 — Aggregation (deterministic):**
-Counts and frequencies are computed across all sources:
-- `attack_vector_frequency` — weighted count of each attack vector across all sources
-- `attack_surface_frequency` — same for attack surfaces
-- `maturity_distribution` — breakdown of operational_status and threat_maturity per category
-- `monthly_category_counts` — time-series by month × category (for trend charts)
-- `signal_cluster_counts` — how many sources fall into each signal cluster
-- `category_breakdowns` — per-category detailed distributions
-- `adversary_adoption_analytics` — adoption stage distribution, total adversary sources
-- `capability_analytics` — capability stage distribution
-- `governance_analytics` — governance function frequency, governance by sector
-- `defensive_analytics` — defensive control frequency, mitigation gap signals
-- `trend_deltas` — month-over-month change in source volume per category
+### Processing Steps
 
-**Step 6 — Derived Metrics (deterministic):**
-9 composite risk indexes (0–100) computed from the aggregates:
+**Step 5b.1 — Analytics Eligibility:** Classify each source as `full_analytics`, `limited_analytics`, or `excluded`.
 
-| Index | What It Measures |
-|-------|-----------------|
-| `operationalisation_index` | Proportion of corpus with active/PoC operational status (weighted by stage) |
-| `adversary_adoption_index` | How far adversaries have progressed in adopting AI (weighted stage score + volume) |
-| `agentic_risk_index` | Agentic category's share of offensive corpus + operational boost |
-| `ai_enabled_threat_index` | AI-as-weapon category's corpus share + operational boost |
-| `governance_pressure_index` | Volume of governance sources × diversity of governance functions |
-| `defensive_maturity_index` | Defensive coverage relative to threat surface, penalised for mitigation gaps |
-| `ecosystem_dependency_index` | Volume + diversity of AI infrastructure dependency signals |
-| `trust_boundary_shift_index` | Authority delegation + oversight reduction signals + shift diversity |
-| `research_to_threat_pipeline_index` | Lab-demonstrated + PoC + in-wild capabilities × established/mature maturity |
+**Step 5b.2 — Analytics Profiles:** Attach source-type-aware extraction profile (enabled_dimensions, required_fields, aggregation_weight).
 
-**Step 7 — Analytics Evidence Selection (deterministic):**
-Summarises the aggregates into a concise `analytics_evidence[]` array — one item per dimension — that the analysis layer can consume directly. Each item has a human-readable `insight` string, `top_entries[]`, and `data` object. E.g. "Most common attack vector: Prompt Injection (weighted count: 12)" or "87% of adversary signals at operationalizing/widespread stage."
+**Step 5b.3 — Feature Extraction (LLM + deterministic):** Extract chart-ready metadata from each eligible source using controlled vocabularies. LLM used only for `full_analytics` sources when key is available. Deterministic fallback always runs first.
 
-**Step 8 — Visualization Specs (deterministic):**
-Generates ~25 chart specifications, each with a stable `visualization_id`, `chart_type`, `title`, and `chart_data`. Chart types include bar, stacked bar, heatmap (rendered as table), timeline, radar (rendered as bar), and gauge array. All labels use Title Case. Specs are finalised with integer rounding and thin-data flagging (`insufficient_data: true` when fewer than 2 non-zero data points; `low_n: true` with honest corpus-size caveat when N<6).
+Controlled vocabularies include:
+- `operational_status`: theoretical | research_only | proof_of_concept | limited_operational_use | active_operational_use | mainstream_operational_use | unknown
+- `adversary_adoption_stage`: none_observed | speculative | research_claimed | early_experimentation | limited_operational_use | active_operational_use | widespread_use | unknown
+- `capability_stage`: concept | lab_validated | benchmark_demonstrated | proof_of_concept | tool_available | operationally_reported | unknown
+- Plus: attack_vectors (30 values), attack_surfaces (21 values), ai_layers (11 values), impact_types, signal_clusters, defensive_controls, governance_functions, dependency_types, trust_boundary_shift_types
 
-New specs added this build: `category_trend_delta` (month-over-month change bar chart from trend_deltas), `critical_trend_overview` (gauge array of only high/very_high risk indexes).
+**Step 5b.4 — Normalisation:** Drop any value not in the controlled vocabulary.
 
-**Step 9 — QA (deterministic):** Checks aggregates for empty/invalid fields, validates derived metric bounds, flags empty visualization specs.
+**Step 5b.5 — Aggregation:** Deterministic counting across all sources. Key addition: attack vector and domain frequencies now track source IDs alongside weighted counts (see `attack_vector_frequency_tracked`). Corpus limitations array is generated automatically (small N, low trust, dominant category, thin timelines).
 
-### Outputs
-- Per-source: `analytics_features` object
-- Corpus-level: `aggregates` (all frequency distributions), `derived_metrics` (9 indexes), `analytics_evidence[]` (concise evidence items), `visualization_specs[]` (chart data)
+**Step 5b.5b — Source-Type Coverage Matrix (new):** Build source_type × domain matrix showing which source types support which threat domains. Flags thin operational coverage (fewer than 3 operational-type sources for a domain).
 
-### Plain-English Summary
-The analytics branch treats the entire corpus as a dataset rather than processing sources one at a time. It asks: across all the sources collected this period, what attack techniques appear most often, how operationalised are the threats, are adversaries actually adopting AI? It produces frequency charts, maturity assessments, risk indexes, and timeline data. Everything is computed deterministically from LLM-extracted per-source features — the LLM extracts structured labels per source, then pure counting and math does the rest.
+**Step 5b.6 — Derived Indexes:** 9 deterministic composite indexes (0–100). Each now includes: `index_id`, `score`, `formula`, `inputs`, `source_count`, `confidence` (high/medium/low based on N), and `caveat_if_any`.
+
+| Index ID | Formula summary |
+|----------|-----------------|
+| `operationalisation_index` | (active×1.0 + limited×0.9 + poc×0.5 + research×0.15) / total × 100 |
+| `adversary_adoption_index` | (Σ stage_weight × count) / total × 0.7 + volume_factor |
+| `agentic_runtime_risk_index` | (agentic / offensive) × 60 + operational boost |
+| `ai_enabled_offensive_use_index` | (ai_enabled / total) × 70 + operational boost |
+| `governance_pressure_index` | min(60, gov/total × 120) + min(40, functions/8 × 40) |
+| `defensive_coverage_index` | min(50, def/total × 200) + min(30, controls/8 × 30) − gaps × 5 |
+| `infrastructure_dependency_index` | volume + diversity + attack_surface_growth signal |
+| `trust_boundary_shift_index` | volume + (authority_delegation + oversight_reduction) × 8 + diversity |
+| `research_to_threat_pipeline_index` | (lab×0.3 + bench×0.4 + poc×0.6 + tool×0.8 + op×1.0) / total × 60 + maturity × 40 |
+
+**Step 5b.7 — Analytics Evidence Pack:** Converts aggregates and indexes into `analytics_evidence[]` items. New format includes `analytics_evidence_id`, `evidence_type` enum, `finding` (corpus-level phrasing), `data`, `source_ids`, `metric_ids`, `domain`, `source_types`, `confidence`, `caveat_if_any`.
+
+Evidence types: `frequency_distribution` | `timeline` | `maturity_distribution` | `adoption_signal` | `coverage_gap` | `derived_index`.
+
+**Trend data quality rule:** Timeline findings are only emitted when ≥ 3 non-zero monthly buckets exist. Domains with fewer buckets are listed in `insufficient_trend_data` with a reason. All trend language uses "within the collected corpus" phrasing — never "globally" or "in the real world."
+
+**Step 5b.8 — Visualization Package:** ~25+ chart specifications. Each has `visualization_id`, `chart_type` (bar, stacked_bar, timeline, heatmap_table, gauge_array, matrix_table), `title`, `chart_data`, `source_count`, `insufficient_data: boolean`, `low_n: boolean`, `recommended_slide_use`, and `caveat_if_any`.
+
+**Step 5b.9 — QA:** Validates all structured output.
+
+### Deliverables (11)
+
+1. `corpus_profile` — total/eligible/excluded sources, type distribution, domain distribution, corpus_limitations[]
+2. `source_type_coverage_matrix` — matrix × domain with coverage_notes and thin_coverage_flags
+3. `threat_frequency_analytics` — weighted+unweighted attack vector frequency with source_ids
+4. `operationalisation_analytics` — operational status by domain and source type
+5. `adversary_adoption_analytics` — adoption stage distribution, operational source types only, caveats
+6. `capability_pipeline_analytics` — research→PoC→operational transitions with watchlist
+7. `defensive_governance_infrastructure` — separate analytics for non-attack source types
+8. `trend_timeline_analytics` — monthly distributions, trend direction (3-bucket minimum), insufficient flags
+9. `derived_indexes` — array of 9 indexes with formula + confidence
+10. `analytics_evidence` — concise evidence pack for analysis layer
+11. `visualization_specs` — chart-ready data for slides
+
+### Summary
+The analytics branch treats the corpus as a dataset. It routes each source according to `source_type` — not all sources contribute to all analytics. Operational source types (incident, exploit, TI, adoption signal) provide the strongest evidence. Governance, ecosystem, and strategic signals provide context only. Every frequency count tracks which sources contributed. Every index exposes its formula and signals low confidence when sample size is small.
 
 ---
 
 ## Component 5E — External Evidence Search (Layer 5E)
 
 ### Purpose
-Supplement the corpus with authoritative real-world statistics, benchmarks, and published figures that the ingested sources may not cover. The corpus reflects *what was published this period* — external evidence adds hard numbers like "87% of enterprises experienced AI-related security incidents in 2025" from industry reports that weren't in the feed.
+Supplement the corpus with authoritative external evidence in two forms:
+1. **Text/statistical evidence** — statistics, benchmark results, reports, datasets
+2. **Visual evidence** — charts, diagrams, figures, tables, framework maps, benchmark graphs
 
-### How Web-Searched Analytics Work
+Visual evidence is treated as intelligence, not decoration. Every visual object answers: what does it show, what analytical claim does it support, is it safe to embed on a slide?
 
-**Trigger:** Called ONCE per pipeline run — one LLM call per active threat category (max 4 calls total). Not per-source.
+### Trigger and Model
 
-**Model:** Anthropic Claude (frontier model with web search capability via `callAnthropicWebSearch`). Falls back to Gemini 2.5 Pro if Anthropic is unavailable.
+Called **once per pipeline run** — max one web-search call per active threat category (max 4 calls total). Not called per source.
 
-**What it searches for:** Each category has a list of `evidence_needs` — specific types of statistics and research the category benefits from. Examples for `llm_threats`:
-- "Prompt injection attack success rates on major LLMs"
-- "Jailbreak rates and benchmark evaluations (AdvBench, HarmBench)"
-- "Training data leakage and memorisation statistics"
-- "Published red-team findings from major AI labs"
+**Model:** Anthropic Claude with `web_search` tool (`callAnthropicWebSearch`). Uses `ANTHROPIC_API_KEY`. No Gemini fallback for web search (recall fallback disabled by default to prevent hallucinated citations).
 
-The LLM is given these evidence needs and instructed to retrieve up to 8 items per category.
+**Result caching:** Results are cached to `.cache/evidence_search/` (key = category + version + YYYY-MM, TTL = 7 days). A cache hit skips the web search call entirely — re-running the pipeline within the same month costs zero tokens for this layer. Bypass with `EVIDENCE_CACHE_BYPASS=1`.
+
+### What It Searches For
+
+Each category has two evidence need lists:
+
+**Text/statistical needs** (7 per category) — specific statistics, benchmark results, reports:
+- `llm_threats`: jailbreak benchmark results (HarmBench/AdvBench), prompt injection success rates, red-team findings from AI labs, training data leakage statistics, etc.
+- `traditional_ai_threats`: adversarial robustness benchmarks, data poisoning stats, MITRE ATLAS incidents, etc.
+- `agentic_ai_threats`: AI agent exploitation reports, MCP vulnerability research, coding assistant security findings, etc.
+- `ai_enabled_threats`: deepfake fraud statistics, AI phishing success rates, voice cloning incident data, etc.
+
+**Visual evidence needs** (5 per category) — named figures, diagrams, and charts:
+- `llm_threats`: jailbreak benchmark result chart, prompt injection flow diagram, RAG poisoning diagram, LLM threat model diagram, red-team evaluation table
+- `traditional_ai_threats`: MITRE ATLAS taxonomy diagram, adversarial robustness benchmark chart, model extraction attack diagram, etc.
+- `agentic_ai_threats`: agentic AI threat model diagram, MCP tool-poisoning diagram, multi-agent trust boundary diagram, etc.
+- `ai_enabled_threats`: AI phishing trend chart, deepfake fraud loss chart, GenAI abuse category chart, etc.
+
+The model is instructed to return up to 8 text items + up to 5 visual items per category, and to check each page it opens for relevant figures.
 
 ### How External Evidence Is Validated
 
-Strict rules enforced in the prompt and in post-processing:
-1. **Never fabricate statistics or invent URLs** — any numeric claim must carry a source URL.
-2. **URL confidence levels:** `high` (verified, directly fetched), `medium` (likely correct), `low` (uncertain). Low-confidence URLs are flagged `needs_manual_review: true`.
-3. **Evidence types:** classified as `direct_evidence` (URL directly states the statistic), `inferred` (reasonable derivation), or `weak_uncertain`.
-4. **If no reliable evidence exists** → add to `unsupported_queries`, do NOT hallucinate.
+**Text evidence rules (unchanged):**
+1. Only record URLs actually opened via `web_search`
+2. Never invent statistics, titles, publishers, or exact quotes
+3. URL grounding: items matched against the retrieved URL set → `url_confidence: "high"`, `needs_manual_review: false`. Unmatched → `url_confidence: "low"`, `needs_manual_review: true`.
+4. If no reliable evidence → add to `unsupported_queries`, do not hallucinate
 
-Post-processing (`normalizeEvidenceObject`, `validateEvidenceObject`):
-- Sources with no URL or `url_confidence: low` automatically get `needs_manual_review: true`
-- `evidence_id` assigned (ext_XXXXXXXX format)
-- `accessed_date` stamped
+**Visual evidence rules (new):**
+1. `visual_url` must be a URL the model actually found on the page (not guessed or remembered)
+2. `extractable_data.data_points` are only populated when the model can read exact values from text or labels — never inferred from pixel positions
+3. Visual items are URL-grounded the same way as text items — source_url must match a retrieved page
+4. `slide_usable: true` requires: url_confidence=high + visual_url present + evidence_confidence ≠ low + not copyrighted as reference-only
+5. `needs_manual_review: true` when: no visual_url, PDF-only, low confidence, or copyright unknown
 
-### How External Evidence Reaches the Analysis Layer
+### Visual Evidence Schema
 
-External evidence is attached to per-category evidence packs as `external_evidence[]`. Items flagged `needs_manual_review` are excluded from this pack. In the analysis layer prompts, external evidence is formatted with a special `EXTERNAL VALIDATED EVIDENCE (ext_* IDs)` section so the analysis LLM knows these are real-world figures from authoritative external sources, not corpus counts.
+Each visual evidence object (`extvis_XXXXXXXX`):
+- `visual_type` — `chart | graph | diagram | table | figure | screenshot | framework_map | benchmark_result`
+- `what_the_visual_shows` — precise description of data, comparison, mechanism, or taxonomy shown
+- `analytical_use` — what analytical claim or slide point it supports
+- `supports_claim_type` — `statistic | trend | benchmark | mechanism | taxonomy | attack_path | risk_model | case_evidence`
+- `extractable_data` — numeric data points, axis labels, legend items (only if readable from page)
+- `image_extraction_status` — `direct_image_url | pdf_page_reference | html_embedded_image | caption_only | manual_review_required`
+- `slide_usable` — true if safe to auto-embed on a slide
+- `linked_external_evidence_id` — links to a text evidence item from the same page
 
-Insights citing an `ext_*` ID are validated differently from corpus-based insights — the analysis QA explicitly requires analytics or external evidence for frequency/ranking claims ("most common", "dominant", "surge").
+### How Evidence Reaches Downstream Layers
 
-External evidence is also converted to visualization specs (`stat_callout` and `image_embed` types with `source: "external_web"`) so they can appear on slides. `planSlides.js` uses `externalChartIds()` to surface these on appropriate slides.
+**Evidence packs** (`attachExternalEvidenceToPacks`):
+- Each pack gets `external_evidence[]` and `external_visual_evidence[]`
+- Pack evidence items get `external_references[]` and `external_visual_references[]` annotations
 
-### Plain-English Summary
-The external evidence layer is like a targeted web search at the end of every pipeline run. For each threat category, it asks a frontier AI model to find the best available industry statistics, benchmark results, and published figures. The model cites URLs for everything. Anything without a reliable URL is flagged for human review and kept out of slides. The result supplements the corpus's own findings with hard numbers that the ingested sources might not have — making insights like "the evidence suggests an increasing trend" into "the evidence suggests an increasing trend; a 2025 IBM report found 67% of organisations encountered AI-related attacks."
+**Visualization specs** — three types of visual specs are now generated:
+1. **Re-drawn chart specs** (text evidence with `chart_data`) — bar charts from extracted data series
+2. **Visual figure specs** (visual evidence objects) — `external_chart_reference | external_figure_reference | external_diagram_reference | external_table_reference | image_embed_candidate | pdf_figure_reference`
+
+**Analysis layer** receives `externalEvidence` (text items) in `EXTERNAL VALIDATED EVIDENCE` section, and visual evidence in `EXTERNAL VALIDATED VISUAL EVIDENCE` section. Analysis LLM may cite `ext_*` and `extvis_*` IDs.
+
+**Slide layer:** `slide_usable: true` visual specs are embedded as `image_embed_candidate`. Manual-review visuals are preserved in `manual_review_items` but not auto-embedded.
+
+**Persistence:** Visual evidence is stored to Supabase `visual_evidence` table via `persistVisualEvidence`. The table now handles both old `is_visual` text-evidence items and new `visual_evidence_id` objects.
+
+### Summary
+Component 5E is a targeted web search that adds both hard numbers and authoritative visuals to every pipeline run. It runs once, caches results for the month, and returns two evidence arrays: `external_evidence` (statistics, benchmarks, reports) and `external_visual_evidence` (charts, diagrams, framework maps, figures). Text evidence enriches analysis with quantitative anchors. Visual evidence provides slide-ready figures from authoritative sources — or flags them for manual review when copyright or confidence is unclear. Neither type is fabricated: everything must come from a page the model actually opened.
 
 ---
 
@@ -534,41 +696,87 @@ The external evidence layer is like a targeted web search at the end of every pi
 ### Purpose
 Produce the actual intelligence analysis — not just "what sources exist" but "what happened, what does it mean, where are things heading, and what should defenders do." This is the layer that transforms evidence into viewpoints.
 
-### Architecture
+### Design Principle: Shift Reasoning Upstream
 
-The analysis layer has two parts: per-category analysis (4 sequential LLM sections per category) and cross-category synthesis (1 frontier-model call across all categories).
+Code constructs analytical relationships. LLM explains, prioritises, and writes evidence-backed judgments.
+
+The analysis layer runs in two stages:
+
+1. **Component 6A — Analytical State Construction (deterministic)** — builds structured candidate hypotheses from all prior outputs before any LLM call
+2. **Component 6B — Category Analysis (LLM-per-category)** — evaluates hypothesis candidates and expresses them as evidence-backed intelligence judgments
+
+### Component 6A — Analytical State Construction (buildAnalyticalState.js)
+
+Runs after fused dossier construction, before any LLM calls. Deterministic — no LLM.
+
+For each category, builds:
+
+**Dominant threat patterns** — from attack vector frequency (with source_ids), taxonomy tags, and dossier evidence items grouped by evidence_type. Each pattern has `pattern_id`, `source_count`, `weighted_count`, `source_type_mix`, `confidence`, `supporting_evidence_ids`, and `supporting_metric_ids`.
+
+**Operationalisation signals** — from `maturity_analytics.category_by_operational_status`. Only emit if operational source types (incident, exploit, TI, adoption signal) back up the claim. Each signal has `signal_id`, `status`, `source_types`, `supporting_evidence_ids`, `confidence`.
+
+**Adversary adoption signals** — from `adversary_adoption_analytics.adversary_adoption_evidence` filtered to this category. Only operational source types qualify. Includes `adoption_stage`, `source_types`, `attack_vectors`, `supporting_source_ids`, `adoption_caveats`.
+
+**Capability progression signals** — from `capability_analytics`: `research_to_poc_signals`, `poc_to_operational_signals`, `capability_watchlist`. Each has progression_type, source_ids, attack_vectors.
+
+**Trend signals** — from `trend_analytics`. Applies 3-bucket minimum: if fewer than 3 non-zero monthly buckets, `direction: "insufficient_data"` is set and trend claims are blocked. All trend assertions include "within the collected corpus" language.
+
+**Evidence strength** — `confidence_ceiling` (high/medium/low/none) computed from: critical/high evidence count, source_type_diversity, presence of operational sources, external evidence, quantitative support. This is the hard ceiling for hypothesis confidence.
+
+**Coverage gaps** — from dossier fusion_summary + analytics thin-coverage flags.
+
+**Hypothesis candidates** — for each category, candidates are generated from: dominant patterns (→ trend or operationalisation hypotheses), operationalisation signals (→ operationalisation hypotheses), trend signals (→ trend or evidence_gap), adversary adoption (→ adoption), capability watchlist (→ early_signal). Each candidate has:
+- `hypothesis_id` (hyp_* format)
+- `judgment_type` — operationalisation | trend | adoption | convergence | capability_progression | defensive_gap | governance_pressure | evidence_gap
+- `candidate_claim` — structured claim proposal (not final prose)
+- `basis` — metric_ids, rawfact_evidence_ids, external_evidence_ids by type
+- `confidence_ceiling` — cannot be exceeded by the LLM
+- `recommended_output_type` — insight | early_signal | caveat | evidence_gap
+
+**Cross-category state** — shares patterns across ≥ 2 categories using predefined convergence seed clusters:
+- Prompt injection + tool misuse + agent orchestration (llm_threats + agentic_ai_threats)
+- AI-assisted phishing + deepfake + synthetic identity (ai_enabled_threats)
+- Model supply chain + LLM supply chain + tool supply chain (traditional + llm + agentic)
+- Adversarial ML + LLM evasion (traditional + llm)
+- Governance pressure + infrastructure dependency + trust boundary shift (structural, all domains)
+
+Each convergence cluster requires evidence from ≥ 2 categories. Cross-category hypothesis candidates are generated for every cluster with ≥ 2 supporting categories.
+
+**QA of analytical state** — validates: patterns have evidence/metric IDs, trend claims have ≥ 3 buckets, hypothesis confidence ≤ ceiling, cross-category patterns span ≥ 2 categories.
 
 ### Fused Dossier Construction (buildFusedDossiers.js)
 
-Before any LLM calls, the rawfact evidence packs and analytics outputs are merged into a per-category fused dossier. This is the sole input to the analysis LLM — the model never sees raw source objects.
+Before any LLM calls, rawfact evidence packs and analytics outputs are merged into per-category dossiers. Each dossier contains:
+- `rawfact.critical_evidence[]`, `high_evidence[]`, `case_studies[]`, `statistics[]`, `mitigations[]`, `outlook_signals[]`, `external_evidence[]`, `supporting_evidence_promoted[]`
+- `analytics.*` — frequency distributions, derived metrics, visualization specs
+- `fusion_summary` — deterministic signals, evidence gaps, confidence assessment
 
-Each dossier contains:
-- `rawfact.critical_evidence[]` — up to 5 critical-priority evidence items
-- `rawfact.high_evidence[]` — up to 6 high-priority items
-- `rawfact.case_studies[]` — up to 4 incident/exploit/research items from high-trust sources
-- `rawfact.statistics[]` — up to 5 items with quantitative data
-- `rawfact.mitigations[]` — up to 4 defensive/governance items
-- `rawfact.outlook_signals[]` — up to 4 capability/ecosystem/adversary items
-- `rawfact.external_evidence[]` — up to 4 verified external statistics
-- `rawfact.supporting_evidence_promoted[]` — medium-priority items promoted when critical+high total < 3
-- `analytics.*` — aggregated frequency distributions, derived metrics, visualization specs
-- `fusion_summary` — deterministic signals: strongest claim candidates, biggest happenings candidates, likely early signals, evidence gaps, confidence assessment
+### Component 6B — Category Analysis — 4 Sequential LLM Sections (analyzeCategory.js)
 
-### Category Analysis — 4 Sequential LLM Sections (analyzeCategory.js)
-
-For each active category (those with ≥2 sources), 4 LLM calls run sequentially. Each section builds on the previous.
+For each active category (≥2 sources), 4 LLM calls run sequentially. Each builds on the previous. The analytical state from 6A is injected into Sections 2 and 3.
 
 **Section 1 — Happenings:**
 *Input:* `critical_evidence`, `high_evidence`, `case_studies` (+ promoted supporting if thin)  
-*Task:* Extract 0–5 concrete events. A "happening" is a real event with rawfact evidence: an incident, demonstrated capability, disclosed vulnerability, governance action, or clear trend shift. Not analysis, not prediction.  
-*Rules:* Each happening MUST cite at least one `ev_*` or `raw_*` evidence_id from the dossier. The model is given a strict ALLOWED evidence_ids list (only IDs visible in the section's prompt). `confidence` reflects evidence strength: high = multiple strong sources.
+*Task:* Extract 0–5 concrete events with rawfact evidence. Not analysis, not prediction.  
+*Rules:* Each happening MUST cite at least one `ev_*` or `raw_*` ID from the dossier. ALLOWED IDs list is scoped to evidence in this section.
 
-**Section 2 — Insights:**
-*Input:* Happenings from Section 1 + analytics_evidence + statistics + external_evidence  
-*Task:* Write 2–5 analytical conclusions explaining what the events and patterns MEAN. An insight connects at least two pieces of evidence, or a rawfact event with an analytics pattern.  
-*Rules:* Frequency/ranking claims ("most common", "dominant", "surge") require an `agg_*` or `metric_*` or `ext_*` ID — never a bare corpus count of 1–2. "Mixed" insights that tie a concrete event to a corpus-wide pattern are preferred.
+**Section 2 — Insights (with Analytical State):**
+*Input:* Happenings from §1 + **hypothesis candidates from Component 6A** + evidence strength + analytics_evidence + statistics + external_evidence  
+*Task:* Evaluate the provided hypothesis candidates and express them as evidence-backed intelligence judgments. Reject or downgrade unsupported candidates.  
+*Rules:*
+- May ACCEPT, COMBINE, or REJECT hypothesis candidates based on evidence
+- May NOT introduce claims not grounded in hypothesis candidates or the analytics/evidence provided
+- May NOT upgrade confidence above a candidate's `confidence_ceiling`
+- Frequency/ranking claims require `agg_*`, `metric_*`, or `ext_*` IDs — never bare corpus counts
+- `hyp_*` IDs are in the ALLOWED IDs list
+- Optional: `judgment_type` and `caveat_if_any` fields in output
 
-**Section 3 — Early Signals + Outlook:**
+**Section 3 — Early Signals + Outlook (with Trend State):**
+*Input:* Insights from §2 + **trend signals from Component 6A** + outlook_signals + analytics_evidence  
+*Task:* Write 0–3 early signals and one 3-6mo outlook.  
+*Rules:* For trend claims, use only pre-computed trend_ids. If `direction: "insufficient_data"` — do NOT claim a trend direction. All trend language uses "within the collected corpus" phrasing.
+
+**Section 4 — Recommendations:**
 *Input:* Outlook signals + insights from Section 2 + analytics trend data  
 *Task:* 0–3 early signals (weak signs of emerging change with `why_early` and `implication_3_6_months`) + one 3-6 month outlook statement.  
 *Rules:* Every signal and the outlook must cite an allowed evidence_id. Ground forward-looking statements in evidence trajectory, not speculation.
@@ -620,7 +828,7 @@ Model routing: Anthropic Claude Sonnet preferred → Gemini 2.5 Pro → Gemini 2
 - `cross_category_synthesis` — executive summary + patterns + overall happenings/signals/outlook
 - `qa_report` — retained/removed counts per category
 
-### Plain-English Summary
+### Summary
 The analysis layer is where evidence becomes intelligence. Instead of one massive LLM call that produces vague outputs, it runs four focused calls per category — each given only the evidence relevant to that step. The first call identifies what concretely happened (with citations). The second draws analytical conclusions from the events and patterns. The third looks at what is emerging. The fourth recommends defensive actions. Everything must cite a traceable evidence ID. After all categories are done, a final call looks across all four categories to find the cross-cutting patterns and produce the strategic executive summary.
 
 ---
@@ -699,7 +907,7 @@ Unknown/insufficient data → neutral grey box with "Insufficient data for this 
 - `slidesWithNotes[]` — slides with speaker_notes appended
 - `.pptx` file via PptxGenJS
 
-### Plain-English Summary
+### Summary
 The slides layer takes the intelligence analysis and turns it into a professional briefing deck. The planning step is entirely deterministic — it decides the deck structure from the analysis outputs. The content step calls a powerful LLM (Anthropic Opus 4.8) for each analytical slide, giving it the actual evidence items with their verbatim source quotes. The LLM writes insight-led headlines and evidence-backed bullets; it's prohibited from inventing facts, using unsubstantiated trend language, or restating generic observations. A separate call generates what the presenter should say for each slide. Finally, PptxGenJS renders all charts, tables, and timelines as native PPTX chart objects.
 
 ---
@@ -741,7 +949,7 @@ Every LLM call in the pipeline goes through a single central dispatcher. It sele
 ### Failure Handling
 If all providers fail → returns `{ result: null, llm_metadata: { error: "all_providers_failed" } }`. Every caller has a deterministic fallback for this case. The pipeline never crashes on LLM failure.
 
-### Plain-English Summary
+### Summary
 The LLM router is the single gateway for all AI model calls. It knows what each task needs (cheap bulk model vs expensive frontier model), which providers are available and healthy, and how to fall back gracefully. Multiple API keys per provider let it rotate across quota limits automatically. Responses are cached so re-running the pipeline on the same sources doesn't repeat expensive calls.
 
 ---
@@ -776,7 +984,7 @@ Source type is orthogonal to threat category — it describes *what kind of inte
 - **Validation:** `taxonomyValidation.js` imports `getTag()`, `isPrimaryTag()`, `isSecondaryDimension()` for all tag checks
 - **generateTaxonomyDocs.js:** Generates reference tables from the registry on demand
 
-### Plain-English Summary
+### Summary
 The taxonomy registry is the pipeline's single source of truth about what AI threats exist and how to recognise them. It's a structured ontology — not a flat tag list — with parent-child relationships, domain membership, MITRE/OWASP references, and strict assignment rules for each of the 62 primary threat tags. Every LLM call that does classification receives this taxonomy as part of its system prompt. Every proposed tag is validated against the registry before it is accepted.
 
 ---
