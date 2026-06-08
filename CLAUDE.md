@@ -38,8 +38,9 @@ WEB_DISCOVERY_PROVIDER — optional: force tavily | serpapi | anthropic
   /lib/pipeline — the 9-layer pipeline, one subdirectory per layer group:
     /lib/pipeline/ingest    — Layer 1: source collection, normalization, filtering, connectors
     /lib/pipeline/clean     — Layer 2: text cleaning, structured content extraction
-    /lib/pipeline/classify  — Layer 3: source typing, relevance scoring, validity gate
-      /lib/pipeline/classify/layer3 — sublayers 3.1–3.5 (validity, relevance, typing, trust, gate)
+    /lib/pipeline/validation — Layer 3 (validation layer): LLM-led AI-threat relevance, summary, source typing, validity gate
+      sublayers 3.1–3.5 (validity, relevance+summary+typing via Haiku, trust, gate); deterministic pre-gate + fallback
+    /lib/pipeline/classify  — classifyCategory.js only: Layer 6 main-category pick (deterministic)
     /lib/pipeline/understand — Layer 4: LLM source understanding (stub)
     /lib/pipeline/feed       — Layer 5a: feed evidence branch (stub)
     /lib/pipeline/analytics  — Layer 5b: analytics branch (stub)
@@ -69,7 +70,7 @@ WEB_DISCOVERY_PROVIDER — optional: force tavily | serpapi | anthropic
 
 Layer 1 (ingest)     → collect raw sources from connectors
 Layer 2 (clean)      → normalize text, extract code blocks and IOCs
-Layer 3 (classify)   → validate, type, score relevance; gate sources for Layer 4
+Layer 3 (validation) → validate; LLM-led AI-threat relevance + summary + source typing; gate sources for Layer 4
 Layer 4 (understand) → LLM deep understanding, framework mapping [stub]
 Layer 5a (feed)      → feed evidence extraction and scoring [stub]
 Layer 5b (analytics) → analytics aggregation and visualization data [stub]
@@ -97,7 +98,8 @@ Key columns on sources:
 - main_category — one of the four offensive threat categories, or "unclear_or_adjacent"
 - ai_specificity_score (0-100) — how AI-specific the content is
 - relevance_tier — core/adjacent/peripheral/off_topic
-- layer3_status — pass/review/reject (set by Layer 3 final gate)
+- validation_status / layer3_status — pass/review/reject (set by Layer 3 validation final gate)
+- validation_summary, ai_threat_focus, candidate_domain — set by the Layer 3 LLM relevance call
 - downstream_route — layer4/layer4_with_review/discard
 - intelligence (jsonb) — LLM-extracted fields: trend_signals, key_entities, threat_maturity, etc.
 - short_summary, analyst_brief — LLM-generated summaries
@@ -149,5 +151,5 @@ npx vercel dev — starts full local environment with API functions on :3000 (us
 Scripts that must be run locally (Vercel timeout is 10s for most operations):
 - node scripts/backfillSources.js [start] [end] [connectors] — historical ingestion
 - node scripts/importCuratedExcel.js <path-to-xlsx> — import curated sources from Excel
-- node scripts/debugLayer3.js [options] — inspect Layer 3 classification on live sources
+- node scripts/debugValidation.js [options] — inspect Layer 3 validation (relevance/summary/typing) on live sources
 - node scripts/llmDiscoverySources.js — LLM-assisted source discovery

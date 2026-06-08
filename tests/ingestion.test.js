@@ -8,7 +8,7 @@ import { normalizeSource } from "../lib/pipeline/ingest/normalizeSource.js";
 import { dedupeSources } from "../lib/utils/dedupe.js";
 import { filterAcceptableSources } from "../lib/pipeline/ingest/filterAcceptableSources.js";
 import { computeEligibilityFlags } from "../lib/pipeline/ingest/eligibilityFlags.js";
-import { isSafeUrl } from "../lib/pipeline/classify/urlSafety.js";
+import { isSafeUrl } from "../lib/pipeline/validation/urlSafety.js";
 
 let passed = 0;
 let failed = 0;
@@ -191,49 +191,46 @@ test("deduplication removes exact URL duplicates", () => {
 
 console.log("\nfilterAcceptableSources");
 
-test("incident_database is always accepted", () => {
+// Note: incident_database, ai_threat_framework, social_signal, open_source_project were
+// removed from ALL_SOURCE_TYPES in taxonomy v8/v9. They are now rejected with
+// "Unsupported source_type" and must be mapped to current types at ingestion.
+test("incident_database is rejected (removed type — use 'incident' instead)", () => {
   const { accepted, rejected } = filterAcceptableSources([{
     id: "a", title: "AI Incident #123", url: "https://incidentdatabase.ai/123",
     source_type: "incident_database", trust_tier: "medium", tags: [],
   }]);
-  assert.equal(accepted.length, 1);
-  assert.equal(rejected.length, 0);
+  assert.equal(accepted.length, 0);
+  assert.equal(rejected.length, 1);
+  assert.ok(rejected[0].reason.includes("Unsupported source_type"),
+    `expected Unsupported source_type, got: ${rejected[0].reason}`);
 });
 
-test("ai_threat_framework is always accepted", () => {
-  const { accepted } = filterAcceptableSources([{
+test("ai_threat_framework is rejected (removed type — use 'threat_intelligence' instead)", () => {
+  const { accepted, rejected } = filterAcceptableSources([{
     id: "a", title: "MITRE ATLAS Tactic", url: "https://atlas.mitre.org/techniques/AML.T0001",
     source_type: "ai_threat_framework", trust_tier: "unknown", tags: [],
-  }]);
-  assert.equal(accepted.length, 1);
-});
-
-test("social_signal accepted for primary trust tier", () => {
-  const { accepted, rejected } = filterAcceptableSources([{
-    id: "a", title: "CISA tweet", url: "https://twitter.com/cisagov/status/123",
-    source_type: "social_signal", trust_tier: "primary", tags: [],
-  }]);
-  assert.equal(accepted.length, 1);
-  assert.equal(rejected.length, 0);
-});
-
-test("social_signal rejected for unknown trust tier", () => {
-  const { accepted, rejected } = filterAcceptableSources([{
-    id: "a", title: "Random tweet", url: "https://twitter.com/randomuser/status/456",
-    source_type: "social_signal", trust_tier: "unknown", tags: [],
   }]);
   assert.equal(accepted.length, 0);
   assert.equal(rejected.length, 1);
 });
 
-test("open_source_project accepted when title contains CVE reference", () => {
-  const { accepted } = filterAcceptableSources([{
+test("social_signal is rejected (removed type — social content maps to other types)", () => {
+  const { accepted, rejected } = filterAcceptableSources([{
+    id: "a", title: "CISA tweet", url: "https://twitter.com/cisagov/status/123",
+    source_type: "social_signal", trust_tier: "primary", tags: [],
+  }]);
+  assert.equal(accepted.length, 0);
+  assert.equal(rejected.length, 1);
+});
+
+test("open_source_project is rejected (removed type — use 'vulnerability' or 'exploit_disclosure')", () => {
+  const { accepted, rejected } = filterAcceptableSources([{
     id: "a", title: "CVE-2026-1234: security vulnerability in llama.cpp",
     url: "https://github.com/ggerganov/llama.cpp/security/advisories/GHSA-xxxx",
     source_type: "open_source_project", trust_tier: "high", tags: [],
-    full_text: "CVE-2026-1234 is a buffer overflow vulnerability.",
   }]);
-  assert.equal(accepted.length, 1);
+  assert.equal(accepted.length, 0);
+  assert.equal(rejected.length, 1);
 });
 
 test("unknown source_type accepted with needs_review flag", () => {

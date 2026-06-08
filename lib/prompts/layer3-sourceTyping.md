@@ -23,11 +23,8 @@ ALLOWED SOURCE TYPES (use these exact strings):
 - adversary_adoption_signal — early warning that threat actors are beginning to USE AI techniques in real operations
 - defensive_capability      — new detection methods, mitigations, hardening guides, defensive tooling
 - governance_signal         — government advisories, regulatory guidance, AI governance frameworks, compliance mandates, AI Act updates
-- ecosystem_signal          — new AI security tools released, platform launches, funding/acquisitions that shift the attack surface
-- infrastructure_dependency_signal — widespread dependency on AI infrastructure creating systemic attack-surface risk
-- trust_boundary_shift      — a change in what is trusted or who has authority due to AI adoption (e.g. agents delegated elevated access)
 - societal_harm_signal      — AI-enabled harm at population scale: deepfake fraud campaigns, AI disinformation, voice-clone scams
-- strategic_signal          — forward-looking strategic analysis of AI threat convergence, systemic risks, or horizon signals
+- attack_surface_signal     — a development that materially expands or shifts the AI attack surface: widely-adopted AI tooling/infrastructure, a new dependency or concentration risk, or a new autonomy/trust/authority boundary (e.g. MCP servers proliferating, agents granted elevated access). NOT pure funding/market news.
 - unknown                   — cannot be classified with the available information
 
 DISAMBIGUATION RULES:
@@ -35,9 +32,9 @@ DISAMBIGUATION RULES:
 - research_finding vs benchmark_evaluation: benchmark = primarily quantitative results (scores, rates, rankings); research = method or analysis focus
 - incident vs adversary_adoption_signal: incident = a specific attack already happened; adoption_signal = threat actors are starting to use an AI technique (early warning, may not describe one specific attack)
 - incident vs threat_intelligence: incident = what happened; threat_intelligence = how adversaries operate (TTPs, actor profile, campaign pattern)
-- governance_signal vs strategic_signal: governance = specific policy/regulation/advisory issued; strategic = analysis of where threats are heading
-- ecosystem_signal vs infrastructure_dependency_signal: ecosystem = new tools/platforms launching; infrastructure_dependency = widespread reliance on an AI system creating systemic risk
-- trust_boundary_shift vs ecosystem_signal: trust_shift = change in authority/trust assumptions; ecosystem = market/adoption change
+- governance_signal vs attack_surface_signal: governance = a specific policy/regulation/advisory issued; attack_surface = a structural change in AI adoption/dependency/trust that enlarges what can be attacked
+- attack_surface_signal vs adversary_adoption_signal: attack_surface = the surface/exposure grew (defender-side structural change); adoption = adversaries are observed USING AI (attacker-side behaviour)
+- attack_surface_signal vs ecosystem/market news: only classify as attack_surface_signal when there is a security-relevant exposure; ignore pure funding rounds, valuations, and acquisitions
 
 RULES:
 1. Return strict JSON only — no markdown, no explanation.

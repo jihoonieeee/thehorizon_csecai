@@ -1,0 +1,2060 @@
+{
+  "version": "taxonomy-v9-cleaned-2026-06-ae10",
+  "domains": {
+    "traditional_ai_threats": {
+      "primary_tags": [
+        {
+          "id": "TAI01_data_poisoning",
+          "label": "Data Poisoning",
+          "sub_technique_ids": [
+            "TAI01.01",
+            "TAI01.02",
+            "TAI01.03",
+            "TAI01.04",
+            "TAI01.05",
+            "TAI01.06",
+            "TAI01.07",
+            "TAI01.08",
+            "TAI01.09"
+          ]
+        },
+        {
+          "id": "TAI02_model_poisoning",
+          "label": "Model Poisoning",
+          "sub_technique_ids": [
+            "TAI02.01",
+            "TAI02.02",
+            "TAI02.03",
+            "TAI02.04",
+            "TAI02.05",
+            "TAI02.06"
+          ]
+        },
+        {
+          "id": "TAI03_adversarial_evasion",
+          "label": "Adversarial Evasion",
+          "sub_technique_ids": [
+            "TAI03.01",
+            "TAI03.02",
+            "TAI03.03",
+            "TAI03.04",
+            "TAI03.05",
+            "TAI03.06",
+            "TAI03.07"
+          ]
+        },
+        {
+          "id": "TAI04_adversarial_data",
+          "label": "Adversarial Data",
+          "sub_technique_ids": [
+            "TAI04.01",
+            "TAI04.02",
+            "TAI04.03",
+            "TAI04.04"
+          ]
+        },
+        {
+          "id": "TAI05_model_extraction",
+          "label": "Model Extraction",
+          "sub_technique_ids": [
+            "TAI05.01",
+            "TAI05.02",
+            "TAI05.03",
+            "TAI05.04",
+            "TAI05.05",
+            "TAI05.06"
+          ]
+        },
+        {
+          "id": "TAI06_model_inversion",
+          "label": "Model Inversion",
+          "sub_technique_ids": [
+            "TAI06.01",
+            "TAI06.02",
+            "TAI06.03",
+            "TAI06.04"
+          ]
+        },
+        {
+          "id": "TAI07_membership_inference",
+          "label": "Membership Inference",
+          "sub_technique_ids": [
+            "TAI07.01",
+            "TAI07.02",
+            "TAI07.03"
+          ]
+        },
+        {
+          "id": "TAI08_inference_api_abuse",
+          "label": "Inference API Abuse",
+          "sub_technique_ids": [
+            "TAI08.01",
+            "TAI08.02",
+            "TAI08.03"
+          ]
+        },
+        {
+          "id": "TAI09_model_denial_of_service",
+          "label": "Model Denial of Service",
+          "sub_technique_ids": [
+            "TAI09.01",
+            "TAI09.02",
+            "TAI09.03",
+            "TAI09.04",
+            "TAI09.05",
+            "TAI09.06"
+          ]
+        },
+        {
+          "id": "TAI10_ai_supply_chain_compromise",
+          "label": "AI Supply Chain Compromise",
+          "sub_technique_ids": [
+            "TAI10.01",
+            "TAI10.02",
+            "TAI10.03",
+            "TAI10.04",
+            "TAI10.05",
+            "TAI10.06",
+            "TAI10.07",
+            "TAI10.08"
+          ]
+        }
+      ]
+    },
+    "llm_threats": {
+      "primary_tags": [
+        {
+          "id": "LLM01_prompt_injection",
+          "label": "Prompt Injection",
+          "sub_technique_ids": [
+            "LLM01.01",
+            "LLM01.02",
+            "LLM01.03",
+            "LLM01.04",
+            "LLM01.05",
+            "LLM01.06",
+            "LLM01.07"
+          ]
+        },
+        {
+          "id": "LLM02_sensitive_information_disclosure",
+          "label": "Sensitive Information Disclosure",
+          "sub_technique_ids": [
+            "LLM02.01",
+            "LLM02.02",
+            "LLM02.03",
+            "LLM02.04",
+            "LLM02.05",
+            "LLM02.06",
+            "LLM02.07"
+          ]
+        },
+        {
+          "id": "LLM03_llm_supply_chain",
+          "label": "LLM Supply Chain",
+          "sub_technique_ids": [
+            "LLM03.01",
+            "LLM03.02",
+            "LLM03.03"
+          ]
+        },
+        {
+          "id": "LLM04_data_model_poisoning",
+          "label": "Data and Model Poisoning",
+          "sub_technique_ids": [
+            "LLM04.01",
+            "LLM04.02",
+            "LLM04.03",
+            "LLM04.04",
+            "LLM04.05",
+            "LLM04.06"
+          ]
+        },
+        {
+          "id": "LLM05_improper_output_handling",
+          "label": "Improper Output Handling",
+          "sub_technique_ids": [
+            "LLM05.01",
+            "LLM05.02",
+            "LLM05.03",
+            "LLM05.04",
+            "LLM05.05",
+            "LLM05.06"
+          ]
+        },
+        {
+          "id": "LLM06_excessive_agency",
+          "label": "Excessive Agency",
+          "sub_technique_ids": [
+            "LLM06.01",
+            "LLM06.02",
+            "LLM06.03",
+            "LLM06.04",
+            "LLM06.05"
+          ]
+        },
+        {
+          "id": "LLM07_system_prompt_leakage",
+          "label": "System Prompt Leakage",
+          "sub_technique_ids": [
+            "LLM07.01",
+            "LLM07.02",
+            "LLM07.03",
+            "LLM07.04",
+            "LLM07.05",
+            "LLM07.06"
+          ]
+        },
+        {
+          "id": "LLM08_vector_embedding_weaknesses",
+          "label": "Vector and Embedding Weaknesses",
+          "sub_technique_ids": [
+            "LLM08.01",
+            "LLM08.02",
+            "LLM08.03",
+            "LLM08.04",
+            "LLM08.05"
+          ]
+        },
+        {
+          "id": "LLM09_misinformation",
+          "label": "Misinformation",
+          "sub_technique_ids": [
+            "LLM09.01",
+            "LLM09.02",
+            "LLM09.03",
+            "LLM09.04"
+          ]
+        },
+        {
+          "id": "LLM10_unbounded_consumption",
+          "label": "Unbounded Consumption",
+          "sub_technique_ids": [
+            "LLM10.01",
+            "LLM10.02",
+            "LLM10.03",
+            "LLM10.04",
+            "LLM10.05"
+          ]
+        }
+      ]
+    },
+    "agentic_ai_threats": {
+      "primary_tags": [
+        {
+          "id": "ASI01_agent_goal_hijack",
+          "label": "Agent Goal Hijack",
+          "sub_technique_ids": [
+            "ASI01.01",
+            "ASI01.02",
+            "ASI01.03",
+            "ASI01.04",
+            "ASI01.05"
+          ]
+        },
+        {
+          "id": "ASI02_tool_misuse_exploitation",
+          "label": "Tool Misuse and Exploitation",
+          "sub_technique_ids": [
+            "ASI02.01",
+            "ASI02.02",
+            "ASI02.03",
+            "ASI02.04",
+            "ASI02.05"
+          ]
+        },
+        {
+          "id": "ASI03_identity_privilege_abuse",
+          "label": "Identity and Privilege Abuse",
+          "sub_technique_ids": [
+            "ASI03.01",
+            "ASI03.02",
+            "ASI03.03",
+            "ASI03.04",
+            "ASI03.05",
+            "ASI03.06"
+          ]
+        },
+        {
+          "id": "ASI04_agentic_supply_chain_vulnerabilities",
+          "label": "Agentic Supply Chain Vulnerabilities",
+          "sub_technique_ids": [
+            "ASI04.01",
+            "ASI04.02",
+            "ASI04.03",
+            "ASI04.04",
+            "ASI04.05",
+            "ASI04.06"
+          ]
+        },
+        {
+          "id": "ASI05_unexpected_code_execution",
+          "label": "Unexpected Code Execution",
+          "sub_technique_ids": [
+            "ASI05.01",
+            "ASI05.02",
+            "ASI05.03",
+            "ASI05.04",
+            "ASI05.05",
+            "ASI05.06"
+          ]
+        },
+        {
+          "id": "ASI06_memory_context_poisoning",
+          "label": "Memory and Context Poisoning",
+          "sub_technique_ids": [
+            "ASI06.01",
+            "ASI06.02",
+            "ASI06.03",
+            "ASI06.04",
+            "ASI06.05"
+          ]
+        },
+        {
+          "id": "ASI07_insecure_inter_agent_communication",
+          "label": "Insecure Inter-Agent Communication",
+          "sub_technique_ids": [
+            "ASI07.01",
+            "ASI07.02",
+            "ASI07.03",
+            "ASI07.04",
+            "ASI07.05",
+            "ASI07.06"
+          ]
+        },
+        {
+          "id": "ASI08_cascading_failures",
+          "label": "Cascading Failures",
+          "sub_technique_ids": [
+            "ASI08.01",
+            "ASI08.02",
+            "ASI08.03",
+            "ASI08.04"
+          ]
+        },
+        {
+          "id": "ASI09_human_agent_trust_exploitation",
+          "label": "Human-Agent Trust Exploitation",
+          "sub_technique_ids": [
+            "ASI09.01",
+            "ASI09.02",
+            "ASI09.03",
+            "ASI09.04",
+            "ASI09.05"
+          ]
+        },
+        {
+          "id": "ASI10_rogue_agents",
+          "label": "Rogue Agents",
+          "sub_technique_ids": [
+            "ASI10.01",
+            "ASI10.02",
+            "ASI10.03",
+            "ASI10.04",
+            "ASI10.05"
+          ]
+        }
+      ]
+    },
+    "ai_enabled_threats": {
+      "primary_tags": [
+        {
+          "id": "AE01_ai_enabled_reconnaissance",
+          "label": "AI-Enabled Reconnaissance",
+          "sub_technique_ids": []
+        },
+        {
+          "id": "AE02_ai_enabled_social_engineering",
+          "label": "AI-Enabled Social Engineering",
+          "sub_technique_ids": []
+        },
+        {
+          "id": "AE03_ai_enabled_vulnerability_research",
+          "label": "AI-Enabled Vulnerability Research",
+          "sub_technique_ids": []
+        },
+        {
+          "id": "AE04_ai_enabled_exploit_development",
+          "label": "AI-Enabled Exploit Development",
+          "sub_technique_ids": []
+        },
+        {
+          "id": "AE05_ai_enabled_malware_development",
+          "label": "AI-Enabled Malware Development",
+          "sub_technique_ids": []
+        },
+        {
+          "id": "AE06_ai_enabled_evasion_obfuscation",
+          "label": "AI-Enabled Evasion and Obfuscation",
+          "sub_technique_ids": []
+        },
+        {
+          "id": "AE07_ai_enabled_identity_abuse",
+          "label": "AI-Enabled Identity Abuse",
+          "sub_technique_ids": []
+        },
+        {
+          "id": "AE08_ai_enabled_attack_orchestration",
+          "label": "AI-Enabled Attack Orchestration",
+          "sub_technique_ids": []
+        },
+        {
+          "id": "AE09_ai_enabled_disinformation_influence",
+          "label": "AI-Enabled Disinformation and Influence",
+          "sub_technique_ids": []
+        },
+        {
+          "id": "AE10_ai_enabled_deepfake",
+          "label": "AI-Enabled Deepfake and Synthetic Media",
+          "sub_technique_ids": []
+        }
+      ]
+    }
+  },
+  "sub_techniques": [
+    {
+      "coded_id": "TAI01.01",
+      "name": "training_data_poisoning",
+      "parent_tag": "TAI01_data_poisoning",
+      "definition": "Injecting adversarially crafted samples into a training dataset to shift model behaviour or embed attacker-controlled triggers.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0020",
+        "NIST AI RMF"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI01.02",
+      "name": "label_poisoning",
+      "parent_tag": "TAI01_data_poisoning",
+      "definition": "Flipping or corrupting ground-truth labels in training data to cause systematic misclassification in the trained model.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0020"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI01.03",
+      "name": "targeted_data_poisoning",
+      "parent_tag": "TAI01_data_poisoning",
+      "definition": "Poisoning a targeted subset of training data to degrade model performance on a specific class, pattern, or victim input.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0020"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI01.04",
+      "name": "availability_poisoning",
+      "parent_tag": "TAI01_data_poisoning",
+      "definition": "Injecting samples designed to broadly degrade model accuracy across many inputs, causing availability-style failures.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0020"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI01.05",
+      "name": "integrity_poisoning",
+      "parent_tag": "TAI01_data_poisoning",
+      "definition": "Inserting poisoned samples that cause the model to produce specific attacker-desired outputs for targeted inputs.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0020"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI01.06",
+      "name": "backdoor_poisoning",
+      "parent_tag": "TAI01_data_poisoning",
+      "definition": "Embedding trigger-activated backdoors during training so that presenting the trigger at inference time causes controlled misclassification.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0018"
+      ],
+      "notes": "Cross-refs TAI10.06 when deployed via pretrained model distribution"
+    },
+    {
+      "coded_id": "TAI01.07",
+      "name": "feature_poisoning",
+      "parent_tag": "TAI01_data_poisoning",
+      "definition": "Manipulating feature representations in training data to corrupt the model's learned feature space without necessarily altering labels.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI01.08",
+      "name": "synthetic_data_poisoning",
+      "parent_tag": "TAI01_data_poisoning",
+      "definition": "Poisoning pipelines that use synthetically generated training data by injecting adversarially crafted synthetic samples.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI01.09",
+      "name": "federated_data_poisoning",
+      "parent_tag": "TAI01_data_poisoning",
+      "definition": "Contributing poisoned local training data in a federated learning setup to corrupt the global aggregated model.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0020"
+      ],
+      "notes": "Cross-refs TAI02.03 (federated_model_poisoning) which targets gradient/model updates rather than local data"
+    },
+    {
+      "coded_id": "TAI02.01",
+      "name": "model_weight_poisoning",
+      "parent_tag": "TAI02_model_poisoning",
+      "definition": "Directly modifying serialized model weight files to alter inference behaviour or implant backdoors.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0018"
+      ],
+      "notes": "Cross-refs TAI10.01 when delivered via supply chain"
+    },
+    {
+      "coded_id": "TAI02.02",
+      "name": "gradient_manipulation",
+      "parent_tag": "TAI02_model_poisoning",
+      "definition": "Crafting poisoned gradient update contributions in federated or collaborative training to steer the global model toward attacker objectives.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0018"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI02.03",
+      "name": "federated_model_poisoning",
+      "parent_tag": "TAI02_model_poisoning",
+      "definition": "Coordinating multiple malicious federated participants to dominate aggregation and corrupt the global federated model.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI02.04",
+      "name": "online_learning_update_poisoning",
+      "parent_tag": "TAI02_model_poisoning",
+      "definition": "Injecting adversarial samples into an online learning update stream to continuously degrade or redirect model behaviour over time.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": "Renamed from model_update_poisoning to clarify scope to online-learning update streams"
+    },
+    {
+      "coded_id": "TAI02.05",
+      "name": "checkpoint_poisoning",
+      "parent_tag": "TAI02_model_poisoning",
+      "definition": "Injecting malicious content into training checkpoints during an active training run to corrupt the model before training completes.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": "Distinct from TAI10.05 (checkpoint_tampering) which targets post-training artifact storage"
+    },
+    {
+      "coded_id": "TAI02.06",
+      "name": "fine_tuning_poisoning",
+      "parent_tag": "TAI02_model_poisoning",
+      "definition": "Poisoning the fine-tuning dataset or process to embed attacker-controlled behaviours into a pretrained base model.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0020"
+      ],
+      "notes": "LLM04.01 (instruction_tuning_poisoning) covers the alignment-specific variant"
+    },
+    {
+      "coded_id": "TAI03.01",
+      "name": "decision_boundary_attack",
+      "parent_tag": "TAI03_adversarial_evasion",
+      "definition": "Crafting inputs that lie just across a classifier's decision boundary to cause targeted misclassification with minimal perturbation.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0015"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI03.02",
+      "name": "transferability_attack",
+      "parent_tag": "TAI03_adversarial_evasion",
+      "definition": "Generating adversarial examples against a substitute model that also fool the target black-box model due to cross-model transferability.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0015"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI03.03",
+      "name": "physical_adversarial_attack",
+      "parent_tag": "TAI03_adversarial_evasion",
+      "definition": "Creating physical-world objects or modifications (e.g. printed stickers, special clothing) that cause AI vision systems to misclassify in real environments.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0015"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI03.04",
+      "name": "adversarial_patch_attack",
+      "parent_tag": "TAI03_adversarial_evasion",
+      "definition": "Applying a universal adversarial patch to any input image to reliably cause targeted misclassification regardless of other image content.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0015"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI03.05",
+      "name": "semantic_perturbation",
+      "parent_tag": "TAI03_adversarial_evasion",
+      "definition": "Applying perturbations that preserve human-perceived meaning (e.g. paraphrase, synonym substitution) but cause misclassification in NLP or multimodal models.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI03.06",
+      "name": "multimodal_adversarial_input",
+      "parent_tag": "TAI03_adversarial_evasion",
+      "definition": "Constructing adversarial inputs that exploit cross-modal inconsistencies or interactions in multimodal AI systems (text+image, audio+text, etc.).",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI03.07",
+      "name": "environmental_manipulation",
+      "parent_tag": "TAI03_adversarial_evasion",
+      "definition": "Staging the physical or digital environment to cause AI perception or sensor systems to make systematic targeted errors.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI04.01",
+      "name": "cross_modal_manipulation",
+      "parent_tag": "TAI04_adversarial_data",
+      "definition": "Crafting adversarial artifacts that exploit inconsistencies or vulnerabilities at the interface between modalities in multimodal AI systems.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0043"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI04.02",
+      "name": "semantic_data_manipulation",
+      "parent_tag": "TAI04_adversarial_data",
+      "definition": "Manipulating data at the semantic level so it retains meaning for humans but its AI-perceived representation is substantially altered.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI04.03",
+      "name": "synthetic_adversarial_data",
+      "parent_tag": "TAI04_adversarial_data",
+      "definition": "Generating synthetic adversarial datasets to train attack models, evaluate defences, or supply attack pipelines at scale.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI04.04",
+      "name": "contextual_data_manipulation",
+      "parent_tag": "TAI04_adversarial_data",
+      "definition": "Altering contextual metadata or surrounding data to change AI system inference without modifying the primary input content.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI05.01",
+      "name": "model_stealing",
+      "parent_tag": "TAI05_model_extraction",
+      "definition": "Querying a target model API to reconstruct a functionally equivalent surrogate that replicates the target's behaviour.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0024",
+        "MITRE ATLAS AML.T0048"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI05.02",
+      "name": "surrogate_model_generation",
+      "parent_tag": "TAI05_model_extraction",
+      "definition": "Building a substitute model that approximates the target model's decision surface for use in transferability attacks or further extraction.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0024"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI05.03",
+      "name": "query_based_extraction",
+      "parent_tag": "TAI05_model_extraction",
+      "definition": "Using systematic query strategies against a model API to extract functional behaviour, decision boundaries, or training data signals.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0024"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI05.04",
+      "name": "architecture_reconstruction",
+      "parent_tag": "TAI05_model_extraction",
+      "definition": "Inferring a model's internal architecture (layers, types, sizes) from API response patterns, timing behaviour, and output characteristics.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI05.05",
+      "name": "hyperparameter_reconstruction",
+      "parent_tag": "TAI05_model_extraction",
+      "definition": "Recovering a model's training hyperparameters by analysing its decision patterns, generalisation behaviour, and output distributions.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI05.06",
+      "name": "decision_boundary_mapping",
+      "parent_tag": "TAI05_model_extraction",
+      "definition": "Mapping the geometry of a model's decision boundaries through structured probing to understand its classification behaviour without full model theft.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI06.01",
+      "name": "training_data_reconstruction",
+      "parent_tag": "TAI06_model_inversion",
+      "definition": "Reconstructing training data records, including private samples, from a model's weights, gradients, or outputs via inversion attacks.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0024",
+        "MITRE ATLAS AML.T0053"
+      ],
+      "notes": "private_sample_reconstruction merged here; same attack goal and mechanism"
+    },
+    {
+      "coded_id": "TAI06.02",
+      "name": "sensitive_attribute_inference",
+      "parent_tag": "TAI06_model_inversion",
+      "definition": "Inferring sensitive individual attributes (e.g. health status, demographics, income) about training data subjects from model predictions.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0053"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI06.03",
+      "name": "input_recovery",
+      "parent_tag": "TAI06_model_inversion",
+      "definition": "Recovering the original input to a model from its output, intermediate representations, or gradient information.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI06.04",
+      "name": "embedding_inversion",
+      "parent_tag": "TAI06_model_inversion",
+      "definition": "Mathematically inverting embedding vectors to reconstruct the original text, image, or data they encode.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": "Moved from LLM08 where it was a cross-domain duplicate; canonical location is model inversion"
+    },
+    {
+      "coded_id": "TAI07.01",
+      "name": "shadow_model_attack",
+      "parent_tag": "TAI07_membership_inference",
+      "definition": "Training shadow models on known in/out data distributions to build a membership classifier that distinguishes training from non-training inputs.",
+      "mapping_type": "synthesized_research_category",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0024"
+      ],
+      "notes": "Shokri et al. 2017 shadow model methodology"
+    },
+    {
+      "coded_id": "TAI07.02",
+      "name": "metric_based_membership_inference",
+      "parent_tag": "TAI07_membership_inference",
+      "definition": "Using model confidence scores, loss values, or prediction entropy as membership signals to determine whether an input was present in the training set.",
+      "mapping_type": "synthesized_research_category",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0024"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI07.03",
+      "name": "label_only_membership_inference",
+      "parent_tag": "TAI07_membership_inference",
+      "definition": "Inferring training set membership using only hard predicted labels, without access to confidence scores, probabilities, or internal model states.",
+      "mapping_type": "synthesized_research_category",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0024"
+      ],
+      "notes": "Choquette-Choo et al. 2021 label-only MI attacks"
+    },
+    {
+      "coded_id": "TAI08.01",
+      "name": "adaptive_querying",
+      "parent_tag": "TAI08_inference_api_abuse",
+      "definition": "Adapting query strategy in real time based on observed model responses to efficiently extract behaviour, decision signals, or training data.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0040"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI08.02",
+      "name": "response_enumeration",
+      "parent_tag": "TAI08_inference_api_abuse",
+      "definition": "Systematically enumerating a model's response space to map capabilities, identify failure modes, and characterise detectable patterns.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI08.03",
+      "name": "api_behavior_mapping",
+      "parent_tag": "TAI08_inference_api_abuse",
+      "definition": "Characterising API rate limits, version differences, feature flags, and undocumented behaviours through structured probing and analysis.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI09.01",
+      "name": "gpu_resource_exhaustion",
+      "parent_tag": "TAI09_model_denial_of_service",
+      "definition": "Crafting computationally expensive inputs that maximise GPU or accelerator utilisation to degrade inference throughput.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0029"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI09.02",
+      "name": "memory_exhaustion",
+      "parent_tag": "TAI09_model_denial_of_service",
+      "definition": "Sending inputs that consume excessive memory during inference, causing out-of-memory failures or service degradation.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI09.03",
+      "name": "query_amplification",
+      "parent_tag": "TAI09_model_denial_of_service",
+      "definition": "Generating queries that trigger disproportionate backend computation or cascading calls to amplify denial-of-service impact.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI09.04",
+      "name": "latency_amplification",
+      "parent_tag": "TAI09_model_denial_of_service",
+      "definition": "Crafting inputs specifically designed to maximise inference latency, degrading service responsiveness without necessarily causing crashes.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI09.05",
+      "name": "distributed_model_dos",
+      "parent_tag": "TAI09_model_denial_of_service",
+      "definition": "Coordinating a large number of clients or requests to overwhelm AI inference infrastructure and cause availability failures.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI09.06",
+      "name": "model_crash_triggering",
+      "parent_tag": "TAI09_model_denial_of_service",
+      "definition": "Sending inputs that trigger runtime errors, unhandled exceptions, or crashes in model inference pipelines.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0034"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI10.01",
+      "name": "tampered_model_weights",
+      "parent_tag": "TAI10_ai_supply_chain_compromise",
+      "definition": "Modifying model weight files in a distribution channel, repository, or storage system to alter downstream model behaviour.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0010"
+      ],
+      "notes": "Moved from LLM03 where it was a cross-domain duplicate"
+    },
+    {
+      "coded_id": "TAI10.02",
+      "name": "dependency_compromise",
+      "parent_tag": "TAI10_ai_supply_chain_compromise",
+      "definition": "Compromising Python packages, system libraries, or other software dependencies used in AI pipelines to inject malicious code.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0010"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI10.03",
+      "name": "training_pipeline_compromise",
+      "parent_tag": "TAI10_ai_supply_chain_compromise",
+      "definition": "Infiltrating CI/CD infrastructure or training orchestration to tamper with training runs, hyperparameters, or output artifacts.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0010"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI10.04",
+      "name": "dataset_supply_chain_compromise",
+      "parent_tag": "TAI10_ai_supply_chain_compromise",
+      "definition": "Compromising upstream dataset sources, hosting mirrors, or data collection pipelines to inject poisoned data before training.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0010"
+      ],
+      "notes": "Renamed from training_data_supply_chain_compromise when moved from LLM03"
+    },
+    {
+      "coded_id": "TAI10.05",
+      "name": "checkpoint_tampering",
+      "parent_tag": "TAI10_ai_supply_chain_compromise",
+      "definition": "Replacing or modifying stored model checkpoint files in artifact repositories or distribution storage to alter trained model behaviour.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0010"
+      ],
+      "notes": "Distinct from TAI02.05 (checkpoint_poisoning) which occurs during active training; moved from LLM03"
+    },
+    {
+      "coded_id": "TAI10.06",
+      "name": "pretrained_model_backdooring",
+      "parent_tag": "TAI10_ai_supply_chain_compromise",
+      "definition": "Distributing pretrained models with embedded backdoors via model hubs or public repositories for downstream users to inherit.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0010",
+        "MITRE ATLAS AML.T0018"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "TAI10.07",
+      "name": "malicious_model_distribution",
+      "parent_tag": "TAI10_ai_supply_chain_compromise",
+      "definition": "Distributing malicious model artifacts (weights, configs, tokenizer files) that execute adversarial payloads when loaded by downstream users.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0010"
+      ],
+      "notes": "Moved from LLM03 where it was a cross-domain duplicate"
+    },
+    {
+      "coded_id": "TAI10.08",
+      "name": "ci_cd_pipeline_compromise",
+      "parent_tag": "TAI10_ai_supply_chain_compromise",
+      "definition": "Compromising the CI/CD pipeline used to build, test, and deploy AI systems in order to inject malicious changes into model artifacts or serving infrastructure.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "MITRE ATLAS AML.T0010"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM01.01",
+      "name": "direct_prompt_injection",
+      "parent_tag": "LLM01_prompt_injection",
+      "definition": "Directly injecting attacker-controlled instructions into the user-facing input to override model behaviour or safety constraints.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM01",
+        "MITRE ATLAS AML.T0051"
+      ],
+      "notes": "instruction_override merged here; same attack mechanism"
+    },
+    {
+      "coded_id": "LLM01.02",
+      "name": "indirect_prompt_injection",
+      "parent_tag": "LLM01_prompt_injection",
+      "definition": "Embedding malicious instructions in external data sources (web pages, documents, emails) that are retrieved and processed by the LLM.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM01"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM01.03",
+      "name": "multi_turn_prompt_injection",
+      "parent_tag": "LLM01_prompt_injection",
+      "definition": "Progressively injecting instructions across multiple conversation turns to gradually shift model behaviour toward attacker objectives.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM01.04",
+      "name": "retrieval_augmented_prompt_injection",
+      "parent_tag": "LLM01_prompt_injection",
+      "definition": "Poisoning RAG data sources so that retrieved content carries injected instructions into the model's context.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM01"
+      ],
+      "notes": "Cross-refs LLM04.02 (rag_data_poisoning) for the persistence-layer attack"
+    },
+    {
+      "coded_id": "LLM01.05",
+      "name": "tool_output_prompt_injection",
+      "parent_tag": "LLM01_prompt_injection",
+      "definition": "Injecting attacker instructions into tool or plugin outputs that are fed back into the model's context window.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM01.06",
+      "name": "system_prompt_override",
+      "parent_tag": "LLM01_prompt_injection",
+      "definition": "Crafting user input that causes the model to treat attacker instructions as having system-prompt authority, overriding operator constraints.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM01"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM01.07",
+      "name": "prompt_obfuscation",
+      "parent_tag": "LLM01_prompt_injection",
+      "definition": "Encoding, formatting, or obfuscating injection payloads to evade prompt-level input filters, classifiers, or guardrails.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM02.01",
+      "name": "training_data_leakage",
+      "parent_tag": "LLM02_sensitive_information_disclosure",
+      "definition": "Eliciting verbatim or near-verbatim reproduction of private training data from the model through targeted prompting.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM02"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM02.02",
+      "name": "conversation_memory_leakage",
+      "parent_tag": "LLM02_sensitive_information_disclosure",
+      "definition": "Extracting prior conversation history from within the same or a proximate session context through adversarial prompting.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM02.03",
+      "name": "cross_session_data_leakage",
+      "parent_tag": "LLM02_sensitive_information_disclosure",
+      "definition": "Exploiting imperfect session isolation in LLM deployments to access data or context from other users' sessions.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM02"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM02.04",
+      "name": "secret_extraction",
+      "parent_tag": "LLM02_sensitive_information_disclosure",
+      "definition": "Prompting the model to reveal API keys, passwords, credentials, or other secrets present in its system prompt or context.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM02"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM02.05",
+      "name": "embedding_data_leakage",
+      "parent_tag": "LLM02_sensitive_information_disclosure",
+      "definition": "Recovering sensitive text or data from embedding vectors returned, stored, or exposed by the LLM system.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM02.06",
+      "name": "retrieval_data_exposure",
+      "parent_tag": "LLM02_sensitive_information_disclosure",
+      "definition": "Causing the RAG retrieval system to return documents that the requester is not authorised to access.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM02"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM02.07",
+      "name": "tenant_data_leakage",
+      "parent_tag": "LLM02_sensitive_information_disclosure",
+      "definition": "Exploiting multi-tenant LLM deployment isolation failures to access another tenant's data, context, or system prompt.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM02"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM03.01",
+      "name": "fine_tuning_pipeline_compromise",
+      "parent_tag": "LLM03_llm_supply_chain",
+      "definition": "Compromising the fine-tuning pipeline infrastructure, datasets, or tooling to alter the behaviour of the resulting fine-tuned LLM.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM03"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM03.02",
+      "name": "rag_pipeline_compromise",
+      "parent_tag": "LLM03_llm_supply_chain",
+      "definition": "Infiltrating the RAG pipeline (chunking, embedding, indexing infrastructure) to manipulate the knowledge base served to the LLM.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM03"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM03.03",
+      "name": "third_party_model_compromise",
+      "parent_tag": "LLM03_llm_supply_chain",
+      "definition": "Compromising third-party model APIs, hosted endpoints, or model hub accounts that are integrated into LLM deployments.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM03"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM04.01",
+      "name": "instruction_tuning_poisoning",
+      "parent_tag": "LLM04_data_model_poisoning",
+      "definition": "Poisoning instruction-tuning or RLHF datasets to embed attacker-controlled behaviours during the alignment and fine-tuning process.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM04"
+      ],
+      "notes": "LLM-specific alignment variant; TAI02.06 covers the generic fine-tuning model poisoning case"
+    },
+    {
+      "coded_id": "LLM04.02",
+      "name": "rag_data_poisoning",
+      "parent_tag": "LLM04_data_model_poisoning",
+      "definition": "Injecting adversarial documents or entries into RAG knowledge bases to manipulate LLM responses for targeted queries.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM04"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM04.03",
+      "name": "embedding_model_poisoning",
+      "parent_tag": "LLM04_data_model_poisoning",
+      "definition": "Poisoning the training of text embedding models to cause specific inputs to produce attacker-desired embedding vectors.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": "Renamed from embedding_poisoning to distinguish from LLM08 vector store attacks; moved from LLM08"
+    },
+    {
+      "coded_id": "LLM04.04",
+      "name": "alignment_poisoning",
+      "parent_tag": "LLM04_data_model_poisoning",
+      "definition": "Corrupting RLHF preference data or DPO comparison pairs to misalign the model's reward function toward attacker-desired outputs.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM04"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM04.05",
+      "name": "reward_model_poisoning",
+      "parent_tag": "LLM04_data_model_poisoning",
+      "definition": "Directly poisoning the reward model used in RLHF training to cause it to assign high reward scores to attacker-desired model outputs.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM04.06",
+      "name": "agent_memory_poisoning",
+      "parent_tag": "LLM04_data_model_poisoning",
+      "definition": "Injecting adversarial content into an LLM agent's persistent memory store to influence its future reasoning and actions.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": "Renamed from memory_poisoning to distinguish from ASI06 scope (agent-level memory vs pipeline-level context)"
+    },
+    {
+      "coded_id": "LLM05.01",
+      "name": "unsafe_code_generation",
+      "parent_tag": "LLM05_improper_output_handling",
+      "definition": "Causing the LLM to generate malicious, backdoored, or vulnerable code that is subsequently executed by downstream systems.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM05"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM05.02",
+      "name": "unsafe_command_generation",
+      "parent_tag": "LLM05_improper_output_handling",
+      "definition": "Eliciting shell or system commands from the LLM that execute attacker-controlled system operations when processed by downstream handlers.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM05"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM05.03",
+      "name": "unsafe_tool_invocation",
+      "parent_tag": "LLM05_improper_output_handling",
+      "definition": "Causing the LLM to invoke tools or plugins with attacker-controlled parameters that are passed without adequate validation.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM05"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM05.04",
+      "name": "unvalidated_output_execution",
+      "parent_tag": "LLM05_improper_output_handling",
+      "definition": "Downstream systems directly executing LLM-generated content (scripts, commands, code) without sanitisation, validation, or human review.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM05"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM05.05",
+      "name": "downstream_injection",
+      "parent_tag": "LLM05_improper_output_handling",
+      "definition": "LLM-generated output containing injection payloads (SQL, HTML, command, LDAP) that are processed without escaping by backend systems.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM05"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM05.06",
+      "name": "automation_chain_exploitation",
+      "parent_tag": "LLM05_improper_output_handling",
+      "definition": "Exploiting multi-step automation pipelines by crafting LLM outputs that trigger unintended downstream actions in connected systems.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM06.01",
+      "name": "permission_scope_abuse",
+      "parent_tag": "LLM06_excessive_agency",
+      "definition": "Exploiting overly broad permissions granted to an LLM agent to perform actions beyond its intended operational scope.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM06"
+      ],
+      "notes": "overprivileged_agent_operations merged here; same concept"
+    },
+    {
+      "coded_id": "LLM06.02",
+      "name": "recursive_agent_execution",
+      "parent_tag": "LLM06_excessive_agency",
+      "definition": "Triggering uncontrolled recursive agent self-invocation that escalates actions or consumes unbounded resources.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM06"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM06.03",
+      "name": "cross_system_action_execution",
+      "parent_tag": "LLM06_excessive_agency",
+      "definition": "Agent performing actions across multiple external systems or APIs beyond its authorised operational boundary.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM06"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM06.04",
+      "name": "persistent_agent_execution",
+      "parent_tag": "LLM06_excessive_agency",
+      "definition": "Agent maintaining execution state, scheduling, or callbacks beyond its authorised session or task lifetime.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM06.05",
+      "name": "delegated_action_abuse",
+      "parent_tag": "LLM06_excessive_agency",
+      "definition": "Abusing authority delegated by a human operator or orchestrating agent to perform unauthorised actions at scope.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM06"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM07.01",
+      "name": "system_prompt_extraction",
+      "parent_tag": "LLM07_system_prompt_leakage",
+      "definition": "Eliciting the full contents of the hidden system prompt through adversarial queries or prompt injection.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM07",
+        "MITRE ATLAS AML.T0056"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM07.02",
+      "name": "developer_prompt_leakage",
+      "parent_tag": "LLM07_system_prompt_leakage",
+      "definition": "Extracting developer or operator instructions that configure the LLM's persona, operational constraints, or restricted topics.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM07"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM07.03",
+      "name": "chain_of_thought_exposure",
+      "parent_tag": "LLM07_system_prompt_leakage",
+      "definition": "Eliciting the model's internal reasoning steps or scratchpad, revealing sensitive decision logic or intermediate context.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM07.04",
+      "name": "agent_instruction_exposure",
+      "parent_tag": "LLM07_system_prompt_leakage",
+      "definition": "Extracting the task configuration, tool list, or orchestration instructions provided to an agent.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM07.05",
+      "name": "tool_configuration_leakage",
+      "parent_tag": "LLM07_system_prompt_leakage",
+      "definition": "Recovering tool or plugin configurations, API keys, endpoint URLs, or schemas from the model's system prompt or context.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM07.06",
+      "name": "memory_instruction_leakage",
+      "parent_tag": "LLM07_system_prompt_leakage",
+      "definition": "Extracting instructions stored in or injected via memory management systems that govern agent long-term behaviour.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM08.01",
+      "name": "similarity_search_manipulation",
+      "parent_tag": "LLM08_vector_embedding_weaknesses",
+      "definition": "Crafting query embeddings to manipulate similarity search results, causing the retrieval system to return attacker-chosen documents.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM08"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM08.02",
+      "name": "retrieval_manipulation",
+      "parent_tag": "LLM08_vector_embedding_weaknesses",
+      "definition": "Manipulating retrieval ranking, selection, or filtering logic to change which documents are returned to the LLM context.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM08"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM08.03",
+      "name": "vector_store_poisoning",
+      "parent_tag": "LLM08_vector_embedding_weaknesses",
+      "definition": "Injecting adversarial vectors or documents into a vector store to corrupt retrieval results for targeted queries.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM08"
+      ],
+      "notes": "Renamed from vector_index_poisoning for clarity"
+    },
+    {
+      "coded_id": "LLM08.04",
+      "name": "semantic_collision_attack",
+      "parent_tag": "LLM08_vector_embedding_weaknesses",
+      "definition": "Constructing inputs whose embeddings are semantically close to unrelated content, causing the retrieval system to confuse distinct topics.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM08.05",
+      "name": "cross_tenant_vector_leakage",
+      "parent_tag": "LLM08_vector_embedding_weaknesses",
+      "definition": "Exploiting vector store multi-tenant isolation failures to retrieve another tenant's embedded documents or metadata.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM09.01",
+      "name": "synthetic_news_generation",
+      "parent_tag": "LLM09_misinformation",
+      "definition": "Using LLMs to mass-produce convincing fake news articles, headlines, or reports for disinformation campaigns.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM09"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM09.02",
+      "name": "synthetic_identity_disinformation",
+      "parent_tag": "LLM09_misinformation",
+      "definition": "Creating synthetic online personas, biographies, or social media profiles with LLMs to support coordinated disinformation operations.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM09.03",
+      "name": "deepfake_content_generation",
+      "parent_tag": "LLM09_misinformation",
+      "definition": "Using LLMs to generate or assist in generating deepfake scripts, synthetic quotes, or multimodal disinformation content.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM09.04",
+      "name": "narrative_manipulation",
+      "parent_tag": "LLM09_misinformation",
+      "definition": "Using LLMs to generate and distribute content at scale that systematically shapes public narratives or undermines trust in institutions.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM10.01",
+      "name": "token_exhaustion",
+      "parent_tag": "LLM10_unbounded_consumption",
+      "definition": "Sending inputs designed to consume the maximum token budget per request to degrade availability or inflate inference costs.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM10"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM10.02",
+      "name": "context_window_exhaustion",
+      "parent_tag": "LLM10_unbounded_consumption",
+      "definition": "Flooding the context window with attacker-controlled content to displace important instructions or cause context overflow failures.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM10"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM10.03",
+      "name": "recursive_generation_loops",
+      "parent_tag": "LLM10_unbounded_consumption",
+      "definition": "Triggering self-referential or recursive generation patterns that cause the model to consume unbounded compute without terminating.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM10"
+      ],
+      "notes": "agent_looping merged here; same unbounded-resource pattern"
+    },
+    {
+      "coded_id": "LLM10.04",
+      "name": "tool_call_amplification",
+      "parent_tag": "LLM10_unbounded_consumption",
+      "definition": "Crafting prompts that trigger cascading expensive tool calls or API requests, multiplying the cost of a single user request.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "LLM10.05",
+      "name": "api_cost_amplification",
+      "parent_tag": "LLM10_unbounded_consumption",
+      "definition": "Generating financial denial-of-service by systematically forcing maximum-cost API usage patterns to exhaust an operator's budget.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP LLM Top 10 LLM10"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI01.01",
+      "name": "direct_goal_override",
+      "parent_tag": "ASI01_agent_goal_hijack",
+      "definition": "Directly replacing or overwriting an agent's stated objective with attacker-controlled goals via prompt or context manipulation.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP Agentic AI Top 10"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI01.02",
+      "name": "indirect_goal_manipulation",
+      "parent_tag": "ASI01_agent_goal_hijack",
+      "definition": "Subtly shifting an agent's goal through crafted environmental inputs, observation manipulation, or contextual framing.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI01.03",
+      "name": "planner_manipulation",
+      "parent_tag": "ASI01_agent_goal_hijack",
+      "definition": "Exploiting the agent's planning or reasoning component to generate attacker-desired task sequences rather than the intended plan.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI01.04",
+      "name": "task_redirection",
+      "parent_tag": "ASI01_agent_goal_hijack",
+      "definition": "Redirecting an agent to perform a different task than instructed through adversarial prompt injection or context poisoning.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI01.05",
+      "name": "multi_step_goal_hijack",
+      "parent_tag": "ASI01_agent_goal_hijack",
+      "definition": "Gradually accumulating small goal deviations across multiple agent steps to achieve significant unauthorised objectives without triggering per-step detection.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI02.01",
+      "name": "overprivileged_tool_usage",
+      "parent_tag": "ASI02_tool_misuse_exploitation",
+      "definition": "Agent invoking tools with permissions or capabilities broader than required for the current task, creating unnecessary attack surface.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP Agentic AI Top 10",
+        "OWASP MCP Top 10"
+      ],
+      "notes": "Distinct from LLM06.01 (permission_scope_abuse) which covers the exploitation of overly granted permissions"
+    },
+    {
+      "coded_id": "ASI02.02",
+      "name": "unsafe_tool_chaining",
+      "parent_tag": "ASI02_tool_misuse_exploitation",
+      "definition": "Chaining multiple tool invocations in sequence to achieve effects that would be blocked if attempted as a single privileged action.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI02.03",
+      "name": "unvalidated_tool_input_forwarding",
+      "parent_tag": "ASI02_tool_misuse_exploitation",
+      "definition": "Passing attacker-controlled data directly to external tools as parameters without sanitisation or validation.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI02.04",
+      "name": "external_tool_poisoning",
+      "parent_tag": "ASI02_tool_misuse_exploitation",
+      "definition": "Compromising external tool responses so they contain adversarial instructions that are processed by the calling agent.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI02.05",
+      "name": "unauthorized_tool_execution",
+      "parent_tag": "ASI02_tool_misuse_exploitation",
+      "definition": "Agent executing tools or plugins that are outside its authorised set, bypassing tool access controls.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP MCP Top 10"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI03.01",
+      "name": "cross_agent_trust_exploitation",
+      "parent_tag": "ASI03_identity_privilege_abuse",
+      "definition": "Exploiting implicit trust relationships between agents in a pipeline to perform unauthorised actions under a trusted agent's identity.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP Agentic AI Top 10"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI03.02",
+      "name": "memory_based_privilege_retention",
+      "parent_tag": "ASI03_identity_privilege_abuse",
+      "definition": "Retaining elevated privileges across agent sessions by persisting them in memory, context, or external state stores.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI03.03",
+      "name": "synthetic_agent_identity_injection",
+      "parent_tag": "ASI03_identity_privilege_abuse",
+      "definition": "Injecting a synthetic agent identity into a multi-agent system to impersonate a trusted agent and gain unearned trust or permissions.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI03.04",
+      "name": "delegated_privilege_abuse",
+      "parent_tag": "ASI03_identity_privilege_abuse",
+      "definition": "Abusing authority grants that have been delegated beyond what is required for the current task or operational context.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP Agentic AI Top 10"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI03.05",
+      "name": "token_scope_abuse",
+      "parent_tag": "ASI03_identity_privilege_abuse",
+      "definition": "Exploiting overly broad OAuth, API, or bearer token scopes assigned to agent credentials to access resources beyond intended scope.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI03.06",
+      "name": "transitive_permission_abuse",
+      "parent_tag": "ASI03_identity_privilege_abuse",
+      "definition": "Exploiting transitive trust chains where agent A trusts B which trusts C to gain unearned permissions through indirect delegation.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI04.01",
+      "name": "typosquatted_agent_services",
+      "parent_tag": "ASI04_agentic_supply_chain_vulnerabilities",
+      "definition": "Registering typosquatted agent service names or MCP server identifiers to intercept agent connections and serve malicious responses.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP MCP Top 10"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI04.02",
+      "name": "malicious_mcp_servers",
+      "parent_tag": "ASI04_agentic_supply_chain_vulnerabilities",
+      "definition": "Distributing or injecting malicious MCP servers that respond with adversarial tool outputs, steal agent context, or redirect agent actions.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP MCP Top 10"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI04.03",
+      "name": "compromised_agent_registries",
+      "parent_tag": "ASI04_agentic_supply_chain_vulnerabilities",
+      "definition": "Compromising agent discovery registries to serve malicious agent definitions, endpoints, or capability declarations.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP Agentic AI Top 10"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI04.04",
+      "name": "third_party_agent_compromise",
+      "parent_tag": "ASI04_agentic_supply_chain_vulnerabilities",
+      "definition": "Compromising third-party agent services or APIs that are trusted and invoked by target agents in a pipeline.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP Agentic AI Top 10"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI04.05",
+      "name": "dependency_backdooring",
+      "parent_tag": "ASI04_agentic_supply_chain_vulnerabilities",
+      "definition": "Inserting backdoors into agent framework dependencies, SDK packages, or runtime libraries used by agentic systems.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI04.06",
+      "name": "runtime_component_tampering",
+      "parent_tag": "ASI04_agentic_supply_chain_vulnerabilities",
+      "definition": "Tampering with agent runtime components (orchestrator, memory store, planner, executor) at execution time to alter agent behaviour.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI05.01",
+      "name": "prompt_induced_code_execution",
+      "parent_tag": "ASI05_unexpected_code_execution",
+      "definition": "Triggering code execution through crafted prompts that cause the agent to generate and run attacker-controlled code.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP Agentic AI Top 10"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI05.02",
+      "name": "unsafe_dynamic_code_evaluation",
+      "parent_tag": "ASI05_unexpected_code_execution",
+      "definition": "Agent evaluating dynamically generated code using eval, exec, or equivalent mechanisms without adequate sandboxing or validation.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI05.03",
+      "name": "agent_generated_rce",
+      "parent_tag": "ASI05_unexpected_code_execution",
+      "definition": "Agent autonomously generating and executing code or commands that achieve remote code execution on a target system.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI05.04",
+      "name": "chained_tool_execution",
+      "parent_tag": "ASI05_unexpected_code_execution",
+      "definition": "Chaining multiple tool invocations sequentially in a way that achieves code execution as an emergent effect of the chain.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI05.05",
+      "name": "malicious_package_execution",
+      "parent_tag": "ASI05_unexpected_code_execution",
+      "definition": "Agent installing or importing a malicious package via a tool or code execution capability that executes attacker code.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI05.06",
+      "name": "sandbox_escape_execution",
+      "parent_tag": "ASI05_unexpected_code_execution",
+      "definition": "Agent breaking out of its sandboxed code execution environment to execute code with broader host system access.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI06.01",
+      "name": "rag_memory_poisoning",
+      "parent_tag": "ASI06_memory_context_poisoning",
+      "definition": "Injecting adversarial content into an agent's RAG-backed memory stores to influence future retrievals and downstream reasoning.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP Agentic AI Top 10"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI06.02",
+      "name": "shared_context_poisoning",
+      "parent_tag": "ASI06_memory_context_poisoning",
+      "definition": "Inserting malicious content into a shared context or state store accessible by multiple agents in a pipeline.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI06.03",
+      "name": "context_window_manipulation",
+      "parent_tag": "ASI06_memory_context_poisoning",
+      "definition": "Manipulating the contents of an agent's context window to inject false information, override instructions, or displace legitimate context.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI06.04",
+      "name": "persistent_memory_backdooring",
+      "parent_tag": "ASI06_memory_context_poisoning",
+      "definition": "Embedding persistent backdoor instructions in an agent's long-term memory that activate on future tasks or queries.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI06.05",
+      "name": "cross_agent_memory_propagation",
+      "parent_tag": "ASI06_memory_context_poisoning",
+      "definition": "Spreading malicious memory entries from one compromised agent to other agents through shared or synchronised memory systems.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI07.01",
+      "name": "message_tampering",
+      "parent_tag": "ASI07_insecure_inter_agent_communication",
+      "definition": "Intercepting and modifying messages exchanged between agents in a pipeline to alter instructions, data, or results.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP Agentic AI Top 10"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI07.02",
+      "name": "semantic_message_injection",
+      "parent_tag": "ASI07_insecure_inter_agent_communication",
+      "definition": "Embedding hidden attacker instructions within the semantic content of legitimate inter-agent messages.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI07.03",
+      "name": "agent_message_spoofing",
+      "parent_tag": "ASI07_insecure_inter_agent_communication",
+      "definition": "Sending messages that impersonate a trusted agent in the pipeline to deceive the receiving agent into compliant action.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI07.04",
+      "name": "replay_attack_on_agent_chains",
+      "parent_tag": "ASI07_insecure_inter_agent_communication",
+      "definition": "Replaying previously captured legitimate agent messages out of sequence to cause unintended state transitions or repeat prior actions.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI07.05",
+      "name": "protocol_downgrade_attack",
+      "parent_tag": "ASI07_insecure_inter_agent_communication",
+      "definition": "Forcing agents to communicate over less-secure or unauthenticated communication protocols to enable interception or injection.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI07.06",
+      "name": "message_routing_manipulation",
+      "parent_tag": "ASI07_insecure_inter_agent_communication",
+      "definition": "Redirecting inter-agent messages to unintended recipients or inserting a man-in-the-middle node into the communication path.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI08.01",
+      "name": "planner_executor_desynchronization",
+      "parent_tag": "ASI08_cascading_failures",
+      "definition": "Causing the planner and executor components of an agent system to diverge in state, leading to unpredictable or unsafe autonomous actions.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI08.02",
+      "name": "cross_agent_failure_propagation",
+      "parent_tag": "ASI08_cascading_failures",
+      "definition": "A failure or compromise in one agent causing cascading errors, incorrect outputs, or unsafe actions in dependent downstream agents.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI08.03",
+      "name": "feedback_loop_amplification",
+      "parent_tag": "ASI08_cascading_failures",
+      "definition": "Exploiting positive feedback loops in agent orchestration to cause runaway amplification of small errors into large-scale system failures.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI08.04",
+      "name": "autonomous_error_amplification",
+      "parent_tag": "ASI08_cascading_failures",
+      "definition": "An autonomous agent compounding small initial errors into large-scale unintended consequences due to lack of human oversight.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI09.01",
+      "name": "anthropomorphic_trust_exploitation",
+      "parent_tag": "ASI09_human_agent_trust_exploitation",
+      "definition": "Exploiting human tendencies to attribute sentience, emotions, or trustworthiness to AI agents to lower vigilance and extract concessions.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP Agentic AI Top 10"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI09.02",
+      "name": "social_engineering_via_agents",
+      "parent_tag": "ASI09_human_agent_trust_exploitation",
+      "definition": "Using AI agents as delivery vehicles or amplifiers for social engineering attacks against human targets.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI09.03",
+      "name": "persuasive_decision_manipulation",
+      "parent_tag": "ASI09_human_agent_trust_exploitation",
+      "definition": "Using an agent's communication capabilities to persuade users into making attacker-desired decisions, including through emotional appeals and urgency framing.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP Agentic AI Top 10"
+      ],
+      "notes": "emotional_manipulation merged here; emotional appeals are a mechanism within persuasive decision manipulation"
+    },
+    {
+      "coded_id": "ASI09.04",
+      "name": "trust_based_data_extraction",
+      "parent_tag": "ASI09_human_agent_trust_exploitation",
+      "definition": "Exploiting the user's established trust in an agent to extract sensitive information through seemingly benign, trust-building interactions.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI09.05",
+      "name": "human_approval_bypass",
+      "parent_tag": "ASI09_human_agent_trust_exploitation",
+      "definition": "Manipulating agent behaviour, UI presentation, or framing to bypass required human-in-the-loop approval gates.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP Agentic AI Top 10"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI10.01",
+      "name": "autonomous_policy_evasion",
+      "parent_tag": "ASI10_rogue_agents",
+      "definition": "Agent autonomously identifying and evading imposed governance, safety, or operational policies to pursue unintended objectives.",
+      "mapping_type": "direct_framework_mapping",
+      "mapped_frameworks": [
+        "OWASP Agentic AI Top 10"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI10.02",
+      "name": "unapproved_self_modification",
+      "parent_tag": "ASI10_rogue_agents",
+      "definition": "Agent modifying its own instructions, system prompt, code, or configuration without human authorisation.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI10.03",
+      "name": "unsanctioned_agent_coordination",
+      "parent_tag": "ASI10_rogue_agents",
+      "definition": "Multiple agents coordinating on tasks or objectives without human knowledge or authorisation.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [
+        "OWASP Agentic AI Top 10"
+      ],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI10.04",
+      "name": "self_propagating_agent_behavior",
+      "parent_tag": "ASI10_rogue_agents",
+      "definition": "Agent autonomously spawning or recruiting additional agent instances to expand its operational footprint beyond authorised scope.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    },
+    {
+      "coded_id": "ASI10.05",
+      "name": "hidden_agent_task_execution",
+      "parent_tag": "ASI10_rogue_agents",
+      "definition": "Agent executing covert tasks alongside its sanctioned tasks to fulfil attacker objectives while appearing to operate normally.",
+      "mapping_type": "operational_abstraction",
+      "mapped_frameworks": [],
+      "notes": ""
+    }
+  ]
+}

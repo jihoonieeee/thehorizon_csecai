@@ -31,13 +31,15 @@ STEP 1 — UNDERSTAND THE SOURCE
   source_summary (2–3 analyst sentences), primary_subject (≤15 words),
   main_claims (2–5 facts), key_entities (≤10), important_numbers (≤5).
 
-STEP 2 — ASSIGN SOURCE TYPE (one of 16 canonical strings)
+STEP 2 — ASSIGN SOURCE TYPE (one of 13 canonical strings)
   vulnerability, exploit_disclosure, incident, threat_intelligence,
-  research_finding, defensive_capability, benchmark_evaluation,
-  capability_demonstration, adversary_adoption_signal,
-  infrastructure_dependency_signal, trust_boundary_shift,
-  societal_harm_signal, governance_signal, ecosystem_signal,
-  strategic_signal, unknown
+  adversary_adoption_signal, research_finding, benchmark_evaluation,
+  capability_demonstration, defensive_capability, governance_signal,
+  societal_harm_signal, attack_surface_signal, unknown
+
+  attack_surface_signal = a development that materially expands or shifts the AI
+  attack surface (widely-adopted AI tooling/infra, new dependency/concentration
+  risk, or new autonomy/trust/authority boundary) — NOT pure funding/market news.
 
   Disambiguation rules inline: vulnerability vs exploit_disclosure,
   incident vs threat_intelligence, research vs capability_demonstration, etc.

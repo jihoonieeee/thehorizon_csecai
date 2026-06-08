@@ -1,6 +1,7 @@
 import { formatLabel } from "../utils.js";
 
-const PAGES = ["report", "daily", "weekly", "monthly", "quarterly", "archive"];
+const PAGES = ["dashboard", "report", "daily", "weekly", "monthly", "quarterly", "archive"];
+const PAGE_LABELS = { dashboard: "Dashboard", report: "Report" };
 
 export function Nav({ page, setPage }) {
   return (
@@ -13,7 +14,7 @@ export function Nav({ page, setPage }) {
             className={page === item ? "active" : ""}
             onClick={() => setPage(item)}
           >
-            {item === "report" ? "Report" : formatLabel(item)}
+            {PAGE_LABELS[item] || formatLabel(item)}
           </button>
         ))}
       </div>

@@ -672,7 +672,13 @@ AI-assisted autonomous attack coordination, automation, or operational chaining.
 
 ## AE09_ai_enabled_disinformation_influence
 
-AI-assisted propaganda, manipulation, synthetic media, or influence operations.
+AI-assisted disinformation, propaganda, narrative manipulation, or coordinated influence operations. Does not cover synthetic media used for fraud — see AE10.
+
+---
+
+## AE10_ai_enabled_deepfake
+
+AI-generated synthetic video, audio, or imagery used for fraud, impersonation, extortion, scams, or targeted harm. Includes face-swap attacks, voice cloning fraud, non-consensual synthetic content, and synthetic identity fraud. Distinct from AE09 (influence operations) and AE07 (credential/identity system abuse).
 
 ---
 
