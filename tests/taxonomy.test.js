@@ -457,7 +457,7 @@ const { coerceOutlook } = await import("../lib/pipeline/analysis/analyzeCategory
 test("bare string outlook becomes an object", () => {
   const o = coerceOutlook("The evidence suggests escalation", "llm_threats");
   assert.equal(o.statement, "The evidence suggests escalation");
-  assert.equal(o.time_horizon, "3-6 months");
+  assert.equal(o.time_horizon, "6 months");   // L6 rework: 6-month outlook contract
 });
 
 test("char-indexed (spread-corrupted) outlook is reassembled", () => {

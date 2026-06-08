@@ -131,7 +131,11 @@ async function main() {
     })();
 
     console.log(`[ingest] Collecting sources: ${ingestWindow.start_utc.slice(0, 10)} → ${ingestWindow.end_utc.slice(0, 10)}`);
-    if (WEB_DISCOVERY) console.log("[ingest] Web discovery (Layer 1B/1C) enabled");
+    if (WEB_DISCOVERY) {
+      const { discoveryProviderStatus } = await import("../lib/pipeline/discovery/discoverySearchRouter.js");
+      const ps = discoveryProviderStatus();
+      console.log(`[ingest] Web discovery (Layer 1B/1C) enabled — providers: tavily=${ps.tavily} serpapi=${ps.serpapi} anthropic=${ps.anthropic}${ps.forced ? ` forced=${ps.forced}` : ""}`);
+    }
     const ingestResult = await collectRawSources(ingestWindow, { webDiscovery: WEB_DISCOVERY, skipLlm: NO_LLM });
     const ingestSources = ingestResult.sources.slice(0, LIMIT);
     console.log(

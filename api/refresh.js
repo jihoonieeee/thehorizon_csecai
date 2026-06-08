@@ -65,6 +65,10 @@ export default async function handler(req, res) {
       discarded_count: result.discarded_count,
       discarded_by_validity: result.discarded_by_validity,
 
+      discarded_by_relevance_count: result.discarded_by_relevance_count,
+      discarded_by_relevance: result.discarded_by_relevance,
+      validation_stats: result.validation_stats,
+
       pipeline_counts: result.pipeline_counts,
 
       sources: result.sources,
