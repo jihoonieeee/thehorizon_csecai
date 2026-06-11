@@ -320,6 +320,29 @@ ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS automation_level text;
 ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS autonomy_level   text;
 ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS taxonomy_version text;
 
+-- Evidence-quality axis: makes per-evidence packet quality queryable in SQL
+-- (previously only present inside the deck blob). Populated by runRawfactBranch +
+-- persistRawfacts; the writer drops any column the DB lacks, so this is back-compat.
+ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS evidence_type         text;
+ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS evidence_strength     text;
+ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS admissibility         text;
+ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS permitted_uses        jsonb;
+ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS limitations           jsonb;
+ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS observed_use          boolean;
+ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS materiality           text;
+ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS uniqueness            text;
+ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS quote_entailment      text;
+ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS claim_preservation    text;
+ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS method_quality        text;
+ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS statistical_use       text;
+ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS origin_role           text;
+ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS independence_level    text;
+ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS primary_origin_url    text;
+ALTER TABLE rawfacts ADD COLUMN IF NOT EXISTS source_quality_status text;
+CREATE INDEX IF NOT EXISTS idx_rawfacts_evidence_strength ON rawfacts (evidence_strength);
+CREATE INDEX IF NOT EXISTS idx_rawfacts_admissibility     ON rawfacts (admissibility);
+CREATE INDEX IF NOT EXISTS idx_rawfacts_materiality       ON rawfacts (materiality);
+
 CREATE TABLE IF NOT EXISTS analytics_metrics (
   metric_id          text PRIMARY KEY,
   metric_name        text,
