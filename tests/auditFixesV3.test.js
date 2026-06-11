@@ -10,6 +10,7 @@
 
 import assert from "node:assert/strict";
 
+import { qaAnalyticalClaim } from "../lib/pipeline/analysis/claimQa.js";
 import { validateCategoryAnalysis } from "../lib/pipeline/analysis/validateCategoryAnalysis.js";
 import { buildAnalyticalStateBlock } from "../lib/pipeline/analysis/synthesizeCategory.js";
 import { normalizeL5CToPacket } from "../lib/pipeline/evidence/normalizeToPackets.js";
@@ -146,6 +147,26 @@ test("a single publisher citing an origin is NOT circular", () => {
   const r1 = inferOriginRole(s1);
   assert.notEqual(r1.independence_level, "circular_reporting_risk");
   resetCircularRegistry();
+});
+
+// ── 5. Recommendation grounding ───────────────────────────────────────────────
+console.log("\nRecommendation grounding");
+
+test("recommendation with no admissible evidence is blocked (was partially_supported)", () => {
+  const claim = { claim_type: "recommendation", claim_text: "Adopt stricter guardrails." };
+  const r = qaAnalyticalClaim(claim, [], { analysis_allowed: "full" });
+  assert.equal(r.claim_support_status, "unsupported");
+  assert.equal(r.allowed_to_proceed, false);
+});
+
+test("recommendation with a defensive/governance basis is supported", () => {
+  const claim = { claim_type: "recommendation", claim_text: "Deploy detection for prompt injection." };
+  const packet = {
+    evidence_id: "d1", evidence_type: "defensive_capability", source_type: "defensive_capability",
+    triage_data: { evidence_strength: "usable", admissibility: "passed", permitted_uses: ["recommendation_input"], limitations: [] },
+  };
+  const r = qaAnalyticalClaim(claim, [packet], { analysis_allowed: "full" });
+  assert.equal(r.claim_support_status, "supported");
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

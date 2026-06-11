@@ -32,6 +32,9 @@ function flattenPacket(packet) {
 
   return {
     evidence_id:      packet.evidence_id,
+    branch_type:      packet.branch_type || (packet.provenance?.extraction_layer === "L5B" ? "analytics"
+                        : packet.provenance?.extraction_layer === "L5C" ? "web_enrichment" : "rawfact"),
+    enrichment:       packet.enrichment === true,
     source_id:        packet.source_id || prov.source_id || null,
     evidence_type:    packet.evidence_type || "",
     evidence_class:   packet.evidence_class || "",
@@ -42,6 +45,11 @@ function flattenPacket(packet) {
     // Significance axis (separate from reliability) — read from either packet shape.
     materiality:      cr.materiality || packet.triage_data?.materiality || packet.materiality || null,
     uniqueness:       cr.uniqueness  || packet.triage_data?.uniqueness  || packet.uniqueness  || null,
+    // Quality axis (now carried on the canonical packet)
+    source_quality:   packet.source_quality || null,
+    independence:     packet.independence   || null,
+    grounding:        packet.grounding      || null,
+    method:           packet.method         || null,
     category:         packet.category      || null,
     taxonomy_tags:    packet.taxonomy_tags || [],
 
