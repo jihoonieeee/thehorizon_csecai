@@ -237,11 +237,21 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- taxonomy_validation_status allowed values MUST match the producers in
+-- understandSource.js: validated | weak | needs_manual_review | rejected
+-- PLUS the gate/novelty statuses emerging_unmapped | no_domain_match | no_tags_found.
+-- The original constraint omitted the last three, so persisting an emerging_unmapped
+-- source (the novelty safety valve) or a gate-discarded source violated the check.
+-- Drop-and-recreate so existing databases pick up the widened set.
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_taxonomy_validation_status' AND conrelid = 'sources'::regclass) THEN
-    ALTER TABLE sources ADD CONSTRAINT chk_taxonomy_validation_status
-      CHECK (taxonomy_validation_status IS NULL OR taxonomy_validation_status IN ('validated','weak','needs_manual_review','rejected'));
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_taxonomy_validation_status' AND conrelid = 'sources'::regclass) THEN
+    ALTER TABLE sources DROP CONSTRAINT chk_taxonomy_validation_status;
   END IF;
+  ALTER TABLE sources ADD CONSTRAINT chk_taxonomy_validation_status
+    CHECK (taxonomy_validation_status IS NULL OR taxonomy_validation_status IN (
+      'validated','weak','needs_manual_review','rejected',
+      'emerging_unmapped','no_domain_match','no_tags_found'
+    ));
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_sources_primary_domain
@@ -867,3 +877,75 @@ COMMIT;
 -- SELECT report_period_month, COUNT(*) FROM sources
 -- WHERE report_period_month IS NOT NULL
 -- GROUP BY 1 ORDER BY 1 DESC LIMIT 12;
+
+
+-- ===========================================================================
+-- 13. Deck v9.1 — argument-form metadata + slide QA columns (June 2026)
+--
+-- These columns extend the `decks` table to store deck-v9.1 planning
+-- metadata: argument forms used, bullet-role QA results, visual support
+-- stats, and speaker-notes QA flags. All are nullable so older deck rows
+-- are unaffected.
+-- ===========================================================================
+
+-- Deck-level argument-form and QA metadata
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS deck_version          text;
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS argument_forms_used   text[]  DEFAULT '{}';
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS bullet_role_violations int     DEFAULT 0;
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS analytics_not_supporting int   DEFAULT 0;
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS visual_contextual_count  int   DEFAULT 0;
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS notes_qa_blocking        int   DEFAULT 0;
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS notes_qa_warnings        int   DEFAULT 0;
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS claim_anchored_slides    int   DEFAULT 0;
+
+-- Verification queries for section 13:
+-- SELECT column_name FROM information_schema.columns
+-- WHERE table_name = 'decks'
+--   AND column_name IN (
+--     'deck_version','argument_forms_used','bullet_role_violations',
+--     'analytics_not_supporting','visual_contextual_count',
+--     'notes_qa_blocking','notes_qa_warnings','claim_anchored_slides'
+--   )
+-- ORDER BY column_name;
+-- Expected: 8 rows
+
+
+-- ===========================================================================
+-- 14. Validation v1.1 — content quality gate + URL resolution (June 2026)
+--
+-- Adds columns populated by the new Layer 3.3 content quality gate and the
+-- URL resolution step in validateAndTypeSource.js.
+-- All nullable — existing rows default to NULL, pipeline sets on next run.
+-- ===========================================================================
+
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS content_quality        text;
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS content_quality_reason text;
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS ai_signal_strength     text;
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS display_url            text;
+
+CREATE INDEX IF NOT EXISTS idx_sources_content_quality
+  ON sources (content_quality)
+  WHERE content_quality IS NOT NULL;
+
+-- Verification:
+-- SELECT column_name FROM information_schema.columns
+-- WHERE table_name = 'sources'
+--   AND column_name IN ('content_quality','content_quality_reason','ai_signal_strength','display_url')
+-- ORDER BY column_name;
+-- Expected: 4 rows
+
+COMMIT;
+
+
+-- ── Audit refactor: source quality, origin tracking, relevance path ───────────
+-- See docs/migrations/audit-refactor.sql for detailed comments.
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS source_quality_status  text;
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS source_quality_reasons text[];
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS origin_role            text;
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS primary_origin_url     text;
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS cited_sources          text[];
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS relevance_path         text;
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS taxonomy_status        text;
+
+CREATE INDEX IF NOT EXISTS idx_sources_source_quality_status ON sources (source_quality_status);
+CREATE INDEX IF NOT EXISTS idx_sources_origin_role           ON sources (origin_role);
