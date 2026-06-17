@@ -182,11 +182,12 @@ async function main() {
       .limit(LIMIT);
     if (CATEGORY) query = query.eq("main_category", CATEGORY);
     if (UNCLASSIFIED_ONLY) {
-      // Fix 2: catch null AND the legacy 'uncategorised' value from the old MVP pipeline.
-      // Fix 3: skip sources already rejected by a prior classify run.
+      // Catch null AND the legacy 'uncategorised' value from the old MVP pipeline.
+      // NOTE: chaining .not() after .or() produces 0 results in Supabase PostgREST —
+      // use a second .or() to exclude rejected sources instead.
       query = query
         .or("main_category.is.null,main_category.eq.uncategorised")
-        .not("validation_status", "eq", "reject");
+        .or("validation_status.is.null,validation_status.neq.reject");
     }
 
     const { data, error } = await query;

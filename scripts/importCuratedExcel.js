@@ -66,36 +66,26 @@ function parseDate(value) {
 }
 
 function sourceTypeFromPublisher(publisher) {
-  if (publisher.includes("Google Cloud")) return "threat_intel";
-  if (publisher.includes("Microsoft")) return "threat_intel";
+  if (publisher.includes("Google Cloud")) return "threat_intelligence_report";
+  if (publisher.includes("Microsoft")) return "threat_intelligence_report";
   if (publisher.includes("CISA")) return "government_advisory";
-  if (publisher.includes("NIST")) return "policy_update";
-  if (publisher.includes("OWASP")) return "security_framework";
+  if (publisher.includes("NIST")) return "standards_document";
+  if (publisher.includes("OWASP")) return "standards_document";
   if (publisher.includes("arXiv")) return "research_paper";
-
   return "security_blog";
 }
 
 function tagsFromSheet(sheetName) {
-  if (sheetName === "Security of AI") return ["security_of_ai", "curated"];
-  if (sheetName === "AI for Cyber") return ["curated"];
-  if (sheetName === "AI-Enabled Threats") return ["ai_enabled_threats", "curated"];
-  return ["curated"];
+  // v2: tags are assigned by the classify-only pass (L4). Leave empty so the
+  // LLM assigns proper taxonomy tags. The sheet hint is preserved in main_category.
+  return [];
 }
 
-// Curated sources are hand-picked — assign baseline scores so the classifier
-// never deletes them and the scoring pipeline ranks them appropriately.
 function baselineFromSheet(sheetName) {
-  if (sheetName === "Security of AI") {
-    return { ai_specificity_score: 80, relevance_tier: "core", main_category: "traditional_ai_threats" };
-  }
-  if (sheetName === "AI for Cyber") {
-    return { ai_specificity_score: 65, relevance_tier: "core", main_category: "uncategorised" };
-  }
-  if (sheetName === "AI-Enabled Threats") {
-    return { ai_specificity_score: 75, relevance_tier: "core", main_category: "ai_enabled_threats" };
-  }
-  return { ai_specificity_score: 70, relevance_tier: "core", main_category: "uncategorised" };
+  // Set main_category to null so classify-only runs on every curated source.
+  // Sheet names give a strong signal but the v2 AE gate must still verify.
+  // trust_tier is set per-source by inferTrustTier() — not overridden here.
+  return { main_category: null };
 }
 
 function getSgtWindowForDate(dateIso) {
