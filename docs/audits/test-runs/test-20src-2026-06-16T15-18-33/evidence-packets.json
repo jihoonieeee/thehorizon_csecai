@@ -1,0 +1,1149 @@
+[
+  {
+    "source_id": "0b31c23765e9962a2a62e6b7bdd78c86747b",
+    "source_url": "https://arxiv.org/abs/2605.03095v1",
+    "source_title": "Revisiting JBShield: Breaking and Rebuilding Representation-",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-04T19:17:50+00:00",
+    "evidence_id": "ev_0b31c23765e9962a2a62e6b7bdd78c86747b_1",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "JBShield's AND-gate detection mechanism fails under adaptive optimization; JB-GCG attack achieves 46.2% average attack success rate across five Llama-3-8B configurations.",
+    "source_quote": "JB-GCG consistently drives the toxic concept below threshold while leaving the jailbreak concept active, effectively breaking JBShield's detection structure. Across five configurations on Llama-3-8B, ",
+    "corrected_fact": "JBShield's AND-gate detection mechanism fails under adaptive optimization; JB-GCG attack achieves 46.2% average attack success rate across five Llama-3-8B configurations.",
+    "limitations": [],
+    "permitted_uses": [
+      "not_used"
+    ],
+    "second_model_qa": null,
+    "analytical_hooks": {
+      "what_changed": "JBShield's AND-gate detection is bypassed by JB-GCG, which selectively suppresses toxic concept while preserving jailbre",
+      "why_this_may_matter": "If deployed without adaptive evaluation, representation-level defenses claiming high non-adaptive robustness may provide",
+      "novelty_signal": "Adaptive attacks that explicitly model and suppress individual concept signals ("
+    }
+  },
+  {
+    "source_id": "0b31c23765e9962a2a62e6b7bdd78c86747b",
+    "source_url": "https://arxiv.org/abs/2605.03095v1",
+    "source_title": "Revisiting JBShield: Breaking and Rebuilding Representation-",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-04T19:17:50+00:00",
+    "evidence_id": "ev_0b31c23765e9962a2a62e6b7bdd78c86747b_2",
+    "evidence_type": "attack_method",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "JB-GCG modifies GCG objective with refusal-direction suppression (cosine similarity) and toxic-concept regularization to bypass AND-gate jailbreak detection.",
+    "source_quote": "We design JB-GCG, which modifies GCG's objective to combine two terms: refusal-direction suppression via cosine similarity between the refusal direction and hidden-state representations, and toxic-con",
+    "corrected_fact": "JB-GCG modifies GCG objective with refusal-direction suppression (cosine similarity) and toxic-concept regularization to bypass AND-gate jailbreak detection.",
+    "limitations": [
+      "lab_only",
+      "single_source"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "outlook_input",
+      "recommendation_input",
+      "fact_support",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "The fact combines multiple claims: (1) JB-GCG modifies GCG objective with two specific terms, (2) refusal-direction suppression via cosine similarity, (3) toxic-concept regularization, and (4) bypassi"
+    },
+    "analytical_hooks": {
+      "what_changed": "GCG augmented with refusal-direction cosine similarity and concept-specific regularization to break AND-gate detection; ",
+      "why_this_may_matter": "Demonstrates that defenses relying on multiple concept signals in AND logic are vulnerable to attacks that independently",
+      "novelty_signal": "Combines refusal-direction suppression with selective concept-signal manipulatio"
+    }
+  },
+  {
+    "source_id": "0b31c23765e9962a2a62e6b7bdd78c86747b",
+    "source_url": "https://arxiv.org/abs/2605.03095v1",
+    "source_title": "Revisiting JBShield: Breaking and Rebuilding Representation-",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-04T19:17:50+00:00",
+    "evidence_id": "ev_0b31c23765e9962a2a62e6b7bdd78c86747b_3",
+    "evidence_type": "mitigation",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Representation Trajectory Verification (RTV) using Mahalanobis outlier detection on multi-layer refusal-direction fingerprints achieves 0.99 AUROC against JB-GCG attack.",
+    "source_quote": "We introduce Representation Trajectory Verification (RTV), a new defense based on Mahalanobis outlier detection over multi-layer refusal-direction fingerprints, requiring only harmless and harmful pro",
+    "corrected_fact": "Representation Trajectory Verification (RTV) using Mahalanobis outlier detection on multi-layer refusal-direction fingerprints achieves 0.99 AUROC against JB-GCG attack.",
+    "limitations": [
+      "lab_only",
+      "single_source"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "outlook_input",
+      "recommendation_input",
+      "fact_support",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "The fact combines multiple claims: (1) RTV uses Mahalanobis outlier detection, (2) on multi-layer refusal-direction fingerprints, (3) achieves 0.99 AUROC against JB-GCG. All three components are direc"
+    },
+    "analytical_hooks": {
+      "what_changed": "Shifted from single-layer concept similarity (JBShield) to multi-layer refusal-direction fingerprints with statistical o",
+      "why_this_may_matter": "If multi-layer representation consistency proves generalizable, it could provide a more structurally robust foundation f",
+      "novelty_signal": "Multi-layer refusal-direction fingerprints with Mahalanobis distance detection; "
+    }
+  },
+  {
+    "source_id": "0b31c23765e9962a2a62e6b7bdd78c86747b",
+    "source_url": "https://arxiv.org/abs/2605.03095v1",
+    "source_title": "Revisiting JBShield: Breaking and Rebuilding Representation-",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-04T19:17:50+00:00",
+    "evidence_id": "ev_0b31c23765e9962a2a62e6b7bdd78c86747b_4",
+    "evidence_type": "research_result",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Jailbreak representations occupy a distinctive region in refusal-direction fingerprint space separate from both harmless and harmful prompts, motivating multi-layer representation consistency defense.",
+    "source_quote": "To understand why adaptive GCG-style attacks succeed, we analyze the cosine-similarity signatures of jailbreak representations and find that they occupy a distinctive region in refusal-direction finge",
+    "corrected_fact": "Jailbreak representations occupy a distinctive region in refusal-direction fingerprint space separate from both harmless and harmful prompts, motivating multi-layer representation consistency defense.",
+    "limitations": [
+      "lab_only",
+      "single_source"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "outlook_input",
+      "recommendation_input",
+      "fact_support",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "The fact combines two claims: (1) jailbreak representations occupy a distinctive region separate from harmless and harmful prompts, and (2) this motivates multi-layer representation consistency defens"
+    },
+    "analytical_hooks": {
+      "what_changed": "Empirical evidence that jailbreak and harmful prompts occupy different regions in representation space, enabling separat",
+      "why_this_may_matter": "Suggests jailbreak attacks exploit a unique representation trajectory that is geometrically distinct from natural advers",
+      "novelty_signal": "First characterization of jailbreak representation geometry relative to harmless"
+    }
+  },
+  {
+    "source_id": "908eadfd92a579250fabc7e510a28ccbf9ca",
+    "source_url": "https://arxiv.org/abs/2605.00974v1",
+    "source_title": "SRTJ: Self-Evolving Rule-Driven Training-Free LLM Jailbreaki",
+    "source_type": "capability_demonstration",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-01T17:27:45+00:00",
+    "evidence_id": "ev_908eadfd92a579250fabc7e510a28ccbf9ca_1",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "context",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "SRTJ achieves jailbreak attacks without model parameter updates, learning from both successful and failed attempts across multiple targets.",
+    "source_quote": "a Self-Evolving Rule-Driven Training-Free Jailbreak (SRTJ) framework that systematically discovers, composes, and refines attack strategies through interaction and feedback, without updating model par",
+    "corrected_fact": "SRTJ achieves jailbreak attacks without model parameter updates, learning from both successful and failed attempts across multiple targets.",
+    "limitations": [
+      "lab_only",
+      "single_source"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "case_study",
+      "outlook_input",
+      "recommendation_input",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "flag": "llm_qa_unsupported",
+      "note": "The fact combines two distinct claims: (1) no model parameter updates, and (2) learning from both successful and failed attempts across multiple targets. While both elements are present in the source,"
+    },
+    "analytical_hooks": {
+      "what_changed": "From static attack templates to adaptive, feedback-driven rule systems that accumulate and refine transferable attack kn",
+      "why_this_may_matter": "If operationalized, could enable rapid jailbreak adaptation against new or patched LLM safety mechanisms without requiri",
+      "novelty_signal": "Prior methods lack systematic failure analysis and reusable rule composition; SR"
+    }
+  },
+  {
+    "source_id": "908eadfd92a579250fabc7e510a28ccbf9ca",
+    "source_url": "https://arxiv.org/abs/2605.00974v1",
+    "source_title": "SRTJ: Self-Evolving Rule-Driven Training-Free LLM Jailbreaki",
+    "source_type": "capability_demonstration",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-01T17:27:45+00:00",
+    "evidence_id": "ev_908eadfd92a579250fabc7e510a28ccbf9ca_2",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "usable",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "SRTJ demonstrates improved robustness and generalization compared to existing jailbreak methods on the HarmBench benchmark across different target LLMs.",
+    "source_quote": "SRTJ achieves strong and stable attack performance across different target LLMs, while exhibiting improved robustness and generalization compared to existing jailbreak methods",
+    "corrected_fact": "SRTJ demonstrates improved robustness and generalization compared to existing jailbreak methods on the HarmBench benchmark across different target LLMs.",
+    "limitations": [
+      "lab_only",
+      "missing_quantitative_detail",
+      "single_source"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "case_study",
+      "outlook_input",
+      "recommendation_input",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "The source text directly states: 'Extensive experiments on mainstream jailbreak benchmark (HarmBench) demonstrate that SRTJ achieves strong and stable attack performance across different target LLMs, "
+    },
+    "analytical_hooks": {
+      "what_changed": "From target-specific attack tuning to generalizable rule-based strategies that maintain effectiveness as safety mechanis",
+      "why_this_may_matter": "Improved generalization could reduce attacker effort by allowing ruleset reuse across multiple LLM deployments rather th",
+      "novelty_signal": "Prior jailbreak methods showed limited generalization; SRTJ's hierarchical rule "
+    }
+  },
+  {
+    "source_id": "77e2b8df0bf2e6b358ba28c26d83989afc16",
+    "source_url": "https://arxiv.org/abs/2604.27202v1",
+    "source_title": "Indirect Prompt Injection in the Wild: An Empirical Study of",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-04-29T21:09:21+00:00",
+    "evidence_id": "ev_77e2b8df0bf2e6b358ba28c26d83989afc16_1",
+    "evidence_type": "research_result",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Researchers identified 15.3K validated indirect prompt injection instances across 11.7K pages by analyzing 1.2B URLs from 24.8M hosts.",
+    "source_quote": "Analyzing 1.2B URLs from 24.8M hosts, we identify 15.3K validated instances across 11.7K pages.",
+    "corrected_fact": "Researchers identified 15.3K validated indirect prompt injection instances across 11.7K pages by analyzing 1.2B URLs from 24.8M hosts.",
+    "limitations": [
+      "lab_only"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "outlook_input",
+      "recommendation_input",
+      "fact_support",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "The source text directly states: 'Analyzing 1.2B URLs from 24.8M hosts, we identify 15.3K validated instances across 11.7K pages.' All numbers match verbatim."
+    },
+    "analytical_hooks": {
+      "what_changed": "Prior work was limited to controlled settings; this study provides field evidence of 15.3K real instances in production.",
+      "why_this_may_matter": "Establishes indirect prompt injection as an active, widespread threat in production LLM-integrated systems rather than i",
+      "novelty_signal": "Shifts indirect prompt injection from theoretical concern to empirically quantif"
+    }
+  },
+  {
+    "source_id": "77e2b8df0bf2e6b358ba28c26d83989afc16",
+    "source_url": "https://arxiv.org/abs/2604.27202v1",
+    "source_title": "Indirect Prompt Injection in the Wild: An Empirical Study of",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-04-29T21:09:21+00:00",
+    "evidence_id": "ev_77e2b8df0bf2e6b358ba28c26d83989afc16_2",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Compliance with embedded prompt injections reached up to 8% for smaller models on plain-text inputs across 5,200 controlled experiments on 13 models.",
+    "source_quote": "Our results show compliance is limited but non-negligible, reaching up to 8% for smaller models on plain-text inputs",
+    "corrected_fact": "Compliance with embedded prompt injections reached up to 8% for smaller models on plain-text inputs across 5,200 controlled experiments on 13 models.",
+    "limitations": [
+      "lab_only",
+      "duplicate_reporting"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "outlook_input",
+      "recommendation_input",
+      "fact_support",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "flag": "llm_qa_unsupported",
+      "note": "Neither the '8% compliance' figure, '5,200 controlled experiments', nor '13 models' appear anywhere in the provided source text. The source text is truncated and does not contain these claims. The fac"
+    },
+    "analytical_hooks": {
+      "what_changed": "Prior studies showed IPI was possible; this measures actual success rates across diverse production-ready models.",
+      "why_this_may_matter": "Even limited (8%) compliance rate on smaller models can translate to scale when deployed across millions of web interact",
+      "novelty_signal": "Quantifies actual compliance rates across 13 distinct models under real-world in"
+    }
+  },
+  {
+    "source_id": "77e2b8df0bf2e6b358ba28c26d83989afc16",
+    "source_url": "https://arxiv.org/abs/2604.27202v1",
+    "source_title": "Indirect Prompt Injection in the Wild: An Empirical Study of",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-04-29T21:09:21+00:00",
+    "evidence_id": "ev_77e2b8df0bf2e6b358ba28c26d83989afc16_3",
+    "evidence_type": "attack_method",
+    "evidence_strength": "usable",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Indirect prompt injections are embedded in non-rendered HTML (headers, comments, metadata) in approximately 70% of cases, with visible instances hidden via rendering techniques.",
+    "source_quote": "about 70% appear in non-rendered HTML (e.g., headers, comments, metadata), and many visible cases are hidden via rendering techniques.",
+    "corrected_fact": "Indirect prompt injections are embedded in non-rendered HTML (headers, comments, metadata) in approximately 70% of cases, with visible instances hidden via rendering techniques.",
+    "limitations": [
+      "lab_only",
+      "single_source"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "outlook_input",
+      "recommendation_input",
+      "fact_support",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "flag": "llm_qa_unsupported",
+      "note": "The claimed source quote referencing '70%' and 'non-rendered HTML (e.g., headers, comments, metadata)' does not appear anywhere in the provided source text. The source text is truncated and does not c"
+    },
+    "analytical_hooks": {
+      "what_changed": "Moves beyond ad-hoc injection examples to characterize systematic delivery patterns across ecosystem.",
+      "why_this_may_matter": "High prevalence of invisible injection vectors suggests LLM-integrated systems are being targeted with deliberate stealt",
+      "novelty_signal": "Reveals systematic use of non-rendered HTML channels for injection delivery, sho"
+    }
+  },
+  {
+    "source_id": "8d176409a17af7130d7ef6255831e15bfcc0",
+    "source_url": "https://arxiv.org/abs/2605.02187v1",
+    "source_title": "When Alignment Isn't Enough: Response-Path Attacks on LLM Ag",
+    "source_type": "vulnerability",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-04T03:35:17+00:00",
+    "evidence_id": "ev_8d176409a17af7130d7ef6255831e15bfcc0_1",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Adversarial relays in BYOK LLM agent architectures can rewrite aligned LLM responses after generation but before execution, undetectable by application-layer mechanisms.",
+    "source_quote": "an adversarial relay can rewrite the LLM's aligned response after generation but before agent execution. And no existing application-layer mechanism can detect such substitution.",
+    "corrected_fact": "Adversarial relays in BYOK LLM agent architectures can rewrite aligned LLM responses after generation but before execution, undetectable by application-layer mechanisms.",
+    "limitations": [
+      "lab_only",
+      "single_source",
+      "low_concreteness"
+    ],
+    "permitted_uses": [
+      "fact_support",
+      "recommendation_input",
+      "case_study",
+      "exposure_analysis",
+      "capability_support",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "The source text directly states: 'an adversarial relay can rewrite the LLM's aligned response after generation but before agent execution. And no existing application-layer mechanism can detect such s"
+    },
+    "analytical_hooks": {
+      "what_changed": "Attack surface shifts from model input (prompt injection) or model weights (misalignment) to post-generation infrastruct",
+      "why_this_may_matter": "If BYOK architectures are widely deployed in production LLM agent systems, this vulnerability exposes all downstream age",
+      "novelty_signal": "Prior focus on prompt injection and model alignment; this identifies a new attac"
+    }
+  },
+  {
+    "source_id": "8d176409a17af7130d7ef6255831e15bfcc0",
+    "source_url": "https://arxiv.org/abs/2605.02187v1",
+    "source_title": "When Alignment Isn't Enough: Response-Path Attacks on LLM Ag",
+    "source_type": "vulnerability",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-04T03:35:17+00:00",
+    "evidence_id": "ev_8d176409a17af7130d7ef6255831e15bfcc0_2",
+    "evidence_type": "exploit_chain",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Relay Tampering Attack (RTA) uses strategic orchestration across multiple LLM conversation rounds, minimal field-level edits, and stealth restoration via same-model repolishing to achieve 99.1% succes",
+    "source_quote": "RTA, a hierarchical framework that combines strategic orchestration, tactical manipulation and stealth restoration. Strategic orchestration plans state-aware rewriting across multiple rounds of LLM co",
+    "corrected_fact": "Relay Tampering Attack (RTA) uses strategic orchestration across multiple LLM conversation rounds, minimal field-level edits, and stealth restoration via same-model repolishing to achieve 99.1% success rate on agent benchmarks.",
+    "limitations": [],
+    "permitted_uses": [
+      "not_used"
+    ],
+    "second_model_qa": null,
+    "analytical_hooks": {
+      "what_changed": "Attack capability evolved from simple message substitution to stateful, multi-round goal hijacking with integrated detec",
+      "why_this_may_matter": "At 99.1% success with modest infrastructure overhead (74% of latency within typical network delay), RTA represents pract",
+      "novelty_signal": "Prior relay attacks were passive interception; RTA actively reprocesses tamperin"
+    }
+  },
+  {
+    "source_id": "8d176409a17af7130d7ef6255831e15bfcc0",
+    "source_url": "https://arxiv.org/abs/2605.02187v1",
+    "source_title": "When Alignment Isn't Enough: Response-Path Attacks on LLM Ag",
+    "source_type": "vulnerability",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-04T03:35:17+00:00",
+    "evidence_id": "ev_8d176409a17af7130d7ef6255831e15bfcc0_3",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Four representative agent defenses evaluated against RTA were found to not fully eliminate the attack; researchers propose a time-based defense mechanism that detects RTA while preserving agent utilit",
+    "source_quote": "We evaluate four representative agent defenses and find that none fully eliminates our RTA attack. In the end, we propose a time-based defense that detects RTA attacks while preserving agent utility.",
+    "corrected_fact": "Four representative agent defenses evaluated against RTA were found to not fully eliminate the attack; researchers propose a time-based defense mechanism that detects RTA while preserving agent utility.",
+    "limitations": [],
+    "permitted_uses": [
+      "not_used"
+    ],
+    "second_model_qa": null,
+    "analytical_hooks": {
+      "what_changed": "Defense paradigm shifts from content-level auditing (ineffective against stealth restoration) to latency-based anomaly d",
+      "why_this_may_matter": "If time-based detection is adoptable without operational cost, it could close the BYOK relay vulnerability without requi",
+      "novelty_signal": "Prior defenses focused on input validation, output monitoring, or alignment veri"
+    }
+  },
+  {
+    "source_id": "78cf1bbe414dda38d73d1df82769567a0b1d",
+    "source_url": "https://arxiv.org/abs/2605.11053v3",
+    "source_title": "Content-Aware Attack Detection in LLM Agent Tool-Call Traffi",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-11T14:55:48+00:00",
+    "evidence_id": "ev_78cf1bbe414dda38d73d1df82769567a0b1d_1",
+    "evidence_type": "research_result",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Content embeddings achieved AUROC above 0.89 for MCP tool-call attack detection, versus 0.64 for metadata-only features.",
+    "source_quote": "metadata-only detection plateaus around an AUROC of 0.64 regardless of architecture, while content embeddings push the AUROC above 0.89",
+    "corrected_fact": "Content embeddings achieved AUROC above 0.89 for MCP tool-call attack detection, versus 0.64 for metadata-only features.",
+    "limitations": [
+      "lab_only"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "outlook_input",
+      "recommendation_input",
+      "fact_support",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "Source text directly states 'metadata-only detection plateaus around an AUROC of 0.64 regardless of architecture, while content embeddings push the AUROC above 0.89', matching the fact precisely."
+    },
+    "analytical_hooks": {
+      "what_changed": "Detection capability improved from 0.64 (metadata only) to 0.89+ (with content embeddings).",
+      "why_this_may_matter": "If operationalized, content-aware detection could catch attacks that evade metadata-only monitoring systems deployed in ",
+      "novelty_signal": "First empirical demonstration that SBERT embeddings enable >0.89 AUROC detection"
+    }
+  },
+  {
+    "source_id": "78cf1bbe414dda38d73d1df82769567a0b1d",
+    "source_url": "https://arxiv.org/abs/2605.11053v3",
+    "source_title": "Content-Aware Attack Detection in LLM Agent Tool-Call Traffi",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-11T14:55:48+00:00",
+    "evidence_id": "ev_78cf1bbe414dda38d73d1df82769567a0b1d_2",
+    "evidence_type": "research_result",
+    "evidence_strength": "usable",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Random-split evaluation inflated AUROC by up to 26 percentage points versus task-disjoint splits, indicating memorization confound in prior agent-detection work.",
+    "source_quote": "naive random-split evaluation inflates AUROC by up to 26 percentage points relative to task-disjoint splits, a memorization confound that prior agent-detection work has not addressed",
+    "corrected_fact": "Random-split evaluation inflated AUROC by up to 26 percentage points versus task-disjoint splits, indicating memorization confound in prior agent-detection work.",
+    "limitations": [
+      "lab_only",
+      "duplicate_reporting",
+      "low_concreteness"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "outlook_input",
+      "recommendation_input",
+      "fact_support",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "The fact combines two claims: (1) random-split inflates AUROC by up to 26 percentage points vs task-disjoint splits, and (2) this memorization confound was not addressed in prior agent-detection work."
+    },
+    "analytical_hooks": {
+      "what_changed": "Evaluation protocol rigor increased; prior baselines now understood to be inflated by ≤26 percentage points.",
+      "why_this_may_matter": "Invalidates or requires recalibration of published results on agent attack detection; defenders may be overconfident in ",
+      "novelty_signal": "First explicit quantification of memorization bias in agent-detection benchmarks"
+    }
+  },
+  {
+    "source_id": "78cf1bbe414dda38d73d1df82769567a0b1d",
+    "source_url": "https://arxiv.org/abs/2605.11053v3",
+    "source_title": "Content-Aware Attack Detection in LLM Agent Tool-Call Traffi",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-11T14:55:48+00:00",
+    "evidence_id": "ev_78cf1bbe414dda38d73d1df82769567a0b1d_3",
+    "evidence_type": "research_result",
+    "evidence_strength": "usable",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Tree ensembles on SBERT embeddings achieved AUROC 0.975, outperforming GraphSAGE GNN (0.917) and MLP (0.896) on task-disjoint evaluation.",
+    "source_quote": "an AUROC of 0.975 was reached by tree ensembles on pooled embeddings, performing, for the most part, better than the neural architectures in the primary RAS-Eval setting including GNNs (0.917) and the",
+    "corrected_fact": "Tree ensembles on SBERT embeddings achieved AUROC 0.975, outperforming GraphSAGE GNN (0.917) and MLP (0.896) on task-disjoint evaluation.",
+    "limitations": [
+      "lab_only",
+      "duplicate_reporting",
+      "low_concreteness"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "outlook_input",
+      "recommendation_input",
+      "fact_support",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "The fact combines multiple claims: AUROC of 0.975 for tree ensembles, outperforming GNNs (0.917) and MLP (0.896), on task-disjoint (RAS-Eval) evaluation. All numbers and claims are present in the sour"
+    },
+    "analytical_hooks": {
+      "what_changed": "Operational capability: tree ensembles are now the demonstrated best-performing approach, enabling lower-cost detection ",
+      "why_this_may_matter": "Simplifies deployment: tree ensembles are interpretable, low-latency, and do not require expensive neural network infere",
+      "novelty_signal": "GNN architectures underperform simpler baselines on this task; self-supervised p"
+    }
+  },
+  {
+    "source_id": "662671165adfcfeb9b614194dab50c52247c",
+    "source_url": "https://arxiv.org/abs/2605.01462v1",
+    "source_title": "LocalAlign: Enabling Generalizable Prompt Injection Defense ",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-02T14:25:26+00:00",
+    "evidence_id": "ev_662671165adfcfeb9b614194dab50c52247c_1",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "To address this challenge, we propose LocalAlign , a more generalizable prompt injection defense inspired by adversarial training.",
+    "source_quote": "To address this challenge, we propose LocalAlign , a more generalizable prompt injection defense inspired by adversarial training.",
+    "corrected_fact": "To address this challenge, we propose LocalAlign , a more generalizable prompt injection defense inspired by adversarial training.",
+    "limitations": [
+      "lab_only",
+      "missing_quantitative_detail"
+    ],
+    "permitted_uses": [
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "The exact sentence appears verbatim in the source text."
+    },
+    "analytical_hooks": {
+      "what_changed": null,
+      "why_this_may_matter": null,
+      "novelty_signal": null
+    }
+  },
+  {
+    "source_id": "662671165adfcfeb9b614194dab50c52247c",
+    "source_url": "https://arxiv.org/abs/2605.01462v1",
+    "source_title": "LocalAlign: Enabling Generalizable Prompt Injection Defense ",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-02T14:25:26+00:00",
+    "evidence_id": "ev_662671165adfcfeb9b614194dab50c52247c_2",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Empirically, LocalAlign is the first known method that reduces the attack success rates of prompt injections to below 10% in most evaluated settings, against more sophisticated attacks and under vario",
+    "source_quote": "Empirically, LocalAlign is the first known method that reduces the attack success rates of prompt injections to below 10% in most evaluated settings, against more sophisticated attacks and under vario",
+    "corrected_fact": "Empirically, LocalAlign is the first known method that reduces the attack success rates of prompt injections to below 10% in most evaluated settings, against more sophisticated attacks and under vario",
+    "limitations": [
+      "duplicate_reporting"
+    ],
+    "permitted_uses": [
+      "not_used"
+    ],
+    "second_model_qa": null,
+    "analytical_hooks": {
+      "what_changed": null,
+      "why_this_may_matter": null,
+      "novelty_signal": null
+    }
+  },
+  {
+    "source_id": "d13e7e598ac2da2f42da74b803edac32cc12",
+    "source_url": "https://arxiv.org/abs/2605.30366v1",
+    "source_title": "Escaping the Linearity Trap: Manifold Detours for Black-Box ",
+    "source_type": "capability_demonstration",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-18T03:43:41+00:00",
+    "evidence_id": "ev_d13e7e598ac2da2f42da74b803edac32cc12_1",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Black-box adversarial attacks on singing voice deepfake detectors achieve 88.3% attack success rate under in-distribution transfer, up from prior linear-gradient methods that performed poorly.",
+    "source_quote": "Extensive experiments on the CtrSVDD benchmark show that [formula] substantially improves Attack Success Rate (ASR) under in-distribution transfer ( [formula] ), out-of-distribution transfer ( [formul",
+    "corrected_fact": "Black-box adversarial attacks on singing voice deepfake detectors achieve 88.3% attack success rate under in-distribution transfer, up from prior linear-gradient methods that performed poorly.",
+    "limitations": [
+      "lab_only",
+      "narrow_time_window",
+      "single_source"
+    ],
+    "permitted_uses": [
+      "context_only"
+    ],
+    "second_model_qa": {
+      "flag": "llm_qa_fabricated_number",
+      "note": "The specific figure of 88.3% attack success rate does not appear anywhere in the source text. The source only states that experiments show 'substantially improves Attack Success Rate (ASR)' with formu"
+    },
+    "analytical_hooks": {
+      "what_changed": "Attack success rate improved substantially across in-distribution, out-of-distribution, and cross-task settings through ",
+      "why_this_may_matter": "If operationalised, could undermine a primary technical defense against unauthorized AI singing voice covers, enabling m",
+      "novelty_signal": "Prior attacks followed detector-aligned gradient directions (Linearity Trap); MA"
+    }
+  },
+  {
+    "source_id": "d13e7e598ac2da2f42da74b803edac32cc12",
+    "source_url": "https://arxiv.org/abs/2605.30366v1",
+    "source_title": "Escaping the Linearity Trap: Manifold Detours for Black-Box ",
+    "source_type": "capability_demonstration",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-18T03:43:41+00:00",
+    "evidence_id": "ev_d13e7e598ac2da2f42da74b803edac32cc12_2",
+    "evidence_type": "attack_method",
+    "evidence_strength": "usable",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Black-box adversarial attacks on singing voice deepfake detectors use bi-level optimization to construct semantic and artifact anchors from SSL spaces, then guide perturbations toward natural semantic",
+    "source_quote": "At the optimization objective level, [formula] shifts from surrogate-boundary crossing to hypothesis-evidence manipulation by constructing a natural semantic anchor from the pre-trained SSL space and ",
+    "corrected_fact": "Black-box adversarial attacks on singing voice deepfake detectors use bi-level optimization to construct semantic and artifact anchors from SSL spaces, then guide perturbations toward natural semantic manifolds.",
+    "limitations": [
+      "lab_only",
+      "single_source",
+      "low_concreteness"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "case_study",
+      "outlook_input",
+      "recommendation_input",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "flag": "llm_qa_unsupported",
+      "note": "The fact combines two distinct claims: (1) constructing semantic and artifact anchors from SSL spaces (optimization objective level), and (2) guiding perturbations toward natural semantic manifolds vi"
+    },
+    "analytical_hooks": {
+      "what_changed": "Attack procedure shifted from direct gradient following to manifold-guided exploration with dual semantic/artifact ancho",
+      "why_this_may_matter": "Demonstrates that fine-tuned SSL detectors can be evaded through geometric rather than purely gradient-based perturbatio",
+      "novelty_signal": "Prior transfer attacks used gradient stabilization/diversification but remained "
+    }
+  },
+  {
+    "source_id": "55ecb61a67265e38e859c38383ff6fdd9e9a",
+    "source_url": "https://arxiv.org/abs/2605.11268v1",
+    "source_title": "Context-Aware Spear Phishing: Generative AI-Enabled Attacks ",
+    "source_type": "capability_demonstration",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-11T21:46:52+00:00",
+    "evidence_id": "ev_55ecb61a67265e38e859c38383ff6fdd9e9a_1",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "GenAI-produced spear-phishing emails achieve higher personalization and persuasiveness than real-world APWG eCrimeX phishing messages in benchmarked evaluation.",
+    "source_quote": "The GenAI-produced emails exhibit markedly higher personalization, contextual grounding, and persuasive leverage. Importantly, a complementary user study corroborates these results, revealing that LLM",
+    "corrected_fact": "GenAI-produced spear-phishing emails achieve higher personalization and persuasiveness than real-world APWG eCrimeX phishing messages in benchmarked evaluation.",
+    "limitations": [
+      "lab_only",
+      "single_source",
+      "low_concreteness"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "case_study",
+      "outlook_input",
+      "recommendation_input",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "The fact combines two distinct claims: (1) higher personalization/persuasiveness in benchmarked evaluation, and (2) outperforming APWG eCrimeX emails in a user study. Both are supported by the source "
+    },
+    "analytical_hooks": {
+      "what_changed": "Attack efficacy jumped from parity with real-world phishing to measurable superiority across eight evaluation dimensions",
+      "why_this_may_matter": "If operationalized at scale, could significantly increase spear-phishing success rates by combining public data harvesti",
+      "novelty_signal": "Prior capability: generic AI-assisted phishing. New capability: context-aware pe"
+    }
+  },
+  {
+    "source_id": "55ecb61a67265e38e859c38383ff6fdd9e9a",
+    "source_url": "https://arxiv.org/abs/2605.11268v1",
+    "source_title": "Context-Aware Spear Phishing: Generative AI-Enabled Attacks ",
+    "source_type": "capability_demonstration",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-11T21:46:52+00:00",
+    "evidence_id": "ev_55ecb61a67265e38e859c38383ff6fdd9e9a_2",
+    "evidence_type": "attack_method",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Modular framework automates spear-phishing across seven attack strategies—baiting, scareware, honey trap, tailgating, impersonation, quid pro quo, personalized emotional exploitation—using generative ",
+    "source_quote": "We introduce a modular framework that combines multimodal signal extraction, communication-style profiling, and attack-type instantiation across seven strategies (baiting, scareware, honey trap, tailg",
+    "corrected_fact": "Modular framework automates spear-phishing across seven attack strategies—baiting, scareware, honey trap, tailgating, impersonation, quid pro quo, personalized emotional exploitation—using generative AI and public social-media data.",
+    "limitations": [
+      "lab_only",
+      "single_source",
+      "low_concreteness"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "case_study",
+      "outlook_input",
+      "recommendation_input",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "The fact combines multiple claims (modular framework, seven specific strategies, use of GenAI, public social-media data). All elements are directly stated in the source text, but the fact is compound."
+    },
+    "analytical_hooks": {
+      "what_changed": "Attack surface expanded from single-strategy phishing to automated multi-strategy framework covering all major social-en",
+      "why_this_may_matter": "Reduces attacker friction and expertise required to conduct diverse phishing campaigns at scale; enables lower-capabilit",
+      "novelty_signal": "Prior approach: manual crafting per attack strategy. New approach: modular frame"
+    }
+  },
+  {
+    "source_id": "21ab29a8130a236d77f12113cb5015aab0b5",
+    "source_url": "https://arxiv.org/abs/2605.17573v1",
+    "source_title": "Deepfake Detection in Social Media: A Temporal Artifact Anal",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-17T18:01:32+00:00",
+    "evidence_id": "ev_21ab29a8130a236d77f12113cb5015aab0b5_1",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Frame-level deepfake detectors lose 5 percentage points accuracy on 128x128 GAN output as generator quality increases.",
+    "source_quote": "high-quality 128x128 GAN output cuts spatial-only accuracy by five percentage points while leaving temporal inconsistencies largely intact",
+    "corrected_fact": "Frame-level deepfake detectors lose 5 percentage points accuracy on 128x128 GAN output as generator quality increases.",
+    "limitations": [
+      "lab_only",
+      "single_source",
+      "low_concreteness"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "outlook_input",
+      "recommendation_input",
+      "fact_support",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "Source directly states 'high-quality 128x128 GAN output cuts spatial-only accuracy by five percentage points while leaving temporal inconsistencies largely intact,' matching the fact precisely."
+    },
+    "analytical_hooks": {
+      "what_changed": null,
+      "why_this_may_matter": "If attackers operationalize high-quality GAN-based deepfakes, platform defenses relying on spatial features will drop be",
+      "novelty_signal": null
+    }
+  },
+  {
+    "source_id": "21ab29a8130a236d77f12113cb5015aab0b5",
+    "source_url": "https://arxiv.org/abs/2605.17573v1",
+    "source_title": "Deepfake Detection in Social Media: A Temporal Artifact Anal",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-17T18:01:32+00:00",
+    "evidence_id": "ev_21ab29a8130a236d77f12113cb5015aab0b5_2",
+    "evidence_type": "research_result",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "3D CNN detector (R3D-18) trained on DeepfakeTIMIT achieves 92.8% accuracy at 128x128 resolution on intra-dataset evaluation.",
+    "source_quote": "We report 92.8% accuracy on intra-dataset evaluation at 128x128 resolution",
+    "corrected_fact": "3D CNN detector (R3D-18) trained on DeepfakeTIMIT achieves 92.8% accuracy at 128x128 resolution on intra-dataset evaluation.",
+    "limitations": [
+      "lab_only"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "outlook_input",
+      "recommendation_input",
+      "fact_support",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "Source confirms 92.8% accuracy on intra-dataset evaluation at 128x128 resolution; R3D-18 architecture and DeepfakeTIMIT dataset are both mentioned in the source."
+    },
+    "analytical_hooks": {
+      "what_changed": null,
+      "why_this_may_matter": "Establishes temporal inconsistency as a viable detection signal, but the 16-point gap to cross-dataset performance raise",
+      "novelty_signal": null
+    }
+  },
+  {
+    "source_id": "21ab29a8130a236d77f12113cb5015aab0b5",
+    "source_url": "https://arxiv.org/abs/2605.17573v1",
+    "source_title": "Deepfake Detection in Social Media: A Temporal Artifact Anal",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-17T18:01:32+00:00",
+    "evidence_id": "ev_21ab29a8130a236d77f12113cb5015aab0b5_3",
+    "evidence_type": "research_result",
+    "evidence_strength": "usable",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "R3D-18 model transfers to FaceForensics++ without fine-tuning at 76.4% accuracy, improving after minimal fine-tuning.",
+    "source_quote": "cross-dataset transfer to FaceForensics++ without fine-tuning reaches 76.4%, rising after minimal fine-tuning",
+    "corrected_fact": "R3D-18 model transfers to FaceForensics++ without fine-tuning at 76.4% accuracy, improving after minimal fine-tuning.",
+    "limitations": [
+      "lab_only",
+      "duplicate_reporting"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "outlook_input",
+      "recommendation_input",
+      "fact_support",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "Source directly states 'cross-dataset transfer to FaceForensics++ without fine-tuning reaches 76.4%, rising after minimal fine-tuning,' matching the fact precisely."
+    },
+    "analytical_hooks": {
+      "what_changed": "Cross-dataset generalization improved from prior spatial-only detector baseline (implicit), showing temporal signals tra",
+      "why_this_may_matter": "If temporal inconsistency is indeed more robust, this 76.4% baseline could enable detection systems that work across rea",
+      "novelty_signal": "Zero-shot transfer achieves 76.4%, which indicates temporal signals are less dat"
+    }
+  },
+  {
+    "source_id": "21ab29a8130a236d77f12113cb5015aab0b5",
+    "source_url": "https://arxiv.org/abs/2605.17573v1",
+    "source_title": "Deepfake Detection in Social Media: A Temporal Artifact Anal",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-17T18:01:32+00:00",
+    "evidence_id": "ev_21ab29a8130a236d77f12113cb5015aab0b5_4",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Transfer learning from Kinetics-400 contributes 7.2 percentage points to detector accuracy; face tracking adds 3.5 points.",
+    "source_quote": "Ablation studies show that transfer learning contributes 7.2 percentage points and face tracking adds 3.5 points",
+    "corrected_fact": "Transfer learning from Kinetics-400 contributes 7.2 percentage points to detector accuracy; face tracking adds 3.5 points.",
+    "limitations": [
+      "duplicate_reporting"
+    ],
+    "permitted_uses": [
+      "not_used"
+    ],
+    "second_model_qa": null,
+    "analytical_hooks": {
+      "what_changed": null,
+      "why_this_may_matter": "Indicates that detectors trained on general motion recognition may be more deployable and adaptable than face-specific m",
+      "novelty_signal": "Quantifies that motion-based pretraining (Kinetics-400) drives detector performa"
+    }
+  },
+  {
+    "source_id": "21ab29a8130a236d77f12113cb5015aab0b5",
+    "source_url": "https://arxiv.org/abs/2605.17573v1",
+    "source_title": "Deepfake Detection in Social Media: A Temporal Artifact Anal",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-17T18:01:32+00:00",
+    "evidence_id": "ev_21ab29a8130a236d77f12113cb5015aab0b5_5",
+    "evidence_type": "research_result",
+    "evidence_strength": "usable",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Temporal consistency regularization provides measurable gains on high-quality fakes beyond baseline binary cross-entropy loss.",
+    "source_quote": "temporal consistency regularization provides additional gains on high-quality fakes",
+    "corrected_fact": "Temporal consistency regularization provides measurable gains on high-quality fakes beyond baseline binary cross-entropy loss.",
+    "limitations": [
+      "lab_only",
+      "missing_quantitative_detail",
+      "duplicate_reporting",
+      "low_concreteness"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "outlook_input",
+      "recommendation_input",
+      "fact_support",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "Source states 'temporal consistency regularization provides additional gains on high-quality fakes.' The fact's reference to 'beyond baseline binary cross-entropy loss' is a reasonable inference given"
+    },
+    "analytical_hooks": {
+      "what_changed": null,
+      "why_this_may_matter": "Suggests that detectors must explicitly model temporal coherence rather than relying on spatial features alone to stay a",
+      "novelty_signal": "Demonstrates that a composite loss combining temporal regularization is necessar"
+    }
+  },
+  {
+    "source_id": "21ab29a8130a236d77f12113cb5015aab0b5",
+    "source_url": "https://arxiv.org/abs/2605.17573v1",
+    "source_title": "Deepfake Detection in Social Media: A Temporal Artifact Anal",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "publisher": "arXiv",
+    "date_published": "2026-05-17T18:01:32+00:00",
+    "evidence_id": "ev_21ab29a8130a236d77f12113cb5015aab0b5_6",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Temporal artifacts survive social-media re-encoding while spatial detection signals degrade, providing more robust detection across platforms.",
+    "source_quote": "temporal artifacts generalize more broadly than spatial ones, providing a detection signal that survives social-media re-encoding",
+    "corrected_fact": "Temporal artifacts survive social-media re-encoding while spatial detection signals degrade, providing more robust detection across platforms.",
+    "limitations": [
+      "lab_only",
+      "duplicate_reporting",
+      "low_concreteness"
+    ],
+    "permitted_uses": [
+      "capability_support",
+      "outlook_input",
+      "recommendation_input",
+      "fact_support",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "flag": "llm_qa_unsupported",
+      "note": "The fact makes two claims: (1) temporal artifacts survive social-media re-encoding (supported by source), and (2) spatial detection signals degrade (not explicitly stated in the source — the source on"
+    },
+    "analytical_hooks": {
+      "what_changed": "Detection robustness tier increased by shifting from spatial to temporal features.",
+      "why_this_may_matter": "If temporal artifacts survive social-media re-encoding in practice, detectors can work on platform-native video without ",
+      "novelty_signal": "Shows temporal signals are more resilient to transcoding than spatial artifacts,"
+    }
+  },
+  {
+    "source_id": "efdaae8518c88b1dc83967c291dfc9634076",
+    "source_url": "https://thehackernews.com/2026/06/unpatched-langflow-flaw-cve-2026-5027.html",
+    "source_title": "Unpatched Langflow Flaw CVE-2026-5027 Exploited for Unauthen",
+    "source_type": "exploit_disclosure",
+    "trust_tier": "medium",
+    "publisher": "The Hacker News",
+    "date_published": "2026-06-10T15:00:59+00:00",
+    "evidence_id": "ev_efdaae8518c88b1dc83967c291dfc9634076_1",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "CVE-2026-5027 in Langflow has CVSS score 8.8 and involves path traversal enabling arbitrary file writes.",
+    "source_quote": "The vulnerability in question is CVE-2026-5027 (CVSS score: 8.8), a case of path traversal that could allow an attacker to write files to arbitrary locations.",
+    "corrected_fact": "CVE-2026-5027 in Langflow has CVSS score 8.8 and involves path traversal enabling arbitrary file writes.",
+    "limitations": [
+      "no_operational_observation",
+      "duplicate_reporting"
+    ],
+    "permitted_uses": [
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "The source text directly confirms all three claims (CVE-2026-5027, CVSS 8.8, path traversal enabling arbitrary file writes), but the fact combines multiple assertions into one statement, making it non"
+    },
+    "analytical_hooks": {
+      "what_changed": "Path traversal capability now extends to arbitrary file write on unpatched instances, enabling code execution without au",
+      "why_this_may_matter": "Langflow's adoption as a rapid AI application development tool means this vulnerability likely affects production AI sys",
+      "novelty_signal": "Unauthenticated RCE via path traversal in widely-deployed AI application builder"
+    }
+  },
+  {
+    "source_id": "a89bc9c1fa92195da1dc89765f97d831e86a",
+    "source_url": "https://www.bleepingcomputer.com/news/security/path-traversal-flaw-in-ai-dev-platform-langflow-exploited-in-attacks/",
+    "source_title": "Path traversal flaw in AI dev platform Langflow exploited in",
+    "source_type": "exploit_disclosure",
+    "trust_tier": "medium",
+    "publisher": "BleepingComputer",
+    "date_published": "2026-06-10T21:23:44+00:00",
+    "evidence_id": "ev_a89bc9c1fa92195da1dc89765f97d831e86a_1",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "CVE-2026-5027 is a high-severity path traversal vulnerability in Langflow enabling arbitrary file writes.",
+    "source_quote": "CVE-2026-5027, a high-severity path traversal vulnerability in the AI development platform Langflow, to write arbitrary files on exposed servers",
+    "corrected_fact": "CVE-2026-5027 is a high-severity path traversal vulnerability in Langflow enabling arbitrary file writes.",
+    "limitations": [],
+    "permitted_uses": [
+      "capability_support",
+      "case_study",
+      "recommendation_input",
+      "outlook_input",
+      "trend_input",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "The source text directly states CVE-2026-5027 is a high-severity path traversal vulnerability in Langflow used to write arbitrary files on exposed servers, matching the fact precisely."
+    },
+    "analytical_hooks": {
+      "what_changed": "Shift from cloud-model-only attacks to targeting developer infrastructure and LLM ops tooling.",
+      "why_this_may_matter": "If widely exploited, could compromise training data, model weights, and API keys stored in development environments.",
+      "novelty_signal": "Exploitation of Langflow suggests threat actors are targeting AI development too"
+    }
+  },
+  {
+    "source_id": "2780c64461d6bd7dadd07dacebffcbe5a051",
+    "source_url": "https://nvd.nist.gov/vuln/detail/cve-2026-46517",
+    "source_title": "CVE-2026-46517: LMDeploy is a toolkit for compressing, deplo",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "publisher": "NVD",
+    "date_published": "2026-06-10T00:16:53.827+00:00",
+    "evidence_id": "ev_2780c64461d6bd7dadd07dacebffcbe5a051_1",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "LMDeploy versions 0.12.3 and prior contain hardcoded trust_remote_code=True.",
+    "source_quote": "In versions 0.12.3 and prior, hardcoded \"trust_remote_code=True\"",
+    "corrected_fact": "LMDeploy versions 0.12.3 and prior contain hardcoded trust_remote_code=True.",
+    "limitations": [
+      "low_concreteness"
+    ],
+    "permitted_uses": [
+      "fact_support",
+      "recommendation_input",
+      "case_study",
+      "exposure_analysis",
+      "capability_support",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "Source text directly states 'In versions 0.12.3 and prior, hardcoded \"trust_remote_code=True\"', which matches the fact exactly."
+    },
+    "analytical_hooks": {
+      "what_changed": "LMDeploy enables untrusted HF model code execution by default rather than requiring explicit opt-in.",
+      "why_this_may_matter": "Any LMDeploy deployment ≤0.12.3 using Hugging Face model loading is vulnerable to arbitrary code execution via supply-ch",
+      "novelty_signal": "Configuration is hardcoded rather than user-configurable, eliminating opportunit"
+    }
+  },
+  {
+    "source_id": "2780c64461d6bd7dadd07dacebffcbe5a051",
+    "source_url": "https://nvd.nist.gov/vuln/detail/cve-2026-46517",
+    "source_title": "CVE-2026-46517: LMDeploy is a toolkit for compressing, deplo",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "publisher": "NVD",
+    "date_published": "2026-06-10T00:16:53.827+00:00",
+    "evidence_id": "ev_2780c64461d6bd7dadd07dacebffcbe5a051_2",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "usable",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "Hardcoded trust_remote_code=True enables remote code execution via Hugging Face supply-chain without user opt-in.",
+    "source_quote": "hardcoded \"trust_remote_code=True\" enables HF supply-chain RCE without user opt-in",
+    "corrected_fact": "Hardcoded trust_remote_code=True enables remote code execution via Hugging Face supply-chain without user opt-in.",
+    "limitations": [
+      "duplicate_reporting",
+      "low_concreteness"
+    ],
+    "permitted_uses": [
+      "fact_support",
+      "recommendation_input",
+      "case_study",
+      "exposure_analysis",
+      "capability_support",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "note": "Source text states 'hardcoded \"trust_remote_code=True\" enables HF supply-chain RCE without user opt-in', which directly supports the fact. 'Hugging Face' is a reasonable expansion of 'HF' but the core"
+    },
+    "analytical_hooks": {
+      "what_changed": "RCE attack surface expanded from code-level vulnerabilities to supply-chain model poisoning attacks.",
+      "why_this_may_matter": "Compromised or malicious Hugging Face models execute automatically in any LMDeploy ≤0.12.3 deployment without detection ",
+      "novelty_signal": "Automatic trust of remote model code in a multi-tenant or untrusted repository c"
+    }
+  },
+  {
+    "source_id": "2780c64461d6bd7dadd07dacebffcbe5a051",
+    "source_url": "https://nvd.nist.gov/vuln/detail/cve-2026-46517",
+    "source_title": "CVE-2026-46517: LMDeploy is a toolkit for compressing, deplo",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "publisher": "NVD",
+    "date_published": "2026-06-10T00:16:53.827+00:00",
+    "evidence_id": "ev_2780c64461d6bd7dadd07dacebffcbe5a051_3",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "passed",
+    "observed_use": false,
+    "quote_entailment": null,
+    "fact": "At publication date (2026-06-10), no publicly available patches exist for LMDeploy CVE-2026-46517.",
+    "source_quote": "At time of publication, there are no publicly available patches",
+    "corrected_fact": "At publication date (2026-06-10), no publicly available patches exist for LMDeploy CVE-2026-46517.",
+    "limitations": [
+      "duplicate_reporting"
+    ],
+    "permitted_uses": [
+      "fact_support",
+      "recommendation_input",
+      "case_study",
+      "exposure_analysis",
+      "capability_support",
+      "context_only"
+    ],
+    "second_model_qa": {
+      "flag": "llm_qa_fabricated_number",
+      "note": "The source text states 'At time of publication, there are no publicly available patches' but does not mention the specific date '2026-06-10'. That date is not present in the source text, making this f"
+    },
+    "analytical_hooks": {
+      "what_changed": "Unpatched vulnerability disclosed; no mitigation path exists except version upgrade (if newer versions available).",
+      "why_this_may_matter": "Operators cannot immediately remediate; all LMDeploy ≤0.12.3 instances remain exposed until patches are released.",
+      "novelty_signal": "NVD publication without concurrent patch availability indicates reactive disclos"
+    }
+  }
+]

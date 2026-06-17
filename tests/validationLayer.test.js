@@ -13,6 +13,8 @@ import {
   validateAndTypeSource, validateAndTypeSources, VALIDATION_VERSION,
 } from "../lib/pipeline/validation/validateAndTypeSource.js";
 import { annotateSourceContext } from "../lib/pipeline/validation/trustAssessment.js";
+import { checkSourceValidity } from "../lib/pipeline/validation/sourceValidity.js";
+import { classifyPublisherCanonical, classifyForTrust, classifyForOrigin } from "../lib/pipeline/validation/publisherClass.js";
 
 let passed = 0, failed = 0;
 async function test(name, fn) {
@@ -65,6 +67,17 @@ console.log("\npre-gate (word-boundary AI-signal detection)");
 await test("no AI signal — word-boundary avoids 'retailer'/'source' false positives", () => {
   assert.equal(hasAiSignal({ full_text: "The retailer reviewed its source code and logistics." }).has_ai_signal, false);
 });
+await test("generic AI mention + concrete cyber threat passes to the LLM (recall hedge)", () => {
+  // No high/medium AI keyword, but "AI" + a concrete CVE/RCE → worth an LLM check.
+  const s = hasAiSignal({ full_text: "An AI feature contained a vulnerability allowing remote code execution (RCE)." });
+  assert.equal(s.has_ai_signal, true);
+  assert.equal(s.signal_strength, "low_ai_cyber");
+});
+
+await test("generic AI mention WITHOUT a concrete cyber threat is still discarded", () => {
+  assert.equal(hasAiSignal({ full_text: "The company uses AI and automation to improve logistics." }).has_ai_signal, false);
+});
+
 await test("real AI terms trip the signal", () => {
   assert.equal(hasAiSignal({ full_text: "A prompt injection attack on the LLM agent." }).has_ai_signal, true);
 });
@@ -249,6 +262,92 @@ await test("source context fields flow through full validateAndTypeSource", asyn
   assert.equal(r.evidence_strength_hint, "strong");
   assert.equal(r.verification_status,    "verified");
   assert.ok(!("source_credibility_score" in r), "source_credibility_score must not be present");
+});
+
+// ── Deny list uses exact/subdomain matching, not substring (F19) ──────────────
+
+await test("denied domain matches host and subdomains, not substrings", () => {
+  // reddit.com is on the deny list → hard fail
+  const denied = checkSourceValidity({ title: "x", url: "https://www.reddit.com/r/x/post" });
+  assert.equal(denied.hard_fail, true);
+  assert.ok(denied.validity_reason.includes("denied_domain"));
+
+  // phoenix.com must NOT be denied by the "x.com" rule (substring false positive)
+  const ok = checkSourceValidity({ title: "AI threat report", url: "https://phoenix.com/research" });
+  assert.equal(ok.hard_fail, false, "phoenix.com wrongly denied by substring match");
+});
+
+// ── Canonical publisher classifier is the single source of truth (F15) ────────
+
+await test("one canonical classifier; each module maps it consistently", () => {
+  // CrowdStrike: security_firm everywhere.
+  assert.equal(classifyPublisherCanonical({ publisher: "CrowdStrike" }), "security_firm");
+  assert.equal(classifyForTrust({ publisher: "CrowdStrike" }), "security_firm");
+  assert.equal(classifyForOrigin({ publisher: "CrowdStrike" }), "security_firm");
+
+  // Google: major_vendor for trust, folds to security_firm for origin/quality.
+  assert.equal(classifyPublisherCanonical({ publisher: "Google" }), "major_vendor");
+  assert.equal(classifyForTrust({ publisher: "Google" }), "major_vendor");
+  assert.equal(classifyForOrigin({ publisher: "Google" }), "security_firm");
+
+  // AI lab: major_vendor for trust, primary_authority for origin/quality.
+  assert.equal(classifyPublisherCanonical({ publisher: "Anthropic" }), "ai_lab");
+  assert.equal(classifyForTrust({ publisher: "Anthropic" }), "major_vendor");
+  assert.equal(classifyForOrigin({ publisher: "Anthropic" }), "primary_authority");
+
+  // Unknown small publisher: other / unknown.
+  assert.equal(classifyPublisherCanonical({ publisher: "Zephyr Daily", url: "https://zephyrdaily.example/x" }), "other");
+  assert.equal(classifyForOrigin({ publisher: "Zephyr Daily", url: "https://zephyrdaily.example/x" }), "unknown");
+});
+
+// ── finalGate: primary tier unconditional review pass (F20) ──────────────────
+
+await test("primary tier off-topic source routes to review, never reject", async () => {
+  // NVD CVE about an AI toolkit — title uses product name, no generic threat keywords.
+  // Before the fix: ai_specificity_score=0 → off_topic_trusted_no_ai_signal → reject.
+  // After the fix: primary tier gets unconditional review like curated.
+  const src = mkSource({
+    trust_tier:  "primary",
+    publisher:   "NVD",
+    source_type: "vulnerability",
+    title:       "CVE-2026-99999: LMDeploy path traversal allows arbitrary file write",
+    full_text:   "CVE-2026-99999 is a path traversal vulnerability in the REST API server of the LMDeploy tool. An unauthenticated attacker can issue crafted requests to overwrite arbitrary files on the target system. CVSS score: 9.1 Critical. Upgrade to version 0.6.3 or later. No workaround available. ".repeat(4),
+  });
+  const r = await validateAndTypeSource(src, { skipLlm: true });
+  assert.equal(r.validation_status, "review",  "primary tier must never be hard-rejected");
+  assert.equal(r.downstream_route, "layer4_with_review");
+  assert.ok(r.final_validity_reason.startsWith("off_topic_but_primary"), `unexpected reason: ${r.final_validity_reason}`);
+});
+
+await test("high tier off-topic with no signal is still rejected", async () => {
+  // Generic ML paper from arXiv without threat content — high tier, but no signal.
+  const src = mkSource({
+    trust_tier: "high",
+    publisher:  "arXiv",
+    title:      "Efficient Transformer Training on Large Datasets",
+    full_text:  "We present a new method for efficient transformer training on large corpora. Our approach improves throughput by 20%. ".repeat(8),
+  });
+  const r = await validateAndTypeSource(src, { skipLlm: true });
+  assert.equal(r.validation_status, "reject",  "high tier no-signal source must still be rejected");
+  assert.ok(r.final_validity_reason.includes("off_topic"), `unexpected reason: ${r.final_validity_reason}`);
+});
+
+// ── relevance_path on the LLM path (bug fix: was null after LLM triage) ──────
+
+await test("relevance_path is non-null after LLM triage confirms relevance", async () => {
+  const src = mkSource(); // default source has AI signal keywords
+  const r = await validateAndTypeSource(src, { llmFn: mkLlm({ relevance: CENTRAL, qa: QA_OK }) });
+  assert.notEqual(r.relevance_path, null, "relevance_path must not be null after LLM triage");
+  assert.ok(
+    ["known_signal", "novelty_signal", "both", "none"].includes(r.relevance_path),
+    `unexpected relevance_path: ${r.relevance_path}`
+  );
+});
+
+await test("relevance_path is non-null on deterministic path too", async () => {
+  const src = mkSource();
+  const r = await validateAndTypeSource(src, { skipLlm: true });
+  assert.notEqual(r.relevance_path, null, "relevance_path must not be null on deterministic path");
 });
 
 // ── Summary ─────────────────────────────────────────────────────────────────

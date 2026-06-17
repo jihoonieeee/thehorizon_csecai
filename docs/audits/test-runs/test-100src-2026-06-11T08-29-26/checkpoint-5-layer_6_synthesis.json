@@ -1,0 +1,35 @@
+{
+  "title": "Layer 6 synthesis",
+  "checks": [
+    {
+      "name": "≥ 2 categories assessed",
+      "status": "pass",
+      "detail": "traditional_ai_threats, llm_threats, agentic_ai_threats, ai_enabled_threats"
+    },
+    {
+      "name": "All 4 offensive categories assessed",
+      "status": "pass",
+      "detail": "assessed: traditional_ai_threats, llm_threats, agentic_ai_threats, ai_enabled_threats"
+    },
+    {
+      "name": "Zero hallucinated evidence IDs",
+      "status": "warn",
+      "detail": "1 IDs not in registry: ae_06923fab"
+    },
+    {
+      "name": "Claim blocking rate ≤ 60%",
+      "status": "pass",
+      "detail": "0% (0/0)"
+    },
+    {
+      "name": "Presentation packet built",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "name": "Cross-category synthesis present",
+      "status": "pass",
+      "detail": ""
+    }
+  ]
+}

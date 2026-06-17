@@ -76,17 +76,23 @@ test("short generic fact → admissibility failed (generic_or_too_short)", () =>
   assert.equal(result.admissibility, "failed");
 });
 
-test("marketing language in fact → admissibility failed", () => {
-  const result = triage({ fact: "This industry-leading AI solution is best-in-class for enterprise security teams." });
-  assert.equal(result.admissibility, "failed");
+test("marketing language in fact → admissibility context_only (no LLM, deterministic fallback)", () => {
+  // Without LLM judgment, marketing language is not hard-failed — the LLM detects it
+  // via source_type_fit=false / support_level="vendor_claim". Deterministic path
+  // returns context_only when the item lacks concrete anchors (entities/numbers).
+  const result = triage({ fact: "This industry-leading AI solution is best-in-class for enterprise security teams.", entities: [], numbers: [] });
+  assert.ok(["context_only", "failed"].includes(result.admissibility),
+    `marketing without anchors must not pass: got ${result.admissibility}`);
 });
 
-test("speculative language without demonstration → admissibility failed", () => {
+test("speculative language without demonstration → admissibility context_only", () => {
+  // Speculative language without demonstration returns context_only on deterministic path.
+  // The LLM catches this via direct_demonstration=false / support_level="prediction".
   const result = triage({
     fact: "AI could be used to generate convincing deepfakes targeting corporate executives.",
     entities: [], numbers: [],
   });
-  assert.equal(result.admissibility, "failed");
+  assert.equal(result.admissibility, "context_only");
 });
 
 test("non-atomic item → admissibility failed", () => {

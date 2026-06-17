@@ -1,6 +1,6 @@
 /**
  * Taxonomy tests — registry integrity, validation rules, and migration.
- * Tests taxonomy-v9 (TAI01–TAI10, LLM01–LLM10, ASI01–ASI10, AE01–AE09).
+ * Tests taxonomy-v9 (TAI01–TAI10, LLM01–LLM10, ASI01–ASI10, AE01–AE10).
  * No network, no DB. Run with: node tests/taxonomy.test.js
  */
 
@@ -16,7 +16,6 @@ import {
   validateThreatTag, validateThreatTags,
   validateSubTechniqueTag, validateAiEnabledOverlay,
 } from "../lib/config/taxonomyValidation.js";
-import { migrateLegacyTaxonomy, OLD_TO_NEW } from "../lib/config/taxonomyMigration.js";
 
 let passed = 0, failed = 0;
 function test(name, fn) {
@@ -43,11 +42,11 @@ test("every primary tag has required fields", () => {
   }
 });
 
-test("primary tag counts per domain (TAI=10, LLM=10, ASI=10, AE=9)", () => {
+test("primary tag counts per domain (TAI=10, LLM=10, ASI=10, AE=10)", () => {
   assert.equal(PRIMARY_TAGS_BY_DOMAIN.traditional_ai_threats.length, 10, "TAI count");
   assert.equal(PRIMARY_TAGS_BY_DOMAIN.llm_threats.length, 10, "LLM count");
   assert.equal(PRIMARY_TAGS_BY_DOMAIN.agentic_ai_threats.length, 10, "ASI count");
-  assert.equal(PRIMARY_TAGS_BY_DOMAIN.ai_enabled_threats.length, 9, "AE count");
+  assert.equal(PRIMARY_TAGS_BY_DOMAIN.ai_enabled_threats.length, 10, "AE count");
 });
 
 test("primary tags use coded IDs (TAI/LLM/ASI/AE prefixes)", () => {
@@ -64,7 +63,7 @@ test("AI-enabled tags are also valid AI-enabled roles", () => {
     assert.ok(VALID_AI_ENABLED_ROLES.has(tag), `${tag} not in VALID_AI_ENABLED_ROLES`);
     assert.ok(isValidAiEnabledRole(tag), `isValidAiEnabledRole failed for ${tag}`);
   }
-  assert.equal(VALID_AI_ENABLED_ROLES.size, 9, "Should have exactly 9 AE roles");
+  assert.equal(VALID_AI_ENABLED_ROLES.size, 10, "Should have exactly 10 AE roles");
 });
 
 test("AI-enabled tags have no sub-techniques (by design)", () => {
@@ -274,71 +273,6 @@ test("unknown primary tags are filtered", () => {
     primary_tags: ["LLM01_prompt_injection", "old_flat_tag"],
   });
   assert.deepEqual(normalized.primary_tags, ["LLM01_prompt_injection"]);
-});
-
-// ── Migration old→new ───────────────────────────────────────────────────────────
-console.log("\nmigration old→new");
-
-test("OLD_TO_NEW maps known legacy tags to v9", () => {
-  assert.equal(OLD_TO_NEW.data_poisoning, "TAI01_data_poisoning");
-  assert.equal(OLD_TO_NEW.prompt_injection, "LLM01_prompt_injection");
-  assert.equal(OLD_TO_NEW.jailbreak, "LLM01_prompt_injection");
-  assert.equal(OLD_TO_NEW.ai_reconnaissance, "AE01_ai_enabled_reconnaissance");
-  assert.equal(OLD_TO_NEW.ai_malware_generation, "AE05_ai_enabled_malware_development");
-  assert.equal(OLD_TO_NEW.ai_exploit_generation, "AE04_ai_enabled_exploit_development");
-  assert.equal(OLD_TO_NEW.mcp_server_compromise, "ASI04_agentic_supply_chain_vulnerabilities");
-  assert.equal(OLD_TO_NEW.agent_memory_poisoning, "ASI06_memory_context_poisoning");
-});
-
-test("old LLM child tags (direct_prompt_injection) migrate to primary parent", () => {
-  // direct_prompt_injection was a child tag in v8; in v9 it's a sub-technique
-  assert.equal(OLD_TO_NEW.direct_prompt_injection, "LLM01_prompt_injection");
-  assert.equal(OLD_TO_NEW.indirect_prompt_injection, "LLM01_prompt_injection");
-});
-
-test("migrateLegacyTaxonomy maps old tags to new primary_tags array", () => {
-  const src = {
-    id: "x", url: "https://e.com",
-    understanding: {
-      primary_threat_tags: [
-        { tag: "data_poisoning", supporting_quote: "poison the training set" },
-        { tag: "prompt_injection", supporting_quote: "inject hidden instructions" },
-      ]
-    }
-  };
-  const out = migrateLegacyTaxonomy(src);
-  const tags = out.understanding.primary_tags.map((t) => t.tag);
-  assert.ok(tags.includes("TAI01_data_poisoning"), "data_poisoning → TAI01");
-  assert.ok(tags.includes("LLM01_prompt_injection"), "prompt_injection → LLM01");
-  assert.equal(out.understanding.taxonomy_migration_status, "migrated");
-  assert.equal(out.understanding.taxonomy_version, "taxonomy-v9-2026-06");
-});
-
-test("migrateLegacyTaxonomy handles already-v9 tags without duplication", () => {
-  const src = {
-    id: "y", url: "https://e.com",
-    understanding: {
-      primary_threat_tags: [
-        { tag: "TAI01_data_poisoning", supporting_quote: "training data was poisoned" },
-      ]
-    }
-  };
-  const out = migrateLegacyTaxonomy(src);
-  const tags = out.understanding.primary_tags;
-  assert.equal(tags.length, 1, "should not duplicate");
-  assert.equal(tags[0].tag, "TAI01_data_poisoning");
-});
-
-test("ambiguous legacy tag is flagged needs_manual_review", () => {
-  const src = {
-    id: "z", url: "https://e.com",
-    understanding: {
-      framework_tags: [{ tag: "synthetic_identity_impersonation", evidence: "used" }]
-    }
-  };
-  const out = migrateLegacyTaxonomy(src);
-  assert.equal(out.understanding.taxonomy_migration_status, "needs_manual_review");
-  assert.ok(out.understanding.taxonomy_unmapped.includes("synthetic_identity_impersonation"));
 });
 
 // ── Analytics aggregation ──────────────────────────────────────────────────────

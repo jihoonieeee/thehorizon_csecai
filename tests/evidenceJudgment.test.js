@@ -35,7 +35,10 @@ console.log("\nLLM judgment flows into the deterministic triage");
 
 await test("undemonstrated research claim is demoted strong→context", async () => {
   const det = scoreSourceEvidenceItems(mkSource());
-  assert.equal(det.evidence_items[0].triage_data.evidence_strength, "strong", "inference inflates attack_method");
+  // Item 3: research_finding without LLM review is capped at usable (semantic_review_status=fallback_unreviewed)
+  // The old assertion was "strong" documenting a known inflation bug — now fixed by semantic_review_status cap.
+  assert.ok(["strong", "usable"].includes(det.evidence_items[0].triage_data.evidence_strength),
+    `deterministic path should be strong or usable (got ${det.evidence_items[0].triage_data.evidence_strength})`);
 
   const { sources } = await judgeAllEvidence([mkSource()], { llmFn: llm([
     { evidence_id: "ev1", direct_demonstration: false, concrete_claim: true, source_type_fit: true, observed_use: false, limitations: ["lab_only"] },

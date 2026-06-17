@@ -377,9 +377,9 @@ function buildAuditReport(result, checkpoints) {
     }
 
     lines.push(`\n**Slide sample (first 5 non-cover slides):**`);
-    const slideSample = (result.deck.slides || []).filter(s => !["cover"].includes(s.slide_type)).slice(0, 5);
+    const slideSample = (result.deck.slides || []).filter(s => !["cover"].includes(s.type)).slice(0, 5);
     for (const slide of slideSample) {
-      lines.push(`\n#### Slide ${slide.slide_number}: ${slide.slide_type}`);
+      lines.push(`\n#### Slide ${slide.slide_number}: ${slide.type}`);
       lines.push(`**Headline**: ${t(slide.headline, 100)}`);
       for (const b of (slide.bullets || []).slice(0, 4)) {
         const evRef = b.evidence_id ? ` \`[${b.evidence_id}]\`` : "";
@@ -390,9 +390,9 @@ function buildAuditReport(result, checkpoints) {
       }
       // Audit
       const slideIssues = [];
-      if (!slide.headline)                                         slideIssues.push("no headline");
-      if (!slide.bullets?.length && slide.slide_type !== "cover") slideIssues.push("no bullets");
-      if (!slide.speaker_notes)                                    slideIssues.push("no speaker notes");
+      if (!slide.headline)                                     slideIssues.push("no headline");
+      if (!slide.bullets?.length && slide.type !== "cover")   slideIssues.push("no bullets");
+      if (!slide.speaker_notes)                                slideIssues.push("no speaker notes");
       const unresolved = (slide.bullets||[]).filter(b => b.evidence_id && !b.evidence_id.startsWith("ev-"));
       if (unresolved.length > 0) slideIssues.push(`${unresolved.length} suspicious evidence IDs`);
       lines.push(slideIssues.length ? `**⚠ AUDIT**: ${slideIssues.join(" | ")}` : `**✓ AUDIT**: slide looks complete`);

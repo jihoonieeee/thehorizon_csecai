@@ -1,0 +1,25 @@
+{
+  "title": "Layer 5B analytics",
+  "checks": [
+    {
+      "name": "≥ 5 visualization specs generated",
+      "status": "pass",
+      "detail": "37"
+    },
+    {
+      "name": "All viz specs corpus_scoped=true",
+      "status": "fail",
+      "detail": "6 missing corpus_scoped"
+    },
+    {
+      "name": "All viz specs have caveat_if_any",
+      "status": "fail",
+      "detail": "6 missing caveat"
+    },
+    {
+      "name": "Analytics QA score ≥ 80",
+      "status": "pass",
+      "detail": "score=undefined"
+    }
+  ]
+}

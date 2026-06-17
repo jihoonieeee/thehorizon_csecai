@@ -1,0 +1,16 @@
+{
+  "run_id": "debug5-2026-06-16T13-52-56",
+  "layer": "L8",
+  "timestamp": "2026-06-16T13:52:56.515Z",
+  "slides_with_notes": 18,
+  "slides_with_structure": 18,
+  "content_qa_issues": 1,
+  "notes_qa_issues": 0,
+  "sample_headlines": [
+    "A strategic horizon scan of emerging AI cyber threats.",
+    "5 validated sources across 3 AI threat categories — 90-day reporting window.",
+    "5 validated sources across 3 threat categories.",
+    "Key findings, prioritised claims, and the top threat signals this reporting period.",
+    "Microsoft Security Report: Adversarial ML Attacks Against AI-Powered Security Pr"
+  ]
+}

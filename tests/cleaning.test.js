@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { extractStructuredContent } from "../lib/pipeline/clean/extractStructuredContent.js";
 import { cleanPlaintext } from "../lib/pipeline/clean/cleanPlaintext.js";
 import { cleanSources, CLEANING_VERSION } from "../lib/pipeline/clean/cleanSources.js";
+import { detectNearDuplicates } from "../lib/pipeline/clean/detectNearDuplicates.js";
 
 let passed = 0;
 let failed = 0;
@@ -195,6 +196,42 @@ test("code block content is preserved inline after cleaning", () => {
   assert.ok(!result.clean_text.includes("```"), "backtick markers removed");
   assert.equal(result.extracted_code_blocks.length, 1, "code block extracted");
   assert.ok(result.extracted_iocs.cves.includes("CVE-2025-1111"), "CVE in extracted iocs");
+});
+
+// ── detectNearDuplicates (Layer 2 near-duplicate clustering) ──────────────────
+
+console.log("\ndetectNearDuplicates");
+
+test("five rewrites of one story collapse to a single representative", () => {
+  const story = (id, publisher, trust, text) => ({
+    id, publisher, trust_tier: trust,
+    title: "CrowdStrike uncovers new prompt injection campaign targeting AI agents",
+    full_text: text,
+    date_published: "2026-06-01T00:00:00.000Z",
+    date_confidence: "exact",
+  });
+  const sources = [
+    story("orig", "CrowdStrike", "high", "Original report ".repeat(80)),
+    story("a", "BleepingComputer", "medium", "Coverage A"),
+    story("b", "The Record", "medium", "Coverage B"),
+    story("c", "SecurityWeek", "medium", "Coverage C"),
+    story("d", "Dark Reading", "medium", "Coverage D"),
+  ];
+  const { kept, removed } = detectNearDuplicates(sources);
+  assert.equal(kept.length, 1, "collapses to one representative");
+  assert.equal(removed.length, 4, "four near-duplicates removed");
+  // Highest-quality (richest text + high trust) representative is kept.
+  assert.equal(kept[0].id, "orig", "keeps the original high-trust report");
+});
+
+test("genuinely different stories are not collapsed", () => {
+  const sources = [
+    { id: "1", publisher: "X", trust_tier: "high", title: "Prompt injection attack bypasses guardrails in coding agents", full_text: "a ".repeat(300) },
+    { id: "2", publisher: "Y", trust_tier: "high", title: "Deepfake voice cloning fraud hits financial sector hard", full_text: "b ".repeat(300) },
+  ];
+  const { kept, removed } = detectNearDuplicates(sources);
+  assert.equal(kept.length, 2, "distinct stories both kept");
+  assert.equal(removed.length, 0, "nothing removed");
 });
 
 // ── Results ───────────────────────────────────────────────────────────────────

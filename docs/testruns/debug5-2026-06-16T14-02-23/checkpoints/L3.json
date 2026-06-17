@@ -1,0 +1,78 @@
+{
+  "run_id": "debug5-2026-06-16T14-02-23",
+  "layer": "L3",
+  "timestamp": "2026-06-16T14:02:55.249Z",
+  "total": 5,
+  "by_status": {
+    "pass": 1,
+    "review": 4,
+    "reject": 0
+  },
+  "results": [
+    {
+      "source_id": "sample-0",
+      "title": "CISA Alert: Threat Actors Exploit LLM APIs to Automate Phishing Campaigns at Scale",
+      "layer3_status": "review",
+      "ai_threat_focus": "central",
+      "candidate_domain": "ai_enabled_threats",
+      "source_type": "threat_intelligence",
+      "trust_tier": "high",
+      "downstream_route": "layer4_with_review",
+      "relevance_path": "known_signal",
+      "validation_flags": [],
+      "validation_summary": "CISA and FBI report that threat actors are using LLM APIs to generate personalized spear-phishing emails at scale, with nation-state actors producing over 50,000 unique emails daily targeting critical infrastructure personnel with contextually aware content. The alert recommends email authentication, staff training on AI-generated indicators, and behavioral anomaly detection."
+    },
+    {
+      "source_id": "sample-1",
+      "title": "Indirect Prompt Injection Attacks Against Autonomous LLM Agents: A Systematic Study",
+      "layer3_status": "pass",
+      "ai_threat_focus": "central",
+      "candidate_domain": "agentic_ai_threats",
+      "source_type": "research_finding",
+      "trust_tier": "high",
+      "downstream_route": "layer4",
+      "relevance_path": "both",
+      "validation_flags": [],
+      "validation_summary": "This study demonstrates that 92% of autonomous LLM agents with tool-use capabilities are vulnerable to indirect prompt injection attacks through tool outputs, enabling data exfiltration, privilege escalation, and lateral movement. The researchers identify six injection vectors and propose mitigations including instruction hierarchy enforcement and output sandboxing."
+    },
+    {
+      "source_id": "sample-2",
+      "title": "Microsoft Security Report: Adversarial ML Attacks Against AI-Powered Security Products",
+      "layer3_status": "review",
+      "ai_threat_focus": "central",
+      "candidate_domain": "traditional_ai_threats",
+      "source_type": "threat_intelligence",
+      "trust_tier": "high",
+      "downstream_route": "layer4_with_review",
+      "relevance_path": "both",
+      "validation_flags": [],
+      "validation_summary": "Microsoft reports a 340% surge in adversarial machine learning attacks targeting AI-powered security tools over 12 months, with attackers using evasion, data poisoning, and model extraction techniques against malware classifiers, phishing detectors, and anomaly detection systems, primarily in financial and critical infrastructure sectors."
+    },
+    {
+      "source_id": "sample-3",
+      "title": "CVE-2025-23456: Remote Code Execution via Deserialization in LangChain Agent Framework",
+      "layer3_status": "review",
+      "ai_threat_focus": null,
+      "candidate_domain": "unclear_or_adjacent",
+      "source_type": "research_finding",
+      "trust_tier": "high",
+      "downstream_route": "layer4_with_review",
+      "relevance_path": "both",
+      "validation_flags": [],
+      "validation_summary": null
+    },
+    {
+      "source_id": "sample-4",
+      "title": "Google DeepMind: Jailbreaking State-of-the-Art LLMs via Many-Shot In-Context Learning",
+      "layer3_status": "review",
+      "ai_threat_focus": "central",
+      "candidate_domain": "llm_threats",
+      "source_type": "vulnerability",
+      "trust_tier": "high",
+      "downstream_route": "layer4_with_review",
+      "relevance_path": "known_signal",
+      "validation_flags": [],
+      "validation_summary": "Google DeepMind researchers demonstrate a many-shot in-context learning attack that bypasses safety guardrails in frontier LLMs (GPT-4, Claude 3, Gemini Ultra) by prepending 100+ crafted examples, achieving 85%+ success rates with only API access; the attack scales with context window size and the paper proposes detection-based defenses."
+    }
+  ]
+}

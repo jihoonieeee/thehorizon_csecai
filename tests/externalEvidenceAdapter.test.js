@@ -51,7 +51,7 @@ test("maps depth→confidence, statistics→metric, lineage→url", () => {
   const ext = webEvidenceToExternalEvidence(sampleWebEvidence());
   const e = ext.external_evidence[0];
   assert.equal(e.evidence_confidence, "high");        // detailed → high
-  assert.equal(e.evidence_type, "benchmark_or_statistic");
+  assert.equal(e.evidence_type, "benchmark_result");  // hasStats + non-authoritative source → benchmark_result
   assert.equal(e.metric_name, "guardrail bypass rate");
   assert.equal(e.metric_value, "73%");
   assert.equal(e.url, "https://orig/paper");          // prefers original source
@@ -135,18 +135,26 @@ test("a stat missing metric/value/quote is dropped", () => {
 // ── Gating ──────────────────────────────────────────────────────────────────────
 console.log("\n5C auto-enable gating");
 
-test("auto-enables when a provider key is present; off when absent", () => {
+test("off by default; requires WEB_EVIDENCE_ENABLED=1 regardless of provider keys", () => {
   const saved = { t: process.env.TAVILY_API_KEY, s: process.env.SERPAPI_API_KEY, e: process.env.WEB_EVIDENCE_ENABLED };
   delete process.env.WEB_EVIDENCE_ENABLED;
   delete process.env.TAVILY_API_KEY; delete process.env.SERPAPI_API_KEY;
-  assert.equal(hasSearchProvider(), false);
-  assert.equal(getWebEvidenceConfig().enabled, false, "no provider → off");
 
+  assert.equal(getWebEvidenceConfig().enabled, false, "no keys, no override → off");
+
+  // Provider key alone must NOT auto-enable — keys may exist for Layer 1B discovery
   process.env.TAVILY_API_KEY = "k";
-  assert.equal(getWebEvidenceConfig().enabled, true, "provider present → on");
+  assert.equal(getWebEvidenceConfig().enabled, false, "provider key alone must not enable L5C");
+
+  // Explicit opt-in enables
+  process.env.WEB_EVIDENCE_ENABLED = "1";
+  assert.equal(getWebEvidenceConfig().enabled, true, "WEB_EVIDENCE_ENABLED=1 enables");
 
   process.env.WEB_EVIDENCE_ENABLED = "false";
-  assert.equal(getWebEvidenceConfig().enabled, false, "explicit override forces off");
+  assert.equal(getWebEvidenceConfig().enabled, false, "explicit false forces off even with key");
+
+  // hasSearchProvider still works as a utility (used elsewhere to check key availability)
+  assert.equal(hasSearchProvider(), true, "hasSearchProvider still detects the key");
 
   // restore
   if (saved.t == null) delete process.env.TAVILY_API_KEY; else process.env.TAVILY_API_KEY = saved.t;

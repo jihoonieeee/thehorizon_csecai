@@ -1,0 +1,75 @@
+# Deep Debug Run Summary
+
+> **Run ID**: `debug30-2026-06-17T01-46-17`  
+> **Date**: 2026-06-17T01:54:30.548Z  
+> **Elapsed**: ?s
+> **LLM mode**: live LLM
+> **Web evidence**: disabled
+> **Command**: `npm run debug:deep -- --limit 0`
+
+## Source Intake
+
+| Metric | Value |
+| --- | --- |
+| Total sources | 0 |
+| L3 pass | 6 |
+| L3 review | 24 |
+| L3 reject | 0 |
+| L4 taxonomy validated | 7 |
+
+
+## Evidence Layer
+
+| Metric | Value |
+| --- | --- |
+| Evidence items extracted | 0 |
+| Strong items | 0 |
+| Usable items | 0 |
+| Evidence packs | 4 |
+| Clusters (dedup) | 11 |
+
+
+## Analysis Layer
+
+| Metric | Value |
+| --- | --- |
+| Categories analyzed | 4 |
+| Judgments generated | 14 |
+| Judgments approved | 8 |
+| Judgments blocked | 6 |
+
+
+## Dashboard Intelligence
+
+| Metric | Value |
+| --- | --- |
+| Intel objects generated | 14 |
+| Approved for dashboard | 0 |
+| Rejected | 14 |
+
+
+## Slides & QA
+
+| Metric | Value |
+| --- | --- |
+| Slides planned | 0 |
+| Slides generated | 0 |
+| Content QA blocking issues | 0 |
+| QA overall pass | not run |
+
+
+## Error Summary
+
+| Severity | Count |
+| --- | --- |
+| error | 0 |
+| warning | 0 |
+
+
+## Where to Start Reading
+
+1. **`11_errors_warnings_and_suspected_bugs.md`** — all errors and warnings
+2. **`03_L3_validation_deep.md`** — check pass/reject decisions
+3. **`05_L5A_evidence_extraction_deep.md`** — check evidence quality
+4. **`06_L6_analysis_deep.md`** — check strategic judgments
+5. **`AUDIT_PACK.md`** — curated examples of best/worst outputs

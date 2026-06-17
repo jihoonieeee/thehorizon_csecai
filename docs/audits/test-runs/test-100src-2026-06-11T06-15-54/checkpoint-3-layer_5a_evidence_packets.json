@@ -1,0 +1,40 @@
+{
+  "title": "Layer 5A evidence packets",
+  "checks": [
+    {
+      "name": "At least 1 eligible source",
+      "status": "pass",
+      "detail": "100/100"
+    },
+    {
+      "name": "≥ 5 evidence items extracted",
+      "status": "pass",
+      "detail": "274"
+    },
+    {
+      "name": "At least 1 strong or usable item",
+      "status": "pass",
+      "detail": "strong=24 usable=8"
+    },
+    {
+      "name": "Zero items missing evidence_id (no ID hallucination)",
+      "status": "pass",
+      "detail": "0 null IDs"
+    },
+    {
+      "name": "Zero items with invalid evidence_type",
+      "status": "warn",
+      "detail": "defensive_control, defensive_control, defensive_control"
+    },
+    {
+      "name": "archive-only rate ≤ 80% (some items above archive)",
+      "status": "pass",
+      "detail": "12% strong/usable"
+    },
+    {
+      "name": "admissibility: ≥ 20% passed or context_only",
+      "status": "pass",
+      "detail": "186/274"
+    }
+  ]
+}

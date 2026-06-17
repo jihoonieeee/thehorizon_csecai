@@ -1,0 +1,81 @@
+[
+  {
+    "id": "2780c64461d6bd7dadd07dacebffcbe5a051",
+    "title": "CVE-2026-46517: LMDeploy is a toolkit for compressing, deploying, and ",
+    "primary_domain": "traditional_ai_threats",
+    "main_category": "traditional_ai_threats",
+    "primary_tags": [],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "needs_manual_review",
+    "ai_enabled": false,
+    "classification_confidence": "low"
+  },
+  {
+    "id": "74cb3dcd20dc94847544002905ad8494bcc3",
+    "title": "CVE-2026-46432: LMDeploy is a toolkit for compressing, deploying, and ",
+    "primary_domain": "traditional_ai_threats",
+    "main_category": "traditional_ai_threats",
+    "primary_tags": [],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "needs_manual_review",
+    "ai_enabled": false,
+    "classification_confidence": "low"
+  },
+  {
+    "id": "27870879434904650fc8a5adfabfb321445d",
+    "title": "PRC-linked influence operations are targeting AI debates in the US",
+    "primary_domain": "ai_enabled_threats",
+    "main_category": "ai_enabled_threats",
+    "primary_tags": [
+      "AE09_ai_enabled_disinformation_influence"
+    ],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "validated",
+    "ai_enabled": false,
+    "classification_confidence": "high"
+  },
+  {
+    "id": "8b5e9c5610e1508511df79f3b7f261520c55",
+    "title": "Anthropic Releases Claude Fable 5, Its Most Powerful AI Yet, With Cybe",
+    "primary_domain": "llm_threats",
+    "main_category": "llm_threats",
+    "primary_tags": [],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "needs_manual_review",
+    "ai_enabled": false,
+    "classification_confidence": "low"
+  },
+  {
+    "id": "efdaae8518c88b1dc83967c291dfc9634076",
+    "title": "Unpatched Langflow Flaw CVE-2026-5027 Exploited for Unauthenticated RC",
+    "primary_domain": "agentic_ai_threats",
+    "main_category": "agentic_ai_threats",
+    "primary_tags": [],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "needs_manual_review",
+    "ai_enabled": false,
+    "classification_confidence": "low"
+  },
+  {
+    "id": "a89bc9c1fa92195da1dc89765f97d831e86a",
+    "title": "Path traversal flaw in AI dev platform Langflow exploited in attacks",
+    "primary_domain": "agentic_ai_threats",
+    "main_category": "agentic_ai_threats",
+    "primary_tags": [],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "needs_manual_review",
+    "ai_enabled": false,
+    "classification_confidence": "low"
+  },
+  {
+    "id": "96ea8f3032da4212f840f2a972b0dad9123d",
+    "title": "New Browser-in-the-Browser phishing uses fake login popups to steal Mi",
+    "primary_domain": "ai_enabled_threats",
+    "main_category": "ai_enabled_threats",
+    "primary_tags": [],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "no_tags_found",
+    "ai_enabled": false,
+    "classification_confidence": "low"
+  }
+]

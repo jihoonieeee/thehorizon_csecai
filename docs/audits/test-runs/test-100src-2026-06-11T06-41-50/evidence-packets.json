@@ -1,0 +1,2171 @@
+[
+  {
+    "evidence_id": "ev_a7a5281aef1db0b1f6cba6b6f59d0a1dd6a1_1",
+    "source_id": "a7a5281aef1db0b1f6cba6b6f59d0a1dd6a1",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_a7a5281aef1db0b1f6cba6b6f59d0a1dd6a1_2",
+    "source_id": "a7a5281aef1db0b1f6cba6b6f59d0a1dd6a1",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_a7a5281aef1db0b1f6cba6b6f59d0a1dd6a1_3",
+    "source_id": "a7a5281aef1db0b1f6cba6b6f59d0a1dd6a1",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_a7a5281aef1db0b1f6cba6b6f59d0a1dd6a1_4",
+    "source_id": "a7a5281aef1db0b1f6cba6b6f59d0a1dd6a1",
+    "evidence_type": "attack_method",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_917c4c24c5572fdd990c3629899220ce7bda_1",
+    "source_id": "917c4c24c5572fdd990c3629899220ce7bda",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_917c4c24c5572fdd990c3629899220ce7bda_2",
+    "source_id": "917c4c24c5572fdd990c3629899220ce7bda",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_917c4c24c5572fdd990c3629899220ce7bda_3",
+    "source_id": "917c4c24c5572fdd990c3629899220ce7bda",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_917c4c24c5572fdd990c3629899220ce7bda_4",
+    "source_id": "917c4c24c5572fdd990c3629899220ce7bda",
+    "evidence_type": "research_result",
+    "evidence_strength": "usable",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_27870879434904650fc8a5adfabfb321445d_1",
+    "source_id": "27870879434904650fc8a5adfabfb321445d",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_27870879434904650fc8a5adfabfb321445d_2",
+    "source_id": "27870879434904650fc8a5adfabfb321445d",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_27870879434904650fc8a5adfabfb321445d_3",
+    "source_id": "27870879434904650fc8a5adfabfb321445d",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_27870879434904650fc8a5adfabfb321445d_4",
+    "source_id": "27870879434904650fc8a5adfabfb321445d",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_46e307adf3b428fc48dcb989aa0432382a5a_1",
+    "source_id": "46e307adf3b428fc48dcb989aa0432382a5a",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_46e307adf3b428fc48dcb989aa0432382a5a_2",
+    "source_id": "46e307adf3b428fc48dcb989aa0432382a5a",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_5b1311fb9e3b513182f10dd253f9c3a075b9_1",
+    "source_id": "5b1311fb9e3b513182f10dd253f9c3a075b9",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_5b1311fb9e3b513182f10dd253f9c3a075b9_2",
+    "source_id": "5b1311fb9e3b513182f10dd253f9c3a075b9",
+    "evidence_type": "attack_method",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_5b1311fb9e3b513182f10dd253f9c3a075b9_3",
+    "source_id": "5b1311fb9e3b513182f10dd253f9c3a075b9",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_2780c64461d6bd7dadd07dacebffcbe5a051_1",
+    "source_id": "2780c64461d6bd7dadd07dacebffcbe5a051",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_2780c64461d6bd7dadd07dacebffcbe5a051_2",
+    "source_id": "2780c64461d6bd7dadd07dacebffcbe5a051",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_2780c64461d6bd7dadd07dacebffcbe5a051_3",
+    "source_id": "2780c64461d6bd7dadd07dacebffcbe5a051",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_2780c64461d6bd7dadd07dacebffcbe5a051_4",
+    "source_id": "2780c64461d6bd7dadd07dacebffcbe5a051",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_fa429d599f599863928f48e59dafa0fb7375_1",
+    "source_id": "fa429d599f599863928f48e59dafa0fb7375",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_fa429d599f599863928f48e59dafa0fb7375_2",
+    "source_id": "fa429d599f599863928f48e59dafa0fb7375",
+    "evidence_type": "attack_method",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_fa429d599f599863928f48e59dafa0fb7375_3",
+    "source_id": "fa429d599f599863928f48e59dafa0fb7375",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_fa429d599f599863928f48e59dafa0fb7375_4",
+    "source_id": "fa429d599f599863928f48e59dafa0fb7375",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_4b3833bb24d39feac6809d03073f18db522c_1",
+    "source_id": "4b3833bb24d39feac6809d03073f18db522c",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_4b3833bb24d39feac6809d03073f18db522c_2",
+    "source_id": "4b3833bb24d39feac6809d03073f18db522c",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_4b3833bb24d39feac6809d03073f18db522c_3",
+    "source_id": "4b3833bb24d39feac6809d03073f18db522c",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_982a9cc0fb0d6fc7f615905ce8064524363f_1",
+    "source_id": "982a9cc0fb0d6fc7f615905ce8064524363f",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_982a9cc0fb0d6fc7f615905ce8064524363f_2",
+    "source_id": "982a9cc0fb0d6fc7f615905ce8064524363f",
+    "evidence_type": "attack_method",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_982a9cc0fb0d6fc7f615905ce8064524363f_3",
+    "source_id": "982a9cc0fb0d6fc7f615905ce8064524363f",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "context",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_74cb3dcd20dc94847544002905ad8494bcc3_1",
+    "source_id": "74cb3dcd20dc94847544002905ad8494bcc3",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_74cb3dcd20dc94847544002905ad8494bcc3_2",
+    "source_id": "74cb3dcd20dc94847544002905ad8494bcc3",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_efdaae8518c88b1dc83967c291dfc9634076_1",
+    "source_id": "efdaae8518c88b1dc83967c291dfc9634076",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_efdaae8518c88b1dc83967c291dfc9634076_2",
+    "source_id": "efdaae8518c88b1dc83967c291dfc9634076",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_efdaae8518c88b1dc83967c291dfc9634076_3",
+    "source_id": "efdaae8518c88b1dc83967c291dfc9634076",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_efdaae8518c88b1dc83967c291dfc9634076_4",
+    "source_id": "efdaae8518c88b1dc83967c291dfc9634076",
+    "evidence_type": "attack_method",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_e11530b8b4516e95b8910b044e830df3d9a1_1",
+    "source_id": "e11530b8b4516e95b8910b044e830df3d9a1",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_e11530b8b4516e95b8910b044e830df3d9a1_2",
+    "source_id": "e11530b8b4516e95b8910b044e830df3d9a1",
+    "evidence_type": "attack_method",
+    "evidence_strength": "usable",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_e11530b8b4516e95b8910b044e830df3d9a1_3",
+    "source_id": "e11530b8b4516e95b8910b044e830df3d9a1",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_e11530b8b4516e95b8910b044e830df3d9a1_4",
+    "source_id": "e11530b8b4516e95b8910b044e830df3d9a1",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_2a85517886182bbbf97df1698802158eae9d_1",
+    "source_id": "2a85517886182bbbf97df1698802158eae9d",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "archive",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_2a85517886182bbbf97df1698802158eae9d_2",
+    "source_id": "2a85517886182bbbf97df1698802158eae9d",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_2a85517886182bbbf97df1698802158eae9d_3",
+    "source_id": "2a85517886182bbbf97df1698802158eae9d",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_74b23cf55951282e461d1c43f5e7facade34_1",
+    "source_id": "74b23cf55951282e461d1c43f5e7facade34",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_74b23cf55951282e461d1c43f5e7facade34_2",
+    "source_id": "74b23cf55951282e461d1c43f5e7facade34",
+    "evidence_type": "attack_method",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_74b23cf55951282e461d1c43f5e7facade34_3",
+    "source_id": "74b23cf55951282e461d1c43f5e7facade34",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_56a2841aa167bf36afffd665141684724c07_1",
+    "source_id": "56a2841aa167bf36afffd665141684724c07",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_56a2841aa167bf36afffd665141684724c07_2",
+    "source_id": "56a2841aa167bf36afffd665141684724c07",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_56a2841aa167bf36afffd665141684724c07_3",
+    "source_id": "56a2841aa167bf36afffd665141684724c07",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_f8ca063ee086a04c75af8d6fd8b8a6dba8df_1",
+    "source_id": "f8ca063ee086a04c75af8d6fd8b8a6dba8df",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_f8ca063ee086a04c75af8d6fd8b8a6dba8df_2",
+    "source_id": "f8ca063ee086a04c75af8d6fd8b8a6dba8df",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_f8ca063ee086a04c75af8d6fd8b8a6dba8df_3",
+    "source_id": "f8ca063ee086a04c75af8d6fd8b8a6dba8df",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_f8ca063ee086a04c75af8d6fd8b8a6dba8df_4",
+    "source_id": "f8ca063ee086a04c75af8d6fd8b8a6dba8df",
+    "evidence_type": "attack_method",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_786432e35f5982925f2e698fec26702e3f78_1",
+    "source_id": "786432e35f5982925f2e698fec26702e3f78",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_786432e35f5982925f2e698fec26702e3f78_2",
+    "source_id": "786432e35f5982925f2e698fec26702e3f78",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_786432e35f5982925f2e698fec26702e3f78_3",
+    "source_id": "786432e35f5982925f2e698fec26702e3f78",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_786432e35f5982925f2e698fec26702e3f78_4",
+    "source_id": "786432e35f5982925f2e698fec26702e3f78",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_f9baebc3fbc902477fced63e38801d1e7547_1",
+    "source_id": "f9baebc3fbc902477fced63e38801d1e7547",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_f9baebc3fbc902477fced63e38801d1e7547_2",
+    "source_id": "f9baebc3fbc902477fced63e38801d1e7547",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "usable",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_8587f095c7b4d435e9d0c14f4c32dcf5d47b_1",
+    "source_id": "8587f095c7b4d435e9d0c14f4c32dcf5d47b",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_8587f095c7b4d435e9d0c14f4c32dcf5d47b_2",
+    "source_id": "8587f095c7b4d435e9d0c14f4c32dcf5d47b",
+    "evidence_type": "attack_method",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_8587f095c7b4d435e9d0c14f4c32dcf5d47b_3",
+    "source_id": "8587f095c7b4d435e9d0c14f4c32dcf5d47b",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "usable",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_3a91ab681f37f213907d2dc1f76503602f6d_1",
+    "source_id": "3a91ab681f37f213907d2dc1f76503602f6d",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_3a91ab681f37f213907d2dc1f76503602f6d_2",
+    "source_id": "3a91ab681f37f213907d2dc1f76503602f6d",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_3a91ab681f37f213907d2dc1f76503602f6d_3",
+    "source_id": "3a91ab681f37f213907d2dc1f76503602f6d",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_e294d3bde3590234aaa8208291078bd28a13_1",
+    "source_id": "e294d3bde3590234aaa8208291078bd28a13",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_e294d3bde3590234aaa8208291078bd28a13_2",
+    "source_id": "e294d3bde3590234aaa8208291078bd28a13",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_8dc7420344edfaed368bf926c740a9829eef_1",
+    "source_id": "8dc7420344edfaed368bf926c740a9829eef",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_8dc7420344edfaed368bf926c740a9829eef_2",
+    "source_id": "8dc7420344edfaed368bf926c740a9829eef",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "usable",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_8b910642bc4d129cf309f46c0573933da929_1",
+    "source_id": "8b910642bc4d129cf309f46c0573933da929",
+    "evidence_type": "threat_actor_activity",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_160e14b6c99f0f0fe1d4ca7f1811bef13e7d_1",
+    "source_id": "160e14b6c99f0f0fe1d4ca7f1811bef13e7d",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "usable",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_160e14b6c99f0f0fe1d4ca7f1811bef13e7d_2",
+    "source_id": "160e14b6c99f0f0fe1d4ca7f1811bef13e7d",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_160e14b6c99f0f0fe1d4ca7f1811bef13e7d_3",
+    "source_id": "160e14b6c99f0f0fe1d4ca7f1811bef13e7d",
+    "evidence_type": "attack_method",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_16cedd7f39343c5a9e5b016f11ddaec6b5fd_1",
+    "source_id": "16cedd7f39343c5a9e5b016f11ddaec6b5fd",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_16cedd7f39343c5a9e5b016f11ddaec6b5fd_2",
+    "source_id": "16cedd7f39343c5a9e5b016f11ddaec6b5fd",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_16cedd7f39343c5a9e5b016f11ddaec6b5fd_3",
+    "source_id": "16cedd7f39343c5a9e5b016f11ddaec6b5fd",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_67a295e7692de6c09eb643e340819a56afe9_1",
+    "source_id": "67a295e7692de6c09eb643e340819a56afe9",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_67a295e7692de6c09eb643e340819a56afe9_2",
+    "source_id": "67a295e7692de6c09eb643e340819a56afe9",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_67a295e7692de6c09eb643e340819a56afe9_3",
+    "source_id": "67a295e7692de6c09eb643e340819a56afe9",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_67a295e7692de6c09eb643e340819a56afe9_4",
+    "source_id": "67a295e7692de6c09eb643e340819a56afe9",
+    "evidence_type": "attack_method",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_470ea9290ab890c4ef32a3b4812b50b40c38_1",
+    "source_id": "470ea9290ab890c4ef32a3b4812b50b40c38",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_470ea9290ab890c4ef32a3b4812b50b40c38_2",
+    "source_id": "470ea9290ab890c4ef32a3b4812b50b40c38",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_ef9d21730fe0ff48755ce939bc4daa83f275_1",
+    "source_id": "ef9d21730fe0ff48755ce939bc4daa83f275",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_ef9d21730fe0ff48755ce939bc4daa83f275_2",
+    "source_id": "ef9d21730fe0ff48755ce939bc4daa83f275",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_ef9d21730fe0ff48755ce939bc4daa83f275_3",
+    "source_id": "ef9d21730fe0ff48755ce939bc4daa83f275",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_d4299c4c3c3d1659d822673e785135d169a0_1",
+    "source_id": "d4299c4c3c3d1659d822673e785135d169a0",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_d4299c4c3c3d1659d822673e785135d169a0_2",
+    "source_id": "d4299c4c3c3d1659d822673e785135d169a0",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_d4299c4c3c3d1659d822673e785135d169a0_3",
+    "source_id": "d4299c4c3c3d1659d822673e785135d169a0",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_0cdb81ac94a082287584bb9e222b05b56fdc_1",
+    "source_id": "0cdb81ac94a082287584bb9e222b05b56fdc",
+    "evidence_type": "mitigation",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_0cdb81ac94a082287584bb9e222b05b56fdc_2",
+    "source_id": "0cdb81ac94a082287584bb9e222b05b56fdc",
+    "evidence_type": "mitigation",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_0cdb81ac94a082287584bb9e222b05b56fdc_3",
+    "source_id": "0cdb81ac94a082287584bb9e222b05b56fdc",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_635ba0b7d498ddd0d4cd41274034e39afd0f_1",
+    "source_id": "635ba0b7d498ddd0d4cd41274034e39afd0f",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_635ba0b7d498ddd0d4cd41274034e39afd0f_2",
+    "source_id": "635ba0b7d498ddd0d4cd41274034e39afd0f",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_635ba0b7d498ddd0d4cd41274034e39afd0f_3",
+    "source_id": "635ba0b7d498ddd0d4cd41274034e39afd0f",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_8b5e9c5610e1508511df79f3b7f261520c55_1",
+    "source_id": "8b5e9c5610e1508511df79f3b7f261520c55",
+    "evidence_type": "research_result",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_8b5e9c5610e1508511df79f3b7f261520c55_2",
+    "source_id": "8b5e9c5610e1508511df79f3b7f261520c55",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_8b5e9c5610e1508511df79f3b7f261520c55_3",
+    "source_id": "8b5e9c5610e1508511df79f3b7f261520c55",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_8b5e9c5610e1508511df79f3b7f261520c55_4",
+    "source_id": "8b5e9c5610e1508511df79f3b7f261520c55",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_9ff7724e9082717401af7146aac0d88ba438_1",
+    "source_id": "9ff7724e9082717401af7146aac0d88ba438",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_9ff7724e9082717401af7146aac0d88ba438_2",
+    "source_id": "9ff7724e9082717401af7146aac0d88ba438",
+    "evidence_type": "research_result",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_9ff7724e9082717401af7146aac0d88ba438_3",
+    "source_id": "9ff7724e9082717401af7146aac0d88ba438",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_9ff7724e9082717401af7146aac0d88ba438_4",
+    "source_id": "9ff7724e9082717401af7146aac0d88ba438",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_bed7489d539289947fc51b6b806b55247594_1",
+    "source_id": "bed7489d539289947fc51b6b806b55247594",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_bed7489d539289947fc51b6b806b55247594_2",
+    "source_id": "bed7489d539289947fc51b6b806b55247594",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_d97ef96f82d84a9d783e27fddadc0208c8ee_1",
+    "source_id": "d97ef96f82d84a9d783e27fddadc0208c8ee",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_d97ef96f82d84a9d783e27fddadc0208c8ee_2",
+    "source_id": "d97ef96f82d84a9d783e27fddadc0208c8ee",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_d97ef96f82d84a9d783e27fddadc0208c8ee_3",
+    "source_id": "d97ef96f82d84a9d783e27fddadc0208c8ee",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_5780f296dcb3db90bd8d074e743dad4f6e3d_1",
+    "source_id": "5780f296dcb3db90bd8d074e743dad4f6e3d",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_5780f296dcb3db90bd8d074e743dad4f6e3d_2",
+    "source_id": "5780f296dcb3db90bd8d074e743dad4f6e3d",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_5780f296dcb3db90bd8d074e743dad4f6e3d_3",
+    "source_id": "5780f296dcb3db90bd8d074e743dad4f6e3d",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_ac3418004a6773075edcf1450fbc2bff8e56_1",
+    "source_id": "ac3418004a6773075edcf1450fbc2bff8e56",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_ac3418004a6773075edcf1450fbc2bff8e56_2",
+    "source_id": "ac3418004a6773075edcf1450fbc2bff8e56",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_95ef5f428e06fda47aecec72c1df7888db2a_1",
+    "source_id": "95ef5f428e06fda47aecec72c1df7888db2a",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "archive",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_95ef5f428e06fda47aecec72c1df7888db2a_2",
+    "source_id": "95ef5f428e06fda47aecec72c1df7888db2a",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_95ef5f428e06fda47aecec72c1df7888db2a_3",
+    "source_id": "95ef5f428e06fda47aecec72c1df7888db2a",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_607d39a0b2f1e3745ddf94b62008c6fdbd54_1",
+    "source_id": "607d39a0b2f1e3745ddf94b62008c6fdbd54",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_607d39a0b2f1e3745ddf94b62008c6fdbd54_2",
+    "source_id": "607d39a0b2f1e3745ddf94b62008c6fdbd54",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_607d39a0b2f1e3745ddf94b62008c6fdbd54_3",
+    "source_id": "607d39a0b2f1e3745ddf94b62008c6fdbd54",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_65902f5caff395fcf6a5f54874eae3b10455_1",
+    "source_id": "65902f5caff395fcf6a5f54874eae3b10455",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_65902f5caff395fcf6a5f54874eae3b10455_2",
+    "source_id": "65902f5caff395fcf6a5f54874eae3b10455",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_65902f5caff395fcf6a5f54874eae3b10455_3",
+    "source_id": "65902f5caff395fcf6a5f54874eae3b10455",
+    "evidence_type": "attack_method",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_65902f5caff395fcf6a5f54874eae3b10455_4",
+    "source_id": "65902f5caff395fcf6a5f54874eae3b10455",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_5d0e9c7b2be6cd9745c29d0e5fb825e6fc60_1",
+    "source_id": "5d0e9c7b2be6cd9745c29d0e5fb825e6fc60",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_5d0e9c7b2be6cd9745c29d0e5fb825e6fc60_2",
+    "source_id": "5d0e9c7b2be6cd9745c29d0e5fb825e6fc60",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_5d0e9c7b2be6cd9745c29d0e5fb825e6fc60_3",
+    "source_id": "5d0e9c7b2be6cd9745c29d0e5fb825e6fc60",
+    "evidence_type": "attack_method",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_446df640dcb2979a839308877d821a3ec4db_1",
+    "source_id": "446df640dcb2979a839308877d821a3ec4db",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_446df640dcb2979a839308877d821a3ec4db_2",
+    "source_id": "446df640dcb2979a839308877d821a3ec4db",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_446df640dcb2979a839308877d821a3ec4db_3",
+    "source_id": "446df640dcb2979a839308877d821a3ec4db",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_32637acd7a12dd278997f67888618d1af92c_1",
+    "source_id": "32637acd7a12dd278997f67888618d1af92c",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_32637acd7a12dd278997f67888618d1af92c_2",
+    "source_id": "32637acd7a12dd278997f67888618d1af92c",
+    "evidence_type": "attack_method",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_32637acd7a12dd278997f67888618d1af92c_3",
+    "source_id": "32637acd7a12dd278997f67888618d1af92c",
+    "evidence_type": "mitigation",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_32637acd7a12dd278997f67888618d1af92c_4",
+    "source_id": "32637acd7a12dd278997f67888618d1af92c",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_008aaf21b01d5e5bd8512d407aa3ccf80e91_1",
+    "source_id": "008aaf21b01d5e5bd8512d407aa3ccf80e91",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_6e6b732c8eaf9c080479fa11f72391877b6b_1",
+    "source_id": "6e6b732c8eaf9c080479fa11f72391877b6b",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_6e6b732c8eaf9c080479fa11f72391877b6b_2",
+    "source_id": "6e6b732c8eaf9c080479fa11f72391877b6b",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_6e6b732c8eaf9c080479fa11f72391877b6b_3",
+    "source_id": "6e6b732c8eaf9c080479fa11f72391877b6b",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_05c4082bb765aa5f02f4aa36280e69b49dbc_1",
+    "source_id": "05c4082bb765aa5f02f4aa36280e69b49dbc",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_05c4082bb765aa5f02f4aa36280e69b49dbc_2",
+    "source_id": "05c4082bb765aa5f02f4aa36280e69b49dbc",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_05c4082bb765aa5f02f4aa36280e69b49dbc_3",
+    "source_id": "05c4082bb765aa5f02f4aa36280e69b49dbc",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_b8a4a1d9103429b82807bee6ec2fe542dfd4_1",
+    "source_id": "b8a4a1d9103429b82807bee6ec2fe542dfd4",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_b8a4a1d9103429b82807bee6ec2fe542dfd4_2",
+    "source_id": "b8a4a1d9103429b82807bee6ec2fe542dfd4",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_b8a4a1d9103429b82807bee6ec2fe542dfd4_3",
+    "source_id": "b8a4a1d9103429b82807bee6ec2fe542dfd4",
+    "evidence_type": "attack_method",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_416f2e9b861c29dc84d2fa30caa859e6c978_1",
+    "source_id": "416f2e9b861c29dc84d2fa30caa859e6c978",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_416f2e9b861c29dc84d2fa30caa859e6c978_2",
+    "source_id": "416f2e9b861c29dc84d2fa30caa859e6c978",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "usable",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_5110c09bfb2a831b9de4d505fe1f5a339dc8_1",
+    "source_id": "5110c09bfb2a831b9de4d505fe1f5a339dc8",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_5110c09bfb2a831b9de4d505fe1f5a339dc8_2",
+    "source_id": "5110c09bfb2a831b9de4d505fe1f5a339dc8",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_5110c09bfb2a831b9de4d505fe1f5a339dc8_3",
+    "source_id": "5110c09bfb2a831b9de4d505fe1f5a339dc8",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_3dcdc10325afaeec652b6ad4f66e8e2741f7_1",
+    "source_id": "3dcdc10325afaeec652b6ad4f66e8e2741f7",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_3dcdc10325afaeec652b6ad4f66e8e2741f7_2",
+    "source_id": "3dcdc10325afaeec652b6ad4f66e8e2741f7",
+    "evidence_type": "exploit_chain",
+    "evidence_strength": "archive",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_3dcdc10325afaeec652b6ad4f66e8e2741f7_3",
+    "source_id": "3dcdc10325afaeec652b6ad4f66e8e2741f7",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_3dcdc10325afaeec652b6ad4f66e8e2741f7_4",
+    "source_id": "3dcdc10325afaeec652b6ad4f66e8e2741f7",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_1f8c6cefaf9a44f397da10e6de0386e3ae3b_1",
+    "source_id": "1f8c6cefaf9a44f397da10e6de0386e3ae3b",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_1f8c6cefaf9a44f397da10e6de0386e3ae3b_2",
+    "source_id": "1f8c6cefaf9a44f397da10e6de0386e3ae3b",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_1f8c6cefaf9a44f397da10e6de0386e3ae3b_3",
+    "source_id": "1f8c6cefaf9a44f397da10e6de0386e3ae3b",
+    "evidence_type": "mitigation",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_1f8c6cefaf9a44f397da10e6de0386e3ae3b_4",
+    "source_id": "1f8c6cefaf9a44f397da10e6de0386e3ae3b",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_1ce473947cd0c16c06b382e61518ce0b3dc0_1",
+    "source_id": "1ce473947cd0c16c06b382e61518ce0b3dc0",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_1ce473947cd0c16c06b382e61518ce0b3dc0_2",
+    "source_id": "1ce473947cd0c16c06b382e61518ce0b3dc0",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_af0f6c4893dd328037ec7d5a5daf912337ad_1",
+    "source_id": "af0f6c4893dd328037ec7d5a5daf912337ad",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_af0f6c4893dd328037ec7d5a5daf912337ad_2",
+    "source_id": "af0f6c4893dd328037ec7d5a5daf912337ad",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_af0f6c4893dd328037ec7d5a5daf912337ad_3",
+    "source_id": "af0f6c4893dd328037ec7d5a5daf912337ad",
+    "evidence_type": "attack_method",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_8750f9fc552a691af786f6c63dcbfc838eed_1",
+    "source_id": "8750f9fc552a691af786f6c63dcbfc838eed",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_8750f9fc552a691af786f6c63dcbfc838eed_2",
+    "source_id": "8750f9fc552a691af786f6c63dcbfc838eed",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_8750f9fc552a691af786f6c63dcbfc838eed_3",
+    "source_id": "8750f9fc552a691af786f6c63dcbfc838eed",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_629252ba15f5c54ef4a682a03babdbe9d2d7_1",
+    "source_id": "629252ba15f5c54ef4a682a03babdbe9d2d7",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_629252ba15f5c54ef4a682a03babdbe9d2d7_2",
+    "source_id": "629252ba15f5c54ef4a682a03babdbe9d2d7",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_629252ba15f5c54ef4a682a03babdbe9d2d7_3",
+    "source_id": "629252ba15f5c54ef4a682a03babdbe9d2d7",
+    "evidence_type": "mitigation",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_9a7b860367864e3eb8032030ff287b9ec153_1",
+    "source_id": "9a7b860367864e3eb8032030ff287b9ec153",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_9a7b860367864e3eb8032030ff287b9ec153_2",
+    "source_id": "9a7b860367864e3eb8032030ff287b9ec153",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_9a7b860367864e3eb8032030ff287b9ec153_3",
+    "source_id": "9a7b860367864e3eb8032030ff287b9ec153",
+    "evidence_type": "attack_method",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_fdd9f8c40b258b158385d8763f543a85d3e9_1",
+    "source_id": "fdd9f8c40b258b158385d8763f543a85d3e9",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_fdd9f8c40b258b158385d8763f543a85d3e9_2",
+    "source_id": "fdd9f8c40b258b158385d8763f543a85d3e9",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_fdd9f8c40b258b158385d8763f543a85d3e9_3",
+    "source_id": "fdd9f8c40b258b158385d8763f543a85d3e9",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_fdd9f8c40b258b158385d8763f543a85d3e9_4",
+    "source_id": "fdd9f8c40b258b158385d8763f543a85d3e9",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_d4fa7fbd8228e886997802317f985e524713_1",
+    "source_id": "d4fa7fbd8228e886997802317f985e524713",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_d4fa7fbd8228e886997802317f985e524713_2",
+    "source_id": "d4fa7fbd8228e886997802317f985e524713",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_d4fa7fbd8228e886997802317f985e524713_3",
+    "source_id": "d4fa7fbd8228e886997802317f985e524713",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_d4fa7fbd8228e886997802317f985e524713_4",
+    "source_id": "d4fa7fbd8228e886997802317f985e524713",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": true,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_e04f081dfdd5c790082016510a13ec4d02f8_1",
+    "source_id": "e04f081dfdd5c790082016510a13ec4d02f8",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_e04f081dfdd5c790082016510a13ec4d02f8_2",
+    "source_id": "e04f081dfdd5c790082016510a13ec4d02f8",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_e04f081dfdd5c790082016510a13ec4d02f8_3",
+    "source_id": "e04f081dfdd5c790082016510a13ec4d02f8",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_b756594ccaef23932b6c34248f6c780db209_1",
+    "source_id": "b756594ccaef23932b6c34248f6c780db209",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_b756594ccaef23932b6c34248f6c780db209_2",
+    "source_id": "b756594ccaef23932b6c34248f6c780db209",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_b756594ccaef23932b6c34248f6c780db209_3",
+    "source_id": "b756594ccaef23932b6c34248f6c780db209",
+    "evidence_type": "exploit_chain",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_b756594ccaef23932b6c34248f6c780db209_4",
+    "source_id": "b756594ccaef23932b6c34248f6c780db209",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_28914ddb81a09adc37c70034dcc39f752a31_1",
+    "source_id": "28914ddb81a09adc37c70034dcc39f752a31",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_1f466d7e15f5905eb1e0976994d55b8cf2d6_1",
+    "source_id": "1f466d7e15f5905eb1e0976994d55b8cf2d6",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_1f466d7e15f5905eb1e0976994d55b8cf2d6_2",
+    "source_id": "1f466d7e15f5905eb1e0976994d55b8cf2d6",
+    "evidence_type": "attack_method",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_1f466d7e15f5905eb1e0976994d55b8cf2d6_3",
+    "source_id": "1f466d7e15f5905eb1e0976994d55b8cf2d6",
+    "evidence_type": "research_result",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_c99f3adf7433b6f8f49af1ae42fa6cce37cc_1",
+    "source_id": "c99f3adf7433b6f8f49af1ae42fa6cce37cc",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_c99f3adf7433b6f8f49af1ae42fa6cce37cc_2",
+    "source_id": "c99f3adf7433b6f8f49af1ae42fa6cce37cc",
+    "evidence_type": "exploit_chain",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_c99f3adf7433b6f8f49af1ae42fa6cce37cc_3",
+    "source_id": "c99f3adf7433b6f8f49af1ae42fa6cce37cc",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_c99f3adf7433b6f8f49af1ae42fa6cce37cc_4",
+    "source_id": "c99f3adf7433b6f8f49af1ae42fa6cce37cc",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_89dd459f4b1793391772196e5f49b964dc51_1",
+    "source_id": "89dd459f4b1793391772196e5f49b964dc51",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_89dd459f4b1793391772196e5f49b964dc51_2",
+    "source_id": "89dd459f4b1793391772196e5f49b964dc51",
+    "evidence_type": "research_result",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_89dd459f4b1793391772196e5f49b964dc51_3",
+    "source_id": "89dd459f4b1793391772196e5f49b964dc51",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_89dd459f4b1793391772196e5f49b964dc51_4",
+    "source_id": "89dd459f4b1793391772196e5f49b964dc51",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_f2ca33a26c74084e9d59574ad17a816929d8_1",
+    "source_id": "f2ca33a26c74084e9d59574ad17a816929d8",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_acff8ea93605f471e4d8803481e79eaf09d0_1",
+    "source_id": "acff8ea93605f471e4d8803481e79eaf09d0",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "context",
+    "admissibility": "passed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_acff8ea93605f471e4d8803481e79eaf09d0_2",
+    "source_id": "acff8ea93605f471e4d8803481e79eaf09d0",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_acff8ea93605f471e4d8803481e79eaf09d0_3",
+    "source_id": "acff8ea93605f471e4d8803481e79eaf09d0",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_92833e83e87c0fad4562fe2662bbd0e19344_1",
+    "source_id": "92833e83e87c0fad4562fe2662bbd0e19344",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_92833e83e87c0fad4562fe2662bbd0e19344_2",
+    "source_id": "92833e83e87c0fad4562fe2662bbd0e19344",
+    "evidence_type": "exploit_chain",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_92833e83e87c0fad4562fe2662bbd0e19344_3",
+    "source_id": "92833e83e87c0fad4562fe2662bbd0e19344",
+    "evidence_type": "exploit_chain",
+    "evidence_strength": "archive",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_92833e83e87c0fad4562fe2662bbd0e19344_4",
+    "source_id": "92833e83e87c0fad4562fe2662bbd0e19344",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_b0c0b3ecd6dfc23f3bec04df6e377337c1f8_1",
+    "source_id": "b0c0b3ecd6dfc23f3bec04df6e377337c1f8",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_b0c0b3ecd6dfc23f3bec04df6e377337c1f8_2",
+    "source_id": "b0c0b3ecd6dfc23f3bec04df6e377337c1f8",
+    "evidence_type": "attack_method",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_b0c0b3ecd6dfc23f3bec04df6e377337c1f8_3",
+    "source_id": "b0c0b3ecd6dfc23f3bec04df6e377337c1f8",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_b0c0b3ecd6dfc23f3bec04df6e377337c1f8_4",
+    "source_id": "b0c0b3ecd6dfc23f3bec04df6e377337c1f8",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_0cc5365c135afe32881908f4ebea30781b55_1",
+    "source_id": "0cc5365c135afe32881908f4ebea30781b55",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_0cc5365c135afe32881908f4ebea30781b55_2",
+    "source_id": "0cc5365c135afe32881908f4ebea30781b55",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_26ba8f5cdd50e977a312cf1b358e04bcf3c7_1",
+    "source_id": "26ba8f5cdd50e977a312cf1b358e04bcf3c7",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_26ba8f5cdd50e977a312cf1b358e04bcf3c7_2",
+    "source_id": "26ba8f5cdd50e977a312cf1b358e04bcf3c7",
+    "evidence_type": "attack_method",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_26ba8f5cdd50e977a312cf1b358e04bcf3c7_3",
+    "source_id": "26ba8f5cdd50e977a312cf1b358e04bcf3c7",
+    "evidence_type": "attack_method",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_0e3702fee26d1ca616eb470c22cbcb893d94_1",
+    "source_id": "0e3702fee26d1ca616eb470c22cbcb893d94",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_0e3702fee26d1ca616eb470c22cbcb893d94_2",
+    "source_id": "0e3702fee26d1ca616eb470c22cbcb893d94",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_0e3702fee26d1ca616eb470c22cbcb893d94_3",
+    "source_id": "0e3702fee26d1ca616eb470c22cbcb893d94",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_0e3702fee26d1ca616eb470c22cbcb893d94_4",
+    "source_id": "0e3702fee26d1ca616eb470c22cbcb893d94",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_7439ab9c0530876dbea317f61889636ecbc8_1",
+    "source_id": "7439ab9c0530876dbea317f61889636ecbc8",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_7439ab9c0530876dbea317f61889636ecbc8_2",
+    "source_id": "7439ab9c0530876dbea317f61889636ecbc8",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_7439ab9c0530876dbea317f61889636ecbc8_3",
+    "source_id": "7439ab9c0530876dbea317f61889636ecbc8",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_7439ab9c0530876dbea317f61889636ecbc8_4",
+    "source_id": "7439ab9c0530876dbea317f61889636ecbc8",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_e31817ba7fadae73ab59fd74551603d43922_1",
+    "source_id": "e31817ba7fadae73ab59fd74551603d43922",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_e31817ba7fadae73ab59fd74551603d43922_2",
+    "source_id": "e31817ba7fadae73ab59fd74551603d43922",
+    "evidence_type": "defensive_control",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_cd3286aafeff7f92d59b25f4594a1108cc6c_1",
+    "source_id": "cd3286aafeff7f92d59b25f4594a1108cc6c",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_cd3286aafeff7f92d59b25f4594a1108cc6c_2",
+    "source_id": "cd3286aafeff7f92d59b25f4594a1108cc6c",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_cd3286aafeff7f92d59b25f4594a1108cc6c_3",
+    "source_id": "cd3286aafeff7f92d59b25f4594a1108cc6c",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_3d3e11b37283c8a7868690d5e62515d3441c_1",
+    "source_id": "3d3e11b37283c8a7868690d5e62515d3441c",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_3d3e11b37283c8a7868690d5e62515d3441c_2",
+    "source_id": "3d3e11b37283c8a7868690d5e62515d3441c",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_3d3e11b37283c8a7868690d5e62515d3441c_3",
+    "source_id": "3d3e11b37283c8a7868690d5e62515d3441c",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_3d3e11b37283c8a7868690d5e62515d3441c_4",
+    "source_id": "3d3e11b37283c8a7868690d5e62515d3441c",
+    "evidence_type": "mitigation",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_3f5bbea3d4f080c2b7b66b6bdba4b939c5bf_1",
+    "source_id": "3f5bbea3d4f080c2b7b66b6bdba4b939c5bf",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_3f5bbea3d4f080c2b7b66b6bdba4b939c5bf_2",
+    "source_id": "3f5bbea3d4f080c2b7b66b6bdba4b939c5bf",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_3f5bbea3d4f080c2b7b66b6bdba4b939c5bf_3",
+    "source_id": "3f5bbea3d4f080c2b7b66b6bdba4b939c5bf",
+    "evidence_type": "research_result",
+    "evidence_strength": "archive",
+    "admissibility": "failed",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_efa99286ceee2bfbbc8e80a59da4ea915a1a_1",
+    "source_id": "efa99286ceee2bfbbc8e80a59da4ea915a1a",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_efa99286ceee2bfbbc8e80a59da4ea915a1a_2",
+    "source_id": "efa99286ceee2bfbbc8e80a59da4ea915a1a",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "archive",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_efa99286ceee2bfbbc8e80a59da4ea915a1a_3",
+    "source_id": "efa99286ceee2bfbbc8e80a59da4ea915a1a",
+    "evidence_type": "research_result",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_8ba410db441dd3c053cf7ce32877b03f44aa_1",
+    "source_id": "8ba410db441dd3c053cf7ce32877b03f44aa",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_8ba410db441dd3c053cf7ce32877b03f44aa_2",
+    "source_id": "8ba410db441dd3c053cf7ce32877b03f44aa",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_8ba410db441dd3c053cf7ce32877b03f44aa_3",
+    "source_id": "8ba410db441dd3c053cf7ce32877b03f44aa",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  },
+  {
+    "evidence_id": "ev_8ba410db441dd3c053cf7ce32877b03f44aa_4",
+    "source_id": "8ba410db441dd3c053cf7ce32877b03f44aa",
+    "evidence_type": "exploit_chain",
+    "evidence_strength": "archive",
+    "admissibility": "context_only",
+    "observed_use": false,
+    "claim": ""
+  }
+]

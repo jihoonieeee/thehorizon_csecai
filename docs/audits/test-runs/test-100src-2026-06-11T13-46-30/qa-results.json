@@ -1,0 +1,16 @@
+{
+  "overall_pass": true,
+  "slide_count": 31,
+  "deck_version": "deck-v9.1",
+  "claim_anchored": 12,
+  "content_qa": {
+    "slides_blocking": 0,
+    "slides_warning": 20
+  },
+  "notes_qa": {
+    "slides_blocking": 2,
+    "slides_warning": 4
+  },
+  "untyped_bullets_pct": 7,
+  "missing_speaker_notes": 0
+}

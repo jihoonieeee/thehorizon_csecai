@@ -1,0 +1,50 @@
+[
+  {
+    "source_id": "8b5e9c5610e1508511df79f3b7f261520c55",
+    "source_title": "Anthropic Releases Claude Fable 5, Its Most Powerful AI Yet,",
+    "source_type": "capability_demonstration",
+    "trust_tier": "medium",
+    "evidence_id": "ev_8b5e9c5610e1508511df79f3b7f261520c55_1",
+    "evidence_type": "capability_delta",
+    "evidence_strength": "archive",
+    "admissibility": "context_only",
+    "claim": "",
+    "quote": ""
+  },
+  {
+    "source_id": "8b5e9c5610e1508511df79f3b7f261520c55",
+    "source_title": "Anthropic Releases Claude Fable 5, Its Most Powerful AI Yet,",
+    "source_type": "capability_demonstration",
+    "trust_tier": "medium",
+    "evidence_id": "ev_8b5e9c5610e1508511df79f3b7f261520c55_2",
+    "evidence_type": "benchmark_result",
+    "evidence_strength": "archive",
+    "admissibility": "context_only",
+    "claim": "",
+    "quote": ""
+  },
+  {
+    "source_id": "efdaae8518c88b1dc83967c291dfc9634076",
+    "source_title": "Unpatched Langflow Flaw CVE-2026-5027 Exploited for Unauthen",
+    "source_type": "exploit_disclosure",
+    "trust_tier": "medium",
+    "evidence_id": "ev_efdaae8518c88b1dc83967c291dfc9634076_1",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "context",
+    "admissibility": "context_only",
+    "claim": "",
+    "quote": ""
+  },
+  {
+    "source_id": "a89bc9c1fa92195da1dc89765f97d831e86a",
+    "source_title": "Path traversal flaw in AI dev platform Langflow exploited in",
+    "source_type": "exploit_disclosure",
+    "trust_tier": "medium",
+    "evidence_id": "ev_a89bc9c1fa92195da1dc89765f97d831e86a_1",
+    "evidence_type": "vulnerability_fact",
+    "evidence_strength": "strong",
+    "admissibility": "passed",
+    "claim": "",
+    "quote": ""
+  }
+]

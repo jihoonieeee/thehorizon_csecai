@@ -1,0 +1,45 @@
+{
+  "title": "Layers 7-8 slides + QA",
+  "checks": [
+    {
+      "name": "deck-v9.1 generated",
+      "status": "pass",
+      "detail": "deck-v9.1"
+    },
+    {
+      "name": "≥ 18 slides generated",
+      "status": "pass",
+      "detail": "33"
+    },
+    {
+      "name": "argument_form on ≥ 70% analytical slides",
+      "status": "warn",
+      "detail": "18% (3/17)"
+    },
+    {
+      "name": "≥ 3 claim-anchored slides",
+      "status": "pass",
+      "detail": "15"
+    },
+    {
+      "name": "Blocking content QA issues ≤ 20% of slides",
+      "status": "warn",
+      "detail": "9/33"
+    },
+    {
+      "name": "Blocking notes QA issues ≤ 10% of slides",
+      "status": "pass",
+      "detail": "2/33"
+    },
+    {
+      "name": "Untyped bullets ≤ 5%",
+      "status": "warn",
+      "detail": "7% (7/105)"
+    },
+    {
+      "name": "All non-structural slides have speaker notes",
+      "status": "pass",
+      "detail": "0 missing"
+    }
+  ]
+}

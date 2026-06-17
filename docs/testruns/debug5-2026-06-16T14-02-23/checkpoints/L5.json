@@ -1,0 +1,40 @@
+{
+  "run_id": "debug5-2026-06-16T14-02-23",
+  "layer": "L5",
+  "timestamp": "2026-06-16T14:05:14.409Z",
+  "evidence_cards": 4,
+  "high_priority": 4,
+  "categories": 4,
+  "by_strength": {
+    "strong": 6,
+    "usable": 3,
+    "context": 5,
+    "archive": 3
+  },
+  "evidence_packs": [
+    {
+      "category": "traditional_ai_threats",
+      "strong": 0,
+      "usable": 0,
+      "context": 0
+    },
+    {
+      "category": "llm_threats",
+      "strong": 1,
+      "usable": 0,
+      "context": 1
+    },
+    {
+      "category": "agentic_ai_threats",
+      "strong": 3,
+      "usable": 0,
+      "context": 1
+    },
+    {
+      "category": "ai_enabled_threats",
+      "strong": 2,
+      "usable": 0,
+      "context": 1
+    }
+  ]
+}

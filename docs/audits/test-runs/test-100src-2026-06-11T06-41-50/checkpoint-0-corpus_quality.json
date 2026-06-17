@@ -1,0 +1,30 @@
+{
+  "title": "Corpus quality",
+  "checks": [
+    {
+      "name": "≥ 80 sources loaded",
+      "status": "pass",
+      "detail": "100/100"
+    },
+    {
+      "name": "≥ 80% sources have text",
+      "status": "pass",
+      "detail": "100/100"
+    },
+    {
+      "name": "Primary/high tier sources present",
+      "status": "pass",
+      "detail": "primary=22 high=69"
+    },
+    {
+      "name": "≥ 3 distinct source types",
+      "status": "pass",
+      "detail": "research_finding, defensive_capability, threat_intelligence, benchmark_evaluation, capability_demonstration, vulnerability"
+    },
+    {
+      "name": "≥ 2 distinct calendar months",
+      "status": "pass",
+      "detail": "2026-06, 2026-05"
+    }
+  ]
+}

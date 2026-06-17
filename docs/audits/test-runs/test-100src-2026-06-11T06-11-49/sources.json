@@ -1,0 +1,902 @@
+[
+  {
+    "id": "a7a5281aef1db0b1f6cba6b6f59d0a1dd6a1",
+    "title": "Path traversal flaw in AI dev platform Langflow exploited in attacks",
+    "source_type": "research_finding",
+    "trust_tier": "medium",
+    "date_published": "2026-06-10T21:23:44+00:00",
+    "publisher": "BleepingComputer",
+    "has_text": true
+  },
+  {
+    "id": "037ffbb070d53a3c3f235334d435a1e2c15d",
+    "title": "Turn specs into evals for any agent with ASSERT",
+    "source_type": "threat_intelligence",
+    "trust_tier": "high",
+    "date_published": "2026-06-10T16:00:00+00:00",
+    "publisher": "Microsoft",
+    "has_text": true
+  },
+  {
+    "id": "03ed04f0cda4655872cb7a0e3e578bb1ced0",
+    "title": "Who Runs the Ransomware Group The Gentlemen?",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-06-10T14:03:44+00:00",
+    "publisher": "Krebs on Security",
+    "has_text": true
+  },
+  {
+    "id": "27870879434904650fc8a5adfabfb321445d",
+    "title": "PRC-linked influence operations are targeting AI debates in the US",
+    "source_type": "research_finding",
+    "trust_tier": "primary",
+    "date_published": "2026-06-10T12:00:00+00:00",
+    "publisher": "OpenAI",
+    "has_text": true
+  },
+  {
+    "id": "2780c64461d6bd7dadd07dacebffcbe5a051",
+    "title": "CVE-2026-46517: LMDeploy is a toolkit for compressing, deploying, and serving large language models. In versions 0.12.3 and prior, hardcoded \"trust_remote_c",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-06-10T00:16:53.827+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "105af8cf2e4befd2dff5b8ee89cd94d5d18d",
+    "title": "Sandlock: Confining AI Agent Code with Unprivileged Linux Primitives",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-05-25T19:51:30+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "1f466d7e15f5905eb1e0976994d55b8cf2d6",
+    "title": "AgentSecBench: Measuring Prompt Injection, Privacy Leakage, and Tool-Use Integrity in LLM Agents",
+    "source_type": "benchmark_evaluation",
+    "trust_tier": "high",
+    "date_published": "2026-05-25T18:53:22+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "8587f095c7b4d435e9d0c14f4c32dcf5d47b",
+    "title": "APT-Agent: Automated Penetration Testing using Large Language Models",
+    "source_type": "capability_demonstration",
+    "trust_tier": "high",
+    "date_published": "2026-05-24T08:54:33+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "49c582321bba2439f4a2993185449d6fa605",
+    "title": "The Insurability Frontier of AI Risk: Mapping Threats to Affirmative Coverage, Silent Exposures, and Exclusions",
+    "source_type": "governance_signal",
+    "trust_tier": "high",
+    "date_published": "2026-05-06T13:24:44+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "7b26b97ca97ab82f0e6e85e95e4150d6902f",
+    "title": "AI Risk Worries Insurers and Businesses Alike",
+    "source_type": "research_finding",
+    "trust_tier": "medium",
+    "date_published": "2026-06-10T19:34:43+00:00",
+    "publisher": "Dark Reading",
+    "has_text": true
+  },
+  {
+    "id": "4d8b4dc584dcbb65e8ea0693df30f03ad1e3",
+    "title": "How has use of framing protection security headers changed in the past 3 years&#x3f;, (Wed, Jun 10th)",
+    "source_type": "threat_intelligence",
+    "trust_tier": "high",
+    "date_published": "2026-06-10T08:29:21+00:00",
+    "publisher": "SANS ISC",
+    "has_text": true
+  },
+  {
+    "id": "11545678ac33b109bf61799e33293791f32c",
+    "title": "The Download: the “steroid olympics and a safer Mythos",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-06-10T12:10:00+00:00",
+    "publisher": "MIT Technology Review",
+    "has_text": true
+  },
+  {
+    "id": "c7866bf4d0809ad491d368e229e3f5bb5b8e",
+    "title": "From data to decisions: how LSEG is scaling trusted AI",
+    "source_type": "research_finding",
+    "trust_tier": "primary",
+    "date_published": "2026-06-10T00:00:00+00:00",
+    "publisher": "OpenAI",
+    "has_text": true
+  },
+  {
+    "id": "74cb3dcd20dc94847544002905ad8494bcc3",
+    "title": "CVE-2026-46432: LMDeploy is a toolkit for compressing, deploying, and serving large language models. In versions 0.12.3 and prior, LMDeploy is vulnerable to",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-06-10T00:16:53.557+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "008aaf21b01d5e5bd8512d407aa3ccf80e91",
+    "title": "KYA: A Framework-Agnostic Trust Layer for Autonomous Systems with Verifiable Provenance and Hierarchical Policy Composition",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-05-25T02:59:54+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "acff8ea93605f471e4d8803481e79eaf09d0",
+    "title": "VeriScale: Adversarial Test-Suite Scaling for Verifiable Code Generation",
+    "source_type": "benchmark_evaluation",
+    "trust_tier": "high",
+    "date_published": "2026-05-21T12:00:45+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "19f8eb351048d9c9c2e9bf4c2c3ff18a86b0",
+    "title": "Adversarial SQL Injection Generation with LLM-Based Architectures",
+    "source_type": "capability_demonstration",
+    "trust_tier": "high",
+    "date_published": "2026-05-11T19:52:44+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "efdaae8518c88b1dc83967c291dfc9634076",
+    "title": "Unpatched Langflow Flaw CVE-2026-5027 Exploited for Unauthenticated RCE",
+    "source_type": "research_finding",
+    "trust_tier": "medium",
+    "date_published": "2026-06-10T15:00:59+00:00",
+    "publisher": "The Hacker News",
+    "has_text": true
+  },
+  {
+    "id": "9820ae8e6ccc95dd49d33822638214082123",
+    "title": "ISC Stormcast For Wednesday, June 10th, 2026 https://isc.sans.edu/podcastdetail/9966, (Wed, Jun 10th)",
+    "source_type": "threat_intelligence",
+    "trust_tier": "high",
+    "date_published": "2026-06-10T02:00:02+00:00",
+    "publisher": "SANS ISC",
+    "has_text": true
+  },
+  {
+    "id": "2d1dcca58ca14ddab77959c8bb91dd68abcd",
+    "title": "The “steroid olympics” were a circus—and a window into our culture",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-06-10T09:00:00+00:00",
+    "publisher": "MIT Technology Review",
+    "has_text": true
+  },
+  {
+    "id": "b603c6781fdb3ca1800efb04bf558ce07629",
+    "title": "CVE-2026-41863: Spring AI's support for Anthropic's Skills API used LLM-influenced filenames unsanitized in Path.resolve before writing files to disk. This",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-24T23:16:16.377+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "416f2e9b861c29dc84d2fa30caa859e6c978",
+    "title": "Reflect-Guard: Enhancing LLM Safeguards against Adversarial Prompts via Logical Self-Reflection",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-05-24T02:58:21+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "26ba8f5cdd50e977a312cf1b358e04bcf3c7",
+    "title": "Benchmarking Autonomous Agents against Temporal, Spatial, and Semantic Evasions",
+    "source_type": "benchmark_evaluation",
+    "trust_tier": "high",
+    "date_published": "2026-05-21T11:07:51+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "d04f1b7120ca4d9b20a31b7a24e79f603113",
+    "title": "Language Models Can Autonomously Hack and Self-Replicate",
+    "source_type": "capability_demonstration",
+    "trust_tier": "high",
+    "date_published": "2026-05-07T17:09:36+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "f8ca063ee086a04c75af8d6fd8b8a6dba8df",
+    "title": "AISLE Snapshot keeps source code under enterprise control during vulnerability scanning",
+    "source_type": "research_finding",
+    "trust_tier": "medium",
+    "date_published": "2026-06-10T13:41:59+00:00",
+    "publisher": "Help Net Security",
+    "has_text": true
+  },
+  {
+    "id": "8b910642bc4d129cf309f46c0573933da929",
+    "title": "China's Noncombatant Evacuation Operations: 2005–2025",
+    "source_type": "threat_intelligence",
+    "trust_tier": "high",
+    "date_published": "2026-06-10T00:00:00+00:00",
+    "publisher": "Recorded Future",
+    "has_text": true
+  },
+  {
+    "id": "d4fa7fbd8228e886997802317f985e524713",
+    "title": "A Record-Breaking Patch Tuesday for June 2026",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-06-09T22:07:28+00:00",
+    "publisher": "Krebs on Security",
+    "has_text": true
+  },
+  {
+    "id": "3925c5590f3a04aea5033574ca9828b7a20e",
+    "title": "CVE-2026-28444: Typebot is a chatbot builder tool. In versions 3.15.2 and prior, the getResultLogs API endpoint authorizes the caller against the provided t",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-22T09:16:45.97+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "1ce473947cd0c16c06b382e61518ce0b3dc0",
+    "title": "Ellipsoid Control: A White-list Jailbreak Defense via Benign Latent Modeling",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-05-23T12:39:25+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "cd3286aafeff7f92d59b25f4594a1108cc6c",
+    "title": "Overeager Coding Agents: Measuring Out-of-Scope Actions on Benign Tasks",
+    "source_type": "benchmark_evaluation",
+    "trust_tier": "high",
+    "date_published": "2026-05-18T16:00:41+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "e294d3bde3590234aaa8208291078bd28a13",
+    "title": "Drata brings visibility, control and auditability to enterprise AI agents",
+    "source_type": "research_finding",
+    "trust_tier": "medium",
+    "date_published": "2026-06-10T13:31:30+00:00",
+    "publisher": "Help Net Security",
+    "has_text": true
+  },
+  {
+    "id": "ca9d30c481587a7fd9879dc68e882829ac1a",
+    "title": "2026 FIFA World Cup: What Public Safety Officials Need to Know",
+    "source_type": "threat_intelligence",
+    "trust_tier": "high",
+    "date_published": "2026-06-10T00:00:00+00:00",
+    "publisher": "Recorded Future",
+    "has_text": true
+  },
+  {
+    "id": "8ba5c07dc34eca90e3ba9da395f6c152cdad",
+    "title": "Intelligent Detection and Mitigation of Carpet-Bombing DDoS Attacks in SDN Using Retrieval-Augmented Generation and Large Language Models",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-05-25T19:58:45+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "357c732220c7744efceca690e8bda2d081d8",
+    "title": "CVE-2026-41947: Dify before version 1.14.2 contains an authorization bypass vulnerability that allows authenticated editor users to set and enable trace con",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-18T07:16:25.827+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "875fd428d2068575982b701c550010e1c3ca",
+    "title": "Agent-ToM: Learning to Monitor Autonomous LLM Agents via Theory-of-Mind Reasoning",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-05-22T20:57:20+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "efa99286ceee2bfbbc8e80a59da4ea915a1a",
+    "title": "LivePI: More Realistic Benchmarking of Agents Against Indirect Prompt Injection",
+    "source_type": "benchmark_evaluation",
+    "trust_tier": "high",
+    "date_published": "2026-05-18T07:41:35+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "d4c12869a305085abb10b96a70de6ec3a38a",
+    "title": "CISO Forum Webinar Today: 2026 Mid-Year Review",
+    "source_type": "research_finding",
+    "trust_tier": "medium",
+    "date_published": "2026-06-10T12:00:00+00:00",
+    "publisher": "SecurityWeek",
+    "has_text": true
+  },
+  {
+    "id": "26a9bfbb11d2c0c2a5a9256fd0b8d90469ec",
+    "title": "Blinding the Watchmen: Abusing Cloud Logging Services for Defense Evasion and Visibility",
+    "source_type": "threat_intelligence",
+    "trust_tier": "high",
+    "date_published": "2026-06-09T22:00:21+00:00",
+    "publisher": "Palo Alto Networks Unit 42",
+    "has_text": true
+  },
+  {
+    "id": "df33ab0ceeed93a138a05487f557f6e9228a",
+    "title": "CyberEvolver: Structured Self-Evolution for Cybersecurity Agents On the Fly",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-05-25T16:26:59+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "56b46332cca589366b64184093c657747daf",
+    "title": "CVE-2026-45667: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.8.0, GET /api/v1/memories/ef i",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-15T14:16:56.193+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "30880888937b6821642b6ee5973e50d0a8f6",
+    "title": "PocketAgents: A Manifest-Driven Library of Autonomous Defense Agents",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-05-20T19:52:24+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "c8b2f165b94e8d8ff44a1f2fe63b3e163dd5",
+    "title": "Can Visual Mamba Improve AI-Generated Image Detection? An In-Depth Investigation",
+    "source_type": "benchmark_evaluation",
+    "trust_tier": "high",
+    "date_published": "2026-05-14T13:09:16+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "0cdb81ac94a082287584bb9e222b05b56fdc",
+    "title": "Rubrik launches Autonomous Business Recovery to rebuild cloud applications after cyberattacks",
+    "source_type": "research_finding",
+    "trust_tier": "medium",
+    "date_published": "2026-06-10T09:33:49+00:00",
+    "publisher": "Help Net Security",
+    "has_text": true
+  },
+  {
+    "id": "b2375ae03f67169bc41ad5471bc02d0cee5a",
+    "title": "Building an Adversarial Malware Dataset by Family and Type: Generation, Evasion, and Poisoning Evaluation",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-05-25T15:17:02+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "08d6e9e45d624824a3a869fde5ffb943f9af",
+    "title": "CVE-2026-45666: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.8.11, the API /api/v1/notes/ n",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-15T14:16:56.057+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "28914ddb81a09adc37c70034dcc39f752a31",
+    "title": "BiRD: A Bidirectional Ranking Defense Mechanism for Retrieval Augmented Generation",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-05-19T17:11:00+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "1786219255a243f9907bf1a5a3b33918d8f0",
+    "title": "Benchmarking LLM-Based Static Analysis for Secure Smart Contract Development: Reliability, Limitations, and Potential Hybrid Solutions",
+    "source_type": "benchmark_evaluation",
+    "trust_tier": "high",
+    "date_published": "2026-05-11T19:10:47+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "8b5e9c5610e1508511df79f3b7f261520c55",
+    "title": "Anthropic Releases Claude Fable 5, Its Most Powerful AI Yet, With Cyber Safeguards",
+    "source_type": "research_finding",
+    "trust_tier": "medium",
+    "date_published": "2026-06-10T07:37:59+00:00",
+    "publisher": "The Hacker News",
+    "has_text": true
+  },
+  {
+    "id": "5db479003ca900c30dabf7b92956b5ce1da2",
+    "title": "How Agentic AI Coding Assistants Become the Attacker's Shell",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-05-25T13:59:48+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "b94855948d24605de4b49efb30a412b06502",
+    "title": "CVE-2026-45665: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.8.0, a Stored Cross-Site Scrip",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-15T14:16:55.92+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "f2ca33a26c74084e9d59574ad17a816929d8",
+    "title": "Be Kind, Rewrite: Benign Projections via Rewriting Defend Against LLM Data Poisoning Attacks",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-05-18T21:56:36+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "a85e64387b9eb28b1519deb4b039a9e93ff2",
+    "title": "ExploitGym: Can AI Agents Turn Security Vulnerabilities into Real Attacks?",
+    "source_type": "benchmark_evaluation",
+    "trust_tier": "high",
+    "date_published": "2026-05-11T18:00:14+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "a317ccf33229390c5cf29d5d44ccd084e591",
+    "title": "Anthropic rolls out Claude Fable 5, but it's available for a limited time",
+    "source_type": "research_finding",
+    "trust_tier": "medium",
+    "date_published": "2026-06-10T02:03:31+00:00",
+    "publisher": "BleepingComputer",
+    "has_text": true
+  },
+  {
+    "id": "88d63c1fcad484560323836953181bc7465d",
+    "title": "PennySynth: RAG-Driven Data Synthesis for Automated Quantum Code Generation",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-05-25T08:26:43+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "eb2a5713be7669e6406f228aab26165a4eb0",
+    "title": "CVE-2026-45365: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.8.11, an internal-only bypass_",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-15T14:16:55.59+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "0cc5365c135afe32881908f4ebea30781b55",
+    "title": "ESLD (External Surrogate Latent Defense): A Latent-Space Architecture for Faster, Stronger Prompt-Injection Defense",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-05-18T06:57:58+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "8b07e9aa4c7c304318bc3b80aa77c9021e7c",
+    "title": "From Controlled to the Wild: Evaluation of Pentesting Agents for the Real-World",
+    "source_type": "benchmark_evaluation",
+    "trust_tier": "high",
+    "date_published": "2026-05-11T16:50:00+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "a9042f4cee0f6899081addee23ead4eb728d",
+    "title": "A Tertiary Review of Large Language Model-Based Code Generating Tasks: Trends, Challenges, and Future Directions",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-05-25T07:49:23+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "68a9d028ea858ff72105708e1594690560dd",
+    "title": "CVE-2026-45351: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.8.9, when a regular user [non-",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-15T14:16:55.453+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "e31817ba7fadae73ab59fd74551603d43922",
+    "title": "Lightweight and Fast Backdoor Model Detection",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-05-17T16:02:40+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "e499ae534799c296da7dd7a1d9b8d2a5c50c",
+    "title": "LITMUS: Benchmarking Behavioral Jailbreaks of LLM Agents in Real OS Environments",
+    "source_type": "benchmark_evaluation",
+    "trust_tier": "high",
+    "date_published": "2026-05-11T16:14:04+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "a8e4d1854dac062bb75298491734f4aa6b19",
+    "title": "Evo-Attacker: Memory-Augmented Reinforcement Learning for Long-Horizon Tool Attacks on LLM-MAS",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-05-25T03:33:45+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "fd7a4abae1025a9490f24ac7752059092f66",
+    "title": "CVE-2026-45350: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.8.6, there is a vulnerability",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-15T14:16:55.323+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "ec5585fca2eeacffcd00d0832f5447991a27",
+    "title": "Re-Triggering Safeguards within LLMs for Jailbreak Detection",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-05-11T14:09:31+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "901181fbbbb0dfb543bdd3dd915bcb4dafa1",
+    "title": "MT-JailBench: A Modular Benchmark for Understanding Multi-Turn Jailbreak Attacks",
+    "source_type": "benchmark_evaluation",
+    "trust_tier": "high",
+    "date_published": "2026-05-10T00:17:14+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "378570d1fd2222c7da43457996e5fa313530",
+    "title": "Tool-Schema Compression Enables Agentic RAG Under Constrained Context Budgets",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-05-24T20:52:54+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "d8a4ea7f896327f6f4649023109ac960d4dd",
+    "title": "CVE-2026-45347: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.5.11, there is a blind server",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-15T14:16:55.19+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "96079b9cadb62065efa1a6b1fdb60e96cec0",
+    "title": "Guaranteed Jailbreaking Defense via Disrupt-and-Rectify Smoothing",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-05-11T13:54:26+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "aab808fa921ced06b8c16661145e87f20351",
+    "title": "GAMBIT: A Three-Mode Benchmark for Adversarial Robustness in Multi-Agent LLM Collectives",
+    "source_type": "benchmark_evaluation",
+    "trust_tier": "high",
+    "date_published": "2026-05-09T16:07:23+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "b848ed4208422067885730f55a331fe9396f",
+    "title": "Security in the Fine-Tuning Lifecycle of Large Language Models: Threats, Defenses,Evaluation, and Future Directions",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-05-24T13:34:47+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "7972e76ef2cd6fe31ae53d74f6eb03dcc3be",
+    "title": "CVE-2026-45346: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.6.31, there is a Cross-Site Sc",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-15T14:16:55.063+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "82f424bf16a595f219744e4c716ff4176de5",
+    "title": "From Specification to Deployment: Empirical Evidence from a W3C VC + DID Trust Infrastructure for Autonomous Agents",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-05-07T14:09:51+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "a6a59a5e22073f40b9c167c549a1d06f2dcf",
+    "title": "Autonomous Adversary: Red-Teaming in the age of LLM",
+    "source_type": "benchmark_evaluation",
+    "trust_tier": "high",
+    "date_published": "2026-05-07T16:07:41+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "ec4d276624e11e5ae6f3edb48abb11840ea7",
+    "title": "Device Context Protocol: A Compact, Safety-First Architecture for LLM-Driven Control of Constrained Devices",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-05-24T12:37:19+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "c23f8408fbe516bb51f8adf7531f52d5eac0",
+    "title": "CVE-2026-45345: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.5.7, a user can modify another",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-15T14:16:54.923+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "06cda6fc47b29b01a574a12790b32b2fb086",
+    "title": "Redefining AI Red Teaming in the Agentic Era: From Weeks to Hours",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-05-05T17:43:52+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "e598a65d8055183a1d12f261439778282b21",
+    "title": "Benchmarking Retrieval Strategies for Biomedical Retrieval-Augmented Generation: A Controlled Empirical Study",
+    "source_type": "benchmark_evaluation",
+    "trust_tier": "high",
+    "date_published": "2026-05-04T12:21:46+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "9cb16a15c4219c2988bdf9305a84c7f683a3",
+    "title": "MemMark: State-Evolution Attribution Watermarking for Agent Long-Term Memory Systems",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-05-24T11:04:35+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "2adb26875595b577162b743a2a40b258f724",
+    "title": "CVE-2026-45338: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.9.0, a Server-Side Request For",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-15T14:16:54.79+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "fad48bfbdb84ce12a3d608491f0b0ccdd942",
+    "title": "RefusalGuard: Geometry-Preserving Fine-Tuning for Safety in LLMs",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-05-03T14:48:18+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "dc39e75105a718fcbfa016793bbef79d480a",
+    "title": "ClassEval-Pro: A Cross-Domain Benchmark for Class-Level Code Generation",
+    "source_type": "benchmark_evaluation",
+    "trust_tier": "high",
+    "date_published": "2026-04-29T17:38:37+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "9d2618f33f77a9ddd628cc8c4dba48e71445",
+    "title": "Memory-Induced Tool-Drift in LLM Agents",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-05-24T08:41:39+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "beadc35b8af450e850143636539de2a67848",
+    "title": "CVE-2026-45318: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.9.3, his advisory tracks a reg",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-15T14:16:54.653+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "a49880c8a0521209d598f85fff450ebe2f91",
+    "title": "AgenticVM: Agentic AI for Adaptive Software Vulnerability Management",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-05-03T06:37:43+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "77bd020c9f862aeb27d03f172d39c130d9c1",
+    "title": "Turning Bias into Bugs: Bandit-Guided Style Manipulation Attacks on LLM Judges",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-05-24T05:24:09+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "231b6d3ddbfe385d718cd6bd90eec0d9b77c",
+    "title": "CVE-2026-45317: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.9.3, an application-wide Cross",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-15T14:16:54.52+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "7da63f0830d789d1041cc1527fcbae91fc4e",
+    "title": "MelShield: Robust Mel-Domain Audio Watermarking for Provenance Attribution of AI Generated Synthesized Speech",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-05-02T16:07:12+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "42aff909fb6bf9b15cbfbab9c8c57a8b50ae",
+    "title": "MemMorph: Tool Hijacking in LLM Agents via Memory Poisoning",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-05-24T04:26:13+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "4faa8d9a75aafc9c057e37038f5997cd1584",
+    "title": "CVE-2026-45316: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.9.3, the POST /api/v1/notes/ i",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-15T14:16:54.387+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "b965ae48aac38fae6b2d2c644c40b81704ad",
+    "title": "CleanBase: Detecting Malicious Documents in RAG Knowledge Databases",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-05-01T06:51:58+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "fafc2eb89b45a0a8c0253f8e46098459d19e",
+    "title": "RAGe: A Retrieval-Augmented Generation Evaluation Framework",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-05-23T17:46:47+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "8770ff95f053f816bb7b1c3778ecb0c55a74",
+    "title": "CVE-2026-45315: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.9.3, the audio transcription u",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-15T14:16:54.25+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "dc3bbe25bcef5ed5b577272a339441d51394",
+    "title": "TwinGate: Stateful Defense against Decompositional Jailbreaks in Untraceable Traffic via Asymmetric Contrastive Learning",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-04-30T13:44:01+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "98ce955ef66c8ffe24d1ab8cc5b06ae85cb6",
+    "title": "A Systematic Evaluation of Retrieval-Augmented Generation and Language Models for Space Operations",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-05-23T15:47:06+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "08e311a8f16d0119bacf6b027dfaee6e80fd",
+    "title": "CVE-2026-45314: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.9.3, the channel webhook creat",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-15T14:16:54.11+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "03419160fd65239c24d49932a84c725db8e5",
+    "title": "SafeTune: Mitigating Data Poisoning in LLM Fine-Tuning for RTL Code Generation",
+    "source_type": "defensive_capability",
+    "trust_tier": "high",
+    "date_published": "2026-04-29T22:26:00+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "23b3cf223af9e50d4cfc37c2c13b07cab17b",
+    "title": "Poisoning the Watchtower: Prompt Injection Attacks Against LLM-Augmented Security Operations Through Adversarial Log Content",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-05-23T06:21:10+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "814e8e101fceca7ebb552fc87d554ef9b985",
+    "title": "CVE-2026-45303: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.6.5, through the HTML renderin",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-15T14:16:53.977+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  },
+  {
+    "id": "9f738865dea849453045a775bd768c1a3f97",
+    "title": "Five Queries Are Enough: Query-Efficient and Surrogate-Free Membership Inference Attacks on RAG via Entailment",
+    "source_type": "research_finding",
+    "trust_tier": "high",
+    "date_published": "2026-05-23T00:38:59+00:00",
+    "publisher": "arXiv",
+    "has_text": true
+  },
+  {
+    "id": "5b39d891e92aff1b27812194a1e173b17938",
+    "title": "CVE-2026-45301: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.3.16, a missing permission che",
+    "source_type": "vulnerability",
+    "trust_tier": "primary",
+    "date_published": "2026-05-15T14:16:53.837+00:00",
+    "publisher": "NVD",
+    "has_text": true
+  }
+]
