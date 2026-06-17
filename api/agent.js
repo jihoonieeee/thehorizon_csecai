@@ -12,26 +12,52 @@
  * All factual claims cite [ev-xxx] or [src-N]; uncited claims are flagged.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
-import { TOOLS, executeTool, buildEvidenceIndexFromDeck } from "../lib/agent/agentTools.js";
+import { TOOLS, executeTool } from "../lib/agent/agentTools.js";
 import { ANTHROPIC_MODELS } from "../lib/llm/taskProfiles.js";
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_VERSION = "2023-06-01";
 
-const MAX_ROUNDS = 4;
+async function anthropicRequest(body, timeoutMs = 90000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(ANTHROPIC_API_URL, {
+      method:  "POST",
+      signal:  controller.signal,
+      headers: {
+        "Content-Type":      "application/json",
+        "x-api-key":         process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": ANTHROPIC_VERSION,
+      },
+      body: JSON.stringify(body),
+    });
+    clearTimeout(timer);
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Anthropic HTTP ${res.status}: ${text.slice(0, 300)}`);
+    }
+    return await res.json();
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === "AbortError") throw new Error(`Anthropic request timed out after ${timeoutMs}ms`);
+    throw err;
+  }
+}
+
+const MAX_ROUNDS = 6;
 
 // ── System prompt ─────────────────────────────────────────────────────────────
 
 const SYSTEM = `You are a senior AI threat intelligence analyst for a CISO-level briefing dashboard.
 You have access to a corpus of ingested threat intelligence sources and structured pipeline analysis.
 
-USE YOUR TOOLS:
-- Always call get_judgments first when answering analytical questions — it gives you validated L6 analysis.
-- Call get_evidence to get facts, grounded quotes, and numbers from specific evidence IDs.
-- Call search_corpus to find specific sources or check what's in the corpus on a topic.
-- Call trend_analysis for any question about direction, frequency, or change over time.
-- Call search_taxonomy to explore attack tags or browse by category.
-- You can call multiple tools in parallel or sequence — use what you need.
+USE YOUR TOOLS — BATCH CALLS:
+- Call multiple tools in a SINGLE response whenever possible. Do not wait for one tool before calling another unless you need the first result to decide what to call next.
+- For most questions: call get_judgments + search_corpus (or trend_analysis) together in one round.
+- Call get_evidence only after get_judgments to fetch specific evidence IDs from its results.
+- Call search_taxonomy when the question is about attack tags, technique categories, or coverage.
+- Batching reduces round-trips: prefer 2 tools at once over 4 sequential single-tool calls.
 
 CITATION RULES (mandatory):
 - Cite evidence items as [ev-xxx] where xxx is the evidence_id from get_evidence/get_judgments.
@@ -168,7 +194,7 @@ export default async function handler(req, res) {
   try {
     // ── Tool use loop ──────────────────────────────────────────────────────────
     for (let round = 0; round < MAX_ROUNDS; round++) {
-      const response = await client.messages.create({
+      const response = await anthropicRequest({
         model:      ANTHROPIC_MODELS.sonnet,
         max_tokens: 4096,
         system:     SYSTEM,
