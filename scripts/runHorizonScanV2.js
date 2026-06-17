@@ -287,15 +287,15 @@ async function main() {
       }
     }
 
-    // Delete sources explicitly rejected by validation (null category + rejected status)
+    // Delete ALL sources rejected by the v2 classify-only pipeline regardless of
+    // their previous main_category value (old MVP pipeline categories may still be set).
     const { count: rejCount, error: rejErr } = await supabase.from("sources")
       .delete({ count: "exact" })
-      .eq("validation_status", "reject")
-      .is("main_category", null);
+      .eq("validation_status", "reject");
     if (rejErr) {
       console.warn(`  [PURGE] Failed to delete rejected sources: ${rejErr.message}`);
     } else {
-      console.log(`  [PURGE] Deleted ${rejCount || 0} rejected sources (null category)`);
+      console.log(`  [PURGE] Deleted ${rejCount || 0} sources marked validation_status=reject`);
       totalDeleted += rejCount || 0;
     }
 
