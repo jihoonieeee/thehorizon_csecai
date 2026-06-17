@@ -12,9 +12,14 @@
  *   node scripts/backfillSources.js 2026-01-01 2026-05-20
  *   node scripts/backfillSources.js 2026-01-01 2026-05-20 arxiv
  *   node scripts/backfillSources.js 2026-01-01 2026-05-20 nvd,aiid
+ *   node scripts/backfillSources.js --feeds-only   # single RSS pull, no date range needed
  *
  * Connectors: arxiv | nvd | aiid | all (default: all)
  * Defaults to Jan 1 of current year → today.
+ *
+ * --feeds-only: runs a single collectRawSources with all 40 RSS feeds enabled.
+ *   RSS feeds return their current items only (no historical depth), so the
+ *   date range args are ignored. Use this to add diverse real-world sources.
  */
 
 import "dotenv/config";
@@ -61,10 +66,53 @@ function pad(n, width = 3) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+const FEEDS_ONLY = process.argv.includes("--feeds-only");
 const startArg      = process.argv[2] || `${new Date().getFullYear()}-01-01`;
 const endArg        = process.argv[3] || new Date().toISOString().slice(0, 10);
 const connectorArg  = (process.argv[4] || "all").toLowerCase();
 const connectorFilter = connectorArg === "all" ? null : connectorArg.split(",");
+
+// ── Feeds-only mode: single RSS pull, no date-range loop ─────────────────────
+if (FEEDS_ONLY) {
+  const sep = "═".repeat(60);
+  console.log(`\n${sep}`);
+  console.log(` Horizon Feed Pull — all 40 RSS feeds (current items only)`);
+  console.log(`${sep}\n`);
+
+  try {
+    // Use a 30-day window so recent feed items pass the publish-date filter
+    const now = new Date();
+    const window = makeWeekWindow(
+      new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      now.toISOString(),
+    );
+    const result = await collectRawSources(window, { includeFeeds: true, connectors: [] });
+    const snapshot = {
+      generated_at: now.toISOString(),
+      period: "feed_pull",
+      stage: "feed_only_pull",
+      reporting_window: result.reporting_window,
+      count: result.sources.length,
+      removed_by_publish_date_count: result.removed_by_publish_date_count,
+      rejected_count: result.rejected_count,
+      discarded_count: result.discarded_count,
+      pipeline_counts: result.pipeline_counts,
+      sources: result.sources,
+      archive: result.archive,
+      connector_results: result.connector_results,
+    };
+    await saveSnapshotToDatabase(snapshot);
+    const raw = result.pipeline_counts?.raw || 0;
+    console.log(`\n${"-".repeat(60)}`);
+    console.log(` Feed pull complete.`);
+    console.log(`   Raw sources seen : ${raw}`);
+    console.log(`   Sources saved    : ${result.sources.length}`);
+  } catch (err) {
+    console.error(`ERROR: ${err.message}`);
+    process.exit(1);
+  }
+  process.exit(0);
+}
 
 // Normalise start to 06:00 SGT (= 22:00 UTC previous day) for consistency
 const startUtc = new Date(`${startArg}T06:00:00+08:00`).toISOString();
