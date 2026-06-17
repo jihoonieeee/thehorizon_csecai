@@ -44,9 +44,16 @@ function compactWith(ceiling) {
 }
 function rawHighConfidence() {
   return {
-    top_insights: [{ text: "A notable development in LLM threats.", supporting_evidence_ids: ["e1", "e2"],
-                     why_this_matters: "x", confidence: "high", slide_usefulness: "high" }],
-    top_trends_or_patterns: [], top_happenings: [], early_signals: [], recommendations: [],
+    strategic_judgments: [{
+      judgment_id: "j1", judgment_type: "risk_elevation",
+      judgment: "A notable development in LLM threats.",
+      what_changed: "New LLM attack techniques observed in the corpus this period.",
+      causal_mechanism: "LLM deployment without adequate safeguards creates exploitable attack surface.",
+      why_this_matters: "Defenders must update mitigations to address the expanded attack surface.",
+      uncertainty: "Evidence limited to two sources.",
+      evidence_for: ["e1", "e2"], evidence_against: [], confidence: "high", caveat_if_any: null,
+      slide_usefulness: "high", recommended_actions: [],
+    }],
     outlook_6_months: { observed_basis: "x", projected_trajectory: "y", reasoning: "z",
                         confidence: "high", supporting_evidence_ids: ["e1", "e2"] },
     evidence_gaps: [],
@@ -55,25 +62,36 @@ function rawHighConfidence() {
 
 test("ceiling=low caps a high-confidence insight to low with a caveat", () => {
   const v = validateCategoryAnalysis(rawHighConfidence(), compactWith("low"));
-  assert.equal(v.top_insights[0].confidence, "low");
-  assert.ok(/ceiling/.test(v.top_insights[0].caveat_if_any || ""), "must annotate the cap");
+  assert.ok(v.strategic_judgments[0], "judgment should exist");
+  assert.equal(v.strategic_judgments[0].confidence, "low");
+  assert.ok(/ceiling/.test(v.strategic_judgments[0].caveat_if_any || ""), "must annotate the cap");
   assert.equal(v.outlook_6_months.confidence, "low");
 });
 
 test("ceiling=high leaves a high-confidence insight unchanged", () => {
   const v = validateCategoryAnalysis(rawHighConfidence(), compactWith("high"));
-  assert.equal(v.top_insights[0].confidence, "high");
+  assert.ok(v.strategic_judgments[0], "judgment should exist");
+  assert.equal(v.strategic_judgments[0].confidence, "high");
 });
 
 test("ceiling=none floors confidence at low", () => {
   const v = validateCategoryAnalysis(rawHighConfidence(), compactWith("none"));
-  assert.equal(v.top_insights[0].confidence, "low");
+  assert.ok(v.strategic_judgments[0], "judgment should exist");
+  assert.equal(v.strategic_judgments[0].confidence, "low");
 });
 
-test("buildAnalyticalStateBlock renders ceiling and candidates", () => {
+test("buildAnalyticalStateBlock renders ceiling and signals", () => {
   const block = buildAnalyticalStateBlock({
     confidence_ceiling: "medium",
-    hypothesis_candidates: [{ candidate_claim: "Prompt injection shifting to RAG.", confidence_ceiling: "medium", supporting_evidence_ids: ["e1", "e2"] }],
+    evidence_signals: {
+      dominant_patterns: [{
+        pattern_name: "Prompt injection shifting to RAG",
+        source_count: 3,
+        confidence: "medium",
+        supporting_evidence_ids: ["e1", "e2"],
+        caveat_if_any: null,
+      }],
+    },
   });
   assert.ok(/CONFIDENCE CEILING/.test(block));
   assert.ok(/medium/.test(block));

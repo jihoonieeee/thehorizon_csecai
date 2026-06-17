@@ -1,276 +1,271 @@
 /**
- * POST /api/agent — Evidence-backed dashboard chatbot.
+ * POST /api/agent — AI threat intelligence chatbot with tool use.
  *
- * Fetches enriched sources from the DB (monthly window), builds a context pack
- * from intelligence.main_claims / source_summary / key_entities, then calls the
- * LLM with that context. Falls back to a deterministic summary if no LLM key.
+ * Claude drives its own retrieval via 5 tools:
+ *   search_corpus    — Supabase sources (live data, always current)
+ *   get_judgments    — L6 analytical judgments from latest pipeline blob
+ *   get_evidence     — Evidence items with facts, quotes, source URLs
+ *   trend_analysis   — Weekly volume + spike detection from Supabase
+ *   search_taxonomy  — Tag/category distribution across the corpus
+ *
+ * Flow: tool loop (max 4 rounds) → parse response → QA check → return
+ * All factual claims cite [ev-xxx] or [src-N]; uncited claims are flagged.
  */
 
-import { callLLM } from "../lib/llm/callLLM.js";
-import { listSources } from "../lib/storage/snapshotDatabase.js";
+import Anthropic from "@anthropic-ai/sdk";
+import { TOOLS, executeTool, buildEvidenceIndexFromDeck } from "../lib/agent/agentTools.js";
+import { ANTHROPIC_MODELS } from "../lib/llm/taskProfiles.js";
 
-const SYSTEM_PROMPT = `You are an AI threat intelligence analyst for the Horizon dashboard.
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-Answer the user's question using ONLY the corpus context provided below.
+const MAX_ROUNDS = 4;
 
-RULES:
-1. Cite source titles and publishers for every factual claim you make.
-2. If the context is insufficient, say clearly what is missing.
-3. Never invent statistics, incidents, or citations not present in the context.
-4. Distinguish: confirmed incidents vs. research demonstrations vs. early signals.
-5. Use corpus-scoped language: "within the collected corpus", "among collected sources this period".
-6. Keep answers analytical — 2-5 paragraphs. No padding.
-7. If asked for "most critical", prioritise: primary/curated trust tier first, then incidents over research, then highest source count per category.`;
+// ── System prompt ─────────────────────────────────────────────────────────────
 
-const CATEGORY_LABELS = {
-  llm_threats:            "LLM Threats",
-  agentic_ai_threats:     "Agentic AI Threats",
-  traditional_ai_threats: "Traditional AI Threats",
-  ai_enabled_threats:     "AI-Enabled Threats",
-};
+const SYSTEM = `You are a senior AI threat intelligence analyst for a CISO-level briefing dashboard.
+You have access to a corpus of ingested threat intelligence sources and structured pipeline analysis.
 
-const ALLOWED_CATEGORIES = new Set([
-  "", "llm_threats", "agentic_ai_threats", "traditional_ai_threats", "ai_enabled_threats",
-]);
+USE YOUR TOOLS:
+- Always call get_judgments first when answering analytical questions — it gives you validated L6 analysis.
+- Call get_evidence to get facts, grounded quotes, and numbers from specific evidence IDs.
+- Call search_corpus to find specific sources or check what's in the corpus on a topic.
+- Call trend_analysis for any question about direction, frequency, or change over time.
+- Call search_taxonomy to explore attack tags or browse by category.
+- You can call multiple tools in parallel or sequence — use what you need.
 
-// ── Context building ──────────────────────────────────────────────────────────
+CITATION RULES (mandatory):
+- Cite evidence items as [ev-xxx] where xxx is the evidence_id from get_evidence/get_judgments.
+- Cite raw sources as [src-N] where N is the ref number from search_corpus results.
+- Every factual claim — statistics, incidents, CVEs, attack success rates, timelines — MUST be cited.
+- If you cannot cite a claim with a tool result, do not make it.
+- Never invent sources, statistics, or events not present in tool results.
 
-function scoreSources(sources, queryWords) {
-  return sources.map((s) => {
-    const intel   = s.intelligence || {};
-    const haystack = [
-      s.title || "",
-      intel.source_summary || "",
-      (intel.main_claims || []).join(" "),
-      (intel.key_entities || []).join(" "),
-      s.main_category || "",
-      s.source_type || "",
-    ].join(" ").toLowerCase();
+ANSWER FORMAT:
+- Lead with the finding. No preamble.
+- Bullet points only. One finding per bullet.
+- For each data point bullet: end the line with the citation inline, e.g. "— 83% success rate against Claude 3 Opus [ev-smk-msj--1]"
+- No hype words. No "unprecedented" or "game-changing".
+- Scope claims: "within the collected corpus" or "among ingested sources".
+- When evidence is thin (< 3 items), say so.
 
-    const score = queryWords.filter((w) => haystack.includes(w)).length;
-    return { ...s, _score: score };
-  }).sort((a, b) => {
-    // Primary: keyword relevance
-    if (b._score !== a._score) return b._score - a._score;
-    // Secondary: trust tier
-    const tierRank = { primary: 4, curated: 3, high: 2, medium: 1, low: 0, unknown: 0 };
-    return (tierRank[b.trust_tier] || 0) - (tierRank[a.trust_tier] || 0);
-  });
-}
+After the answer bullets, write exactly these four lines:
+CONFIDENCE: high|moderate|low
+CONFIDENCE_REASON: one sentence explaining the rating
+CAVEAT: one specific limitation, or null
+FOLLOWUP: one suggested follow-up question
+FOLLOWUP: another suggested follow-up question`;
 
-function buildContextPack(query, category, sources) {
-  const qWords = query.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+// ── Response parser ───────────────────────────────────────────────────────────
 
-  // Apply category filter
-  const filtered = category
-    ? sources.filter((s) => s.main_category === category)
-    : sources.filter((s) => s.main_category && s.main_category !== "unclear_or_adjacent");
+function parseResponse(text) {
+  const lines = text.split("\n");
+  const metaFields = ["CONFIDENCE:", "CONFIDENCE_REASON:", "CAVEAT:", "FOLLOWUP:"];
+  const answerLines = [];
+  const meta = { confidence: "low", confidence_reason: "", caveat: null, followups: [] };
 
-  const scored   = scoreSources(filtered, qWords).slice(0, 20);
-  const top      = scored.slice(0, 10);
-
-  // Category distribution across all AI threat sources
-  const allAI    = sources.filter((s) => s.main_category && s.main_category !== "unclear_or_adjacent");
-  const catCounts = {};
-  for (const s of allAI) {
-    catCounts[s.main_category] = (catCounts[s.main_category] || 0) + 1;
-  }
-
-  // Top claims extracted from intelligence
-  const claims = top.flatMap((s) => {
-    const intel = s.intelligence || {};
-    return (intel.main_claims || []).slice(0, 2).map((c) => ({
-      claim:     c,
-      source_title: s.title,
-      publisher:    s.publisher || "unknown",
-      url:          s.url || "",
-      category:     s.main_category,
-      trust_tier:   s.trust_tier,
-      source_type:  s.source_type || (intel.source_type) || "unknown",
-    }));
-  });
-
-  // Top source summaries
-  const summaries = top
-    .filter((s) => (s.intelligence || {}).source_summary)
-    .slice(0, 8)
-    .map((s) => ({
-      title:    s.title,
-      summary:  s.intelligence.source_summary,
-      publisher:s.publisher || "unknown",
-      url:      s.url || "",
-      category: s.main_category,
-      trust_tier: s.trust_tier,
-      date:     s.date_published ? s.date_published.slice(0, 10) : "",
-    }));
-
-  return { top, claims, summaries, catCounts, totalSources: allAI.length };
-}
-
-function buildPrompt(query, period, category, ctx) {
-  const catLine = category
-    ? `Category filter: ${CATEGORY_LABELS[category] || category}`
-    : `All threat categories`;
-
-  const distLines = Object.entries(ctx.catCounts)
-    .sort((a, b) => b[1] - a[1])
-    .map(([cat, n]) => `  ${CATEGORY_LABELS[cat] || cat}: ${n} sources`)
-    .join("\n");
-
-  const claimsLines = ctx.claims.length > 0
-    ? ctx.claims.map((c, i) =>
-        `${i + 1}. [${c.trust_tier}|${c.source_type}] ${c.claim}\n   Source: "${c.source_title}" — ${c.publisher}${c.url ? ` (${c.url})` : ""}`
-      ).join("\n\n")
-    : "No claims extracted from matching sources.";
-
-  const summaryLines = ctx.summaries.length > 0
-    ? ctx.summaries.map((s, i) =>
-        `${i + 1}. "${s.title}" (${s.publisher}, ${s.date})\n   Category: ${CATEGORY_LABELS[s.category] || s.category} | Trust: ${s.trust_tier}\n   ${s.summary}${s.url ? `\n   URL: ${s.url}` : ""}`
-      ).join("\n\n")
-    : "No summaries available.";
-
-  return `Period: ${period || "current"} | ${catLine}
-Corpus total (AI threat sources): ${ctx.totalSources} sources
-
-CORPUS CATEGORY DISTRIBUTION:
-${distLines || "No distribution data."}
-
-USER QUESTION: ${query}
-
-=== RELEVANT CLAIMS FROM CORPUS ===
-${claimsLines}
-
-=== SOURCE SUMMARIES ===
-${summaryLines}
-
-Answer the question using only the above corpus context. Cite source titles and publishers. If context is insufficient, say so.`;
-}
-
-// ── Deterministic fallback ────────────────────────────────────────────────────
-
-function deterministicAnswer(query, ctx) {
-  const q = query.toLowerCase();
-
-  if (ctx.claims.length === 0 && ctx.summaries.length === 0) {
-    return `No matching evidence found in the corpus for "${query}". The ${ctx.totalSources} AI threat sources collected this period do not appear to address this topic. Check the Landscape Explorer for the closest available category.`;
-  }
-
-  // "most critical" / "critical finding" / "top finding"
-  if (q.includes("critical") || q.includes("top finding") || q.includes("most important")) {
-    const top = ctx.claims[0];
-    if (top) {
-      const catLabel = CATEGORY_LABELS[top.category] || top.category;
-      return `The highest-confidence finding in the current corpus (based on trust tier and source type):\n\n"${top.claim}"\n\nSource: ${top.source_title} — ${top.publisher}${top.url ? ` (${top.url})` : ""}\nCategory: ${catLabel} | Trust: ${top.trust_tier} | Type: ${top.source_type}\n\n(Deterministic response — configure an LLM API key for full evidence synthesis.)`;
+  for (const line of lines) {
+    if (line.startsWith("CONFIDENCE_REASON:")) {
+      meta.confidence_reason = line.replace("CONFIDENCE_REASON:", "").trim();
+    } else if (line.startsWith("CONFIDENCE:")) {
+      const val = line.replace("CONFIDENCE:", "").trim().toLowerCase();
+      if (["high","moderate","low"].includes(val)) meta.confidence = val;
+    } else if (line.startsWith("CAVEAT:")) {
+      const val = line.replace("CAVEAT:", "").trim();
+      meta.caveat = val === "null" ? null : val;
+    } else if (line.startsWith("FOLLOWUP:")) {
+      meta.followups.push(line.replace("FOLLOWUP:", "").trim());
+    } else {
+      answerLines.push(line);
     }
   }
 
-  // Category distribution query
-  if (q.includes("category") || q.includes("distribution") || q.includes("breakdown")) {
-    const lines = Object.entries(ctx.catCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([cat, n]) => `• ${CATEGORY_LABELS[cat] || cat}: ${n} sources`);
-    return `Corpus distribution (${ctx.totalSources} AI threat sources this period):\n\n${lines.join("\n")}\n\n(Deterministic response — configure an LLM API key for synthesised analysis.)`;
-  }
-
-  // General: return top claim + top summary
-  const topClaim   = ctx.claims[0];
-  const topSummary = ctx.summaries[0];
-
-  const parts = [];
-  if (topClaim) {
-    parts.push(`Most relevant corpus finding:\n"${topClaim.claim}"\nSource: ${topClaim.source_title} — ${topClaim.publisher}`);
-  }
-  if (topSummary) {
-    parts.push(`Top matching source summary:\n${topSummary.summary}\n— ${topSummary.title} (${topSummary.publisher})`);
-  }
-
-  return parts.join("\n\n") + "\n\n(Deterministic response — configure an LLM API key for full evidence synthesis.)";
+  return { answer: answerLines.join("\n").trim(), ...meta };
 }
 
-// ── Handler ───────────────────────────────────────────────────────────────────
+// ── Citation extractor ────────────────────────────────────────────────────────
+
+function extractCitations(text, evidenceIndex, sourceRefs) {
+  const citations = [];
+  const seen = new Set();
+
+  // [ev-xxx] evidence item citations
+  for (const m of text.matchAll(/\[ev-[a-z0-9-]+\]/g)) {
+    const id = m[0].slice(1, -1);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const ev = evidenceIndex[id];
+    citations.push(ev
+      ? { ref: m[0], source_title: ev.source_title, url: ev.source_url, publisher: ev.publisher, evidence_type: ev.evidence_type, trust_tier: ev.trust_tier }
+      : { ref: m[0], source_title: "Unknown evidence item", url: null, publisher: null }
+    );
+  }
+
+  // [src-N] source citations
+  for (const m of text.matchAll(/\[src-(\d+)\]/g)) {
+    const ref = m[0];
+    const idx = parseInt(m[1]) - 1;
+    if (seen.has(ref)) continue;
+    seen.add(ref);
+    const src = Array.isArray(sourceRefs) ? sourceRefs[idx] : null;
+    citations.push(src
+      ? { ref, source_title: src.title, url: src.url, publisher: src.publisher, trust_tier: src.trust_tier }
+      : { ref, source_title: "Unknown source", url: null, publisher: null }
+    );
+  }
+
+  return citations;
+}
+
+// ── QA check ─────────────────────────────────────────────────────────────────
+
+function qaResponse(text, citations, evidenceIndex) {
+  const issues = [];
+
+  // Check all cited ev- IDs exist
+  for (const cit of citations) {
+    if (cit.ref.startsWith("[ev-") && !evidenceIndex[cit.ref.slice(1,-1)]) {
+      issues.push(`Citation ${cit.ref} not found in evidence index`);
+    }
+  }
+
+  // Check for statistics without citations
+  const hasStat = /\b\d+\.?\d*%|\bCVE-\d{4}|\b\d{1,3}\s*(?:sources|incidents|attacks|cases)\b/i.test(text);
+  if (hasStat && citations.length === 0) {
+    issues.push("Factual statistics present but no citations found");
+  }
+
+  // Check for minimum citation density on analytical responses
+  const bulletCount = (text.match(/^[-•*]\s/gm) || []).length;
+  if (bulletCount >= 3 && citations.length === 0) {
+    issues.push("Multi-point response has no citations");
+  }
+
+  return issues;
+}
+
+// ── Handler ────────────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({ error: "POST only" });
   }
 
-  const { query, period, category } = req.body || {};
+  const { query, category } = req.body || {};
+  if (!query?.trim()) {
+    return res.status(400).json({ error: "query is required" });
+  }
 
-  if (!query || typeof query !== "string" || query.trim().length < 3) {
-    return res.status(400).json({ error: "Query must be at least 3 characters." });
-  }
-  if (query.length > 500) {
-    return res.status(400).json({ error: "Query too long (max 500 chars)." });
-  }
-  if (category && !ALLOWED_CATEGORIES.has(category)) {
-    return res.status(400).json({ error: "Invalid category." });
-  }
+  // If category filter set, inject it into the user question
+  const userText = category
+    ? `[Focus on: ${category}]\n\n${query.trim()}`
+    : query.trim();
+
+  const messages = [{ role: "user", content: userText }];
+  const evidenceIndex = {};
+  let sourceRefs = [];
+  const toolCallLog = [];
 
   try {
-    // ── Load enriched sources from DB ─────────────────────────────────────
-    // Pull last 90 days of sources that have gone through LLM enrichment
-    const end   = new Date();
-    const start = new Date(end);
-    start.setDate(start.getDate() - 90);
+    // ── Tool use loop ──────────────────────────────────────────────────────────
+    for (let round = 0; round < MAX_ROUNDS; round++) {
+      const response = await client.messages.create({
+        model:      ANTHROPIC_MODELS.sonnet,
+        max_tokens: 4096,
+        system:     SYSTEM,
+        tools:      TOOLS,
+        messages,
+      });
 
-    const sources = await listSources({
-      start: start.toISOString().slice(0, 10),
-      end:   end.toISOString().slice(0, 10),
-      limit: 500,
-    });
+      if (response.stop_reason === "end_turn") {
+        // Extract final text answer
+        const textBlock = response.content.find(b => b.type === "text");
+        const rawText   = textBlock?.text || "(No answer generated)";
 
-    // ── Build context pack ────────────────────────────────────────────────
-    const ctx    = buildContextPack(query.trim(), category || "", sources);
-    const prompt = buildPrompt(query.trim(), period, category || "", ctx);
+        const parsed     = parseResponse(rawText);
+        const citations  = extractCitations(parsed.answer, evidenceIndex, sourceRefs);
+        const qaIssues   = qaResponse(parsed.answer, citations, evidenceIndex);
 
-    // ── LLM call (positional args — fixes the [object Object] bug) ───────
-    let answer   = null;
-    let llm_used = false;
-    let is_mock  = false;
-
-    const hasKey = process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
-    if (hasKey) {
-      try {
-        const result = await callLLM(SYSTEM_PROMPT, prompt, { logLabel: "agent-query" });
-        answer   = typeof result === "string" ? result : JSON.stringify(result);
-        llm_used = true;
-      } catch (llmErr) {
-        console.warn("[agent] LLM call failed:", llmErr.message);
-        answer = null;
+        return res.status(200).json({
+          answer:              parsed.answer,
+          citations,
+          confidence:          parsed.confidence,
+          confidence_reason:   parsed.confidence_reason,
+          caveat:              parsed.caveat,
+          suggested_followups: parsed.followups,
+          // metadata
+          tool_calls:          toolCallLog,
+          qa_issues:           qaIssues,
+          qa_pass:             qaIssues.length === 0,
+          evidence_items_used: Object.keys(evidenceIndex).length,
+        });
       }
+
+      if (response.stop_reason === "tool_use") {
+        // Push assistant turn
+        messages.push({ role: "assistant", content: response.content });
+
+        // Execute all tool calls in this turn
+        const toolResults = [];
+        for (const block of response.content.filter(b => b.type === "tool_use")) {
+          toolCallLog.push({ tool: block.name, input: block.input });
+
+          let result;
+          try {
+            result = await executeTool(block.name, block.input);
+          } catch (err) {
+            result = { error: err.message };
+          }
+
+          // Accumulate evidence index and source refs from tool results
+          if (block.name === "get_evidence" && result.evidence_items) {
+            for (const ev of result.evidence_items) {
+              evidenceIndex[ev.evidence_id] = ev;
+            }
+          }
+          if (block.name === "get_judgments" && result.judgments) {
+            // Pull evidence IDs referenced in judgments (will be fetched if model calls get_evidence)
+            // Also seed evidenceIndex if the blob returned inline evidence
+            for (const j of result.judgments) {
+              for (const eid of (j.evidence_ids || [])) {
+                if (!evidenceIndex[eid]) {
+                  evidenceIndex[eid] = { evidence_id: eid, fact: "", source_url: null, publisher: "", source_title: "" };
+                }
+              }
+            }
+          }
+          if (block.name === "search_corpus" && result.sources) {
+            // Track source refs for [src-N] citation resolution
+            sourceRefs = [...sourceRefs, ...result.sources];
+          }
+
+          toolResults.push({
+            type:        "tool_result",
+            tool_use_id: block.id,
+            content:     JSON.stringify(result),
+          });
+        }
+
+        messages.push({ role: "user", content: toolResults });
+        continue;
+      }
+
+      // Unexpected stop reason — break
+      break;
     }
 
-    if (!answer) {
-      is_mock = true;
-      answer  = deterministicAnswer(query.trim(), ctx);
-    }
-
-    // ── Citations from top sources ────────────────────────────────────────
-    const citations = ctx.top.slice(0, 6).map((s) => ({
-      source_id: s.id,
-      title:     s.title,
-      publisher: s.publisher || "unknown",
-      url:       s.url || "",
-    }));
-
+    // If we exhausted rounds without end_turn
     return res.status(200).json({
-      answer,
-      citations,
-      confidence:     ctx.claims.length >= 5 ? "high" : ctx.claims.length >= 2 ? "medium" : "low",
-      source_count:   ctx.top.length,
-      total_in_corpus:ctx.totalSources,
-      category_distribution: ctx.catCounts,
-      llm_used,
-      is_mock,
-      suggested_followups: [
-        "What are the top attack vectors in the corpus?",
-        "Which categories have the most sources this period?",
-        "Show me early signals for agentic AI threats",
-      ],
+      answer:      "Analysis is taking longer than expected. Please try a more specific question.",
+      citations:   [],
+      confidence:  "low",
+      caveat:      "Tool loop did not complete within the allowed rounds.",
+      tool_calls:  toolCallLog,
+      qa_pass:     false,
+      qa_issues:   ["Tool loop did not complete"],
     });
 
   } catch (err) {
-    console.error("[agent] handler error:", err.message);
-    return res.status(500).json({ error: err.message });
+    console.error("[agent] error:", err.message, err.stack?.slice(0, 500));
+    return res.status(500).json({ error: err.message || "Internal error" });
   }
 }

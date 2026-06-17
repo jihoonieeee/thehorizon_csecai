@@ -1,0 +1,165 @@
+[
+  {
+    "id": "0b31c23765e9962a2a62e6b7bdd78c86747b",
+    "title": "Revisiting JBShield: Breaking and Rebuilding Representation-Level Jail",
+    "primary_domain": "llm_threats",
+    "main_category": "llm_threats",
+    "primary_tags": [],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "needs_manual_review",
+    "ai_enabled": false,
+    "classification_confidence": "low"
+  },
+  {
+    "id": "908eadfd92a579250fabc7e510a28ccbf9ca",
+    "title": "SRTJ: Self-Evolving Rule-Driven Training-Free LLM Jailbreaking",
+    "primary_domain": "llm_threats",
+    "main_category": "llm_threats",
+    "primary_tags": [],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "needs_manual_review",
+    "ai_enabled": false,
+    "classification_confidence": "low"
+  },
+  {
+    "id": "77e2b8df0bf2e6b358ba28c26d83989afc16",
+    "title": "Indirect Prompt Injection in the Wild: An Empirical Study of Prevalenc",
+    "primary_domain": "llm_threats",
+    "main_category": "llm_threats",
+    "primary_tags": [],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "needs_manual_review",
+    "ai_enabled": false,
+    "classification_confidence": "low"
+  },
+  {
+    "id": "8d176409a17af7130d7ef6255831e15bfcc0",
+    "title": "When Alignment Isn't Enough: Response-Path Attacks on LLM Agents",
+    "primary_domain": "agentic_ai_threats",
+    "main_category": "agentic_ai_threats",
+    "primary_tags": [],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "needs_manual_review",
+    "ai_enabled": false,
+    "classification_confidence": "low"
+  },
+  {
+    "id": "a5517941ddfb26fc862bda02e1fb7115c54d",
+    "title": "Security Attack and Defense Strategies for Autonomous Agent Frameworks",
+    "primary_domain": "agentic_ai_threats",
+    "main_category": "agentic_ai_threats",
+    "primary_tags": [],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "needs_manual_review",
+    "ai_enabled": false,
+    "classification_confidence": "low"
+  },
+  {
+    "id": "78cf1bbe414dda38d73d1df82769567a0b1d",
+    "title": "Content-Aware Attack Detection in LLM Agent Tool-Call Traffic: An Empi",
+    "primary_domain": "agentic_ai_threats",
+    "main_category": "agentic_ai_threats",
+    "primary_tags": [],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "needs_manual_review",
+    "ai_enabled": false,
+    "classification_confidence": "low"
+  },
+  {
+    "id": "662671165adfcfeb9b614194dab50c52247c",
+    "title": "LocalAlign: Enabling Generalizable Prompt Injection Defense via Genera",
+    "primary_domain": "llm_threats",
+    "main_category": "llm_threats",
+    "primary_tags": [],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "needs_manual_review",
+    "ai_enabled": false,
+    "classification_confidence": "low"
+  },
+  {
+    "id": "d13e7e598ac2da2f42da74b803edac32cc12",
+    "title": "Escaping the Linearity Trap: Manifold Detours for Black-Box Adversaria",
+    "primary_domain": "ai_enabled_threats",
+    "main_category": "ai_enabled_threats",
+    "primary_tags": [],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "needs_manual_review",
+    "ai_enabled": false,
+    "classification_confidence": "low"
+  },
+  {
+    "id": "27870879434904650fc8a5adfabfb321445d",
+    "title": "PRC-linked influence operations are targeting AI debates in the US",
+    "primary_domain": "ai_enabled_threats",
+    "main_category": "ai_enabled_threats",
+    "primary_tags": [
+      "AE09_ai_enabled_disinformation_influence"
+    ],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "validated",
+    "ai_enabled": false,
+    "classification_confidence": "high"
+  },
+  {
+    "id": "55ecb61a67265e38e859c38383ff6fdd9e9a",
+    "title": "Context-Aware Spear Phishing: Generative AI-Enabled Attacks Against In",
+    "primary_domain": "ai_enabled_threats",
+    "main_category": "ai_enabled_threats",
+    "primary_tags": [
+      "AE02_ai_enabled_social_engineering",
+      "AE01_ai_enabled_reconnaissance"
+    ],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "validated",
+    "ai_enabled": false,
+    "classification_confidence": "high"
+  },
+  {
+    "id": "21ab29a8130a236d77f12113cb5015aab0b5",
+    "title": "Deepfake Detection in Social Media: A Temporal Artifact Analysis Using",
+    "primary_domain": "ai_enabled_threats",
+    "main_category": "ai_enabled_threats",
+    "primary_tags": [
+      "AE10_ai_enabled_deepfake"
+    ],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "validated",
+    "ai_enabled": false,
+    "classification_confidence": "high"
+  },
+  {
+    "id": "efdaae8518c88b1dc83967c291dfc9634076",
+    "title": "Unpatched Langflow Flaw CVE-2026-5027 Exploited for Unauthenticated RC",
+    "primary_domain": "agentic_ai_threats",
+    "main_category": "agentic_ai_threats",
+    "primary_tags": [],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "needs_manual_review",
+    "ai_enabled": false,
+    "classification_confidence": "low"
+  },
+  {
+    "id": "a89bc9c1fa92195da1dc89765f97d831e86a",
+    "title": "Path traversal flaw in AI dev platform Langflow exploited in attacks",
+    "primary_domain": "agentic_ai_threats",
+    "main_category": "agentic_ai_threats",
+    "primary_tags": [],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "needs_manual_review",
+    "ai_enabled": false,
+    "classification_confidence": "low"
+  },
+  {
+    "id": "2780c64461d6bd7dadd07dacebffcbe5a051",
+    "title": "CVE-2026-46517: LMDeploy is a toolkit for compressing, deploying, and ",
+    "primary_domain": "traditional_ai_threats",
+    "main_category": "traditional_ai_threats",
+    "primary_tags": [
+      "TAI10_ai_supply_chain_compromise"
+    ],
+    "taxonomy_version": "taxonomy-v9-2026-06",
+    "taxonomy_validation_status": "validated",
+    "ai_enabled": false,
+    "classification_confidence": "high"
+  }
+]

@@ -1,0 +1,78 @@
+{
+  "run_id": "debug5-2026-06-16T13-47-33",
+  "layer": "L3",
+  "timestamp": "2026-06-16T13:47:33.164Z",
+  "total": 5,
+  "by_status": {
+    "pass": 4,
+    "review": 1,
+    "reject": 0
+  },
+  "results": [
+    {
+      "source_id": "sample-0",
+      "title": "CISA Alert: Threat Actors Exploit LLM APIs to Automate Phishing Campaigns at Scale",
+      "layer3_status": "pass",
+      "ai_threat_focus": "central",
+      "candidate_domain": "unclear_or_adjacent",
+      "source_type": "research_finding",
+      "trust_tier": "high",
+      "downstream_route": "layer4",
+      "relevance_path": "known_signal",
+      "validation_flags": [],
+      "validation_summary": null
+    },
+    {
+      "source_id": "sample-1",
+      "title": "Indirect Prompt Injection Attacks Against Autonomous LLM Agents: A Systematic Study",
+      "layer3_status": "pass",
+      "ai_threat_focus": "central",
+      "candidate_domain": "unclear_or_adjacent",
+      "source_type": "research_finding",
+      "trust_tier": "high",
+      "downstream_route": "layer4",
+      "relevance_path": "both",
+      "validation_flags": [],
+      "validation_summary": null
+    },
+    {
+      "source_id": "sample-2",
+      "title": "Microsoft Security Report: Adversarial ML Attacks Against AI-Powered Security Products",
+      "layer3_status": "pass",
+      "ai_threat_focus": "central",
+      "candidate_domain": "unclear_or_adjacent",
+      "source_type": "research_finding",
+      "trust_tier": "high",
+      "downstream_route": "layer4",
+      "relevance_path": "both",
+      "validation_flags": [],
+      "validation_summary": null
+    },
+    {
+      "source_id": "sample-3",
+      "title": "CVE-2025-23456: Remote Code Execution via Deserialization in LangChain Agent Framework",
+      "layer3_status": "review",
+      "ai_threat_focus": null,
+      "candidate_domain": "unclear_or_adjacent",
+      "source_type": "research_finding",
+      "trust_tier": "high",
+      "downstream_route": "layer4_with_review",
+      "relevance_path": "both",
+      "validation_flags": [],
+      "validation_summary": null
+    },
+    {
+      "source_id": "sample-4",
+      "title": "Google DeepMind: Jailbreaking State-of-the-Art LLMs via Many-Shot In-Context Learning",
+      "layer3_status": "pass",
+      "ai_threat_focus": "central",
+      "candidate_domain": "unclear_or_adjacent",
+      "source_type": "research_finding",
+      "trust_tier": "high",
+      "downstream_route": "layer4",
+      "relevance_path": "known_signal",
+      "validation_flags": [],
+      "validation_summary": null
+    }
+  ]
+}

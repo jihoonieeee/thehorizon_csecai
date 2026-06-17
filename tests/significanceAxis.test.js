@@ -46,10 +46,7 @@ test("duplicative → redundant", () => {
   const r = triageEvidenceItem(baseItem({ evidence_cluster: { is_representative: false } }), src(), {});
   assert.equal(r.materiality, "redundant");
 });
-test("emerging_unmapped source → novel", () => {
-  const r = triageEvidenceItem(baseItem(), src({ taxonomy_validation_status: "emerging_unmapped" }), {});
-  assert.equal(r.materiality, "novel");
-});
+// emerging_unmapped removed 2026-06-15: sources that can't map to taxonomy are discarded.
 test("novelty_signal relevance_path → novel", () => {
   const r = triageEvidenceItem(baseItem(), src({ relevance_path: "novelty_signal" }), {});
   assert.equal(r.materiality, "novel");

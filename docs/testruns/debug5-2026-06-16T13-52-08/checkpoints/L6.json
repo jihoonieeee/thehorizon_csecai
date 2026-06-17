@@ -1,0 +1,40 @@
+{
+  "run_id": "debug5-2026-06-16T13-52-08",
+  "layer": "L6",
+  "timestamp": "2026-06-16T13:52:08.713Z",
+  "category_count": 4,
+  "categories": [
+    {
+      "category": "traditional_ai_threats",
+      "judgment_count": 0,
+      "blocked_count": 0,
+      "assessment_status": "evidence_insufficient",
+      "confidence": "low",
+      "evidence_gaps": 1
+    },
+    {
+      "category": "llm_threats",
+      "judgment_count": 0,
+      "blocked_count": 0,
+      "assessment_status": "evidence_insufficient",
+      "confidence": "low",
+      "evidence_gaps": 2
+    },
+    {
+      "category": "agentic_ai_threats",
+      "judgment_count": 0,
+      "blocked_count": 0,
+      "assessment_status": "evidence_insufficient",
+      "confidence": "low",
+      "evidence_gaps": 3
+    },
+    {
+      "category": "ai_enabled_threats",
+      "judgment_count": 0,
+      "blocked_count": 0,
+      "assessment_status": "evidence_insufficient",
+      "confidence": "low",
+      "evidence_gaps": 0
+    }
+  ]
+}

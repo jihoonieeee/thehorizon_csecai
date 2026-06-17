@@ -8,7 +8,9 @@ import { normalizeSource } from "../lib/pipeline/ingest/normalizeSource.js";
 import { dedupeSources } from "../lib/utils/dedupe.js";
 import { filterAcceptableSources } from "../lib/pipeline/ingest/filterAcceptableSources.js";
 import { computeEligibilityFlags } from "../lib/pipeline/ingest/eligibilityFlags.js";
-import { isSafeUrl } from "../lib/pipeline/validation/urlSafety.js";
+import { isSafeUrl, isPlausibleSourceUrl } from "../lib/pipeline/validation/urlSafety.js";
+import { checkSourceValidity } from "../lib/pipeline/ingest/sourceValidity.js";
+import { splitDateRange } from "../lib/pipeline/ingest/connectors/nvdConnector.js";
 
 let passed = 0;
 let failed = 0;
@@ -122,7 +124,7 @@ test("keeps source with richer full_text when trust tiers are equal", () => {
   const sparse = {
     id: "a",
     url: "https://a.com/article",
-    title: "CVE Report",
+    title: "Critical prompt injection flaw in popular LLM agent framework",
     trust_tier: "medium",
     full_text: "Brief mention",
     date_published: "2026-01-15T10:00:00Z",
@@ -132,7 +134,7 @@ test("keeps source with richer full_text when trust tiers are equal", () => {
   const rich = {
     id: "b",
     url: "https://b.com/article",
-    title: "CVE Report",
+    title: "Critical prompt injection flaw in popular LLM agent framework",
     trust_tier: "medium",
     full_text: "A".repeat(1500),
     date_published: "2026-01-15T10:00:00Z",
@@ -142,6 +144,19 @@ test("keeps source with richer full_text when trust tiers are equal", () => {
   const result = dedupeSources([sparse, rich]);
   assert.equal(result.length, 1);
   assert.equal(result[0].id, "b");
+});
+
+test("distinct articles sharing a generic/short title are NOT merged", () => {
+  const a = {
+    id: "a", url: "https://a.com/adv1", title: "Security Advisory",
+    trust_tier: "high", full_text: "A".repeat(400), date_published: "2026-02-01T00:00:00Z", date_confidence: "exact",
+  };
+  const b = {
+    id: "b", url: "https://b.com/adv2", title: "Security Advisory",
+    trust_tier: "high", full_text: "B".repeat(400), date_published: "2026-03-01T00:00:00Z", date_confidence: "exact",
+  };
+  const result = dedupeSources([a, b]);
+  assert.equal(result.length, 2, "generic title must not collapse two distinct advisories");
 });
 
 test("CVE reference boosts quality score so CVE source beats non-CVE source with same URL", () => {
@@ -251,7 +266,7 @@ const DAILY_WINDOW = {
   end_utc: new Date().toISOString(),
 };
 
-test("eligible_for_daily_report true for recent source with exact date", () => {
+test("recent source with exact date is period-eligible and not flagged for review", () => {
   const flags = computeEligibilityFlags({
     date_published: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
     date_confidence: "exact",
@@ -260,19 +275,22 @@ test("eligible_for_daily_report true for recent source with exact date", () => {
     publisher: "BleepingComputer",
     full_text: "A".repeat(300),
   }, DAILY_WINDOW);
-  assert.equal(flags.eligible_for_daily_report, true);
+  // The daily flag was replaced by calendar-anchored weekly/monthly/quarterly flags.
+  assert.equal(flags.eligible_for_monthly_report, true);
   assert.equal(flags.needs_review, false);
 });
 
-test("eligible_for_daily_report false for source with date_confidence 'none'", () => {
+test("source with date_confidence 'none' is period-ineligible and needs review", () => {
   const flags = computeEligibilityFlags({
     date_published: new Date().toISOString(),
     date_confidence: "none",
     trust_tier: "medium",
     source_type: "security_blog",
+    publisher: "BleepingComputer",
     full_text: "A".repeat(100),
   }, DAILY_WINDOW);
-  assert.equal(flags.eligible_for_daily_report, false);
+  assert.equal(flags.eligible_for_monthly_report, false);
+  assert.equal(flags.eligible_for_weekly_report, false);
   assert.equal(flags.needs_review, true);
 });
 
@@ -302,6 +320,30 @@ test("eligible_for_trend_analysis requires full_text > 200 chars", () => {
   assert.equal(long.eligible_for_trend_analysis, true);
 });
 
+test("estimated/discovery-proxy dates are excluded from period reports", () => {
+  const flags = computeEligibilityFlags({
+    date_published: new Date().toISOString(),
+    date_confidence: "estimated",  // web/LLM discovery proxy date
+    trust_tier: "medium",
+    source_type: "news",
+    publisher: "example.com",
+    full_text: "A".repeat(300),
+  });
+  assert.equal(flags.eligible_for_weekly_report, false);
+  assert.equal(flags.eligible_for_monthly_report, false);
+  assert.equal(flags.eligible_for_quarterly_report, false);
+  // …but still usable for the looser 12-month horizon scan.
+  assert.equal(flags.eligible_for_horizon_scan, true);
+});
+
+test("structured-short types are trend-eligible despite short text", () => {
+  const cve = computeEligibilityFlags({
+    date_published: new Date().toISOString(), date_confidence: "exact",
+    trust_tier: "primary", source_type: "vulnerability", full_text: "CVE-2026-0001: brief.",
+  });
+  assert.equal(cve.eligible_for_trend_analysis, true);
+});
+
 // ── isSafeUrl ─────────────────────────────────────────────────────────────────
 
 console.log("\nisSafeUrl");
@@ -320,6 +362,66 @@ test("localhost URL is not safe", () => {
 
 test("private IP URL is not safe", () => {
   assert.equal(isSafeUrl("https://192.168.1.1/api"), false);
+});
+
+// ── checkSourceValidity (network-free, trust-aware ingest gate) ───────────────
+
+console.log("\ncheckSourceValidity");
+
+test("http URL is plausible at ingest (Layer 3 upgrades it)", () => {
+  assert.equal(isPlausibleSourceUrl("http://example.com/article"), true);
+  assert.equal(isPlausibleSourceUrl("https://example.com/article"), true);
+  assert.equal(isPlausibleSourceUrl("ftp://example.com/x"), false);
+  assert.equal(isPlausibleSourceUrl("http://127.0.0.1/x"), false);
+  assert.equal(isPlausibleSourceUrl(""), false);
+});
+
+test("http source is NOT dropped at ingest (no network, no transient drop)", () => {
+  const v = checkSourceValidity({
+    id: "h1", title: "CISA advisory on AI agent risks", url: "http://cisa.gov/advisory",
+    publisher: "CISA", trust_tier: "primary",
+    date_published: "2026-06-01T00:00:00.000Z", full_text: "x ".repeat(300),
+  });
+  assert.equal(v.usable, true, "http primary source survives ingest");
+  assert.equal(v.url_safety_status, null, "URL resolution deferred to Layer 3");
+});
+
+test("trusted source with sparse metadata is floored to usable, not do_not_use", () => {
+  const v = checkSourceValidity({
+    id: "t1", title: "Advisory", url: "https://ncsc.gov.uk/x",
+    publisher: "Unknown", trust_tier: "primary",
+    date_published: null, full_text: "short",
+  });
+  assert.equal(v.usable, true, "trusted floor keeps it for Layer 3 review");
+  assert.ok(v.warnings.includes("low_structural_score_but_trusted"));
+});
+
+test("untrusted source with no title is still hard-rejected", () => {
+  const v = checkSourceValidity({ id: "n1", title: "", url: "https://blog.example.com/x" });
+  assert.equal(v.usable, false);
+  assert.equal(v.credibility_label, "do_not_use");
+});
+
+// ── splitDateRange (NVD ≤120-day chunking) ────────────────────────────────────
+
+console.log("\nsplitDateRange");
+
+test("a 24h window is a single range", () => {
+  const ranges = splitDateRange("2026-06-09T00:00:00.000Z", "2026-06-10T00:00:00.000Z");
+  assert.equal(ranges.length, 1);
+});
+
+test("a 12-month window is split into multiple <=120-day ranges", () => {
+  const ranges = splitDateRange("2025-06-10T00:00:00.000Z", "2026-06-10T00:00:00.000Z");
+  assert.ok(ranges.length >= 3, `expected >=3 sub-ranges, got ${ranges.length}`);
+  const DAY = 24 * 60 * 60 * 1000;
+  for (const r of ranges) {
+    const span = (new Date(r.end) - new Date(r.start)) / DAY;
+    assert.ok(span <= 120, `sub-range ${span}d exceeds NVD's 120-day cap`);
+  }
+  // Ranges must be contiguous and cover the whole window.
+  assert.equal(ranges[0].start, "2025-06-10T00:00:00.000Z");
+  assert.equal(ranges[ranges.length - 1].end, "2026-06-10T00:00:00.000Z");
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

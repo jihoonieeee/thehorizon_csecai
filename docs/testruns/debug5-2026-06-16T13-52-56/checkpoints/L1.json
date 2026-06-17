@@ -1,0 +1,61 @@
+{
+  "run_id": "debug5-2026-06-16T13-52-56",
+  "layer": "L1",
+  "timestamp": "2026-06-16T13:52:56.326Z",
+  "source_count": 5,
+  "batch": "latest",
+  "source_type_filter": null,
+  "by_type": {
+    "research_finding": 5
+  },
+  "by_trust": {
+    "high": 5
+  },
+  "sources": [
+    {
+      "id": "sample-0",
+      "title": "CISA Alert: Threat Actors Exploit LLM APIs to Automate Phishing Campaigns at Sca",
+      "publisher": "CISA",
+      "source_type": "research_finding",
+      "trust_tier": "high",
+      "text_length": 635,
+      "is_fixture": false
+    },
+    {
+      "id": "sample-1",
+      "title": "Indirect Prompt Injection Attacks Against Autonomous LLM Agents: A Systematic St",
+      "publisher": "arXiv",
+      "source_type": "research_finding",
+      "trust_tier": "high",
+      "text_length": 657,
+      "is_fixture": false
+    },
+    {
+      "id": "sample-2",
+      "title": "Microsoft Security Report: Adversarial ML Attacks Against AI-Powered Security Pr",
+      "publisher": "Microsoft",
+      "source_type": "research_finding",
+      "trust_tier": "high",
+      "text_length": 647,
+      "is_fixture": false
+    },
+    {
+      "id": "sample-3",
+      "title": "CVE-2025-23456: Remote Code Execution via Deserialization in LangChain Agent Fra",
+      "publisher": "NVD/NIST",
+      "source_type": "research_finding",
+      "trust_tier": "high",
+      "text_length": 539,
+      "is_fixture": false
+    },
+    {
+      "id": "sample-4",
+      "title": "Google DeepMind: Jailbreaking State-of-the-Art LLMs via Many-Shot In-Context Lea",
+      "publisher": "Google DeepMind",
+      "source_type": "research_finding",
+      "trust_tier": "high",
+      "text_length": 575,
+      "is_fixture": false
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "title": "Layer 6 synthesis",
+  "checks": [
+    {
+      "name": "≥ 2 categories assessed",
+      "status": "fail",
+      "detail": ""
+    },
+    {
+      "name": "All 4 offensive categories assessed",
+      "status": "warn",
+      "detail": "assessed: "
+    },
+    {
+      "name": "Zero hallucinated evidence IDs",
+      "status": "warn",
+      "detail": "2 IDs not in registry: ae_d1b03f62, ae_a286f9a2"
+    },
+    {
+      "name": "Claim blocking rate ≤ 60%",
+      "status": "pass",
+      "detail": "0% (0/0)"
+    },
+    {
+      "name": "Presentation packet built",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "name": "Cross-category synthesis present",
+      "status": "pass",
+      "detail": ""
+    }
+  ]
+}

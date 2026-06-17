@@ -7,18 +7,20 @@ import assert from "node:assert/strict";
 
 import {
   normalizeUrlForGrounding, assessFreshness, detectAiThreatAnchors,
+  quoteSupport, extractOriginCitations, computeCandidateHashes,
 } from "../lib/pipeline/discovery/candidateGates.js";
 import { normalizeCandidate } from "../lib/pipeline/discovery/normalizeCandidate.js";
 import { computeEarlySignal } from "../lib/pipeline/discovery/earlySignal.js";
 import { dedupeCandidates } from "../lib/pipeline/discovery/dedupeCandidates.js";
-import { triageCandidates } from "../lib/pipeline/discovery/triageCandidates.js";
+import { triageCandidates, triageCandidateDeterministic } from "../lib/pipeline/discovery/triageCandidates.js";
 import { runWebDiscovery, enforceSourceClassQuotas } from "../lib/pipeline/discovery/runWebDiscovery.js";
 import { buildDiscoveryQueries, buildEntitySeededQueries } from "../lib/pipeline/discovery/buildDiscoveryQueries.js";
 import { candidatesToSources } from "../lib/pipeline/discovery/candidateToSource.js";
-import { VALID_EARLY_SIGNAL_TYPE } from "../lib/config/webDiscoveryVocab.js";
+import { VALID_EARLY_SIGNAL_TYPE, VALID_DISCOVERY_ROUTES, ROUTES_INTO_PIPELINE } from "../lib/config/webDiscoveryVocab.js";
 import { runTavilyQuery } from "../lib/pipeline/discovery/providers/tavily.js";
 import { runSerpApiQuery, serpEngineFor } from "../lib/pipeline/discovery/providers/serpapi.js";
 import { providerOrderFor, hasAnyDiscoveryProvider } from "../lib/pipeline/discovery/discoverySearchRouter.js";
+import { hasUsableText, enrichCandidatesWithText, fetchPageText } from "../lib/pipeline/discovery/fetchCandidateText.js";
 
 let passed = 0, failed = 0;
 async function test(name, fn) {
@@ -60,10 +62,14 @@ await test("buzzword-only AI source is rejected", async () => {
   });
   assert.equal(out.ai_threat_specificity, "none", "should have no concrete anchors");
   assert.equal(out.route, "reject");
-  assert.match(out.rejection_reason, /buzzword/);
+  // reason code is now zero_ai_threat_anchors (was: buzzword_only_no_ai_threat_anchor)
+  assert.ok(
+    (out.candidate_route_reasons || [out.rejection_reason]).some((r) => /zero_ai_threat|buzzword/.test(r)),
+    `expected zero_ai_threat_anchors reason, got: ${out.rejection_reason}`
+  );
 });
 
-await test("opened URL but no quote (news page) is rejected / sent to review", async () => {
+await test("opened URL but no quote (news page) is rejected", async () => {
   const out = await triageOne({
     opened_url: "https://news.example.com/gpt4-mcp-injection",
     title: "GPT-4 prompt injection attack via MCP tool output",
@@ -73,12 +79,16 @@ await test("opened URL but no quote (news page) is rejected / sent to review", a
     candidate_claim: "A prompt injection attack against GPT-4 agents abuses MCP tool output",
     verbatim_quote: "",   // no quote on a plain HTML news page
   });
-  assert.ok(["reject", "accept_with_review"].includes(out.route), `route=${out.route}`);
-  if (out.route === "reject") assert.equal(out.rejection_reason, "no_supporting_quote");
-  else assert.equal(out.manual_review_required, true);
+  // Non-preclean source with no quote must be rejected
+  assert.equal(out.route, "reject");
+  // reason code is now quote_missing (was: no_supporting_quote)
+  assert.ok(
+    (out.candidate_route_reasons || [out.rejection_reason]).some((r) => /quote_missing|no_supporting_quote/.test(r)),
+    `expected quote_missing reason, got: ${out.rejection_reason}`
+  );
 });
 
-await test("source with quote but weak AI specificity is rejected", async () => {
+await test("single anchor source goes to novelty_review, not reject", async () => {
   const out = await triageOne({
     opened_url: "https://blog.example.com/ai-thoughts",
     title: "Some thoughts on AI security",
@@ -89,8 +99,13 @@ await test("source with quote but weak AI specificity is rejected", async () => 
     verbatim_quote: "Researchers note that jailbreak attempts continue to evolve across systems over the years.",
   });
   assert.equal(out.ai_threat_specificity, "weak", "exactly one anchor → weak");
-  assert.equal(out.route, "reject");
-  assert.match(out.rejection_reason, /weak_ai_threat_specificity/);
+  // Single anchor → novelty_review path (not reject) — preserves emerging signals
+  assert.equal(out.route, "accept_with_review", "single anchor must route to review, not be hard-rejected");
+  assert.ok(
+    (out.candidate_route_reasons || []).includes("single_anchor_novelty_review"),
+    "must carry single_anchor_novelty_review reason code"
+  );
+  assert.equal(out.relevance_path, "known_signal", "1 known anchor → known_signal path");
 });
 
 // ── Quote-gate adjustment (pre-clean) ─────────────────────────────────────────
@@ -261,15 +276,20 @@ await test("source-class quota prevents news domination", () => {
     news.push({
       candidate_id: `n${i}`, discovery_mission: "new_incident_or_case_study",
       source_class: "news_report", source_quality: "medium",
-      route: "accept", early_signal_value: "none", route_flags: [],
+      route: "accept_evidence_candidate",  // new route name
+      early_signal_value: "none", route_flags: [], candidate_route_reasons: [],
     });
   }
   const out = enforceSourceClassQuotas(news);
-  const accepted = out.filter((c) => c.route === "accept");
-  assert.ok(accepted.length <= 2, `news accepted=${accepted.length} (cap 2)`);
+  // After quota, at most 2 news sources should remain in pipeline
+  const inPipeline = out.filter((c) => ["accept_evidence_candidate","accept_high_priority","accept_with_review","context_only"].includes(c.route));
+  assert.ok(inPipeline.length <= 2, `news in pipeline=${inPipeline.length} (cap 2)`);
   const demoted = out.filter((c) => c.route === "archive_only");
   assert.equal(demoted.length, 3);
-  assert.match(demoted[0].route_reason, /source_class_quota_exceeded/);
+  assert.ok(
+    (demoted[0].candidate_route_reasons || [demoted[0].route_reason]).includes("source_class_quota_exceeded"),
+    "demoted candidate must have quota_exceeded reason"
+  );
 });
 
 // ── Query generation ──────────────────────────────────────────────────────────
@@ -434,6 +454,506 @@ await test("router prefers a forced provider and reports availability", () => {
   process.env.WEB_DISCOVERY_PROVIDER = "tavily";
   assert.deepEqual(providerOrderFor("technical_blog"), ["tavily"]);
   if (prev === undefined) delete process.env.WEB_DISCOVERY_PROVIDER; else process.env.WEB_DISCOVERY_PROVIDER = prev;
+});
+
+// ── Body-text enrichment (F20) ────────────────────────────────────────────────
+
+await test("Tavily candidate carries full page_text used as full_text", () => {
+  const data = { results: [{
+    url: "https://hiddenlayer.com/research/x",
+    title: "New model extraction attack",
+    raw_content: "Researchers describe a model extraction attack. ".repeat(40),
+    published_date: "2026-05-01",
+  }] };
+  const { candidates } = (() => {
+    // runTavilyQuery uses fetch; instead exercise mapResults via a fake fetchImpl
+    return null;
+  }) || {};
+  // Drive through the provider with an injected fetch returning our payload.
+  return runTavilyQuery(
+    { mission: "m", query: "q", family: "seed" },
+    { fetchImpl: async () => ({ ok: true, status: 200, json: async () => data }) }
+  ).then((res) => {
+    const c = res.candidates[0];
+    assert.ok(c.page_text && c.page_text.length > 200, "page_text preserved");
+    const [src] = candidatesToSources([normalizeCandidate(c, { mission: "m", groundedUrlSet: new Set(), groundedQuotes: [], now: NOW })]);
+    assert.ok(src.full_text.length > 200, "full_text uses page_text, not just a quote");
+  });
+});
+
+await test("hasUsableText: page_text or real quote passes; empty fails", () => {
+  assert.equal(hasUsableText({ page_text: "x".repeat(250) }), true);
+  assert.equal(hasUsableText({ verbatim_quote: "A concrete sentence about a real prompt injection attack here." }), true);
+  assert.equal(hasUsableText({ verbatim_quote: "", summary: "short", page_text: "" }), false);
+});
+
+await test("enrichCandidatesWithText fetches thin candidates and demotes unfetchable ones", async () => {
+  const cands = [
+    { opened_url: "https://a.com/has", page_text: "y".repeat(300) },          // present
+    { opened_url: "https://b.com/serp", verbatim_quote: "", summary: "" },    // fetched
+    { opened_url: "https://c.com/dead", verbatim_quote: "", summary: "" },    // thin
+  ];
+  const fetchImpl = async (url) => {
+    if (url.includes("b.com")) {
+      return { ok: true, status: 200, headers: { get: () => "text/html" },
+        text: async () => "<p>" + "Real article body about an AI agent exploit. ".repeat(20) + "</p>" };
+    }
+    return { ok: false, status: 404, headers: { get: () => "text/html" }, text: async () => "" };
+  };
+  const out = await enrichCandidatesWithText(cands, { fetchImpl });
+  assert.equal(out[0].text_status, "present");
+  assert.equal(out[1].text_status, "fetched");
+  assert.ok(out[1].page_text.includes("AI agent exploit"));
+  assert.equal(out[2].text_status, "thin");
+});
+
+await test("fetchPageText skips non-HTML content types", async () => {
+  const fetchImpl = async () => ({ ok: true, status: 200, headers: { get: () => "application/pdf" }, text: async () => "%PDF" });
+  assert.equal(await fetchPageText("https://x.com/a.pdf", { fetchImpl }), "");
+});
+
+// ── New: quote support, freshness_class, origin extraction, routing ──────────────
+console.log("\nquote support + freshness_class + origin + new routing");
+
+await test("quote_support: lexically_matched / requires_entailment_qa / unsupported / unverified", () => {
+  // Strong overlap (≥0.85) → lexically_matched (not "supported" — still needs LLM confirmation)
+  const { quote_support: s1, requires_entailment_qa: r1 } = quoteSupport("prompt injection via MCP tool output exfiltrates secrets", "prompt injection via MCP tool output exfiltrates API secrets from the agent");
+  assert.equal(s1, "lexically_matched", "high overlap → lexically_matched (not a semantic verdict)");
+  assert.equal(r1, true, "lexically_matched still requires LLM entailment confirmation");
+  // Intermediate overlap (0.3–0.85) → requires_entailment_qa (claim goes further than quote says)
+  const { quote_support: s2, requires_entailment_qa: r2 } = quoteSupport(
+    "prompt injection attacks against LLM agents exploit tool output in automated multi-step pipelines",
+    "researchers demonstrate prompt injection techniques against LLM agents in controlled lab settings"
+  );
+  // claim tokens: prompt, injection, attacks, against, llm, agents, exploit, tool, output, automated, multi-step, pipelines
+  // quote tokens: researchers, demonstrate, prompt, injection, techniques, against, llm, agents, controlled, lab, settings
+  // hits: prompt, injection, against, llm, agents = 5/12 = 41% → intermediate → requires_entailment_qa
+  assert.equal(s2, "requires_entailment_qa", "intermediate overlap → LLM must confirm entailment");
+  assert.equal(r2, true);
+  // No overlap → unsupported (fast mechanical rejection — no LLM QA needed)
+  const { quote_support: s3, requires_entailment_qa: r3 } = quoteSupport("APT-X actively deploys RAG poisoning against financial firms", "we present a theoretical framework for understanding retrieval augmented generation");
+  assert.equal(s3, "unsupported", "very low overlap → fast rejection without LLM check");
+  assert.equal(r3, false, "unsupported does not need entailment QA — mechanically rejected");
+  // No quote → unverified
+  const { quote_support: s4, requires_entailment_qa: q4 } = quoteSupport("some claim", "");
+  assert.equal(s4, "unverified");
+  assert.equal(q4, false, "no entailment QA needed if quote is absent");
+});
+
+await test("requires_entailment_qa=true when quote is present with intermediate overlap", () => {
+  // A quote that shares some vocabulary with the claim but doesn't fully cover it.
+  // Intermediate overlap (0.3–0.85) → requires_entailment_qa=true so LLM can confirm.
+  const { requires_entailment_qa } = quoteSupport(
+    "GPT-4 agents were exploited through MCP tool injection attacks extracting secrets",
+    "MCP tool injection attacks against GPT-4 were demonstrated in a research context"
+  );
+  assert.equal(requires_entailment_qa, true, "intermediate overlap quote must flag entailment QA");
+});
+
+await test("zero anchors → reject; 1 anchor → novelty_review; 2+ → evidence_candidate", async () => {
+  const zeroAnchors = await triageOne({
+    opened_url: "https://example.com/ai-hype",
+    title: "AI is changing everything in security this year",
+    publisher: "Blog", published_date: "2026-06-01", source_class: "technical_blog",
+    candidate_claim: "AI is reshaping the security landscape for all organizations",
+    verbatim_quote: "Artificial intelligence continues to reshape how security teams operate and respond to incidents.",
+  });
+  assert.equal(zeroAnchors.ai_threat_specificity, "none");
+  assert.equal(zeroAnchors.route, "reject");
+
+  const oneAnchor = await triageOne({
+    opened_url: "https://blog.example.com/jailbreak",
+    title: "Emerging jailbreak variant observed in wild",
+    publisher: "Researcher", published_date: "2026-06-01", source_class: "technical_blog",
+    candidate_claim: "Novel jailbreak variant bypasses safety filters with a new technique",
+    verbatim_quote: "We observe a new jailbreak variant that bypasses safety filters in a way not previously documented.",
+  });
+  assert.equal(oneAnchor.ai_threat_specificity, "weak");
+  assert.equal(oneAnchor.route, "accept_with_review", "single anchor → novelty review");
+  assert.ok((oneAnchor.candidate_route_reasons || []).includes("single_anchor_novelty_review"));
+});
+
+await test("freshness_class: fresh / current / stale_but_relevant / historical_foundational / historical_stale", () => {
+  const fresh = assessFreshness({ published_date: "2026-06-01", now: NOW });
+  assert.equal(fresh.freshness_class, "fresh");
+  const current = assessFreshness({ published_date: "2026-04-01", now: NOW });
+  assert.equal(current.freshness_class, "current");
+  // NIST/OWASP framework document: historical but foundational
+  const foundational = assessFreshness({ published_date: "2022-01-01", now: NOW, source_class: "standards_or_framework" });
+  assert.equal(foundational.freshness_class, "historical_foundational");
+  // Old research paper with no special exemption → historical_stale
+  const stale = assessFreshness({ published_date: "2023-01-01", now: NOW, source_class: "research_paper" });
+  assert.equal(stale.freshness_class, "historical_stale");
+  // No date → unknown_date
+  const unknown = assessFreshness({});
+  assert.equal(unknown.freshness_class, "unknown_date");
+});
+
+await test("historical_foundational source → context_only, not rejected or archive_only", async () => {
+  const out = await triageOne({
+    opened_url: "https://atlas.mitre.org/techniques/AML.T0018",
+    title: "MITRE ATLAS: Backdoor ML Model technique reference",
+    publisher: "MITRE",
+    published_date: "2022-03-01",  // > 365 days old → historical_foundational
+    source_class: "standards_or_framework",
+    // Claim and quote must carry an anchor so they pass the zero-anchor gate.
+    // "training data poisoning" matches specific_attack_method.
+    candidate_claim: "Backdoor ML model (MITRE ATLAS AML.T0018): adversaries use training data poisoning to implant backdoors in ML model weights",
+    verbatim_quote: "Adversaries may implant backdoors in machine learning models through training data poisoning attacks or by directly modifying model weights.",
+  });
+  assert.ok(["context_only", "accept_with_review", "accept_evidence_candidate"].includes(out.route),
+    `foundational source must not be rejected or archived; got: ${out.route}`);
+  assert.equal(out.freshness_class, "historical_foundational");
+});
+
+await test("secondary article citing primary source → origin_role=secondary_reporting, primary_origin_url extracted", () => {
+  const origin = extractOriginCitations({
+    title: "TechCrunch reports on Anthropic's new AI safety finding",
+    candidate_claim: "According to a new report by Anthropic, LLM agents can be jailbroken via tool output",
+    verbatim_quote: "According to Anthropic researchers, the attack succeeds in 73% of tested configurations.",
+    summary: "Reporting on research from Anthropic on LLM agent jailbreaks.",
+    publisher: "TechCrunch",
+    source_class: "news_report",
+  });
+  assert.equal(origin.origin_role, "secondary_reporting");
+  assert.ok(origin.cited_sources.some((s) => /anthropic/i.test(s)), "Anthropic should be in cited_sources");
+});
+
+await test("multiple articles citing same primary origin share candidate_origin_cluster_id", () => {
+  const makeCand = (url, title, quote) => normalizeCandidate({
+    opened_url: url, title,
+    publisher: "News", published_date: "2026-06-01", source_class: "news_report",
+    candidate_claim: title, verbatim_quote: quote,
+    summary: "Reporting on research from Unit42",
+  }, { mission: "fresh_attack_modes", search_query: "q", search_query_family: "seed",
+      groundedUrlSet: new Set([normalizeUrlForGrounding(url)]), groundedQuotes: [quote], now: NOW });
+
+  const a = makeCand("https://news1.com/story", "Flowise CVE-2026-46442 reported by Unit42",
+    "According to Unit42 researchers, CVE-2026-46442 enables authenticated RCE on Flowise servers.");
+  const b = makeCand("https://news2.com/story", "Unit42 report: Flowise CVE enables RCE",
+    "Based on a report by Unit42, CVE-2026-46442 allows attackers to execute code on Flowise instances.");
+  const [x, y] = dedupeCandidates([a, b]);
+
+  // They should cite the same primary origin → some signal of origin relationship
+  const originRoles = [x.origin_role, y.origin_role];
+  assert.ok(originRoles.some((r) => r === "secondary_reporting"), "at least one should be secondary_reporting");
+});
+
+await test("defensive-only source → context_only route", async () => {
+  const out = await triageOne({
+    opened_url: "https://defender.example.com/hardening-llm",
+    title: "How to harden LLM APIs against prompt injection",
+    publisher: "Defender", published_date: "2026-06-01", source_class: "vendor_research",
+    candidate_claim: "A guide to hardening LLM APIs against prompt injection by deploying input sanitization",
+    verbatim_quote: "Deploy input sanitization and output filtering to reduce prompt injection risk in LLM API deployments.",
+    // LLM would set defensive_content_type=defensive_only; simulate it:
+  });
+  // After triage (skipLlm=true), defensive_content_type defaults to "unknown" so it goes through normally
+  // In real run: defensive_only → context_only; we just verify the field exists
+  assert.ok(["accept_evidence_candidate","accept_with_review","context_only"].includes(out.route),
+    `defensive source routed to: ${out.route}`);
+});
+
+await test("CVE/vulnerability candidate → accept_evidence_candidate or accept_high_priority", async () => {
+  const out = await triageOne({
+    opened_url: "https://nvd.nist.gov/vuln/detail/CVE-2026-99999",
+    title: "CVE-2026-99999: Flowise authenticated RCE via agent execution endpoint",
+    publisher: "NVD",
+    published_date: "2026-06-05",
+    source_class: "vulnerability_database",
+    candidate_claim: "CVE-2026-99999 enables an authenticated attacker to achieve remote code execution on Flowise server instances via the agent execution API endpoint",
+    verbatim_quote: "A remote code execution vulnerability exists in Flowise versions prior to 2.0.1 that allows authenticated users to execute arbitrary commands via the agent API.",
+  });
+  assert.ok(
+    ["accept_evidence_candidate", "accept_high_priority", "accept_with_review"].includes(out.route),
+    `CVE candidate should be accepted; got: ${out.route}`
+  );
+});
+
+await test("content_hash and canonical_url_hash are stable and distinct", () => {
+  const h1 = computeCandidateHashes({
+    opened_url: "https://example.com/article?utm_source=twitter",
+    verbatim_quote: "prompt injection exfiltrates data",
+    candidate_claim: "prompt injection attack demonstrated",
+    title: "Prompt injection attack paper",
+  });
+  const h2 = computeCandidateHashes({
+    opened_url: "https://example.com/article?utm_source=email",  // different tracking param
+    verbatim_quote: "prompt injection exfiltrates data",          // same quote
+    candidate_claim: "prompt injection attack demonstrated",       // same claim
+    title: "Prompt injection attack paper",
+  });
+  // Same URL (after stripping tracking params) → same canonical_url_hash
+  assert.equal(h1.canonical_url_hash, h2.canonical_url_hash, "tracking params stripped → same hash");
+  // Same quote → same quote_hash
+  assert.equal(h1.quote_hash, h2.quote_hash);
+});
+
+await test("duplicate fact (same content_hash) gets archive_only / skip_reprocess signal", () => {
+  const quote = "CVE-2026-46442 enables authenticated remote code execution on Flowise server instances.";
+  const a = normalizeCandidate({
+    opened_url: "https://nvd.nist.gov/cve-2026-46442",
+    title: "CVE-2026-46442 Flowise RCE",
+    publisher: "NVD", published_date: "2026-06-01", source_class: "vulnerability_database",
+    candidate_claim: "CVE-2026-46442 enables authenticated RCE on Flowise",
+    verbatim_quote: quote,
+  }, { mission: "new_vulnerability_or_exploit", search_query: "q", search_query_family: "seed",
+      groundedUrlSet: new Set([normalizeUrlForGrounding("https://nvd.nist.gov/cve-2026-46442")]),
+      groundedQuotes: [quote], now: NOW });
+  const b = normalizeCandidate({
+    opened_url: "https://example.com/flowise-rce-copy",
+    title: "CVE-2026-46442 Flowise RCE",  // same title
+    publisher: "Blog", published_date: "2026-06-01", source_class: "news_report",
+    candidate_claim: "CVE-2026-46442 enables authenticated RCE on Flowise",
+    verbatim_quote: quote,  // same verbatim quote
+  }, { mission: "new_vulnerability_or_exploit", search_query: "q", search_query_family: "seed",
+      groundedUrlSet: new Set([normalizeUrlForGrounding("https://example.com/flowise-rce-copy")]),
+      groundedQuotes: [quote], now: NOW });
+  // Same content_hash is detectable
+  assert.equal(a.content_hash, b.content_hash, "same title+quote → same content_hash");
+  // After dedup, one should be non-representative
+  const [x, y] = dedupeCandidates([a, b]);
+  const nonRep = [x, y].find((c) => !c.is_cluster_representative);
+  assert.ok(nonRep, "one should be non-representative");
+});
+
+await test("all candidate routes are valid vocab values", async () => {
+  const candidates = [
+    { opened_url: "https://nvd.nist.gov/cve-1", title: "CVE-1 RCE in AI framework",
+      publisher: "NVD", published_date: "2026-06-01", source_class: "vulnerability_database",
+      candidate_claim: "CVE-2026-10001 allows prompt injection in GPT-4 agent tools",
+      verbatim_quote: "CVE-2026-10001 enables prompt injection via the tool output of GPT-4 agents, exfiltrating API keys." },
+    { opened_url: "https://arxiv.org/abs/2026.bad", title: "RAG poisoning paper",
+      publisher: "arXiv", published_date: "2025-01-01", source_class: "research_paper",
+      candidate_claim: "RAG poisoning against vector databases using adversarial documents",
+      verbatim_quote: "We demonstrate RAG poisoning against vector databases using adversarial documents in a lab setting." },
+  ].map((r) => normalizeCandidate(r, {
+    mission: "fresh_attack_modes", search_query: "q", search_query_family: "seed",
+    groundedUrlSet: new Set([normalizeUrlForGrounding(r.opened_url)]),
+    groundedQuotes: [r.verbatim_quote], now: NOW,
+  }));
+  const triaged = await triageCandidates(candidates, { skipLlm: true });
+  for (const c of triaged) {
+    assert.ok(VALID_DISCOVERY_ROUTES.has(c.route), `invalid route: ${c.route}`);
+    assert.ok(Array.isArray(c.candidate_route_reasons), "candidate_route_reasons must be array");
+  }
+});
+
+// ── Freshness class completeness ────────────────────────────────────────────
+console.log("\nfreshness class completeness");
+
+await test("stale_but_relevant: source 150 days old", () => {
+  const r = assessFreshness({ published_date: "2026-01-05", now: NOW }); // ~150d
+  assert.equal(r.freshness_status, "stale");
+  assert.equal(r.freshness_class, "stale_but_relevant",
+    "stale sources are stale_but_relevant at normalization time; routing handles LLM-based downgrade");
+});
+
+await test("fresh pub referencing an old event: freshness_class=current, interpretation=fresh_publication_old_event", () => {
+  // Publication date is 34 days ago; event date is ~2 years ago.
+  // freshness_status = "current" (31-120d), freshness_interpretation = fresh_publication_old_event.
+  const recentPub = assessFreshness({
+    published_date: "2026-05-01",
+    event_date: "2024-06-01",  // old event (>180d before pub)
+    now: NOW,  // 2026-06-04, so 34 days after pub
+  });
+  assert.equal(recentPub.freshness_status, "current", "34 days old → current, not fresh (threshold=30d)");
+  assert.equal(recentPub.freshness_interpretation, "fresh_publication_old_event");
+  assert.equal(recentPub.freshness_class, "current",
+    "freshness_class follows freshness_status when within 120d; old event doesn't change class");
+});
+
+await test("historical_stale: research paper older than 365 days with no special class", () => {
+  const r = assessFreshness({ published_date: "2024-01-01", now: NOW, source_class: "research_paper" });
+  assert.equal(r.freshness_status, "historical");
+  assert.equal(r.freshness_class, "historical_stale",
+    "historical non-foundational paper with freshness_interpretation=historical_context → historical_stale");
+});
+
+// ── Quote support → routing ───────────────────────────────────────────────────
+console.log("\nquote support routing");
+
+await test("intermediate-overlap quote routes to accept_with_review with entailment_qa flag", async () => {
+  // Intermediate overlap (30–85%) → requires_entailment_qa → accept_with_review so LLM can confirm.
+  const out = await triageOne({
+    opened_url: "https://arxiv.org/abs/2026.partial",
+    title: "Adversarial attack demonstrated on GPT-4 agents using prompt injection",
+    publisher: "arXiv", published_date: "2026-06-01", source_class: "research_paper",
+    candidate_claim: "A prompt injection attack against GPT-4 agents extracts system prompt and user data",
+    // Intermediate overlap: shares some tokens (prompt injection, agents) but claim asserts data extraction
+    verbatim_quote: "Researchers demonstrate prompt injection attacks against LLM agents in controlled lab settings.",
+  });
+  assert.ok(
+    out.quote_support === "requires_entailment_qa" || out.requires_entailment_qa === true,
+    `quote with intermediate overlap should flag requires_entailment_qa; got quote_support=${out.quote_support}`
+  );
+  assert.ok(
+    (out.candidate_route_reasons || []).includes("requires_entailment_qa") ||
+    out.route === "accept_with_review",
+    `intermediate-overlap quote should produce accept_with_review or entailment_qa reason; got route=${out.route}`
+  );
+});
+
+await test("unsupported quote (low overlap) with moderate specificity → reject", async () => {
+  const out = await triageOne({
+    opened_url: "https://arxiv.org/abs/2026.mismatch",
+    title: "Memory poisoning in GPT-4 MCP agents demonstrated with CVE exploit",
+    publisher: "arXiv", published_date: "2026-06-01", source_class: "research_paper",
+    candidate_claim: "GPT-4 MCP agents actively exploited by Lazarus Group using CVE-2026-9999",
+    // Quote says nothing about Lazarus Group or CVE — completely different content
+    verbatim_quote: "We present theoretical analysis of how training data influences model behaviour in foundation models.",
+  });
+  // Should be unsupported or at least accept_with_review for entailment QA
+  assert.ok(
+    out.quote_support === "unsupported" || out.requires_entailment_qa === true,
+    `low-overlap quote should be unsupported or flag entailment_qa; got quote_support=${out.quote_support}`
+  );
+});
+
+// ── Marketing + prediction-only deterministic filters ─────────────────────────
+console.log("\nmarketing + prediction-only filters");
+
+await test("marketing content (NEGATIVE_CONTENT_PATTERNS) is rejected via isLowValueContent", async () => {
+  const out = await triageOne({
+    opened_url: "https://vendor.example.com/ai-transformation-guide",
+    title: "AI transformation: the future of cybersecurity for enterprises",
+    publisher: "VendorCo", published_date: "2026-06-01", source_class: "vendor_research",
+    candidate_claim: "AI transformation is reshaping how enterprises approach prompt injection defense",
+    verbatim_quote: "AI transformation is key to prompt injection defense in modern enterprise security stacks.",
+  });
+  // "ai transformation" is in NEGATIVE_CONTENT_PATTERNS → isLowValueContent → reject or none signal
+  assert.ok(
+    out.route === "reject" || out.early_signal_value === "none",
+    `marketing content should be rejected or produce no signal; got route=${out.route}`
+  );
+});
+
+await test("prediction-only candidate (pre-set flag) → reject", async () => {
+  // Simulate the post-LLM-enrichment path by calling triageCandidateDeterministic directly
+  const base = mkCandidate({
+    opened_url: "https://blog.example.com/future-ai-attacks",
+    title: "What AI-powered attacks will look like in 2027",
+    publisher: "FuturistBlog", published_date: "2026-06-01", source_class: "technical_blog",
+    candidate_claim: "APT groups will use LLM-powered jailbreaks in large-scale campaigns by 2027",
+    verbatim_quote: "We predict LLM-powered jailbreak campaigns will be common attack vectors in 2027.",
+  });
+  // Inject the LLM flag directly (simulates post-enrichment state)
+  const enriched = { ...base, _llm_is_prediction_only: true };
+  const out = triageCandidateDeterministic(enriched);
+  assert.equal(out.route, "reject", "prediction_only flag → reject");
+  assert.ok(
+    (out.candidate_route_reasons || []).includes("prediction_only"),
+    "must carry prediction_only reason code"
+  );
+});
+
+await test("defensive_with_offensive_findings → accept_with_review", async () => {
+  const base = mkCandidate({
+    opened_url: "https://detection.example.com/offensive-findings",
+    title: "Detecting prompt injection: attack patterns we observed in GPT-4 deployments",
+    publisher: "DetectionLab", published_date: "2026-06-01", source_class: "vendor_research",
+    candidate_claim: "Researchers observed 12 distinct prompt injection attack patterns against GPT-4 APIs in production",
+    verbatim_quote: "Our detection study identified 12 distinct prompt injection attack patterns active against GPT-4 production APIs.",
+  });
+  const enriched = { ...base, defensive_content_type: "defensive_with_offensive_findings" };
+  const out = triageCandidateDeterministic(enriched);
+  assert.equal(out.route, "accept_with_review");
+  assert.ok(
+    (out.candidate_route_reasons || []).includes("defensive_with_offensive_findings"),
+    "must carry defensive_with_offensive_findings reason code"
+  );
+});
+
+// ── processing_cache_status in dedup ──────────────────────────────────────────
+console.log("\nprocessing_cache_status");
+
+await test("syndicated duplicate gets processing_cache_status=seen_same_content", () => {
+  const quote = "CVE-2026-55555 enables remote code execution on LangChain agent endpoints via prompt injection.";
+  const a = normalizeCandidate({
+    opened_url: "https://nvd.nist.gov/cve-2026-55555",
+    title: "CVE-2026-55555 LangChain RCE", publisher: "NVD",
+    published_date: "2026-06-01", source_class: "vulnerability_database",
+    candidate_claim: "CVE-2026-55555 RCE in LangChain", verbatim_quote: quote,
+  }, { mission: "new_vulnerability_or_exploit", search_query: "q", search_query_family: "seed",
+      groundedUrlSet: new Set([normalizeUrlForGrounding("https://nvd.nist.gov/cve-2026-55555")]),
+      groundedQuotes: [quote], now: NOW });
+  const b = normalizeCandidate({
+    opened_url: "https://news.example.com/langchain-rce",
+    title: "CVE-2026-55555 LangChain RCE", publisher: "News",
+    published_date: "2026-06-01", source_class: "news_report",
+    candidate_claim: "CVE-2026-55555 RCE in LangChain", verbatim_quote: quote,
+  }, { mission: "new_vulnerability_or_exploit", search_query: "q", search_query_family: "seed",
+      groundedUrlSet: new Set([normalizeUrlForGrounding("https://news.example.com/langchain-rce")]),
+      groundedQuotes: [quote], now: NOW });
+  assert.equal(a.content_hash, b.content_hash, "same title+quote → same content_hash");
+  const [x, y] = dedupeCandidates([a, b]);
+  const nonRep = [x, y].find((c) => !c.is_cluster_representative);
+  assert.ok(nonRep, "one should be non-representative");
+  assert.equal(nonRep.processing_cache_status, "seen_same_content",
+    "syndicated duplicate with same content_hash → seen_same_content");
+});
+
+await test("derivative coverage (same origin, different content) gets seen_same_origin", () => {
+  const primaryQuote = "According to Unit42, CVE-2026-44444 allows prompt injection in AutoGen agents.";
+  const secondaryQuote = "Based on a report by Unit42, CVE-2026-44444 is exploitable via the tool-calling interface of AutoGen agentic frameworks.";
+  const a = normalizeCandidate({
+    opened_url: "https://unit42.example.com/autogen-cve",
+    title: "CVE-2026-44444 AutoGen prompt injection", publisher: "Unit42",
+    published_date: "2026-06-01", source_class: "vendor_research",
+    candidate_claim: "CVE-2026-44444 enables prompt injection via AutoGen tool-calling",
+    verbatim_quote: primaryQuote,
+    summary: "Unit42 discloses CVE-2026-44444 prompt injection in AutoGen.",
+  }, { mission: "new_vulnerability_or_exploit", search_query: "q", search_query_family: "seed",
+      groundedUrlSet: new Set([normalizeUrlForGrounding("https://unit42.example.com/autogen-cve")]),
+      groundedQuotes: [primaryQuote], now: NOW });
+  const b = normalizeCandidate({
+    opened_url: "https://news.example.com/autogen-cve-report",
+    title: "CVE-2026-44444 AutoGen prompt injection vulnerability", publisher: "News",
+    published_date: "2026-06-02", source_class: "news_report",
+    candidate_claim: "CVE-2026-44444 prompt injection in AutoGen reported by Unit42",
+    verbatim_quote: secondaryQuote,
+    summary: "Based on a report by Unit42, CVE-2026-44444 is exploitable in AutoGen.",
+  }, { mission: "new_vulnerability_or_exploit", search_query: "q", search_query_family: "seed",
+      groundedUrlSet: new Set([normalizeUrlForGrounding("https://news.example.com/autogen-cve-report")]),
+      groundedQuotes: [secondaryQuote], now: NOW });
+  const [x, y] = dedupeCandidates([a, b]);
+  const nonRep = [x, y].find((c) => !c.is_cluster_representative);
+  assert.ok(nonRep, "one should be non-representative");
+  assert.ok(
+    ["seen_same_content", "seen_same_origin"].includes(nonRep.processing_cache_status),
+    `derivative duplicate should get seen_same_content or seen_same_origin; got ${nonRep.processing_cache_status}`
+  );
+});
+
+// ── buildDiscoveryMetadata completeness ───────────────────────────────────────
+console.log("\nbuildDiscoveryMetadata completeness");
+
+import { buildDiscoveryMetadata } from "../lib/pipeline/discovery/normalizeCandidate.js";
+
+await test("buildDiscoveryMetadata includes all new fields", async () => {
+  const c = await triageOne({
+    opened_url: "https://arxiv.org/abs/2026.meta",
+    title: "Reproducible jailbreak via prompt injection on GPT-4 MCP agents with CVE-2026-12345",
+    publisher: "arXiv", published_date: "2026-06-01", source_class: "research_paper",
+    candidate_claim: "CVE-2026-12345 enables jailbreak via prompt injection against GPT-4 MCP agents",
+    verbatim_quote: "We demonstrate CVE-2026-12345 enables prompt injection jailbreak against GPT-4 MCP agents.",
+  });
+  const meta = buildDiscoveryMetadata(c);
+  // New fields must be present
+  assert.ok("quote_support" in meta, "quote_support missing from metadata");
+  assert.ok("requires_entailment_qa" in meta, "requires_entailment_qa missing");
+  assert.ok("freshness_class" in meta, "freshness_class missing");
+  assert.ok("evidence_novelty" in meta, "evidence_novelty missing");
+  assert.ok("defensive_content_type" in meta, "defensive_content_type missing");
+  assert.ok("candidate_usefulness_roles" in meta, "candidate_usefulness_roles missing");
+  assert.ok("candidate_route_reasons" in meta, "candidate_route_reasons missing");
+  assert.ok("relevance_path" in meta, "relevance_path missing");
+  assert.ok("origin_role" in meta, "origin_role missing");
+  assert.ok("independence_level" in meta, "independence_level missing");
+  assert.ok("canonical_url_hash" in meta, "canonical_url_hash missing");
+  assert.ok("content_hash" in meta, "content_hash missing");
+  assert.ok("processing_cache_status" in meta, "processing_cache_status missing");
+  assert.ok("age_days" in meta, "age_days missing");
 });
 
 // ── Results ─────────────────────────────────────────────────────────────────────

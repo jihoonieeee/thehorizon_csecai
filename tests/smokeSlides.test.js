@@ -268,8 +268,10 @@ test("deck has section-A structural slides", () => {
   assert.ok(types.includes("title"),              "missing title");
   assert.ok(types.includes("scope_methodology"),  "missing scope_methodology");
   assert.ok(types.includes("source_coverage"),    "missing source_coverage");
-  assert.ok(types.includes("taxonomy_reference"), "missing taxonomy_reference");
   assert.ok(types.includes("executive_summary"),  "missing executive_summary");
+  // taxonomy_reference moved to appendix only (Section E) — not duplicated in Section A
+  const appendixTaxonomy = plan.filter((s) => s.slide_type === "appendix_taxonomy");
+  assert.ok(appendixTaxonomy.length > 0, "missing appendix_taxonomy in Section E");
 });
 
 test("executive synthesis slides appear when critical claims exist", () => {

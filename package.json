@@ -7,7 +7,18 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "horizon:mvp": "node scripts/runHorizonScanMVP.js"
+    "horizon:v2": "node scripts/runHorizonScanV2.js",
+    "horizon:v2:fast": "node scripts/runHorizonScanV2.js --no-slides",
+    "horizon:v2:dry": "node scripts/runHorizonScanV2.js --no-llm --no-persist",
+    "horizon:mvp": "node scripts/runHorizonScanMVP.js",
+    "smoke:v2": "node scripts/smokeTestV2.js",
+    "smoke:v2:dry": "node scripts/smokeTestV2.js --no-llm --no-slides",
+    "debug:deep": "node scripts/deepDebugPipeline.js",
+    "debug:list": "node scripts/debugPipeline.js --list",
+    "debug:summary": "node scripts/debugPipeline.js --summary",
+    "debug:reports": "node scripts/debugPipeline.js --reports",
+    "test:debug5": "node scripts/debug5.js",
+    "test:debug5:diff": "node scripts/debug5diff.js"
   },
   "devDependencies": {
     "vite": "^8.0.12"

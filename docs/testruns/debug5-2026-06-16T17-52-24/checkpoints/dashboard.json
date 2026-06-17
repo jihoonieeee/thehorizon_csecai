@@ -1,0 +1,12 @@
+{
+  "run_id": "debug5-2026-06-16T17-52-24",
+  "layer": "dashboard",
+  "timestamp": "2026-06-16T17:52:24.933Z",
+  "total": 0,
+  "approved_main_panel": 0,
+  "appendix_only": 0,
+  "chatbot_eligible": 0,
+  "blocked": 0,
+  "url_trace_failures": 0,
+  "objects": []
+}

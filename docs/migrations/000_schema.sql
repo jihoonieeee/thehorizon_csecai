@@ -237,12 +237,11 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- taxonomy_validation_status allowed values MUST match the producers in
--- understandSource.js: validated | weak | needs_manual_review | rejected
--- PLUS the gate/novelty statuses emerging_unmapped | no_domain_match | no_tags_found.
--- The original constraint omitted the last three, so persisting an emerging_unmapped
--- source (the novelty safety valve) or a gate-discarded source violated the check.
--- Drop-and-recreate so existing databases pick up the widened set.
+-- taxonomy_validation_status allowed values: validated | weak | needs_manual_review |
+-- rejected | no_domain_match | no_tags_found.
+-- emerging_unmapped was removed: sources that cannot map to a taxonomy domain or tag
+-- are now discarded (no_domain_match / no_tags_found) rather than preserved with a
+-- fallback status. See migration 006 for the cleanup script.
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_taxonomy_validation_status' AND conrelid = 'sources'::regclass) THEN
     ALTER TABLE sources DROP CONSTRAINT chk_taxonomy_validation_status;
@@ -250,7 +249,7 @@ DO $$ BEGIN
   ALTER TABLE sources ADD CONSTRAINT chk_taxonomy_validation_status
     CHECK (taxonomy_validation_status IS NULL OR taxonomy_validation_status IN (
       'validated','weak','needs_manual_review','rejected',
-      'emerging_unmapped','no_domain_match','no_tags_found'
+      'no_domain_match','no_tags_found'
     ));
 END $$;
 
@@ -902,6 +901,8 @@ COMMIT;
 -- GROUP BY 1 ORDER BY 1 DESC LIMIT 12;
 
 
+BEGIN;
+
 -- ===========================================================================
 -- 13. Deck v9.1 — argument-form metadata + slide QA columns (June 2026)
 --
@@ -912,14 +913,14 @@ COMMIT;
 -- ===========================================================================
 
 -- Deck-level argument-form and QA metadata
-ALTER TABLE decks ADD COLUMN IF NOT EXISTS deck_version          text;
-ALTER TABLE decks ADD COLUMN IF NOT EXISTS argument_forms_used   text[]  DEFAULT '{}';
-ALTER TABLE decks ADD COLUMN IF NOT EXISTS bullet_role_violations int     DEFAULT 0;
-ALTER TABLE decks ADD COLUMN IF NOT EXISTS analytics_not_supporting int   DEFAULT 0;
-ALTER TABLE decks ADD COLUMN IF NOT EXISTS visual_contextual_count  int   DEFAULT 0;
-ALTER TABLE decks ADD COLUMN IF NOT EXISTS notes_qa_blocking        int   DEFAULT 0;
-ALTER TABLE decks ADD COLUMN IF NOT EXISTS notes_qa_warnings        int   DEFAULT 0;
-ALTER TABLE decks ADD COLUMN IF NOT EXISTS claim_anchored_slides    int   DEFAULT 0;
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS deck_version             text;
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS argument_forms_used      text[]  DEFAULT '{}';
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS bullet_role_violations   int     DEFAULT 0;
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS analytics_not_supporting int     DEFAULT 0;
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS visual_contextual_count  int     DEFAULT 0;
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS notes_qa_blocking        int     DEFAULT 0;
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS notes_qa_warnings        int     DEFAULT 0;
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS claim_anchored_slides    int     DEFAULT 0;
 
 -- Verification queries for section 13:
 -- SELECT column_name FROM information_schema.columns
@@ -957,14 +958,21 @@ CREATE INDEX IF NOT EXISTS idx_sources_content_quality
 -- ORDER BY column_name;
 -- Expected: 4 rows
 
-COMMIT;
 
+-- ===========================================================================
+-- 15. Audit refactor — source quality, origin tracking, relevance path
+--     (June 2026; supersedes docs/migrations/audit-refactor.sql)
+--
+-- Columns used by lib/pipeline/validation/originTracking.js,
+-- lib/pipeline/archive/buildSourceRow.js, and the agent answer-grounding
+-- layer to record how a source was found, how trustworthy its claim chain
+-- is, and what relevance path it followed through the pre-gate.
+-- ===========================================================================
 
--- ── Audit refactor: source quality, origin tracking, relevance path ───────────
--- See docs/migrations/audit-refactor.sql for detailed comments.
 ALTER TABLE sources ADD COLUMN IF NOT EXISTS source_quality_status  text;
 ALTER TABLE sources ADD COLUMN IF NOT EXISTS source_quality_reasons text[];
 ALTER TABLE sources ADD COLUMN IF NOT EXISTS origin_role            text;
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS independence_level     text;
 ALTER TABLE sources ADD COLUMN IF NOT EXISTS primary_origin_url     text;
 ALTER TABLE sources ADD COLUMN IF NOT EXISTS cited_sources          text[];
 ALTER TABLE sources ADD COLUMN IF NOT EXISTS relevance_path         text;
@@ -972,3 +980,8 @@ ALTER TABLE sources ADD COLUMN IF NOT EXISTS taxonomy_status        text;
 
 CREATE INDEX IF NOT EXISTS idx_sources_source_quality_status ON sources (source_quality_status);
 CREATE INDEX IF NOT EXISTS idx_sources_origin_role           ON sources (origin_role);
+CREATE INDEX IF NOT EXISTS idx_sources_independence_level
+  ON sources (independence_level)
+  WHERE independence_level IS NOT NULL;
+
+COMMIT;
