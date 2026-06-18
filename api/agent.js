@@ -194,27 +194,51 @@ function parseResponse(text) {
 // ── Citation extractor ────────────────────────────────────────────────────────
 
 /**
- * Clean the answer text for display:
- *   1. Remove internal ev_xxx / ev-xxx IDs
- *   2. Strip inline (Publisher, https://...) patterns — URLs appear in citation chips instead
- *   3. Replace leftover bare https:// URLs with empty string
+ * Harvest every URL from the raw answer text into the citation pool BEFORE
+ * stripping. Returns { text, harvested } where harvested is an array of
+ * { publisher, url } objects extracted from inline patterns.
+ *
+ * This fixes the case where the model writes bare `https://...` or
+ * `(Publisher, URL)` inline — the URLs must be captured before removal or
+ * they disappear entirely.
  */
-function cleanAnswerText(text, evidenceIndex) {
-  return text
-    // Remove ev_xxx IDs
-    .replace(/\bev[_-][a-zA-Z0-9_-]+/g, (rawId) => {
-      const ev = evidenceIndex[rawId];
-      if (!ev) return "";
-      return ev.publisher ? `(${ev.publisher})` : "";
-    })
-    // Strip (Publisher, https://...) inline citations — keep publisher name only
-    .replace(/\(([^,)]{1,60}),\s*https?:\/\/[^\s)]+\)/g, "($1)")
-    // Strip bare https:// URLs left in the text
-    .replace(/https?:\/\/\S+/g, "")
-    // Clean up double spaces / trailing parens
+function harvestAndCleanAnswer(rawText, evidenceIndex) {
+  const harvested = [];
+
+  let text = rawText;
+
+  // 1. Remove ev_xxx IDs (replace with publisher name if known)
+  text = text.replace(/\bev[_-][a-zA-Z0-9_-]+/g, (rawId) => {
+    const ev = evidenceIndex[rawId];
+    if (!ev) return "";
+    return ev.publisher ? `(${ev.publisher})` : "";
+  });
+
+  // 2. Harvest + strip (Publisher, https://...) inline patterns
+  text = text.replace(/\(([^,)]{1,80}),\s*(https?:\/\/[^\s)]+)\)/g, (_, publisher, url) => {
+    const cleanUrl = url.replace(/[.,;:!?]+$/, "");
+    harvested.push({ publisher: publisher.trim(), url: cleanUrl });
+    return `(${publisher.trim()})`;
+  });
+
+  // 3. Harvest + strip bare https:// URLs (e.g. "URL: https://...")
+  text = text.replace(/https?:\/\/[^\s),>]+/g, (url) => {
+    const cleanUrl = url.replace(/[.,;:!?]+$/, "");
+    if (cleanUrl.length > 10) harvested.push({ publisher: "", url: cleanUrl });
+    return "";
+  });
+
+  // 4. Remove "URL:" labels left behind after stripping
+  text = text.replace(/\bURL:\s*/gi, "");
+
+  // 5. Clean up artifacts
+  text = text
     .replace(/\(\s*\)/g, "")
     .replace(/  +/g, " ")
+    .replace(/ \./g, ".")
     .trim();
+
+  return { text, harvested };
 }
 
 function extractCitations(text, evidenceIndex, sourceRefs) {
@@ -361,17 +385,26 @@ export default async function handler(req, res) {
         const textBlock = response.content.find(b => b.type === "text");
         const rawText   = textBlock?.text || "(No answer generated)";
 
-        const parsed      = parseResponse(rawText);
-        const cleanAnswer = cleanAnswerText(parsed.answer, evidenceIndex);
-        const citations   = extractCitations(parsed.answer, evidenceIndex, sourceRefs);
+        const parsed                  = parseResponse(rawText);
+        const { text: cleanAnswer,
+                harvested }           = harvestAndCleanAnswer(parsed.answer, evidenceIndex);
 
-        // Surface every URL harvested from any tool call (search_corpus + get_evidence)
+        // Harvested inline URLs (from answer text) go into citationPool first
+        for (const h of harvested) {
+          if (h.url && !citationPool.some(c => c.url === h.url)) {
+            citationPool.push({ source_title: "", url: h.url, publisher: h.publisher, trust_tier: null });
+          }
+        }
+
+        const citations = extractCitations(parsed.answer, evidenceIndex, sourceRefs);
+
+        // Surface every URL from the full pool (tool results + harvested from text)
         const citedUrls = new Set(citations.map(c => c.url).filter(Boolean));
         for (const src of citationPool) {
           if (!src.url || citedUrls.has(src.url)) continue;
           citations.push({ source_title: src.source_title, url: src.url, publisher: src.publisher, trust_tier: src.trust_tier });
           citedUrls.add(src.url);
-          if (citations.length >= 12) break;
+          if (citations.length >= 15) break;
         }
 
         const qaIssues = qaResponse(cleanAnswer, citations, evidenceIndex);

@@ -728,6 +728,58 @@ a:hover { text-decoration: underline; }
   color: var(--text-secondary);
 }
 
+/* ── Section heading inside response ──────────────────────────────────────── */
+
+.hz-response-heading {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hz-response-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+/* ── Exploitation status badge ─────────────────────────────────────────────── */
+
+.hz-status-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  font-size: 0.82rem;
+}
+
+.hz-status-line.confirmed     { background: #f0fdf4; border: 1px solid #bbf7d0; }
+.hz-status-line.partial       { background: #fffbeb; border: 1px solid #fde68a; }
+.hz-status-line.not-confirmed { background: var(--surface-2); border: 1px solid var(--border); }
+
+.hz-status-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.hz-status-badge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hz-status-badge.confirmed     { background: #dcfce7; color: #15803d; }
+.hz-status-badge.partial       { background: #fef9c3; color: #92400e; }
+.hz-status-badge.not-confirmed { background: var(--surface-2); color: var(--text-tertiary); }
+
 /* ── Source buttons ────────────────────────────────────────────────────────── */
 
 .hz-source-row {

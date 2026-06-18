@@ -15,9 +15,11 @@ const SUGGESTIONS = [
 ];
 
 // ── Structured text renderer ───────────────────────────────────────────────────
-// Handles: numbered points (1. 2. 3.), plain paragraphs, **bold**
+// Handles: 1. / 1 numbered points, section headers, --- dividers,
+// "Confirmed: YES/NO/PARTIAL" status lines, **bold**, plain paragraphs.
 
 function renderInline(text) {
+  if (!text) return null;
   const parts = [];
   const re = /\*\*(.+?)\*\*/g;
   let last = 0, m;
@@ -27,43 +29,92 @@ function renderInline(text) {
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push(text.slice(last));
-  return parts.length ? parts : text;
+  return parts.length > 0 ? parts : text;
 }
+
+// Detect a section heading: "THREAT 1:", "**Heading**", all-caps label lines
+const isHeading = (t) =>
+  /^(THREAT\s+\d+|KEY\s+SOURCES|FOR\s+DEFENDERS|EVIDENCE\s+MATURITY)[\s:]/i.test(t) ||
+  (/^[A-Z][A-Z &/-]{5,}:/.test(t) && t.length < 80);
+
+// Detect exploitation status lines
+const statusMatch = (t) => t.match(/^(confirmed\s+exploitation[^:]*:?\s*)(YES\.?|NO\.?|PARTIAL\.?)/i);
 
 function StructuredText({ text }) {
   if (!text) return null;
 
-  // Split on double newlines → blocks
-  const blocks = text.split(/\n{2,}/).filter(b => b.trim());
+  // Normalise: collapse 3+ newlines → 2, mark --- dividers
+  const normalised = text
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^-{3,}$/gm, "§DIV§");
+
+  const blocks = normalised.split(/\n{2,}/).filter(b => b.trim());
 
   return (
     <div className="hz-response-body">
       {blocks.map((block, bi) => {
-        const lines = block.split("\n").map(l => l.trim()).filter(Boolean);
+        const t = block.trim();
 
-        // Numbered list block
-        if (lines.some(l => /^\d+\.\s/.test(l))) {
-          const items = lines.map((line, li) => {
-            const numMatch = line.match(/^(\d+)\.\s+(.*)/);
-            if (numMatch) {
-              return (
-                <li key={li} className="hz-response-point">
-                  <span className="hz-point-num">{numMatch[1]}</span>
-                  <span className="hz-point-text">{renderInline(numMatch[2])}</span>
-                </li>
-              );
-            }
-            // Non-numbered line inside a mixed block — render as a paragraph
-            return (
-              <li key={li} className="hz-response-point hz-response-point-plain">
-                <span className="hz-point-text">{renderInline(line)}</span>
-              </li>
-            );
-          });
-          return <ol key={bi} className="hz-response-list">{items}</ol>;
+        // Section divider
+        if (t === "§DIV§") {
+          return <div key={bi} className="hz-response-divider" />;
         }
 
-        // Plain paragraph(s)
+        const lines = t.split("\n").map(l => l.trim()).filter(Boolean);
+
+        // Section heading
+        if (lines.length === 1 && isHeading(lines[0])) {
+          const hText = lines[0].replace(/\*\*/g, "");
+          return <div key={bi} className="hz-response-heading">{hText}</div>;
+        }
+
+        // Exploitation status badge line
+        const sm = statusMatch(lines[0]);
+        if (sm) {
+          const status = sm[2].replace(/\.$/, "").toUpperCase();
+          const cls = status === "YES" ? "confirmed" : status === "PARTIAL" ? "partial" : "not-confirmed";
+          return (
+            <div key={bi} className={`hz-status-line ${cls}`}>
+              <span className="hz-status-label">{sm[1].replace(/:$/, "").trim()}</span>
+              <span className={`hz-status-badge ${cls}`}>{status}</span>
+            </div>
+          );
+        }
+
+        // Numbered list — supports both "1." and bare "1" followed by text on same or next line
+        const hasNumbered = lines.some(l => /^\d+[.)]\s+\S/.test(l));
+        if (hasNumbered) {
+          // Merge continuation lines (non-numbered lines after a numbered line)
+          const merged = [];
+          for (const line of lines) {
+            const nm = line.match(/^(\d+)[.)]\s+(.*)/);
+            if (nm) {
+              merged.push({ num: nm[1], text: nm[2] });
+            } else if (merged.length > 0) {
+              merged[merged.length - 1].text += " " + line;
+            } else {
+              merged.push({ num: null, text: line });
+            }
+          }
+          return (
+            <ol key={bi} className="hz-response-list">
+              {merged.map((item, li) =>
+                item.num ? (
+                  <li key={li} className="hz-response-point">
+                    <span className="hz-point-num">{item.num}</span>
+                    <span className="hz-point-text">{renderInline(item.text)}</span>
+                  </li>
+                ) : (
+                  <li key={li} className="hz-response-point hz-response-point-plain">
+                    <span className="hz-point-text">{renderInline(item.text)}</span>
+                  </li>
+                )
+              )}
+            </ol>
+          );
+        }
+
+        // Plain paragraph
         return (
           <p key={bi} className="hz-response-para">
             {renderInline(lines.join(" "))}
