@@ -15,7 +15,8 @@ import { LandscapePage }     from "../../pages/dashboard/LandscapePage.jsx";
 import { AskAgentPage }      from "../../pages/dashboard/AskAgentPage.jsx";
 import { LogsPage }          from "../../pages/dashboard/LogsPage.jsx";
 import { UsagePage }         from "../../pages/dashboard/UsagePage.jsx";
-import { MONTHLY_DASHBOARD, CURRENT_PERIOD } from "../../mockData/dashboardData.js";
+import { CURRENT_PERIOD }    from "../../mockData/dashboardData.js";
+import { useDashboardData }  from "../../hooks/useDashboardData.js";
 
 const PERIODS = [
   { value: "2026-05", label: "May 2026" },
@@ -40,9 +41,7 @@ export function DashboardShell() {
   const [period,      setPeriod]      = useState(CURRENT_PERIOD);
   const [drilldown,   setDrilldown]   = useState(null);   // null = closed
 
-  // In a real app, data would be fetched by useDashboardData(period).
-  // For now, use static mock data regardless of period.
-  const data = MONTHLY_DASHBOARD;
+  const { data, loading } = useDashboardData(period);
 
   const handleDrilldown = (item) => setDrilldown(item);
   const closeDrilldown  = ()     => setDrilldown(null);

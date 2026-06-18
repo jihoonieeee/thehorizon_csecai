@@ -1,0 +1,4 @@
+.llm_cache
+outputs
+node_modules
+.claude

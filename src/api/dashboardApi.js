@@ -14,9 +14,11 @@ const BASE = "/api";
  */
 export async function fetchMonthlyDashboard(period) {
   try {
-    const res = await fetch(`${BASE}/dashboard/monthly?period=${encodeURIComponent(period || "")}`);
+    const res = await fetch(`${BASE}/dashboard?period=${encodeURIComponent(period || "")}`, { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    const d = await res.json();
+    if (d.error) throw new Error(d.error);
+    return d;
   } catch {
     // Fallback to mock data
     return { ...MONTHLY_DASHBOARD, _source: "mock" };
@@ -36,7 +38,7 @@ export async function fetchDrilldown(ids = {}) {
   if (ids.analytics_evidence_ids?.length)params.set("analytics_evidence_ids",ids.analytics_evidence_ids.join(","));
 
   try {
-    const res = await fetch(`${BASE}/dashboard/drilldown?${params}`);
+    const res = await fetch(`${BASE}/dashboard?drilldown=1&${params}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch {
