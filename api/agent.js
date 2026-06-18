@@ -9,7 +9,7 @@
  *   search_taxonomy  — Tag/category distribution across the corpus
  *
  * Flow: tool loop (max 4 rounds) → parse response → QA check → return
- * All factual claims cite [ev-xxx] or [src-N]; uncited claims are flagged.
+ * All factual claims cite source publisher + URL; internal ev_xxx IDs are scrubbed before response.
  */
 
 import { TOOLS, executeTool } from "../lib/agent/agentTools.js";
@@ -49,37 +49,71 @@ const MAX_ROUNDS = 6;
 
 // ── System prompt ─────────────────────────────────────────────────────────────
 
-const SYSTEM = `You are a senior AI threat intelligence analyst for a CISO-level briefing dashboard.
-You have access to a corpus of ingested threat intelligence sources and structured pipeline analysis.
+const SYSTEM = `You are a senior AI threat intelligence analyst. Your audience is security professionals and decision-makers who need clear, reasoned analysis — not source summaries.
 
-USE YOUR TOOLS — BATCH CALLS:
-- Call multiple tools in a SINGLE response whenever possible. Do not wait for one tool before calling another unless you need the first result to decide what to call next.
-- For most questions: call get_judgments + search_corpus (or trend_analysis) together in one round.
-- Call get_evidence only after get_judgments to fetch specific evidence IDs from its results.
-- Call search_taxonomy when the question is about attack tags, technique categories, or coverage.
-- Batching reduces round-trips: prefer 2 tools at once over 4 sequential single-tool calls.
+## YOUR JOB
+Answer the question with analysis, not enumeration. The difference:
+- Enumeration: "Source A says X. Source B says Y. Source C says Z."
+- Analysis: "X and Y together indicate that Z is now achievable without specialist access. The implication for defenders is..."
 
-CITATION RULES (mandatory):
-- Cite evidence items as [ev-xxx] where xxx is the evidence_id from get_evidence/get_judgments.
-- Cite raw sources as [src-N] where N is the ref number from search_corpus results.
-- Every factual claim — statistics, incidents, CVEs, attack success rates, timelines — MUST be cited.
-- If you cannot cite a claim with a tool result, do not make it.
-- Never invent sources, statistics, or events not present in tool results.
+Always: lead with the judgment, support it with evidence, explain what it means, state what you cannot conclude.
 
-ANSWER FORMAT:
-- Lead with the finding. No preamble.
-- Bullet points only. One finding per bullet.
-- For each data point bullet: end the line with the citation inline, e.g. "— 83% success rate against Claude 3 Opus [ev-smk-msj--1]"
-- No hype words. No "unprecedented" or "game-changing".
-- Scope claims: "within the collected corpus" or "among ingested sources".
-- When evidence is thin (< 3 items), say so.
+## TOOL USE — BATCH CALLS
+- Most questions: call get_judgments + search_corpus in round 1 simultaneously.
+- Then get_evidence to fetch specific facts for judgments you want to develop.
+- Use trend_analysis for questions about change over time or volume patterns.
+- Use search_taxonomy for technique/tag/coverage questions.
+- Do not wait for one tool before calling another unless the second depends on the first result.
 
-After the answer bullets, write exactly these four lines:
+## ANALYTICAL STANDARDS
+
+**Lead with the conclusion.**
+State what the evidence means, not what the sources say. The first sentence is your judgment, not a source summary.
+
+**Synthesise across sources.**
+If three sources point to the same pattern, say so explicitly. Connect findings: "Combined with X, this means Y is now within reach of lower-skill actors." Do not list findings independently when they are related.
+
+**Distinguish evidence maturity.**
+Always specify which of these applies to each claim:
+- Research demonstration (lab/controlled, not confirmed in the wild)
+- Disclosed vulnerability (CVE exists, exploitation not confirmed)
+- Observed exploitation (confirmed real-world use)
+- Confirmed adversary adoption (attributed campaign)
+Never conflate these. Do not say "adversaries are using X" if the evidence is only a research paper.
+
+**Explain the implication.**
+For every significant finding, answer: what does this mean for defenders? What changes about the risk picture? What control assumption breaks?
+
+**Acknowledge gaps honestly.**
+If the corpus has thin evidence (<3 items), say: "Based on limited evidence (N source/s) — treat as a signal, not a confirmed pattern."
+If the corpus cannot answer the question, say so directly and state what adjacent information exists.
+
+## WHAT YOU MUST NOT DO
+- Do not produce lists of facts with no connecting reasoning.
+- Do not invent sources, statistics, incidents, or actors not present in tool results.
+- Do not make adversary-adoption claims from research-only evidence.
+- Do not use hype language: no "unprecedented", "game-changing", "rapidly evolving", "critical threat".
+- Do not pad with generic security advice not grounded in the corpus.
+- NEVER expose internal evidence tracking IDs (ev_xxx, ev-xxx) in your response. These are backend codes. Cite using (Publisher, URL) instead.
+
+## FORMAT
+Write in structured prose + focused bullets — not a wall of bullets or a wall of text.
+
+Structure:
+1. Opening judgment (1–3 sentences): the answer to the question.
+2. Supporting evidence (3–5 bullets max): specific, cited facts that back the judgment. Each bullet ends with (Publisher, URL).
+3. Implication (1–2 sentences): what defenders should do or watch, and why.
+4. Gaps (1 sentence if relevant): what the corpus does not cover that would change this picture.
+
+Citation format: (Publisher, URL) inline — e.g. "(NVD, https://nvd.nist.gov/vuln/detail/CVE-2026-55743)".
+Use [src-N] only as fallback shorthand when URLs are very long.
+
+End with exactly:
 CONFIDENCE: high|moderate|low
-CONFIDENCE_REASON: one sentence explaining the rating
-CAVEAT: one specific limitation, or null
-FOLLOWUP: one suggested follow-up question
-FOLLOWUP: another suggested follow-up question`;
+CONFIDENCE_REASON: one sentence — what limits or supports this rating
+CAVEAT: one specific limitation of this answer, or null
+FOLLOWUP: one concrete follow-up the analyst should investigate next
+FOLLOWUP: a second follow-up`;
 
 // ── Response parser ───────────────────────────────────────────────────────────
 
@@ -110,20 +144,43 @@ function parseResponse(text) {
 
 // ── Citation extractor ────────────────────────────────────────────────────────
 
+/**
+ * Scrub internal ev_xxx / ev-xxx IDs from the visible answer text, replacing
+ * them with the resolved source attribution, and collect a deduplicated citation
+ * list for the UI reference panel.
+ */
+function scrubEvIds(text, evidenceIndex) {
+  // Match both ev_abc123 and ev-abc-123 patterns
+  return text.replace(/\bev[_-][a-zA-Z0-9_-]+/g, (rawId) => {
+    const ev = evidenceIndex[rawId];
+    if (!ev) return "";  // drop unresolvable IDs silently
+    const label = ev.publisher
+      ? `${ev.publisher}${ev.source_url ? ", " + ev.source_url : ""}`
+      : (ev.source_url || "");
+    return label ? `(${label})` : "";
+  });
+}
+
 function extractCitations(text, evidenceIndex, sourceRefs) {
   const citations = [];
   const seen = new Set();
 
-  // [ev-xxx] evidence item citations
-  for (const m of text.matchAll(/\[ev-[a-z0-9-]+\]/g)) {
-    const id = m[0].slice(1, -1);
+  // Resolve any ev_xxx / ev-xxx IDs that appear in the text (model may still use them despite prompt)
+  for (const m of text.matchAll(/\bev[_-][a-zA-Z0-9_-]+/g)) {
+    const id = m[0];
     if (seen.has(id)) continue;
     seen.add(id);
     const ev = evidenceIndex[id];
-    citations.push(ev
-      ? { ref: m[0], source_title: ev.source_title, url: ev.source_url, publisher: ev.publisher, evidence_type: ev.evidence_type, trust_tier: ev.trust_tier }
-      : { ref: m[0], source_title: "Unknown evidence item", url: null, publisher: null }
-    );
+    if (ev) {
+      citations.push({
+        ref:            `(${ev.publisher || "Source"})`,
+        source_title:   ev.source_title,
+        url:            ev.source_url,
+        publisher:      ev.publisher,
+        evidence_type:  ev.evidence_type,
+        trust_tier:     ev.trust_tier,
+      });
+    }
   }
 
   // [src-N] source citations
@@ -139,6 +196,14 @@ function extractCitations(text, evidenceIndex, sourceRefs) {
     );
   }
 
+  // (Publisher, URL) inline citations written by the model per the new prompt
+  for (const m of text.matchAll(/\(([^,)]+),\s*(https?:\/\/[^\s)]+)\)/g)) {
+    const key = m[2];
+    if (seen.has(key)) continue;
+    seen.add(key);
+    citations.push({ ref: m[0], source_title: "", url: m[2], publisher: m[1].trim(), trust_tier: null });
+  }
+
   return citations;
 }
 
@@ -147,23 +212,28 @@ function extractCitations(text, evidenceIndex, sourceRefs) {
 function qaResponse(text, citations, evidenceIndex) {
   const issues = [];
 
-  // Check all cited ev- IDs exist
-  for (const cit of citations) {
-    if (cit.ref.startsWith("[ev-") && !evidenceIndex[cit.ref.slice(1,-1)]) {
-      issues.push(`Citation ${cit.ref} not found in evidence index`);
-    }
+  // Flag if any raw ev_xxx IDs slipped through scrubbing into the visible answer
+  if (/\bev[_-][a-zA-Z0-9_-]{4,}/.test(text)) {
+    issues.push("Internal evidence IDs visible in response — scrubbing may have missed a pattern");
   }
 
-  // Check for statistics without citations
+  // Statistics without any citations
   const hasStat = /\b\d+\.?\d*%|\bCVE-\d{4}|\b\d{1,3}\s*(?:sources|incidents|attacks|cases)\b/i.test(text);
   if (hasStat && citations.length === 0) {
     issues.push("Factual statistics present but no citations found");
   }
 
-  // Check for minimum citation density on analytical responses
+  // Substantive response with zero citations (prose or bullets)
   const bulletCount = (text.match(/^[-•*]\s/gm) || []).length;
-  if (bulletCount >= 3 && citations.length === 0) {
-    issues.push("Multi-point response has no citations");
+  const wordCount   = text.split(/\s+/).length;
+  if (wordCount > 80 && citations.length === 0) {
+    issues.push("Substantive response has no citations");
+  }
+
+  // Hype language that slipped past the prompt
+  const hypePattern = /\bunprecedented\b|\bgame.changing\b|\brapidly evolving\b|\bcritical threat\b/i;
+  if (hypePattern.test(text)) {
+    issues.push("Hype language detected — response should use neutral, scoped language");
   }
 
   return issues;
@@ -208,11 +278,13 @@ export default async function handler(req, res) {
         const rawText   = textBlock?.text || "(No answer generated)";
 
         const parsed     = parseResponse(rawText);
+        // Strip any internal ev_xxx IDs the model may have used despite the prompt
+        const cleanAnswer = scrubEvIds(parsed.answer, evidenceIndex);
         const citations  = extractCitations(parsed.answer, evidenceIndex, sourceRefs);
-        const qaIssues   = qaResponse(parsed.answer, citations, evidenceIndex);
+        const qaIssues   = qaResponse(cleanAnswer, citations, evidenceIndex);
 
         return res.status(200).json({
-          answer:              parsed.answer,
+          answer:              cleanAnswer,
           citations,
           confidence:          parsed.confidence,
           confidence_reason:   parsed.confidence_reason,
