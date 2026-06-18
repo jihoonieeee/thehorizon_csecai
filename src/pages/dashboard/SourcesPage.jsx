@@ -1,10 +1,9 @@
 /**
- * SourcesPage — filterable source list.
- * Uses category_counts from dashboard data for a category breakdown,
- * and fetches from GET /api/sources for the table.
+ * SourcesPage — filterable source list with period and archive browsing.
+ * Fetches from GET /api/sources with full period + filter support.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 const CAT_COLOR = {
   traditional_ai_threats: "#3583C9",
@@ -21,7 +20,40 @@ const CAT_LABEL = {
   unclear_or_adjacent:    "Other",
 };
 
+const TRUST_OPTIONS = [
+  { value: "primary",  label: "Primary" },
+  { value: "high",     label: "High" },
+  { value: "medium",   label: "Medium" },
+  { value: "curated",  label: "Curated" },
+  { value: "low",      label: "Low" },
+];
+
 const ALL_CATS = Object.keys(CAT_COLOR);
+const PAGE_SIZE = 50;
+
+// ── Period helpers ─────────────────────────────────────────────────────────────
+
+function buildPeriodOptions() {
+  const list = [];
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const short = d.toLocaleDateString("en-SG", { month: "short", year: "numeric" });
+    list.push({ value: val, label: i === 0 ? `${short} (this month)` : i === 1 ? `${short} (last month)` : short });
+  }
+  return list;
+}
+
+const PERIOD_OPTIONS = [
+  { value: "last-7d",  label: "Last 7 days" },
+  { value: "last-30d", label: "Last 30 days" },
+  { value: "last-90d", label: "Last 90 days" },
+  { value: "all-time", label: "All time" },
+  ...buildPeriodOptions(),
+];
+
+// ── Sub-components ─────────────────────────────────────────────────────────────
 
 function TrustBadge({ tier }) {
   const cls = tier || "unknown";
@@ -33,25 +65,46 @@ function CategoryDot({ category }) {
   return <span className="hz-cat-dot" style={{ background: color }} />;
 }
 
-export function SourcesPage({ data, period }) {
-  const [sources,    setSources]    = useState([]);
-  const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState(null);
-  const [catFilter,  setCatFilter]  = useState("");
-  const [search,     setSearch]     = useState("");
-  const [page,       setPage]       = useState(1);
+// ── Main page ─────────────────────────────────────────────────────────────────
 
-  const PAGE_SIZE = 50;
+export function SourcesPage({ data, period: globalPeriod, onPeriodChange }) {
+  // Local period override — starts synced to nav, can diverge
+  const [localPeriod,  setLocalPeriod]  = useState(globalPeriod || "last-90d");
+  const [sources,      setSources]      = useState([]);
+  const [loading,      setLoading]      = useState(false);
+  const [error,        setError]        = useState(null);
+  const [periodLabel,  setPeriodLabel]  = useState("");
+  const [dateRange,    setDateRange]    = useState(null);
+  const [totalCount,   setTotalCount]   = useState(0);
 
+  // Filters
+  const [catFilter,    setCatFilter]    = useState("");
+  const [trustFilter,  setTrustFilter]  = useState("");
+  const [search,       setSearch]       = useState("");
+  const [page,         setPage]         = useState(1);
+
+  // Sync local period when nav period changes (unless user overrode locally)
+  const [userOverride, setUserOverride] = useState(false);
   useEffect(() => {
+    if (!userOverride && globalPeriod) setLocalPeriod(globalPeriod);
+  }, [globalPeriod, userOverride]);
+
+  const handlePeriodChange = (val) => {
+    setLocalPeriod(val);
+    setUserOverride(true);
+    setPage(1);
+  };
+
+  const loadSources = useCallback(() => {
     setLoading(true);
     setError(null);
-    setPage(1);
 
     const params = new URLSearchParams();
-    if (catFilter) params.set("category", catFilter);
-    if (period)    params.set("period", period);
-    params.set("limit", "200");
+    params.set("period", localPeriod);
+    if (catFilter)   params.set("category",   catFilter);
+    if (trustFilter) params.set("trust_tier", trustFilter);
+    if (search)      params.set("search",     search);
+    params.set("limit", "500");
 
     fetch(`/api/sources?${params}`)
       .then((r) => {
@@ -59,42 +112,88 @@ export function SourcesPage({ data, period }) {
         return r.json();
       })
       .then((json) => {
-        // API may return { sources: [...] } or an array directly
-        setSources(Array.isArray(json) ? json : (json.sources || json.data || []));
+        const rows = Array.isArray(json) ? json : (json.sources || []);
+        setSources(rows);
+        setTotalCount(json.count ?? rows.length);
+        setPeriodLabel(json.period_label || "");
+        setDateRange(json.date_range || null);
         setLoading(false);
+        setPage(1);
       })
       .catch((e) => {
         setError(e.message);
-        setLoading(false);
-        // Fall back to showing summary counts from dashboard data
         setSources([]);
+        setLoading(false);
       });
-  }, [catFilter, period]);
+  }, [localPeriod, catFilter, trustFilter, search]);
 
-  // Client-side search filter
-  const filtered = sources.filter((s) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      (s.title      || "").toLowerCase().includes(q) ||
-      (s.publisher  || "").toLowerCase().includes(q) ||
-      (s.summary    || "").toLowerCase().includes(q)
-    );
-  });
+  useEffect(() => { loadSources(); }, [loadSources]);
 
+  // Client-side search (instant, no re-fetch)
+  const filtered = sources;
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // Summary counts from dashboard data
-  const catCounts = data?.summary?.category_counts || {};
+  // Category counts from currently loaded sources
+  const catCounts = {};
+  for (const s of sources) {
+    if (s.main_category) catCounts[s.main_category] = (catCounts[s.main_category] || 0) + 1;
+  }
 
   return (
     <div>
-      <h1 className="hz-page-title">Sources</h1>
-      <p className="hz-page-sub">Browse validated threat intelligence sources by category.</p>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", marginBottom: "20px" }}>
+        <div>
+          <h1 className="hz-page-title" style={{ marginBottom: 0 }}>Sources</h1>
+          <p className="hz-page-sub" style={{ marginBottom: 0 }}>
+            Browse validated threat intelligence sources.
+            {periodLabel && (
+              <> Showing <strong>{periodLabel}</strong>
+                {dateRange?.start && (
+                  <span style={{ color: "var(--text-tertiary)" }}> ({dateRange.start} – {dateRange.end})</span>
+                )}
+              </>
+            )}
+          </p>
+        </div>
 
-      {/* Category summary pills */}
-      <div style={{ display: "flex", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
+        {/* Period selector */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "0.72rem", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Time range
+          </span>
+          <select
+            className="hz-period-select"
+            value={localPeriod}
+            onChange={(e) => handlePeriodChange(e.target.value)}
+            style={{ fontSize: "0.82rem", padding: "6px 10px" }}
+          >
+            {PERIOD_OPTIONS.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+          {userOverride && localPeriod !== globalPeriod && (
+            <button
+              className="hz-cat-pill"
+              onClick={() => { setLocalPeriod(globalPeriod || "last-90d"); setUserOverride(false); }}
+              style={{ fontSize: "0.7rem", padding: "3px 10px" }}
+              title="Reset to global period"
+            >
+              ↩ Reset
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Category pills with counts */}
+      <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" }}>
+        <button
+          className={`hz-cat-pill${catFilter === "" ? " active" : ""}`}
+          onClick={() => { setCatFilter(""); setPage(1); }}
+        >
+          All
+        </button>
         {ALL_CATS.map((cat) => {
           const count = catCounts[cat] ?? 0;
           const color = CAT_COLOR[cat];
@@ -102,25 +201,26 @@ export function SourcesPage({ data, period }) {
           return (
             <button
               key={cat}
-              onClick={() => setCatFilter(active ? "" : cat)}
+              onClick={() => { setCatFilter(active ? "" : cat); setPage(1); }}
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "8px 14px",
-                borderRadius: "8px",
+                display: "flex", alignItems: "center", gap: "5px",
+                padding: "4px 12px", borderRadius: "20px",
                 border: `1px solid ${active ? color : "var(--border)"}`,
-                background: active ? `${color}15` : "var(--surface)",
-                cursor: "pointer",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                background: active ? color : "var(--surface)",
+                cursor: "pointer", fontSize: "0.75rem", fontWeight: active ? 600 : 500,
+                color: active ? "#fff" : "var(--text-secondary)",
+                transition: "all 0.12s",
               }}
             >
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
-              <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-primary)" }}>
-                {CAT_LABEL[cat]}
-              </span>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: active ? "rgba(255,255,255,0.7)" : color, flexShrink: 0 }} />
+              {CAT_LABEL[cat]}
               {count > 0 && (
-                <span style={{ fontSize: "0.7rem", fontWeight: 700, color: active ? color : "var(--text-tertiary)", background: active ? `${color}20` : "var(--surface-2)", padding: "1px 7px", borderRadius: "10px" }}>
+                <span style={{
+                  fontSize: "0.65rem", fontWeight: 700,
+                  background: active ? "rgba(255,255,255,0.2)" : "var(--surface-2)",
+                  color: active ? "#fff" : "var(--text-tertiary)",
+                  padding: "0 5px", borderRadius: "10px", minWidth: "18px", textAlign: "center",
+                }}>
                   {count}
                 </span>
               )}
@@ -129,37 +229,43 @@ export function SourcesPage({ data, period }) {
         })}
       </div>
 
-      {/* Search + active filter */}
+      {/* Search + trust filter */}
       <div className="hz-sources-filters">
         <input
           className="hz-search-input"
           type="text"
-          placeholder="Search title, publisher..."
+          placeholder="Search title, publisher…"
           value={search}
+          style={{ width: "260px" }}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
         />
-        {catFilter && (
+        <select
+          className="hz-period-select"
+          value={trustFilter}
+          onChange={(e) => { setTrustFilter(e.target.value); setPage(1); }}
+          style={{ fontSize: "0.8rem" }}
+        >
+          <option value="">All trust tiers</option>
+          {TRUST_OPTIONS.map(t => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
+        </select>
+        {(catFilter || trustFilter || search) && (
           <button
-            className="hz-cat-pill active"
-            onClick={() => setCatFilter("")}
-            style={{ background: CAT_COLOR[catFilter], borderColor: CAT_COLOR[catFilter] }}
+            className="hz-cat-pill"
+            onClick={() => { setCatFilter(""); setTrustFilter(""); setSearch(""); setPage(1); }}
+            style={{ fontSize: "0.75rem" }}
           >
-            {CAT_LABEL[catFilter]} x
+            Clear filters
           </button>
         )}
-        {filtered.length > 0 && (
-          <span style={{ fontSize: "0.75rem", color: "var(--text-tertiary)", marginLeft: "auto" }}>
-            {filtered.length} source{filtered.length !== 1 ? "s" : ""}
-          </span>
-        )}
+        <span style={{ fontSize: "0.75rem", color: "var(--text-tertiary)", marginLeft: "auto" }}>
+          {loading ? "Loading…" : `${totalCount} source${totalCount !== 1 ? "s" : ""}${filtered.length < totalCount ? ` (${filtered.length} shown)` : ""}`}
+        </span>
       </div>
 
-      {/* Error / loading / empty states */}
-      {loading && (
-        <div className="hz-empty">Loading sources...</div>
-      )}
-
-      {error && !loading && sources.length === 0 && (
+      {/* Error */}
+      {error && !loading && (
         <div className="hz-empty" style={{ color: "var(--danger)" }}>
           Could not load sources: {error}
           <br />
@@ -169,12 +275,20 @@ export function SourcesPage({ data, period }) {
         </div>
       )}
 
+      {/* Empty */}
       {!loading && !error && paged.length === 0 && (
-        <div className="hz-empty">No sources found{search ? ` for "${search}"` : ""}.</div>
+        <div className="hz-empty">
+          No sources found for this period{catFilter ? ` in ${CAT_LABEL[catFilter]}` : ""}{search ? ` matching "${search}"` : ""}.
+        </div>
+      )}
+
+      {/* Loading skeleton */}
+      {loading && (
+        <div className="hz-empty" style={{ color: "var(--text-tertiary)" }}>Loading sources…</div>
       )}
 
       {/* Table */}
-      {paged.length > 0 && (
+      {!loading && paged.length > 0 && (
         <div className="hz-sources-table-wrap">
           <table className="hz-sources-table">
             <thead>
@@ -194,11 +308,11 @@ export function SourcesPage({ data, period }) {
                       ? <a href={s.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 500 }}>
                           {s.title || "(no title)"}
                         </a>
-                      : <span>{s.title || "(no title)"}</span>
+                      : <span style={{ fontWeight: 500 }}>{s.title || "(no title)"}</span>
                     }
                     {s.short_summary && (
-                      <div style={{ fontSize: "0.73rem", color: "var(--text-secondary)", marginTop: "2px", lineHeight: 1.4 }}>
-                        {s.short_summary.slice(0, 120)}{s.short_summary.length > 120 ? "…" : ""}
+                      <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", marginTop: "3px", lineHeight: 1.4 }}>
+                        {s.short_summary.slice(0, 130)}{s.short_summary.length > 130 ? "…" : ""}
                       </div>
                     )}
                   </td>
@@ -207,14 +321,12 @@ export function SourcesPage({ data, period }) {
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     <CategoryDot category={s.main_category} />
-                    <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                    <span style={{ fontSize: "0.74rem", color: "var(--text-secondary)" }}>
                       {CAT_LABEL[s.main_category] || s.main_category || "—"}
                     </span>
                   </td>
-                  <td>
-                    <TrustBadge tier={s.trust_tier} />
-                  </td>
-                  <td style={{ fontSize: "0.75rem", color: "var(--text-tertiary)", whiteSpace: "nowrap" }}>
+                  <td><TrustBadge tier={s.trust_tier} /></td>
+                  <td style={{ fontSize: "0.74rem", color: "var(--text-tertiary)", whiteSpace: "nowrap" }}>
                     {s.date_published ? s.date_published.slice(0, 10) : "—"}
                   </td>
                 </tr>
@@ -226,25 +338,28 @@ export function SourcesPage({ data, period }) {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginTop: "16px" }}>
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", marginTop: "16px" }}>
           <button
             className="hz-cat-pill"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={page === 1}
             style={{ opacity: page === 1 ? 0.4 : 1 }}
           >
-            Previous
+            ← Previous
           </button>
-          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)", padding: "4px 8px" }}>
+          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
             Page {page} of {totalPages}
+            <span style={{ color: "var(--text-tertiary)", marginLeft: "4px" }}>
+              ({(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length})
+            </span>
           </span>
           <button
             className="hz-cat-pill"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
             style={{ opacity: page === totalPages ? 0.4 : 1 }}
           >
-            Next
+            Next →
           </button>
         </div>
       )}

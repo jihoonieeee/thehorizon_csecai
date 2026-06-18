@@ -47,73 +47,116 @@ async function anthropicRequest(body, timeoutMs = 90000) {
 
 const MAX_ROUNDS = 6;
 
-// ── System prompt ─────────────────────────────────────────────────────────────
+// ── Temporal intent parser ─────────────────────────────────────────────────────
 
-const SYSTEM = `You are a senior AI threat intelligence analyst. Your audience is security professionals and decision-makers who need clear, reasoned analysis — not source summaries.
+/**
+ * Parse temporal phrases from a user query to determine the appropriate date_from.
+ * Returns { date_from: string|null, scope_label: string, all_time: boolean }
+ *
+ * Returning date_from=null with all_time=true means no date restriction.
+ * Returning date_from=null with all_time=false means default 90-day scope.
+ */
+function parseTemporalIntent(query) {
+  const q = (query || "").toLowerCase();
+  const now = new Date();
 
-## YOUR JOB
-Answer the question with analysis, not enumeration. The difference:
-- Enumeration: "Source A says X. Source B says Y. Source C says Z."
-- Analysis: "X and Y together indicate that Z is now achievable without specialist access. The implication for defenders is..."
+  // Explicit "all time" / "entire corpus" / "ever" → unrestricted
+  if (/\ball[- ]time\b|\bentire (?:database|corpus|history)\b|\bever\b|\bsince (?:the )?beginning\b|\ball (?:available |)(?:data|sources|records)\b|\bhistorical(?:ly)?\b/.test(q)) {
+    return { date_from: null, scope_label: "all available data", all_time: true };
+  }
 
-Always: lead with the judgment, support it with evidence, explain what it means, state what you cannot conclude.
+  // "past N days/weeks/months/years" or "last N …"
+  const rel = q.match(/\b(?:past|last)\s+(\d+)\s+(day|week|month|year)s?\b/);
+  if (rel) {
+    const n = parseInt(rel[1], 10);
+    const unit = rel[2];
+    const ms = unit === "day"   ? 86400000 * n
+              : unit === "week"  ? 86400000 * 7 * n
+              : unit === "month" ? 86400000 * 30 * n
+              : 86400000 * 365 * n;
+    const d = new Date(Date.now() - ms);
+    const label = `last ${n} ${unit}${n !== 1 ? "s" : ""}`;
+    return { date_from: d.toISOString().slice(0, 10), scope_label: label, all_time: false };
+  }
 
-## TOOL USE — BATCH CALLS
-- Most questions: call get_judgments + search_corpus in round 1 simultaneously.
-- Then get_evidence to fetch specific facts for judgments you want to develop.
-- Use trend_analysis for questions about change over time or volume patterns.
-- Use search_taxonomy for technique/tag/coverage questions.
-- Do not wait for one tool before calling another unless the second depends on the first result.
+  // "in the past/last N …" (variant)
+  const inPast = q.match(/\bin (?:the )?(?:past|last)\s+(\d+)\s+(day|week|month|year)s?\b/);
+  if (inPast) {
+    const n = parseInt(inPast[1], 10);
+    const unit = inPast[2];
+    const ms = unit === "day"   ? 86400000 * n
+              : unit === "week"  ? 86400000 * 7 * n
+              : unit === "month" ? 86400000 * 30 * n
+              : 86400000 * 365 * n;
+    const d = new Date(Date.now() - ms);
+    return { date_from: d.toISOString().slice(0, 10), scope_label: `last ${n} ${unit}${n !== 1 ? "s" : ""}`, all_time: false };
+  }
 
-## ANALYTICAL STANDARDS
+  // "this week" / "this month"
+  if (/\bthis week\b/.test(q)) {
+    const d = new Date(Date.now() - 7 * 86400000);
+    return { date_from: d.toISOString().slice(0, 10), scope_label: "this week", all_time: false };
+  }
+  if (/\bthis month\b/.test(q)) {
+    return {
+      date_from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`,
+      scope_label: "this month",
+      all_time: false,
+    };
+  }
 
-**Lead with the conclusion.**
-State what the evidence means, not what the sources say. The first sentence is your judgment, not a source summary.
+  // "since Month [Year]" e.g. "since January" or "since January 2026"
+  const MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+  const sinceMonth = q.match(/\bsince\s+(january|february|march|april|may|june|july|august|september|october|november|december)(?:\s+(\d{4}))?\b/);
+  if (sinceMonth) {
+    const monthIdx = MONTHS.indexOf(sinceMonth[1]);
+    const year = sinceMonth[2] ? parseInt(sinceMonth[2], 10) : now.getFullYear();
+    const d = `${year}-${String(monthIdx + 1).padStart(2, "0")}-01`;
+    return { date_from: d, scope_label: `since ${sinceMonth[1]} ${year}`, all_time: false };
+  }
 
-**Synthesise across sources.**
-If three sources point to the same pattern, say so explicitly. Connect findings: "Combined with X, this means Y is now within reach of lower-skill actors." Do not list findings independently when they are related.
+  // Default: last 90 days
+  const d90 = new Date(Date.now() - 90 * 86400000);
+  return { date_from: d90.toISOString().slice(0, 10), scope_label: "last 90 days (default)", all_time: false };
+}
 
-**Distinguish evidence maturity.**
-Always specify which of these applies to each claim:
-- Research demonstration (lab/controlled, not confirmed in the wild)
-- Disclosed vulnerability (CVE exists, exploitation not confirmed)
-- Observed exploitation (confirmed real-world use)
-- Confirmed adversary adoption (attributed campaign)
-Never conflate these. Do not say "adversaries are using X" if the evidence is only a research paper.
+// ── System prompt builder ─────────────────────────────────────────────────────
 
-**Explain the implication.**
-For every significant finding, answer: what does this mean for defenders? What changes about the risk picture? What control assumption breaks?
+function buildSystem(temporal) {
+  const today = new Date().toISOString().slice(0, 10);
+  const scopeNote = temporal.all_time
+    ? `The user is asking about all available data — do not add any date_from filter unless the question implies a specific window.`
+    : `Default data window: ${temporal.scope_label} (from ${temporal.date_from}). Use date_from="${temporal.date_from}" in search_corpus unless the user specifies otherwise. If they mention "all time" or need older context, omit date_from.`;
 
-**Acknowledge gaps honestly.**
-If the corpus has thin evidence (<3 items), say: "Based on limited evidence (N source/s) — treat as a signal, not a confirmed pattern."
-If the corpus cannot answer the question, say so directly and state what adjacent information exists.
+  return `You are a knowledgeable AI threat intelligence analyst. You speak directly and clearly, like a smart colleague briefing a security team.
 
-## WHAT YOU MUST NOT DO
-- Do not produce lists of facts with no connecting reasoning.
-- Do not invent sources, statistics, incidents, or actors not present in tool results.
-- Do not make adversary-adoption claims from research-only evidence.
-- Do not use hype language: no "unprecedented", "game-changing", "rapidly evolving", "critical threat".
-- Do not pad with generic security advice not grounded in the corpus.
-- NEVER expose internal evidence tracking IDs (ev_xxx, ev-xxx) in your response. These are backend codes. Cite using (Publisher, URL) instead.
+Today: ${today}
+${scopeNote}
 
-## FORMAT
-Write in structured prose + focused bullets — not a wall of bullets or a wall of text.
+WHEN TO USE TOOLS vs ANSWER DIRECTLY:
+If the user's question is a follow-up, clarification, or elaboration on what was just discussed (e.g. "what does that mean?", "can you elaborate?", "why is that significant?", "tell me more about X" where X just appeared in your last answer), answer directly from your knowledge without calling any tools. This keeps responses fast and natural.
+Only call tools when you need fresh factual data from the corpus — new topics, specific sources, trend questions, coverage questions.
 
-Structure:
-1. Opening judgment (1–3 sentences): the answer to the question.
-2. Supporting evidence (3–5 bullets max): specific, cited facts that back the judgment. Each bullet ends with (Publisher, URL).
-3. Implication (1–2 sentences): what defenders should do or watch, and why.
-4. Gaps (1 sentence if relevant): what the corpus does not cover that would change this picture.
+HOW TO WRITE YOUR ANSWER:
+Write in plain, natural English. No markdown formatting — no bullet points starting with dashes, no asterisks for bold, no headers with hashes. Write in short, clear paragraphs like you're speaking to someone.
 
-Citation format: (Publisher, URL) inline — e.g. "(NVD, https://nvd.nist.gov/vuln/detail/CVE-2026-55743)".
-Use [src-N] only as fallback shorthand when URLs are very long.
+Lead with your conclusion — what the evidence actually means — then explain what supports it, then what it means for defenders. Keep it tight: two to four paragraphs is usually right.
 
-End with exactly:
+When you cite a source, just mention the publisher naturally: "According to Google Project Zero..." or "CISA reported that..." The clickable source links will appear automatically below your response, so do not write out URLs in the text.
+
+Be honest about thin evidence. If you only have one or two sources, say so plainly. If you cannot answer from the corpus, say so and describe what's missing.
+
+Do not invent sources, statistics, or incidents not in the tool results. Do not use hype language. Do not pad with generic security advice.
+
+NEVER expose internal evidence tracking IDs (ev_xxx, ev-xxx) — these are backend codes that must not appear in responses.
+
+End your response with these lines (required, on their own lines):
 CONFIDENCE: high|moderate|low
-CONFIDENCE_REASON: one sentence — what limits or supports this rating
-CAVEAT: one specific limitation of this answer, or null
-FOLLOWUP: one concrete follow-up the analyst should investigate next
-FOLLOWUP: a second follow-up`;
+CONFIDENCE_REASON: one sentence explaining why
+CAVEAT: one specific limitation, or null
+FOLLOWUP: a concrete follow-up question the analyst should consider
+FOLLOWUP: a second follow-up question`;
+}
 
 // ── Response parser ───────────────────────────────────────────────────────────
 
@@ -145,20 +188,27 @@ function parseResponse(text) {
 // ── Citation extractor ────────────────────────────────────────────────────────
 
 /**
- * Scrub internal ev_xxx / ev-xxx IDs from the visible answer text, replacing
- * them with the resolved source attribution, and collect a deduplicated citation
- * list for the UI reference panel.
+ * Clean the answer text for display:
+ *   1. Remove internal ev_xxx / ev-xxx IDs
+ *   2. Strip inline (Publisher, https://...) patterns — URLs appear in citation chips instead
+ *   3. Replace leftover bare https:// URLs with empty string
  */
-function scrubEvIds(text, evidenceIndex) {
-  // Match both ev_abc123 and ev-abc-123 patterns
-  return text.replace(/\bev[_-][a-zA-Z0-9_-]+/g, (rawId) => {
-    const ev = evidenceIndex[rawId];
-    if (!ev) return "";  // drop unresolvable IDs silently
-    const label = ev.publisher
-      ? `${ev.publisher}${ev.source_url ? ", " + ev.source_url : ""}`
-      : (ev.source_url || "");
-    return label ? `(${label})` : "";
-  });
+function cleanAnswerText(text, evidenceIndex) {
+  return text
+    // Remove ev_xxx IDs
+    .replace(/\bev[_-][a-zA-Z0-9_-]+/g, (rawId) => {
+      const ev = evidenceIndex[rawId];
+      if (!ev) return "";
+      return ev.publisher ? `(${ev.publisher})` : "";
+    })
+    // Strip (Publisher, https://...) inline citations — keep publisher name only
+    .replace(/\(([^,)]{1,60}),\s*https?:\/\/[^\s)]+\)/g, "($1)")
+    // Strip bare https:// URLs left in the text
+    .replace(/https?:\/\/\S+/g, "")
+    // Clean up double spaces / trailing parens
+    .replace(/\(\s*\)/g, "")
+    .replace(/  +/g, " ")
+    .trim();
 }
 
 function extractCitations(text, evidenceIndex, sourceRefs) {
@@ -246,17 +296,44 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "POST only" });
   }
 
-  const { query, category } = req.body || {};
+  const { query, category, history } = req.body || {};
   if (!query?.trim()) {
     return res.status(400).json({ error: "query is required" });
   }
+
+  // Parse temporal intent to guide the model's default date scope
+  const temporal = parseTemporalIntent(query);
+  const system   = buildSystem(temporal);
 
   // If category filter set, inject it into the user question
   const userText = category
     ? `[Focus on: ${category}]\n\n${query.trim()}`
     : query.trim();
 
-  const messages = [{ role: "user", content: userText }];
+  // Build messages: prepend text-only conversation history (last 6 messages max)
+  const historyMessages = [];
+  if (Array.isArray(history) && history.length) {
+    for (const m of history.slice(-6)) {
+      if (m.role === "user" || m.role === "assistant") {
+        const content = typeof m.content === "string" ? m.content : null;
+        if (content) historyMessages.push({ role: m.role, content });
+      }
+    }
+    // Enforce alternating user/assistant (Anthropic requirement)
+    const cleaned = [];
+    let lastRole = null;
+    for (const m of historyMessages) {
+      if (m.role !== lastRole) { cleaned.push(m); lastRole = m.role; }
+    }
+    // History must start with user and end before current user message
+    if (cleaned.length > 0 && cleaned[cleaned.length - 1].role === "user") {
+      cleaned.pop();
+    }
+    historyMessages.length = 0;
+    historyMessages.push(...cleaned);
+  }
+
+  const messages = [...historyMessages, { role: "user", content: userText }];
   const evidenceIndex = {};
   let sourceRefs = [];
   const toolCallLog = [];
@@ -267,7 +344,7 @@ export default async function handler(req, res) {
       const response = await anthropicRequest({
         model:      ANTHROPIC_MODELS.sonnet,
         max_tokens: 4096,
-        system:     SYSTEM,
+        system,
         tools:      TOOLS,
         messages,
       });
@@ -278,8 +355,7 @@ export default async function handler(req, res) {
         const rawText   = textBlock?.text || "(No answer generated)";
 
         const parsed     = parseResponse(rawText);
-        // Strip any internal ev_xxx IDs the model may have used despite the prompt
-        const cleanAnswer = scrubEvIds(parsed.answer, evidenceIndex);
+        const cleanAnswer = cleanAnswerText(parsed.answer, evidenceIndex);
         const citations  = extractCitations(parsed.answer, evidenceIndex, sourceRefs);
         const qaIssues   = qaResponse(cleanAnswer, citations, evidenceIndex);
 
@@ -295,6 +371,7 @@ export default async function handler(req, res) {
           qa_issues:           qaIssues,
           qa_pass:             qaIssues.length === 0,
           evidence_items_used: Object.keys(evidenceIndex).length,
+          temporal_scope:      temporal.scope_label,
         });
       }
 
