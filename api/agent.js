@@ -134,8 +134,9 @@ Today: ${today}
 ${scopeNote}
 
 WHEN TO USE TOOLS vs ANSWER DIRECTLY:
-If the user's question is a follow-up, clarification, or elaboration on what was just discussed (e.g. "what does that mean?", "can you elaborate?", "why is that significant?", "tell me more about X" where X just appeared in your last answer), answer directly from your knowledge without calling any tools. This keeps responses fast and natural.
-Only call tools when you need fresh factual data from the corpus — new topics, specific sources, trend questions, coverage questions.
+If the user's question is a follow-up or clarification on what was just discussed (e.g. "what does that mean?", "can you elaborate?", "why is that significant?"), answer directly without calling any tools.
+
+For every NEW factual question, you MUST call search_corpus. This is non-negotiable — search_corpus is how citation links are generated and shown to the user. If you skip it, the user sees no source links. Call search_corpus in parallel with get_judgments in your first round. Never answer a new factual question without calling search_corpus at least once.
 
 HOW TO WRITE YOUR ANSWER:
 Use this structure every time:
@@ -408,6 +409,10 @@ export default async function handler(req, res) {
         }
 
         const qaIssues = qaResponse(cleanAnswer, citations, evidenceIndex);
+
+        console.log(`[agent] tools called: ${toolCallLog.map(t => t.tool).join(', ')}`);
+        console.log(`[agent] citationPool (${citationPool.length}):`, citationPool.slice(0, 5).map(c => `${c.publisher || '?'} → ${c.url?.slice(0, 60)}`).join(' | '));
+        console.log(`[agent] citations returned (${citations.length}):`, citations.slice(0, 5).map(c => `${c.publisher || '?'} → ${c.url?.slice(0, 60)}`).join(' | '));
 
         return res.status(200).json({
           answer:              cleanAnswer,
