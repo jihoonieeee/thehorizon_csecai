@@ -1,42 +1,72 @@
 /**
- * AskAgentPage — conversational AI threat intelligence Q&A.
- * Sends conversation history for smart follow-up detection.
- * Renders plain-text responses (no markdown).
+ * AskAgentPage — ChatGPT-style AI threat intelligence Q&A.
+ * Renders structured numbered responses. No category focus filter.
  */
 
 import { useState, useRef, useEffect } from "react";
 
-const CATEGORY_OPTIONS = [
-  { value: "",                       label: "All categories" },
-  { value: "traditional_ai_threats", label: "Traditional AI" },
-  { value: "llm_threats",            label: "LLM Threats" },
-  { value: "agentic_ai_threats",     label: "Agentic AI" },
-  { value: "ai_enabled_threats",     label: "AI-Enabled" },
-];
-
 const SUGGESTIONS = [
-  "What's the most important finding right now?",
-  "Are LLM jailbreaks getting more common?",
-  "What agentic AI risks should I prioritize?",
-  "Tell me about MCP vulnerabilities",
-  "How is AI being used as an attack tool?",
-  "What should defenders watch in the next 90 days?",
+  { label: "Most important finding",    prompt: "What's the most important finding right now?" },
+  { label: "LLM jailbreak trends",      prompt: "Are LLM jailbreaks getting more common?" },
+  { label: "Agentic AI risks",          prompt: "What agentic AI risks should I prioritize?" },
+  { label: "MCP vulnerabilities",       prompt: "Tell me about MCP vulnerabilities in the past 90 days" },
+  { label: "AI as an attack tool",      prompt: "How is AI being used as an attack tool?" },
+  { label: "Defender watch list",       prompt: "What should defenders watch in the next 90 days?" },
 ];
 
-// ── Plain text renderer ────────────────────────────────────────────────────────
+// ── Structured text renderer ───────────────────────────────────────────────────
+// Handles: numbered points (1. 2. 3.), plain paragraphs, **bold**
 
-function PlainText({ text }) {
+function renderInline(text) {
+  const parts = [];
+  const re = /\*\*(.+?)\*\*/g;
+  let last = 0, m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    parts.push(<strong key={m.index}>{m[1]}</strong>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts.length ? parts : text;
+}
+
+function StructuredText({ text }) {
   if (!text) return null;
-  // Split into paragraphs on double newlines, then handle single newlines
-  const paragraphs = text.split(/\n{2,}/);
+
+  // Split on double newlines → blocks
+  const blocks = text.split(/\n{2,}/).filter(b => b.trim());
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-      {paragraphs.map((para, i) => {
-        const lines = para.split("\n").filter(l => l.trim());
-        if (!lines.length) return null;
+    <div className="hz-response-body">
+      {blocks.map((block, bi) => {
+        const lines = block.split("\n").map(l => l.trim()).filter(Boolean);
+
+        // Numbered list block
+        if (lines.some(l => /^\d+\.\s/.test(l))) {
+          const items = lines.map((line, li) => {
+            const numMatch = line.match(/^(\d+)\.\s+(.*)/);
+            if (numMatch) {
+              return (
+                <li key={li} className="hz-response-point">
+                  <span className="hz-point-num">{numMatch[1]}</span>
+                  <span className="hz-point-text">{renderInline(numMatch[2])}</span>
+                </li>
+              );
+            }
+            // Non-numbered line inside a mixed block — render as a paragraph
+            return (
+              <li key={li} className="hz-response-point hz-response-point-plain">
+                <span className="hz-point-text">{renderInline(line)}</span>
+              </li>
+            );
+          });
+          return <ol key={bi} className="hz-response-list">{items}</ol>;
+        }
+
+        // Plain paragraph(s)
         return (
-          <p key={i} style={{ margin: 0, lineHeight: 1.65 }}>
-            {lines.join(" ")}
+          <p key={bi} className="hz-response-para">
+            {renderInline(lines.join(" "))}
           </p>
         );
       })}
@@ -44,24 +74,18 @@ function PlainText({ text }) {
   );
 }
 
-// ── Citation button ────────────────────────────────────────────────────────────
+// ── Source button ─────────────────────────────────────────────────────────────
 
 function SourceButton({ c, index }) {
   const label = c.publisher || c.source_title || "Source";
-  const short = label.length > 32 ? label.slice(0, 32) + "…" : label;
+  const short = label.length > 28 ? label.slice(0, 28) + "…" : label;
   return c.url ? (
-    <a
-      href={c.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="hz-source-btn"
-      title={c.source_title || label}
-    >
+    <a href={c.url} target="_blank" rel="noopener noreferrer" className="hz-source-btn" title={c.source_title || label}>
       <span className="hz-source-btn-num">{index + 1}</span>
       {short}
     </a>
   ) : (
-    <span className="hz-source-btn hz-source-btn-nolink" title={c.source_title || label}>
+    <span className="hz-source-btn hz-source-btn-nolink" title={label}>
       <span className="hz-source-btn-num">{index + 1}</span>
       {short}
     </span>
@@ -81,16 +105,14 @@ function Message({ msg, onFollowUp }) {
 
   const confCls = msg.confidence === "high" ? "high"
     : msg.confidence === "moderate" ? "moderate"
-    : msg.confidence === "low" ? "low"
-    : "";
+    : msg.confidence === "low" ? "low" : "";
 
   return (
     <div className="hz-msg-assistant">
-      <div className="hz-msg-assistant-bubble">
-        <PlainText text={msg.content} />
+      <div className="hz-msg-assistant-content">
+        <StructuredText text={msg.content} />
       </div>
 
-      {/* Citations */}
       {msg.citations?.length > 0 && (
         <div className="hz-source-row">
           <span className="hz-source-row-label">Sources</span>
@@ -100,7 +122,6 @@ function Message({ msg, onFollowUp }) {
         </div>
       )}
 
-      {/* Meta row */}
       <div className="hz-msg-meta">
         {msg.confidence && (
           <span className={`hz-msg-conf ${confCls}`} title={msg.confidence_reason}>
@@ -110,19 +131,10 @@ function Message({ msg, onFollowUp }) {
         {msg.temporal_scope && (
           <span className="hz-msg-scope">{msg.temporal_scope}</span>
         )}
-        {msg.caveat && (
-          <span className="hz-msg-caveat" title={msg.caveat}>
-            Note
-          </span>
-        )}
       </div>
 
-      {/* Caveat detail */}
-      {msg.caveat && (
-        <div className="hz-caveat">{msg.caveat}</div>
-      )}
+      {msg.caveat && <div className="hz-caveat">{msg.caveat}</div>}
 
-      {/* Follow-up suggestions */}
       {msg.suggested_followups?.length > 0 && (
         <div className="hz-followups">
           {msg.suggested_followups.slice(0, 2).map((s, i) => (
@@ -139,15 +151,13 @@ function Message({ msg, onFollowUp }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function AskAgentPage({ data, period }) {
-  const [messages, setMessages] = useState([{
-    role: "assistant",
-    content: "Ask me anything about the AI threat landscape. I search the last 90 days by default — but you can ask about any timeframe, like \"in the past 2 weeks\" or \"since January\" or \"all time\".",
-  }]);
+  const [messages, setMessages] = useState([]);
   const [query,    setQuery]    = useState("");
   const [loading,  setLoading]  = useState(false);
-  const [category, setCategory] = useState("");
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
+
+  const hasConversation = messages.length > 0;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -159,24 +169,21 @@ export function AskAgentPage({ data, period }) {
     setQuery("");
 
     const userMsg = { role: "user", content: q };
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages(prev => [...prev, userMsg]);
     setLoading(true);
 
-    // Build text-only history (exclude the current message, exclude system greeting)
-    const history = messages
-      .filter(m => m.role === "user" || m.role === "assistant")
-      .map(m => ({ role: m.role, content: m.content }));
+    const history = messages.map(m => ({ role: m.role, content: m.content }));
 
     try {
       const res  = await fetch("/api/agent", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ query: q, period: data?.period, category, history }),
+        body:    JSON.stringify({ query: q, period: data?.period, history }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || `API error ${res.status}`);
 
-      setMessages((prev) => [...prev, {
+      setMessages(prev => [...prev, {
         role:                "assistant",
         content:             json.answer || "No answer returned.",
         citations:           json.citations            || [],
@@ -184,13 +191,12 @@ export function AskAgentPage({ data, period }) {
         confidence_reason:   json.confidence_reason    || "",
         caveat:              json.caveat               || null,
         suggested_followups: json.suggested_followups  || [],
-        qa_pass:             json.qa_pass              ?? undefined,
         temporal_scope:      json.temporal_scope       || null,
       }]);
     } catch (err) {
-      setMessages((prev) => [...prev, {
-        role:    "assistant",
-        content: `Something went wrong: ${err.message}. Check that the API server is running.`,
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: `Something went wrong: ${err.message}. Make sure the API server is running.`,
         citations: [],
       }]);
     } finally {
@@ -201,69 +207,75 @@ export function AskAgentPage({ data, period }) {
 
   return (
     <div className="hz-chat-shell">
-      {/* Header */}
-      <div className="hz-chat-header">
-        <h1 className="hz-chat-title">Ask Agent</h1>
-        <p className="hz-chat-sub">Grounded answers from the corpus — every response cites its sources.</p>
-      </div>
 
-      {/* Category filter */}
-      <div className="hz-chat-filters">
-        <span className="hz-filter-label">Focus</span>
-        {CATEGORY_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            className={`hz-cat-pill${category === opt.value ? " active" : ""}`}
-            onClick={() => setCategory(opt.value)}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
+      {/* Empty state — centered welcome */}
+      {!hasConversation && !loading && (
+        <div className="hz-chat-welcome">
+          <div className="hz-chat-welcome-icon">◈</div>
+          <h2 className="hz-chat-welcome-title">Ask the Threat Intelligence Agent</h2>
+          <p className="hz-chat-welcome-sub">
+            Searches the last 90 days by default. Ask about any timeframe: "in the past 2 weeks", "since January", "all time".
+          </p>
+          <div className="hz-chat-suggestions-grid">
+            {SUGGESTIONS.map((s) => (
+              <button key={s.prompt} className="hz-suggestion-card" onClick={() => send(s.prompt)}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
-      {/* Suggestion pills */}
-      <div className="hz-suggestions">
-        {SUGGESTIONS.map((s) => (
-          <button key={s} className="hz-suggestion-pill" onClick={() => send(s)}>
-            {s}
-          </button>
-        ))}
-      </div>
+      {/* Chat messages */}
+      {hasConversation && (
+        <div className="hz-chat-window">
+          {messages.map((msg, i) => (
+            <Message key={i} msg={msg} onFollowUp={send} />
+          ))}
+          {loading && (
+            <div className="hz-loading-dot">
+              <span className="hz-loading-dots"><span /><span /><span /></span>
+              Thinking…
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+      )}
 
-      {/* Chat window */}
-      <div className="hz-chat-window">
-        {messages.map((msg, i) => (
-          <Message key={i} msg={msg} onFollowUp={send} />
-        ))}
-        {loading && (
+      {/* Loading in empty state */}
+      {!hasConversation && loading && (
+        <div className="hz-chat-window" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div className="hz-loading-dot">
-            <span className="hz-loading-dots">
-              <span /><span /><span />
-            </span>
+            <span className="hz-loading-dots"><span /><span /><span /></span>
             Thinking…
           </div>
-        )}
-        <div ref={bottomRef} />
+        </div>
+      )}
+
+      {/* Input bar */}
+      <div className={`hz-chat-input-wrap${hasConversation ? " has-messages" : ""}`}>
+        <div className="hz-chat-input-row">
+          <input
+            ref={inputRef}
+            className="hz-chat-input"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && !e.shiftKey && send()}
+            placeholder="Ask about findings, techniques, incidents, trends…"
+          />
+          <button
+            className="hz-chat-send"
+            onClick={() => send()}
+            disabled={loading || !query.trim()}
+          >
+            {loading ? "…" : "↑"}
+          </button>
+        </div>
+        <p className="hz-chat-input-hint">
+          90-day default · specify timeframe for broader or narrower results
+        </p>
       </div>
 
-      {/* Input */}
-      <div className="hz-chat-input-row">
-        <input
-          ref={inputRef}
-          className="hz-chat-input"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
-          placeholder="Ask about findings, techniques, incidents, trends…"
-        />
-        <button
-          className="hz-chat-send"
-          onClick={() => send()}
-          disabled={loading || !query.trim()}
-        >
-          {loading ? "…" : "Send"}
-        </button>
-      </div>
     </div>
   );
 }

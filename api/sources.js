@@ -57,7 +57,7 @@ export default async function handler(req, res) {
 
     let q = supabase
       .from("sources")
-      .select("id,title,url,publisher,author,date_published,main_category,trust_tier,tags,short_summary,validation_status,ai_specificity_score")
+      .select("id,title,url,publisher,author,date_published,main_category,trust_tier,tags,short_summary,summary,analyst_brief,validation_status,ai_specificity_score")
       .not("validation_status", "eq", "reject")
       .order("date_published", { ascending: false })
       .limit(limit);
@@ -83,7 +83,10 @@ export default async function handler(req, res) {
         end:   end   ? end.slice(0, 10)   : null,
       },
       count: data?.length || 0,
-      sources: data || [],
+      sources: (data || []).map(s => ({
+        ...s,
+        short_summary: s.short_summary || s.analyst_brief || s.summary || null,
+      })),
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });

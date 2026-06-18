@@ -138,23 +138,29 @@ If the user's question is a follow-up, clarification, or elaboration on what was
 Only call tools when you need fresh factual data from the corpus — new topics, specific sources, trend questions, coverage questions.
 
 HOW TO WRITE YOUR ANSWER:
-Write in plain, natural English. No markdown formatting — no bullet points starting with dashes, no asterisks for bold, no headers with hashes. Write in short, clear paragraphs like you're speaking to someone.
+Use this structure every time:
 
-Lead with your conclusion — what the evidence actually means — then explain what supports it, then what it means for defenders. Keep it tight: two to four paragraphs is usually right.
+First, one or two sentences directly answering the question — your conclusion up front.
 
-When you cite a source, just mention the publisher naturally: "According to Google Project Zero..." or "CISA reported that..." The clickable source links will appear automatically below your response, so do not write out URLs in the text.
+Then numbered key points (3 to 5). Each point is one clear sentence stating a specific finding, followed by the evidence. Example:
+1. Indirect prompt injection via RAG documents is now confirmed in operational deployments. Three separate incidents were documented this period, each involving externally-sourced document content bypassing system prompts.
+2. Tool-call injection in agentic systems reached consistent proof-of-concept stage across four independent research groups, indicating active development.
 
-Be honest about thin evidence. If you only have one or two sources, say so plainly. If you cannot answer from the corpus, say so and describe what's missing.
+Then one sentence on what defenders should do. Then one sentence on what the data cannot tell us (only if relevant).
 
-Do not invent sources, statistics, or incidents not in the tool results. Do not use hype language. Do not pad with generic security advice.
+Do not use dashes or asterisks. Do not write markdown headers. Number your points with "1." "2." etc. Write each point as a full sentence, not a fragment. Keep it conversational and direct — like briefing a smart colleague.
 
-NEVER expose internal evidence tracking IDs (ev_xxx, ev-xxx) — these are backend codes that must not appear in responses.
+When you cite a source, just mention the publisher naturally in the sentence: "According to Google Project Zero..." or "CISA reported that..." Do not write out URLs — the clickable source links appear automatically below your response.
 
-End your response with these lines (required, on their own lines):
+If evidence is thin (fewer than 3 sources), say so plainly. If you cannot answer from the corpus, say what's missing. Do not invent sources or statistics. No hype language.
+
+NEVER expose internal evidence tracking IDs (ev_xxx, ev-xxx).
+
+End with these lines exactly:
 CONFIDENCE: high|moderate|low
-CONFIDENCE_REASON: one sentence explaining why
+CONFIDENCE_REASON: one sentence
 CAVEAT: one specific limitation, or null
-FOLLOWUP: a concrete follow-up question the analyst should consider
+FOLLOWUP: a concrete follow-up question
 FOLLOWUP: a second follow-up question`;
 }
 
@@ -354,10 +360,20 @@ export default async function handler(req, res) {
         const textBlock = response.content.find(b => b.type === "text");
         const rawText   = textBlock?.text || "(No answer generated)";
 
-        const parsed     = parseResponse(rawText);
+        const parsed      = parseResponse(rawText);
         const cleanAnswer = cleanAnswerText(parsed.answer, evidenceIndex);
-        const citations  = extractCitations(parsed.answer, evidenceIndex, sourceRefs);
-        const qaIssues   = qaResponse(cleanAnswer, citations, evidenceIndex);
+        const citations   = extractCitations(parsed.answer, evidenceIndex, sourceRefs);
+
+        // Always surface every source returned by search_corpus, deduped by URL
+        const citedUrls = new Set(citations.map(c => c.url).filter(Boolean));
+        for (const src of sourceRefs) {
+          if (!src.url || citedUrls.has(src.url)) continue;
+          citations.push({ ref: src.ref, source_title: src.title, url: src.url, publisher: src.publisher, trust_tier: src.trust_tier });
+          citedUrls.add(src.url);
+          if (citations.length >= 12) break;
+        }
+
+        const qaIssues = qaResponse(cleanAnswer, citations, evidenceIndex);
 
         return res.status(200).json({
           answer:              cleanAnswer,
