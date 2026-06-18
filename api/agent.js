@@ -342,6 +342,7 @@ export default async function handler(req, res) {
   const messages = [...historyMessages, { role: "user", content: userText }];
   const evidenceIndex = {};
   let sourceRefs = [];
+  const citationPool = [];   // all source URLs harvested from any tool call
   const toolCallLog = [];
 
   try {
@@ -364,11 +365,11 @@ export default async function handler(req, res) {
         const cleanAnswer = cleanAnswerText(parsed.answer, evidenceIndex);
         const citations   = extractCitations(parsed.answer, evidenceIndex, sourceRefs);
 
-        // Always surface every source returned by search_corpus, deduped by URL
+        // Surface every URL harvested from any tool call (search_corpus + get_evidence)
         const citedUrls = new Set(citations.map(c => c.url).filter(Boolean));
-        for (const src of sourceRefs) {
+        for (const src of citationPool) {
           if (!src.url || citedUrls.has(src.url)) continue;
-          citations.push({ ref: src.ref, source_title: src.title, url: src.url, publisher: src.publisher, trust_tier: src.trust_tier });
+          citations.push({ source_title: src.source_title, url: src.url, publisher: src.publisher, trust_tier: src.trust_tier });
           citedUrls.add(src.url);
           if (citations.length >= 12) break;
         }
@@ -411,11 +412,18 @@ export default async function handler(req, res) {
           if (block.name === "get_evidence" && result.evidence_items) {
             for (const ev of result.evidence_items) {
               evidenceIndex[ev.evidence_id] = ev;
+              // Harvest source URL into citation pool
+              if (ev.source_url) {
+                citationPool.push({
+                  source_title: ev.source_title || "",
+                  url:          ev.source_url,
+                  publisher:    ev.publisher   || "",
+                  trust_tier:   ev.trust_tier  || null,
+                });
+              }
             }
           }
           if (block.name === "get_judgments" && result.judgments) {
-            // Pull evidence IDs referenced in judgments (will be fetched if model calls get_evidence)
-            // Also seed evidenceIndex if the blob returned inline evidence
             for (const j of result.judgments) {
               for (const eid of (j.evidence_ids || [])) {
                 if (!evidenceIndex[eid]) {
@@ -425,8 +433,15 @@ export default async function handler(req, res) {
             }
           }
           if (block.name === "search_corpus" && result.sources) {
-            // Track source refs for [src-N] citation resolution
             sourceRefs = [...sourceRefs, ...result.sources];
+            for (const s of result.sources) {
+              if (s.url) citationPool.push({ source_title: s.title || "", url: s.url, publisher: s.publisher || "", trust_tier: s.trust_tier || null });
+            }
+          }
+          if (block.name === "lookup_cve" && result.results) {
+            for (const r of result.results) {
+              if (r.nvd_url) citationPool.push({ source_title: r.cve_id, url: r.nvd_url, publisher: "NVD", trust_tier: "primary" });
+            }
           }
 
           toolResults.push({
