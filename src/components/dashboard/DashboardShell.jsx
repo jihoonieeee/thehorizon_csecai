@@ -1,13 +1,12 @@
 /**
- * DashboardShell — top-nav shell. Period controls live inside each page.
+ * DashboardShell — top-nav shell. Each page owns its own data fetching.
  */
 
 import { useState } from "react";
-import { useDashboardData } from "../../hooks/useDashboardData.js";
-import { OverviewPage }     from "../../pages/dashboard/OverviewPage.jsx";
-import { AskAgentPage }     from "../../pages/dashboard/AskAgentPage.jsx";
-import { SourcesPage }      from "../../pages/dashboard/SourcesPage.jsx";
-import { LogsPage }         from "../../pages/dashboard/LogsPage.jsx";
+import { OverviewPage } from "../../pages/dashboard/OverviewPage.jsx";
+import { AskAgentPage } from "../../pages/dashboard/AskAgentPage.jsx";
+import { SourcesPage }  from "../../pages/dashboard/SourcesPage.jsx";
+import { LogsPage }     from "../../pages/dashboard/LogsPage.jsx";
 
 const NAV_ITEMS = [
   { id: "overview", label: "Overview" },
@@ -16,25 +15,18 @@ const NAV_ITEMS = [
   { id: "logs",     label: "Logs" },
 ];
 
-// Current month key for the overview's "this month" data
-function currentMonthKey() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function PageContent({ page, data, loading }) {
+function PageContent({ page }) {
   switch (page) {
-    case "overview": return <OverviewPage data={data} loading={loading} />;
-    case "ask":      return <AskAgentPage data={data} />;
+    case "overview": return <OverviewPage />;
+    case "ask":      return <AskAgentPage />;
     case "sources":  return <SourcesPage />;
     case "logs":     return <LogsPage />;
-    default:         return <OverviewPage data={data} loading={loading} />;
+    default:         return <OverviewPage />;
   }
 }
 
 export function DashboardShell() {
   const [activePage, setActivePage] = useState("overview");
-  const { data, loading } = useDashboardData(currentMonthKey());
 
   return (
     <div className="hz-shell">
@@ -58,7 +50,7 @@ export function DashboardShell() {
       </nav>
 
       <div className="hz-content">
-        <PageContent page={activePage} data={data} loading={loading} />
+        <PageContent page={activePage} />
       </div>
     </div>
   );

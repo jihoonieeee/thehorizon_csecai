@@ -3,6 +3,14 @@
     {
       "path": "/api/refresh",
       "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/refresh?days=7",
+      "schedule": "0 0 * * 1"
+    },
+    {
+      "path": "/api/refresh?days=30",
+      "schedule": "0 0 1 * *"
     }
   ]
 }

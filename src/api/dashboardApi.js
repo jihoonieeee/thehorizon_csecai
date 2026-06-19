@@ -1,28 +1,19 @@
 /**
- * Dashboard API client — fetch monthly dashboard data from backend.
- * Falls back to mock data if backend is unavailable.
+ * Dashboard API client.
  */
-
-import { MONTHLY_DASHBOARD } from "../mockData/dashboardData.js";
 
 const BASE = "/api";
 
 /**
- * Fetch monthly dashboard snapshot.
- * @param {string} period - "YYYY-MM" e.g. "2026-05"
- * @returns {Promise<object>} dashboard data object
+ * Fetch overview data for a given time window.
+ * @param {"week"|"month"|"quarter"} win
  */
-export async function fetchMonthlyDashboard(period) {
-  try {
-    const res = await fetch(`${BASE}/dashboard?period=${encodeURIComponent(period || "")}`, { cache: "no-store" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const d = await res.json();
-    if (d.error) throw new Error(d.error);
-    return d;
-  } catch {
-    // Fallback to mock data
-    return { ...MONTHLY_DASHBOARD, _source: "mock" };
-  }
+export async function fetchOverview(win = "quarter") {
+  const res = await fetch(`${BASE}/dashboard?window=${encodeURIComponent(win)}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const d = await res.json();
+  if (d.error) throw new Error(d.error);
+  return d;
 }
 
 /**
