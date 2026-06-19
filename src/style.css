@@ -1897,6 +1897,81 @@ a:hover { text-decoration: underline; }
   margin: 0;
 }
 
+/* ── Cost history cards & window buttons ───────────────────────────────────── */
+
+.hz-log-window-btn {
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.12s;
+  font-family: inherit;
+}
+
+.hz-log-window-btn:hover { border-color: var(--accent-border); color: var(--accent-mid); }
+
+.hz-log-window-btn.active {
+  background: var(--accent-dim);
+  border-color: var(--accent-border);
+  color: var(--accent-mid);
+  font-weight: 600;
+}
+
+.hz-log-cost-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 720px) {
+  .hz-log-cost-summary { grid-template-columns: repeat(2, 1fr); }
+}
+
+.hz-log-cost-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.hz-log-cost-card-total {
+  background: var(--accent-dim);
+  border-color: var(--accent-border);
+}
+
+.hz-log-cost-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+}
+
+.hz-log-cost-card-total .hz-log-cost-label { color: var(--accent-mid); }
+
+.hz-log-cost-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.hz-log-cost-card-total .hz-log-cost-value { color: var(--accent-mid); }
+
+.hz-log-cost-sub {
+  font-size: 0.65rem;
+  color: var(--text-tertiary);
+}
+
 /* ── Shared badges ─────────────────────────────────────────────────────────── */
 
 .hz-badge {

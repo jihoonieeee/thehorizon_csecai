@@ -124,114 +124,109 @@ function AgentCallLog() {
   );
 }
 
-// ── Session LLM Usage ──────────────────────────────────────────────────────────
+// ── Cost History ───────────────────────────────────────────────────────────────
 
-function SessionUsage() {
+const WINDOW_OPTIONS = [
+  { label: "7 days",  days: 7  },
+  { label: "30 days", days: 30 },
+  { label: "90 days", days: 90 },
+];
+
+function CostHistory() {
+  const [window, setWindow] = useState(30);
   const [data, setData]     = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]   = useState(null);
 
   useEffect(() => {
-    fetch("/api/usage")
+    setLoading(true);
+    setError(null);
+    fetch(`/api/usage?days=${window}`)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
-  }, []);
-
-  if (loading) return <section className="hz-log-section"><p className="hz-log-loading">Loading usage…</p></section>;
-  if (error)   return <section className="hz-log-section"><p className="hz-log-error">Failed to load usage: {error}</p></section>;
-  if (!data)   return null;
-
-  const budgetPct = typeof data.daily_budget_pct === "string" ? data.daily_budget_pct : null;
+  }, [window]);
 
   return (
     <section className="hz-log-section">
       <div className="hz-log-section-header">
         <div>
-          <h3 className="hz-log-section-title">Session LLM Usage</h3>
-          <p className="hz-log-section-sub">
-            Pipeline token usage for this server session ({data.session_date}). Resets on server restart.
-          </p>
+          <h3 className="hz-log-section-title">Cost History</h3>
+          <p className="hz-log-section-sub">Cumulative AI costs stored in the database. Persists across restarts.</p>
         </div>
         <div className="hz-log-section-actions">
-          <span className="hz-log-summary-chip">{fmt(data.daily_total_tokens)} tokens today</span>
-          <span className="hz-log-summary-chip hz-log-summary-chip-cost">${(data.total_cost_usd || 0).toFixed(4)} total</span>
-          {budgetPct && <span className="hz-log-summary-chip">{budgetPct} of budget</span>}
+          {WINDOW_OPTIONS.map(o => (
+            <button
+              key={o.days}
+              className={`hz-log-window-btn${window === o.days ? " active" : ""}`}
+              onClick={() => setWindow(o.days)}
+            >
+              {o.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {data.exhausted_providers?.length > 0 && (
-        <div className="hz-log-alert">
-          Exhausted providers: {data.exhausted_providers.join(", ")}
-        </div>
-      )}
+      {loading && <p className="hz-log-loading">Loading…</p>}
+      {error   && <p className="hz-log-error">Failed to load cost history: {error}</p>}
 
-      <div className="hz-log-two-col">
-        {/* By provider */}
-        <div>
-          <h4 className="hz-log-sub-title">By Provider</h4>
-          {(!data.by_provider || data.by_provider.length === 0) ? (
-            <p className="hz-log-empty-small">No pipeline LLM calls this session.</p>
-          ) : (
-            <table className="hz-log-table hz-log-table-sm">
-              <thead>
-                <tr>
-                  <th>Provider</th>
-                  <th>Calls</th>
-                  <th>Input</th>
-                  <th>Output</th>
-                  <th>Cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.by_provider.map((p, i) => (
-                  <tr key={i}>
-                    <td>{p.label || p.provider}</td>
-                    <td className="hz-log-td-num">{fmt(p.calls)}</td>
-                    <td className="hz-log-td-num">{fmt(p.input_tokens)}</td>
-                    <td className="hz-log-td-num">{fmt(p.output_tokens)}</td>
-                    <td className="hz-log-td-num hz-log-td-cost">${(p.cost?.total_usd || 0).toFixed(4)}</td>
+      {data && !loading && (
+        <>
+          {/* Summary chips */}
+          <div className="hz-log-cost-summary">
+            <div className="hz-log-cost-card">
+              <span className="hz-log-cost-label">This month</span>
+              <span className="hz-log-cost-value">{fmtCost(data.month_cost_usd)}</span>
+            </div>
+            <div className="hz-log-cost-card">
+              <span className="hz-log-cost-label">Ingestion &amp; processing</span>
+              <span className="hz-log-cost-value">{fmtCost(data.pipeline_cost_usd)}</span>
+              <span className="hz-log-cost-sub">last {window} days</span>
+            </div>
+            <div className="hz-log-cost-card">
+              <span className="hz-log-cost-label">AI Assistant queries</span>
+              <span className="hz-log-cost-value">{fmtCost(data.agent_cost_usd)}</span>
+              <span className="hz-log-cost-sub">last {window} days</span>
+            </div>
+            <div className="hz-log-cost-card hz-log-cost-card-total">
+              <span className="hz-log-cost-label">Total</span>
+              <span className="hz-log-cost-value">{fmtCost(data.total_cost_usd)}</span>
+              <span className="hz-log-cost-sub">last {window} days</span>
+            </div>
+          </div>
+
+          {/* Daily breakdown table */}
+          {data.daily_series?.length > 0 ? (
+            <div className="hz-log-table-wrap">
+              <table className="hz-log-table hz-log-table-sm">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Ingestion &amp; processing</th>
+                    <th>AI Assistant</th>
+                    <th>Day total</th>
+                    <th>Tokens</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        {/* By task */}
-        <div>
-          <h4 className="hz-log-sub-title">By Task</h4>
-          {(!data.by_task || data.by_task.length === 0) ? (
-            <p className="hz-log-empty-small">No pipeline tasks this session.</p>
+                </thead>
+                <tbody>
+                  {data.daily_series.map((d, i) => (
+                    <tr key={i}>
+                      <td className="hz-log-td-mono">{d.date}</td>
+                      <td className="hz-log-td-num">{d.pipeline_cost > 0 ? fmtCost(d.pipeline_cost) : "—"}</td>
+                      <td className="hz-log-td-num">{d.agent_cost    > 0 ? fmtCost(d.agent_cost)    : "—"}</td>
+                      <td className="hz-log-td-num hz-log-td-cost hz-log-td-bold">{fmtCost(d.total_cost)}</td>
+                      <td className="hz-log-td-num">{fmt(d.total_tokens)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
-            <table className="hz-log-table hz-log-table-sm">
-              <thead>
-                <tr>
-                  <th>Task</th>
-                  <th>Calls</th>
-                  <th>Input</th>
-                  <th>Output</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.by_task.slice(0, 20).map((t, i) => (
-                  <tr key={i}>
-                    <td className="hz-log-td-task">{t.task}</td>
-                    <td className="hz-log-td-num">{fmt(t.calls)}</td>
-                    <td className="hz-log-td-num">{fmt(t.input_tokens)}</td>
-                    <td className="hz-log-td-num">{fmt(t.output_tokens)}</td>
-                    <td className="hz-log-td-num hz-log-td-bold">{fmt(t.total_tokens)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <p className="hz-log-empty">No cost records yet. Costs are logged after each ingestion run and AI Assistant query.</p>
           )}
-        </div>
-      </div>
 
-      {data.pricing_note && (
-        <p className="hz-log-note">{data.pricing_note}</p>
+          <p className="hz-log-note">Cost estimates use approximate published pricing.</p>
+        </>
       )}
     </section>
   );
@@ -371,8 +366,8 @@ function PipelineRuns() {
 export function LogsPage() {
   return (
     <div className="hz-logs-page">
+      <CostHistory />
       <AgentCallLog />
-      <SessionUsage />
       <PipelineRuns />
     </div>
   );

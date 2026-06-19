@@ -14,6 +14,7 @@
 
 import { TOOLS, executeTool } from "../lib/agent/agentTools.js";
 import { ANTHROPIC_MODELS } from "../lib/llm/taskProfiles.js";
+import { logAgentCostToDB } from "../lib/llm/usagePersistence.js";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -441,6 +442,14 @@ export default async function handler(req, res) {
         const estimatedCostUsd =
           (totalInputTokens  / 1_000_000) * AGENT_PRICING.input +
           (totalOutputTokens / 1_000_000) * AGENT_PRICING.output;
+
+        // Persist cost to DB (fire-and-forget — don't delay the response)
+        logAgentCostToDB({
+          inputTokens:  totalInputTokens,
+          outputTokens: totalOutputTokens,
+          rounds:       round + 1,
+          costUsd:      estimatedCostUsd,
+        }).catch(() => {});
 
         return res.status(200).json({
           answer:              cleanAnswer,

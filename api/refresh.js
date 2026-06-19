@@ -5,6 +5,7 @@ import {
   finishIngestionRun,
   failIngestionRun,
 } from "../lib/storage/ingestionRunStore.js";
+import { flushPipelineCostToDB } from "../lib/llm/usagePersistence.js";
 
 function isAuthorized(req) {
   const secret = process.env.CRON_SECRET;
@@ -79,6 +80,7 @@ export default async function handler(req, res) {
     const stored = await saveSnapshotToDatabase(snapshot);
 
     await finishIngestionRun(runId, snapshot);
+    flushPipelineCostToDB(runId).catch(() => {}); // fire-and-forget
 
     return res.status(200).json({
       run_id: runId,

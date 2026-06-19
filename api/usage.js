@@ -1,75 +1,69 @@
 /**
- * GET /api/usage — LLM token usage summary for the current server session.
+ * GET /api/usage — persistent LLM cost history from the database.
  *
- * Returns token counts broken down by provider and task, plus rough cost
- * estimates based on published pricing. Counts reset when the server restarts
- * (in-memory only; not persisted to DB).
+ * Query params:
+ *   ?days=N  (default 30) — how many days of history to return
  *
- * Also returns cache stats and exhausted-provider list.
+ * Returns aggregated cost data by date and context ('pipeline' | 'agent'),
+ * without exposing implementation details (no provider/task names).
  */
 
-import { getTokenUsageSummary } from "../lib/llm/llmRouter.js";
-
-// ── Approximate pricing per 1M tokens (USD) ──────────────────────────────────
-// Prices as of mid-2026; free tiers show $0 for typical small-scale use.
-const PRICING = {
-  gemini:      { input: 0.075,  output: 0.30,  label: "Gemini (Flash)" },
-  anthropic:   { input: 3.00,   output: 15.00, label: "Anthropic (Sonnet)" },
-  openai:      { input: 0.15,   output: 0.60,  label: "OpenAI (4o-mini)" },
-  groq:        { input: 0.05,   output: 0.08,  label: "Groq (Llama)" },
-  cloudflare:  { input: 0.011,  output: 0.033, label: "Cloudflare (Workers AI)" },
-  openrouter:  { input: 0.10,   output: 0.40,  label: "OpenRouter" },
-  ollama:      { input: 0,      output: 0,     label: "Ollama (local)" },
-};
-
-function estimateCost(provider, inputTokens, outputTokens) {
-  const p = PRICING[provider.toLowerCase()] || { input: 0, output: 0 };
-  return {
-    input_usd:  (inputTokens  / 1_000_000) * p.input,
-    output_usd: (outputTokens / 1_000_000) * p.output,
-    total_usd:  (inputTokens  / 1_000_000) * p.input + (outputTokens / 1_000_000) * p.output,
-    label:      p.label || provider,
-  };
-}
+import { getCostHistory } from "../lib/llm/usagePersistence.js";
 
 export default async function handler(req, res) {
   try {
-    const usage = getTokenUsageSummary();
+    const days = Math.min(Number(req.query.days || 30), 365);
+    const rows = await getCostHistory(days);
 
-    // Augment each provider entry with cost estimates
-    const byProvider = Object.entries(usage.by_provider || {}).map(([provider, stats]) => ({
-      provider,
-      label:         PRICING[provider.toLowerCase()]?.label || provider,
-      calls:         stats.calls,
-      input_tokens:  stats.input,
-      output_tokens: stats.output,
-      total_tokens:  stats.input + stats.output,
-      cost:          estimateCost(provider, stats.input, stats.output),
-    }));
+    // Aggregate by date
+    const byDate = {};
+    for (const row of rows) {
+      const d = row.date;
+      if (!byDate[d]) byDate[d] = { date: d, pipeline_cost: 0, agent_cost: 0, total_cost: 0, total_tokens: 0 };
+      const cost = parseFloat(row.cost_usd) || 0;
+      const tok  = (row.input_tokens || 0) + (row.output_tokens || 0);
+      byDate[d].total_cost   += cost;
+      byDate[d].total_tokens += tok;
+      if (row.context === "pipeline") byDate[d].pipeline_cost += cost;
+      if (row.context === "agent")    byDate[d].agent_cost    += cost;
+    }
 
-    const totalCost = byProvider.reduce((sum, p) => sum + p.cost.total_usd, 0);
+    const dailySeries = Object.values(byDate)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map(d => ({
+        date:          d.date,
+        pipeline_cost: round8(d.pipeline_cost),
+        agent_cost:    round8(d.agent_cost),
+        total_cost:    round8(d.total_cost),
+        total_tokens:  d.total_tokens,
+      }));
 
-    const byTask = Object.entries(usage.by_task || {}).map(([task, stats]) => ({
-      task,
-      calls:        stats.calls,
-      input_tokens: stats.input,
-      output_tokens: stats.output,
-      total_tokens: stats.input + stats.output,
-    })).sort((a, b) => b.total_tokens - a.total_tokens);
+    // Totals
+    const totalPipeline = rows.filter(r => r.context === "pipeline").reduce((s, r) => s + (parseFloat(r.cost_usd) || 0), 0);
+    const totalAgent    = rows.filter(r => r.context === "agent")   .reduce((s, r) => s + (parseFloat(r.cost_usd) || 0), 0);
+    const totalTokens   = rows.reduce((s, r) => s + (r.input_tokens || 0) + (r.output_tokens || 0), 0);
+
+    // This-month slice
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const monthKey = monthStart.toISOString().slice(0, 7);
+    const thisMonth = rows.filter(r => r.date >= `${monthKey}-01`);
+    const monthCost = thisMonth.reduce((s, r) => s + (parseFloat(r.cost_usd) || 0), 0);
 
     return res.status(200).json({
-      session_date:        usage.session_date,
-      daily_total_tokens:  usage.daily_total,
-      daily_budget:        usage.daily_budget,
-      daily_budget_pct:    usage.daily_budget_pct,
-      total_cost_usd:      totalCost,
-      by_provider:         byProvider,
-      by_task:             byTask,
-      cache:               usage.cache,
-      exhausted_providers: usage.exhausted_providers,
-      pricing_note:        "Cost estimates use approximate published pricing. Token counts are estimates (chars/4).",
+      days_window:      days,
+      total_cost_usd:   round8(totalPipeline + totalAgent),
+      pipeline_cost_usd: round8(totalPipeline),
+      agent_cost_usd:   round8(totalAgent),
+      month_cost_usd:   round8(monthCost),
+      total_tokens:     totalTokens,
+      daily_series:     dailySeries,
+      row_count:        rows.length,
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 }
+
+function round8(n) { return Math.round(n * 1e8) / 1e8; }
