@@ -23,10 +23,11 @@
  */
 
 import "dotenv/config";
-import { createHash }          from "crypto";
-import { createClient }        from "@supabase/supabase-js";
-import { normalizeSource }     from "../lib/pipeline/ingest/normalizeSource.js";
+import { createHash }              from "crypto";
+import { createClient }            from "@supabase/supabase-js";
+import { normalizeSource }         from "../lib/pipeline/ingest/normalizeSource.js";
 import { extractDocumentSections } from "../lib/pipeline/ingest/extractDocumentSections.js";
+import { validateAndTypeSource }   from "../lib/pipeline/validation/validateAndTypeSource.js";
 
 const args         = process.argv.slice(2);
 const getArg       = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i+1] ? args[i+1] : d; };
@@ -323,8 +324,10 @@ function makeId(url) {
 }
 
 async function existingIds(ids) {
-  const { data } = await supabase.from("sources").select("id").in("id", ids);
-  return new Set((data || []).map(r => r.id));
+  // Only skip sources that have already been through Layer 3 (status is set)
+  // Re-process null-status sources so they get proper validation
+  const { data } = await supabase.from("sources").select("id,validation_status").in("id", ids);
+  return new Set((data || []).filter(r => r.validation_status !== null).map(r => r.id));
 }
 
 // Only columns that exist in the sources table
@@ -375,9 +378,22 @@ async function ingestArticle(url, lastmod, pub) {
 
   // Save with validation_status='review' — enrichCorpus + Layer 3 will classify
   // (same flow as RSS feed items that need review)
+  const validated = await validateAndTypeSource(row, { skipLlm: false });
   const dbRow = {
-    ...row,
-    validation_status:       null,   // let the normal pipeline decide
+    id:                row.id,
+    url:               row.url,
+    title:             row.title,
+    publisher:         row.publisher,
+    author:            row.publisher,
+    date_published:    row.date_published,
+    source_type:       validated.source_type || row.source_type,
+    full_text:         row.full_text,
+    summary:           row.full_text?.slice(0, 500) || "",
+    trust_tier:        row.trust_tier,
+    main_category:     validated.main_category || null,
+    validation_status: validated.validation_status || "review",
+    ai_threat_focus:   validated.ai_threat_focus || null,
+    validation_summary: validated.validation_summary || null,
     claim_extraction_status: null,
   };
 
@@ -451,7 +467,7 @@ async function main() {
         // ghost_rss / wp_api already have full text — save directly
         if (entry.text && entry.text.length >= 200) {
           try {
-            const row = normalizeSource({
+            const normalized = normalizeSource({
               id:             makeId(entry.url),
               title:          entry.title || entry.url.split("/").filter(Boolean).pop()?.replace(/-/g, " ") || "",
               url:            entry.url,
@@ -462,7 +478,26 @@ async function main() {
               full_text:      entry.text,
               trust_tier:     pub.trust_tier,
             });
-            await upsertSource({ ...row, validation_status: null, claim_extraction_status: null });
+            // Run Layer 3 validation so only AI-relevant content passes to enrichCorpus
+            const validated = await validateAndTypeSource(normalized, { skipLlm: false });
+            const row = {
+              id:                normalized.id,
+              url:               normalized.url,
+              title:             normalized.title,
+              publisher:         normalized.publisher,
+              author:            normalized.publisher,
+              date_published:    normalized.date_published,
+              source_type:       validated.source_type || normalized.source_type,
+              full_text:         normalized.full_text,
+              summary:           normalized.full_text?.slice(0, 500) || "",
+              trust_tier:        normalized.trust_tier,
+              main_category:     validated.main_category || null,
+              validation_status: validated.validation_status || "review",
+              ai_threat_focus:   validated.ai_threat_focus || null,
+              validation_summary: validated.validation_summary || null,
+              claim_extraction_status: null,
+            };
+            await upsertSource(row);
             result = { status: "saved" };
           } catch (err) {
             result = { status: "fetch_failed", reason: err.message };
