@@ -49,26 +49,47 @@ const supabase = createClient(
 // sitemap: direct urlset OR sitemap index (resolved automatically)
 // urlFilter: only keep URLs matching this pattern (avoids tag/author pages)
 
+// ── Platform strategies ──────────────────────────────────────────────────────
+// ghost_rss  → paginated RSS feed (/rss/ → /rss/?page=2 …) — returns full content
+// wp_api     → WordPress JSON REST API (/wp-json/wp/v2/posts) — returns full content
+// rss_only   → standard RSS (current items only, used as a fallback signal)
+// sitemap    → HTML scraping from sitemap URLs (works on static/non-JS sites)
+
 const PUBLISHERS = [
+  // ── Ghost CMS blogs (paginated RSS gives full historical content) ──────────
   {
     name:        "Cisco Talos",
     publisher:   "Cisco Talos",
-    sitemaps:    ["https://blog.talosintelligence.com/sitemap-posts.xml"],
+    strategy:    "ghost_rss",
+    rssBase:     "https://blog.talosintelligence.com/rss/",
     trust_tier:  "high",
     source_type: "threat_intelligence",
-    urlFilter:   /^https:\/\/blog\.talosintelligence\.com\/[a-z0-9-]+\/?$/,
   },
+  {
+    name:        "Embrace The Red",
+    publisher:   "Wunderwuzzi (Embrace The Red)",
+    strategy:    "ghost_rss",
+    rssBase:     "https://embracethered.com/blog/index.xml",
+    trust_tier:  "high",
+    source_type: "research_finding",
+  },
+
+  // ── WordPress blogs with paginated RSS (full content in feed) ───────────────
   {
     name:        "SentinelOne Labs",
     publisher:   "SentinelOne",
-    sitemaps:    ["https://www.sentinelone.com/labs-sitemap.xml"],
+    strategy:    "ghost_rss",   // WP also supports ?paged=N on RSS
+    rssBase:     "https://www.sentinelone.com/labs/feed/",
+    rssPageParam:"paged",
     trust_tier:  "high",
     source_type: "threat_intelligence",
-    urlFilter:   /sentinelone\.com\/blog\/|sentinelone\.com\/labs\//,
   },
+
+  // ── Static/Hugo sites — sitemap + HTML fetch ───────────────────────────────
   {
     name:        "CrowdStrike Blog",
     publisher:   "CrowdStrike",
+    strategy:    "sitemap",
     sitemaps:    ["https://www.crowdstrike.com/post-sitemap.xml",
                   "https://www.crowdstrike.com/post-sitemap2.xml"],
     trust_tier:  "high",
@@ -76,74 +97,31 @@ const PUBLISHERS = [
     urlFilter:   /crowdstrike\.com\/blog\//,
   },
   {
-    name:        "Palo Alto Unit 42",
-    publisher:   "Palo Alto Networks Unit 42",
-    sitemaps:    ["https://unit42.paloaltonetworks.com/sitemap.xml"],
+    name:        "Bishop Fox",
+    publisher:   "Bishop Fox",
+    strategy:    "sitemap",
+    sitemaps:    ["https://bishopfox.com/sitemap.xml"],
     trust_tier:  "high",
-    source_type: "threat_intelligence",
-    urlFilter:   /unit42\.paloaltonetworks\.com\/[a-z0-9-]+\/?$/,
+    source_type: "research_finding",
+    urlFilter:   /bishopfox\.com\/blog\//,
     isSitemapIndex: true,
-    indexFilter: /post/,
+    indexFilter: /blog/,
   },
+
+  // ── Sitemap + HTML (static sites / Hugo / Jekyll — no JS rendering) ────────
   {
     name:        "Google Security Blog",
     publisher:   "Google",
+    strategy:    "sitemap",
     sitemaps:    ["https://security.googleblog.com/sitemap.xml"],
     trust_tier:  "high",
     source_type: "research_finding",
     urlFilter:   /security\.googleblog\.com\/\d{4}\/\d{2}\//,
   },
   {
-    name:        "Mandiant",
-    publisher:   "Mandiant",
-    sitemaps:    ["https://www.mandiant.com/sitemap.xml"],
-    trust_tier:  "high",
-    source_type: "threat_intelligence",
-    urlFilter:   /mandiant\.com\/resources\/(blog|reports|research)\//,
-    isSitemapIndex: true,
-    indexFilter: /blog|research|report/,
-  },
-  {
-    name:        "Proofpoint Threat Insight",
-    publisher:   "Proofpoint",
-    sitemaps:    ["https://www.proofpoint.com/sitemap.xml"],
-    trust_tier:  "high",
-    source_type: "threat_intelligence",
-    urlFilter:   /proofpoint\.com\/(us|uk)\/blog\/threat-insight\//,
-    isSitemapIndex: true,
-    indexFilter: /blog/,
-  },
-  {
-    name:        "Embrace The Red",
-    publisher:   "Wunderwuzzi (Embrace The Red)",
-    sitemaps:    ["https://embracethered.com/blog/sitemap.xml"],
-    trust_tier:  "high",
-    source_type: "research_finding",
-    urlFilter:   /embracethered\.com\/blog\/posts?\//,
-  },
-  {
-    name:        "Elastic Security Labs",
-    publisher:   "Elastic",
-    sitemaps:    ["https://www.elastic.co/sitemap.xml"],
-    trust_tier:  "high",
-    source_type: "threat_intelligence",
-    urlFilter:   /elastic\.co\/security-labs\//,
-    isSitemapIndex: true,
-    indexFilter: /security-labs/,
-  },
-  {
-    name:        "Adversa AI",
-    publisher:   "Adversa AI",
-    sitemaps:    ["https://adversa.ai/sitemap.xml"],
-    trust_tier:  "high",
-    source_type: "research_finding",
-    urlFilter:   /adversa\.ai\/blog\//,
-    isSitemapIndex: true,
-    indexFilter: /blog/,
-  },
-  {
     name:        "Trail of Bits",
     publisher:   "Trail of Bits",
+    strategy:    "sitemap",
     sitemaps:    ["https://blog.trailofbits.com/sitemap.xml"],
     trust_tier:  "high",
     source_type: "research_finding",
@@ -152,16 +130,105 @@ const PUBLISHERS = [
     indexFilter: /post/,
   },
   {
-    name:        "Bishop Fox",
-    publisher:   "Bishop Fox",
-    sitemaps:    ["https://bishopfox.com/sitemap.xml"],
+    name:        "Adversa AI",
+    publisher:   "Adversa AI",
+    strategy:    "sitemap",
+    sitemaps:    ["https://adversa.ai/sitemap.xml"],
     trust_tier:  "high",
     source_type: "research_finding",
-    urlFilter:   /bishopfox\.com\/blog\//,
+    urlFilter:   /adversa\.ai\/blog\//,
     isSitemapIndex: true,
     indexFilter: /blog/,
   },
 ];
+
+// ── Ghost RSS paginator ────────────────────────────────────────────────────────
+// Ghost exposes full post content in paginated RSS: /rss/?page=N
+// Returns [{url, lastmod, title, text}]
+
+async function fetchGhostRssPage(base, page, pageParam = "page") {
+  const sep  = base.includes("?") ? "&" : "?";
+  const url  = page === 1 ? base : `${base}${sep}${pageParam}=${page}`;
+  const xml  = await fetchXml(url, 20000);
+  const items = [];
+  for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
+    const chunk = m[1];
+    const getTag = (t) => chunk.match(new RegExp(`<${t}>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/${t}>`))?.[1]?.trim() || "";
+    const loc  = getTag("link") || getTag("guid");
+    const date = getTag("pubDate") || getTag("dc:date");
+    // Ghost includes full content in <content:encoded>
+    const body = getTag("content:encoded") || getTag("description") || "";
+    const title = getTag("title");
+    // Strip HTML tags for plain text
+    const text = body.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim().slice(0, MAX_HTML_CHARS);
+    if (loc && text.length > 100) items.push({ url: loc, lastmod: date, title, text });
+  }
+  return items;
+}
+
+async function resolveGhostRss(pub, cutoffDate, limit) {
+  const entries = [];
+  let page = 1;
+  const pageParam = pub.rssPageParam || "page";   // Ghost uses ?page=N, WP uses ?paged=N
+  while (entries.length < limit) {
+    let items;
+    try { items = await fetchGhostRssPage(pub.rssBase, page, pageParam); }
+    catch { break; } // no more pages or blocked
+    if (!items.length) break;
+
+    let hitCutoff = false;
+    for (const item of items) {
+      const d = item.lastmod ? new Date(item.lastmod) : null;
+      if (d && d < cutoffDate) { hitCutoff = true; break; }
+      entries.push(item);
+      if (entries.length >= limit) break;
+    }
+    if (hitCutoff || entries.length >= limit) break;
+    page++;
+    await new Promise(r => setTimeout(r, 500)); // polite delay
+  }
+  return entries;
+}
+
+// ── WordPress REST API ────────────────────────────────────────────────────────
+// WP REST API returns JSON with full rendered content: /wp-json/wp/v2/posts
+// Returns [{url, lastmod, title, text}]
+
+async function fetchWpApiPage(base, page, cutoffDate) {
+  const after = cutoffDate.toISOString();
+  const url   = `${base}?per_page=50&page=${page}&after=${after}&_fields=link,date,title,content`;
+  const r = await fetch(url, {
+    signal: AbortSignal.timeout(20000),
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; the-horizon-ingester/1.0)", "Accept": "application/json" },
+    redirect: "follow",
+  });
+  if (r.status === 400) return []; // WP returns 400 for page beyond max
+  if (!r.ok) throw new Error(`WP API HTTP ${r.status}`);
+  const posts = await r.json();
+  if (!Array.isArray(posts)) return [];
+  return posts.map(p => {
+    const html = p.content?.rendered || "";
+    const text = html.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim().slice(0, MAX_HTML_CHARS);
+    const title = (p.title?.rendered || "").replace(/<[^>]+>/g, "").trim();
+    return { url: p.link, lastmod: p.date, title, text };
+  }).filter(p => p.url && p.text.length > 100);
+}
+
+async function resolveWpApi(pub, cutoffDate, limit) {
+  const entries = [];
+  let page = 1;
+  while (entries.length < limit) {
+    let items;
+    try { items = await fetchWpApiPage(pub.apiBase, page, cutoffDate); }
+    catch { break; }
+    if (!items.length) break;
+    entries.push(...items);
+    if (items.length < 50) break; // last page
+    page++;
+    await new Promise(r => setTimeout(r, 400));
+  }
+  return entries.slice(0, limit);
+}
 
 // ── Sitemap parsing ────────────────────────────────────────────────────────────
 
@@ -260,8 +327,18 @@ async function existingIds(ids) {
   return new Set((data || []).map(r => r.id));
 }
 
+// Only columns that exist in the sources table
+const DB_COLUMNS = new Set([
+  "id","url","title","publisher","author","date_published","source_type",
+  "full_text","summary","trust_tier","tags","main_category","ai_specificity_score",
+  "relevance_tier","validation_status","layer3_status","validation_summary",
+  "ai_threat_focus","candidate_domain","downstream_route","intelligence",
+  "short_summary","analyst_brief","claim_extraction_status","source_type",
+]);
+
 async function upsertSource(row) {
-  const { error } = await supabase.from("sources").upsert(row, { onConflict: "id" });
+  const clean = Object.fromEntries(Object.entries(row).filter(([k]) => DB_COLUMNS.has(k)));
+  const { error } = await supabase.from("sources").upsert(clean, { onConflict: "id" });
   if (error) throw new Error(error.message);
 }
 
@@ -326,53 +403,79 @@ async function main() {
   let totalSaved = 0, totalSkipped = 0, totalFailed = 0;
 
   for (const pub of publishers) {
-    process.stdout.write(`  ${pub.name.padEnd(30)} resolving sitemap... `);
+    process.stdout.write(`  ${pub.name.padEnd(30)} [${pub.strategy}] fetching... `);
 
-    let entries;
+    // Resolve entries using the appropriate strategy
+    let richEntries = []; // [{url, lastmod, title?, text?}]
     try {
-      entries = await resolveUrls(pub, cutoffDate);
+      if (pub.strategy === "ghost_rss") {
+        richEntries = await resolveGhostRss(pub, cutoffDate, PER_PUB_LIMIT);
+      } else if (pub.strategy === "wp_api") {
+        richEntries = await resolveWpApi(pub, cutoffDate, PER_PUB_LIMIT);
+      } else {
+        const urlEntries = await resolveUrls(pub, cutoffDate);
+        richEntries = urlEntries.slice(0, PER_PUB_LIMIT).map(e => ({ ...e, text: null }));
+      }
     } catch (err) {
-      console.log(`FAIL (${err.message.slice(0, 60)})`);
+      console.log(`FAIL (${err.message.slice(0, 70)})`);
       continue;
     }
 
-    entries = entries.slice(0, PER_PUB_LIMIT);
-    process.stdout.write(`${entries.length} URLs in range\n`);
-
-    if (entries.length === 0) continue;
+    process.stdout.write(`${richEntries.length} posts\n`);
+    if (richEntries.length === 0) continue;
 
     if (DRY_RUN) {
-      entries.slice(0, 5).forEach(e => console.log(`    ${e.lastmod?.slice(0,10) || "?"} ${e.url}`));
-      if (entries.length > 5) console.log(`    ... and ${entries.length - 5} more`);
+      richEntries.slice(0, 5).forEach(e =>
+        console.log(`    ${(e.lastmod||"?").slice(0,10)} [${e.text?.length||0}ch] ${e.url}`)
+      );
+      if (richEntries.length > 5) console.log(`    ... and ${richEntries.length - 5} more`);
       continue;
     }
 
     // Check which IDs already exist
-    const ids = entries.map(e => makeId(e.url));
+    const ids = richEntries.map(e => makeId(e.url));
     const existing = await existingIds(ids);
-    const toFetch  = entries.filter(e => !existing.has(makeId(e.url)));
+    const toProcess = richEntries.filter(e => !existing.has(makeId(e.url)));
 
-    const alreadyIn = entries.length - toFetch.length;
-    if (alreadyIn > 0) process.stdout.write(`    ${alreadyIn} already in DB, fetching ${toFetch.length} new\n`);
+    const alreadyIn = richEntries.length - toProcess.length;
+    if (alreadyIn > 0) process.stdout.write(`    ${alreadyIn} already in DB, ingesting ${toProcess.length} new\n`);
+    if (toProcess.length === 0) continue;
 
-    // Fetch + ingest with bounded concurrency
     let saved = 0, skipped = 0, failed = 0;
     let i = 0;
 
     async function worker() {
-      while (i < toFetch.length) {
-        const { url, lastmod } = toFetch[i++];
-        try {
-          const result = await ingestArticle(url, lastmod, pub);
-          if      (result.status === "saved")        { saved++;   process.stdout.write("."); }
-          else if (result.status === "fetch_failed") { failed++;  process.stdout.write("x"); }
-          else                                       { skipped++; process.stdout.write("_"); }
-        } catch (err) {
-          failed++;
-          process.stdout.write("x");
+      while (i < toProcess.length) {
+        const entry = toProcess[i++];
+        let result;
+        // ghost_rss / wp_api already have full text — save directly
+        if (entry.text && entry.text.length >= 200) {
+          try {
+            const row = normalizeSource({
+              id:             makeId(entry.url),
+              title:          entry.title || entry.url.split("/").filter(Boolean).pop()?.replace(/-/g, " ") || "",
+              url:            entry.url,
+              publisher:      pub.publisher,
+              author:         pub.publisher,
+              date_published: entry.lastmod,
+              source_type:    pub.source_type,
+              full_text:      entry.text,
+              trust_tier:     pub.trust_tier,
+            });
+            await upsertSource({ ...row, validation_status: null, claim_extraction_status: null });
+            result = { status: "saved" };
+          } catch (err) {
+            result = { status: "fetch_failed", reason: err.message };
+          }
+        } else {
+          // sitemap strategy — fetch article HTML
+          result = await ingestArticle(entry.url, entry.lastmod, pub);
         }
-        // Polite delay between requests to the same host
-        await new Promise(r => setTimeout(r, 400));
+
+        if      (result.status === "saved")        { saved++;   process.stdout.write("."); }
+        else if (result.status === "fetch_failed") { failed++;  process.stdout.write("x"); }
+        else                                       { skipped++; process.stdout.write("_"); }
+        await new Promise(r => setTimeout(r, 300));
       }
     }
 
