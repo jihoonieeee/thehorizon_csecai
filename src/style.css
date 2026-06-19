@@ -1926,3 +1926,162 @@ a:hover { text-decoration: underline; }
   .hz-period-bar { padding: 7px 16px; }
   .hz-log-two-col { grid-template-columns: 1fr; }
 }
+
+/* ── Dashboard shell layout ──────────────────────────────────────────────── */
+
+.dashboard-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.dashboard-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  margin-bottom: 20px;
+  border-radius: 10px;
+  background: rgba(8,12,20,0.8);
+  border: 1px solid #0f1827;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.dashboard-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.dashboard-topbar-badges {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.dashboard-body {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+
+.dashboard-sidebar {
+  width: 192px;
+  flex-shrink: 0;
+  padding-right: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-right: 1px solid #0f1827;
+}
+
+.dashboard-sidebar-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: #334155;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0 10px 10px;
+}
+
+.dashboard-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  text-align: left;
+  font-weight: 400;
+  font-size: 0.8rem;
+  transition: background 0.12s, color 0.12s;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.dashboard-nav-btn:hover  { background: rgba(255,255,255,0.03); color: #94a3b8; }
+.dashboard-nav-btn.active { background: rgba(99,102,241,0.14); color: #a5b4fc; font-weight: 600; }
+
+.dashboard-nav-icon {
+  width: 18px;
+  text-align: center;
+  font-size: 0.83rem;
+  color: #334155;
+  flex-shrink: 0;
+}
+.dashboard-nav-btn.active .dashboard-nav-icon { color: #818cf8; }
+
+.dashboard-nav-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.dashboard-sidebar-footer {
+  margin-top: 14px;
+  padding: 12px 10px 0;
+  border-top: 1px solid #0f1827;
+}
+
+/* ── Landscape page responsive grid ─────────────────────────────────────── */
+
+.landscape-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+/* ── Responsive breakpoints ──────────────────────────────────────────────── */
+
+/* Below 1100px — narrower sidebar */
+@media (max-width: 1100px) {
+  .dashboard-sidebar { width: 168px; }
+}
+
+/* Below 880px — icon-only sidebar */
+@media (max-width: 880px) {
+  .dashboard-body   { gap: 12px; }
+  .dashboard-sidebar {
+    width: 44px;
+    padding-right: 0;
+    overflow: hidden;
+  }
+  .dashboard-sidebar-label { display: none; }
+  .dashboard-nav-label     { display: none; }
+  .dashboard-nav-btn       { padding: 9px; justify-content: center; gap: 0; }
+  .dashboard-nav-icon      { width: auto; font-size: 1rem; }
+  .dashboard-sidebar-footer{ display: none; }
+  .landscape-chart-grid    { grid-template-columns: 1fr; }
+}
+
+/* Below 640px — stack everything */
+@media (max-width: 640px) {
+  .dashboard-topbar       { flex-direction: column; align-items: flex-start; }
+  .dashboard-topbar-left  { gap: 6px; }
+  .dashboard-topbar-badges{ gap: 4px; }
+  .dashboard-body         { flex-direction: column; gap: 16px; }
+  .dashboard-sidebar      {
+    width: 100%;
+    flex-direction: row;
+    border-right: none;
+    border-bottom: 1px solid #0f1827;
+    padding-right: 0;
+    padding-bottom: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 4px;
+  }
+  .dashboard-sidebar-label { display: none; }
+  .dashboard-nav-btn       { flex-shrink: 0; white-space: nowrap; }
+  .dashboard-nav-label     { display: inline; }
+  .dashboard-nav-icon      { display: none; }
+  .dashboard-sidebar-footer{ display: none; }
+}
