@@ -241,7 +241,8 @@ function Message({ msg, onFollowUp }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-export function AskAgentPage({ data, period }) {
+export function AskAgentPage() {
+  const data = null;
   const [messages, setMessages] = useState([]);
   const [query,    setQuery]    = useState("");
   const [loading,  setLoading]  = useState(false);
