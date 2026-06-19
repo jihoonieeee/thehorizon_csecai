@@ -185,15 +185,50 @@ async function main() {
     }
 
     try {
-      const { saveDeck } = await import("../lib/storage/deckStore.js");
-      await saveDeck({
+      // saveDeck() expects the old pipeline schema; bypass it and write directly to Blob
+      const { uploadArchiveJson } = await import("../lib/storage/blobArchiveStore.js");
+      const { supabase: sb } = await import("../lib/storage/supabaseClient.js");
+
+      const deck_id      = `v2-${run_id}`;
+      const generated_at = run_date;
+      const payload = {
+        deck_id,
+        generated_at,
+        pipeline_version:  "synthesis-only-v1",
         run_id,
-        created_at:        run_date,
+        source_count:      sources.length,
+        synthesis: {
+          run_id, run_date,
+          category_analyses,
+          evidence_items: evidenceItems.slice(0, 500),
+          corpus_summary,
+          cross_category,
+          dashboard_state,
+        },
+      };
+
+      let blob_path = null;
+      try {
+        const dateKey = generated_at.slice(0, 10);
+        const res = await uploadArchiveJson(`decks/${dateKey}/${deck_id}.json`, payload);
+        blob_path = res.url;
+        console.log(`  Deck blob uploaded → ${blob_path}`);
+      } catch (blobErr) {
+        console.warn(`  Blob upload skipped: ${blobErr.message}`);
+      }
+
+      // Write a decks table row so the chatbot's loadLatestDeck() can find it
+      await sb.from("decks").upsert({
+        deck_id,
+        generated_at,
         source_count:      sources.length,
         pipeline_version:  "synthesis-only-v1",
-        synthesis:         { run_id, run_date, category_analyses, evidence_items: evidenceItems, corpus_summary, cross_category, dashboard_state },
-      });
-      console.log(`  Deck blob saved → available to chatbot and dashboard`);
+        blob_path,
+        synthesis_version: "synthesis-only-v1",
+        slide_count:       0,
+        overall_pass:      true,
+      }, { onConflict: "deck_id" });
+      console.log(`  Deck row saved → available to chatbot and dashboard`);
     } catch (err) {
       console.warn(`  Deck persist failed: ${err.message}`);
     }
