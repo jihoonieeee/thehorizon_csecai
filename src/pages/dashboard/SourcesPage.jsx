@@ -1,9 +1,9 @@
 /**
- * SourcesPage — filterable source list with period and archive browsing.
- * Fetches from GET /api/sources with full period + filter support.
+ * SourcesPage — category tabs + sub-tag exploration + period pill switcher.
+ * No trust-tier filter. Categories are first-class tabs.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 
 const CAT_COLOR = {
   traditional_ai_threats: "#3583C9",
@@ -20,247 +20,223 @@ const CAT_LABEL = {
   unclear_or_adjacent:    "Other",
 };
 
-const TRUST_OPTIONS = [
-  { value: "primary",  label: "Primary" },
-  { value: "high",     label: "High" },
-  { value: "medium",   label: "Medium" },
-  { value: "curated",  label: "Curated" },
-  { value: "low",      label: "Low" },
-];
+const CAT_LABEL_FULL = {
+  traditional_ai_threats: "Traditional AI Threats",
+  llm_threats:            "LLM Threats",
+  agentic_ai_threats:     "Agentic AI Threats",
+  ai_enabled_threats:     "AI-Enabled Threats",
+};
 
 const ALL_CATS = Object.keys(CAT_COLOR);
-const PAGE_SIZE = 50;
-
-// ── Period helpers ─────────────────────────────────────────────────────────────
-
-function buildPeriodOptions() {
-  const list = [];
-  const now = new Date();
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const short = d.toLocaleDateString("en-SG", { month: "short", year: "numeric" });
-    list.push({ value: val, label: i === 0 ? `${short} (this month)` : i === 1 ? `${short} (last month)` : short });
-  }
-  return list;
-}
 
 const PERIOD_OPTIONS = [
-  { value: "last-7d",  label: "Last 7 days" },
-  { value: "last-30d", label: "Last 30 days" },
-  { value: "last-90d", label: "Last 90 days" },
+  { value: "last-7d",  label: "7 days" },
+  { value: "last-30d", label: "30 days" },
+  { value: "last-90d", label: "90 days" },
   { value: "all-time", label: "All time" },
-  ...buildPeriodOptions(),
 ];
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
+const PAGE_SIZE = 50;
 
-function TrustBadge({ tier }) {
-  const cls = tier || "unknown";
-  return <span className={`hz-trust-badge ${cls}`}>{tier || "unknown"}</span>;
-}
+// ── Sub-components ────────────────────────────────────────────────────────────
 
-function CategoryDot({ category }) {
-  const color = CAT_COLOR[category] || "#94a3b8";
-  return <span className="hz-cat-dot" style={{ background: color }} />;
+function TrustDot({ tier }) {
+  const colors = {
+    primary: "#16a34a", high: "#2563eb", medium: "#9ca3af",
+    curated: "#7c3aed", low: "#d97706", unknown: "#e5e7eb",
+  };
+  return (
+    <span
+      title={tier || "unknown"}
+      style={{
+        display: "inline-block", width: 7, height: 7, borderRadius: "50%",
+        background: colors[tier] || colors.unknown, flexShrink: 0, marginTop: 2,
+      }}
+    />
+  );
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-export function SourcesPage({ data, period: globalPeriod, onPeriodChange }) {
-  // Local period override — starts synced to nav, can diverge
-  const [localPeriod,  setLocalPeriod]  = useState(globalPeriod || "last-90d");
-  const [sources,      setSources]      = useState([]);
-  const [loading,      setLoading]      = useState(false);
-  const [error,        setError]        = useState(null);
-  const [periodLabel,  setPeriodLabel]  = useState("");
-  const [dateRange,    setDateRange]    = useState(null);
-  const [totalCount,   setTotalCount]   = useState(0);
+export function SourcesPage() {
+  const [period,      setPeriod]      = useState("last-90d");
+  const [activeTab,   setActiveTab]   = useState("all");
+  const [activeTags,  setActiveTags]  = useState([]);
+  const [search,      setSearch]      = useState("");
+  const [page,        setPage]        = useState(1);
+  const [sources,     setSources]     = useState([]);
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState(null);
+  const [totalCount,  setTotalCount]  = useState(0);
 
-  // Filters
-  const [catFilter,    setCatFilter]    = useState("");
-  const [trustFilter,  setTrustFilter]  = useState("");
-  const [search,       setSearch]       = useState("");
-  const [page,         setPage]         = useState(1);
-
-  // Sync local period when nav period changes (unless user overrode locally)
-  const [userOverride, setUserOverride] = useState(false);
-  useEffect(() => {
-    if (!userOverride && globalPeriod) setLocalPeriod(globalPeriod);
-  }, [globalPeriod, userOverride]);
-
-  const handlePeriodChange = (val) => {
-    setLocalPeriod(val);
-    setUserOverride(true);
-    setPage(1);
-  };
-
+  // Fetch sources whenever period changes (fetch all categories, filter client-side)
   const loadSources = useCallback(() => {
     setLoading(true);
     setError(null);
+    setActiveTags([]);
+    setPage(1);
 
-    const params = new URLSearchParams();
-    params.set("period", localPeriod);
-    if (catFilter)   params.set("category",   catFilter);
-    if (trustFilter) params.set("trust_tier", trustFilter);
-    if (search)      params.set("search",     search);
-    params.set("limit", "500");
-
+    const params = new URLSearchParams({ period, limit: "500" });
     fetch(`/api/sources?${params}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((json) => {
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then(json => {
         const rows = Array.isArray(json) ? json : (json.sources || []);
         setSources(rows);
         setTotalCount(json.count ?? rows.length);
-        setPeriodLabel(json.period_label || "");
-        setDateRange(json.date_range || null);
         setLoading(false);
-        setPage(1);
       })
-      .catch((e) => {
-        setError(e.message);
-        setSources([]);
-        setLoading(false);
-      });
-  }, [localPeriod, catFilter, trustFilter, search]);
+      .catch(e => { setError(e.message); setSources([]); setLoading(false); });
+  }, [period]);
 
   useEffect(() => { loadSources(); }, [loadSources]);
 
-  // Client-side search (instant, no re-fetch)
-  const filtered = sources;
+  // Reset tags when tab changes
+  useEffect(() => { setActiveTags([]); setPage(1); }, [activeTab]);
+
+  // Available tags for the active category tab (from loaded sources)
+  const availableTags = useMemo(() => {
+    const counts = {};
+    for (const s of sources) {
+      if (activeTab !== "all" && s.main_category !== activeTab) continue;
+      for (const t of (s.tags || [])) {
+        counts[t] = (counts[t] || 0) + 1;
+      }
+    }
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [sources, activeTab]);
+
+  // Client-side filtering
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return sources.filter(s => {
+      if (activeTab !== "all" && s.main_category !== activeTab) return false;
+      if (activeTags.length > 0 && !activeTags.every(t => s.tags?.includes(t))) return false;
+      if (q && !s.title?.toLowerCase().includes(q) && !s.publisher?.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [sources, activeTab, activeTags, search]);
+
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // Category counts from currently loaded sources
-  const catCounts = {};
-  for (const s of sources) {
-    if (s.main_category) catCounts[s.main_category] = (catCounts[s.main_category] || 0) + 1;
-  }
+  // Category counts from all loaded sources
+  const catCounts = useMemo(() => {
+    const c = {};
+    for (const s of sources) {
+      if (s.main_category) c[s.main_category] = (c[s.main_category] || 0) + 1;
+    }
+    return c;
+  }, [sources]);
+
+  const toggleTag = (tag) => {
+    setActiveTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+    setPage(1);
+  };
+
+  const tabColor = CAT_COLOR[activeTab] || null;
 
   return (
-    <div>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", marginBottom: "20px" }}>
+    <div className="hz-sources-page">
+
+      {/* Header row */}
+      <div className="hz-sources-header">
         <div>
           <h1 className="hz-page-title" style={{ marginBottom: 0 }}>Sources</h1>
           <p className="hz-page-sub" style={{ marginBottom: 0 }}>
-            Browse validated threat intelligence sources.
-            {periodLabel && (
-              <> Showing <strong>{periodLabel}</strong>
-                {dateRange?.start && (
-                  <span style={{ color: "var(--text-tertiary)" }}> ({dateRange.start} – {dateRange.end})</span>
-                )}
-              </>
-            )}
+            Browse validated threat intelligence sources
           </p>
         </div>
 
-        {/* Period selector */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-          <span style={{ fontSize: "0.72rem", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            Time range
-          </span>
-          <select
-            className="hz-period-select"
-            value={localPeriod}
-            onChange={(e) => handlePeriodChange(e.target.value)}
-            style={{ fontSize: "0.82rem", padding: "6px 10px" }}
-          >
-            {PERIOD_OPTIONS.map((p) => (
-              <option key={p.value} value={p.value}>{p.label}</option>
-            ))}
-          </select>
-          {userOverride && localPeriod !== globalPeriod && (
+        {/* Period pill switcher */}
+        <div className="hz-seg-group">
+          {PERIOD_OPTIONS.map(o => (
             <button
-              className="hz-cat-pill"
-              onClick={() => { setLocalPeriod(globalPeriod || "last-90d"); setUserOverride(false); }}
-              style={{ fontSize: "0.7rem", padding: "3px 10px" }}
-              title="Reset to global period"
+              key={o.value}
+              className={`hz-seg-btn${period === o.value ? " active" : ""}`}
+              onClick={() => { setPeriod(o.value); setPage(1); }}
             >
-              ↩ Reset
+              {o.label}
             </button>
-          )}
+          ))}
         </div>
       </div>
 
-      {/* Category pills with counts */}
-      <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" }}>
+      {/* Category tabs */}
+      <div className="hz-cat-tabs">
         <button
-          className={`hz-cat-pill${catFilter === "" ? " active" : ""}`}
-          onClick={() => { setCatFilter(""); setPage(1); }}
+          className={`hz-cat-tab${activeTab === "all" ? " active" : ""}`}
+          onClick={() => setActiveTab("all")}
         >
           All
+          <span className="hz-cat-tab-count">{sources.length}</span>
         </button>
-        {ALL_CATS.map((cat) => {
+        {ALL_CATS.map(cat => {
           const count = catCounts[cat] ?? 0;
-          const color = CAT_COLOR[cat];
-          const active = catFilter === cat;
+          const active = activeTab === cat;
           return (
             <button
               key={cat}
-              onClick={() => { setCatFilter(active ? "" : cat); setPage(1); }}
-              style={{
-                display: "flex", alignItems: "center", gap: "5px",
-                padding: "4px 12px", borderRadius: "20px",
-                border: `1px solid ${active ? color : "var(--border)"}`,
-                background: active ? color : "var(--surface)",
-                cursor: "pointer", fontSize: "0.75rem", fontWeight: active ? 600 : 500,
-                color: active ? "#fff" : "var(--text-secondary)",
-                transition: "all 0.12s",
-              }}
+              className={`hz-cat-tab${active ? " active" : ""}`}
+              style={active ? {
+                "--tab-color": CAT_COLOR[cat],
+                borderBottomColor: CAT_COLOR[cat],
+                color: CAT_COLOR[cat],
+              } : {}}
+              onClick={() => setActiveTab(cat)}
             >
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: active ? "rgba(255,255,255,0.7)" : color, flexShrink: 0 }} />
+              <span
+                className="hz-cat-tab-dot"
+                style={{ background: CAT_COLOR[cat] }}
+              />
               {CAT_LABEL[cat]}
-              {count > 0 && (
-                <span style={{
-                  fontSize: "0.65rem", fontWeight: 700,
-                  background: active ? "rgba(255,255,255,0.2)" : "var(--surface-2)",
-                  color: active ? "#fff" : "var(--text-tertiary)",
-                  padding: "0 5px", borderRadius: "10px", minWidth: "18px", textAlign: "center",
-                }}>
-                  {count}
-                </span>
-              )}
+              {count > 0 && <span className="hz-cat-tab-count">{count}</span>}
             </button>
           );
         })}
       </div>
 
-      {/* Search + trust filter */}
+      {/* Sub-tag pills (only when a category is selected) */}
+      {activeTab !== "all" && availableTags.length > 0 && (
+        <div className="hz-tag-filter-row">
+          <span className="hz-tag-filter-label">Filter by tag</span>
+          <div className="hz-tag-pills">
+            {availableTags.map(([tag, count]) => {
+              const on = activeTags.includes(tag);
+              return (
+                <button
+                  key={tag}
+                  className={`hz-tag-pill${on ? " active" : ""}`}
+                  style={on ? { background: tabColor, borderColor: tabColor, color: "#fff" } : {}}
+                  onClick={() => toggleTag(tag)}
+                >
+                  {tag}
+                  <span className="hz-tag-pill-count">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+          {activeTags.length > 0 && (
+            <button className="hz-tag-clear" onClick={() => setActiveTags([])}>
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Search + result count */}
       <div className="hz-sources-filters">
         <input
           className="hz-search-input"
           type="text"
           placeholder="Search title, publisher…"
           value={search}
-          style={{ width: "260px" }}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          onChange={e => { setSearch(e.target.value); setPage(1); }}
         />
-        <select
-          className="hz-period-select"
-          value={trustFilter}
-          onChange={(e) => { setTrustFilter(e.target.value); setPage(1); }}
-          style={{ fontSize: "0.8rem" }}
-        >
-          <option value="">All trust tiers</option>
-          {TRUST_OPTIONS.map(t => (
-            <option key={t.value} value={t.value}>{t.label}</option>
-          ))}
-        </select>
-        {(catFilter || trustFilter || search) && (
-          <button
-            className="hz-cat-pill"
-            onClick={() => { setCatFilter(""); setTrustFilter(""); setSearch(""); setPage(1); }}
-            style={{ fontSize: "0.75rem" }}
-          >
-            Clear filters
-          </button>
-        )}
-        <span style={{ fontSize: "0.75rem", color: "var(--text-tertiary)", marginLeft: "auto" }}>
-          {loading ? "Loading…" : `${totalCount} source${totalCount !== 1 ? "s" : ""}${filtered.length < totalCount ? ` (${filtered.length} shown)` : ""}`}
+        <span className="hz-sources-count">
+          {loading ? "Loading…" : `${filtered.length.toLocaleString()} source${filtered.length !== 1 ? "s" : ""}`}
+          {activeTab !== "all" && (
+            <span className="hz-sources-count-cat"> in {CAT_LABEL_FULL[activeTab] || activeTab}</span>
+          )}
         </span>
       </div>
 
@@ -269,7 +245,7 @@ export function SourcesPage({ data, period: globalPeriod, onPeriodChange }) {
         <div className="hz-empty" style={{ color: "var(--danger)" }}>
           Could not load sources: {error}
           <br />
-          <span style={{ color: "var(--text-tertiary)", fontSize: "0.8rem" }}>
+          <span style={{ fontSize: "0.8rem", color: "var(--text-tertiary)" }}>
             Make sure the API server is running (npx vercel dev).
           </span>
         </div>
@@ -278,11 +254,12 @@ export function SourcesPage({ data, period: globalPeriod, onPeriodChange }) {
       {/* Empty */}
       {!loading && !error && paged.length === 0 && (
         <div className="hz-empty">
-          No sources found for this period{catFilter ? ` in ${CAT_LABEL[catFilter]}` : ""}{search ? ` matching "${search}"` : ""}.
+          No sources found{activeTab !== "all" ? ` in ${CAT_LABEL[activeTab]}` : ""}
+          {activeTags.length > 0 ? ` with tag${activeTags.length > 1 ? "s" : ""} ${activeTags.join(", ")}` : ""}
+          {search ? ` matching "${search}"` : ""}.
         </div>
       )}
 
-      {/* Loading skeleton */}
       {loading && (
         <div className="hz-empty" style={{ color: "var(--text-tertiary)" }}>Loading sources…</div>
       )}
@@ -295,38 +272,69 @@ export function SourcesPage({ data, period: globalPeriod, onPeriodChange }) {
               <tr>
                 <th>Title</th>
                 <th>Publisher</th>
-                <th>Category</th>
-                <th>Trust</th>
+                {activeTab === "all" && <th>Category</th>}
+                <th>Tags</th>
                 <th>Date</th>
               </tr>
             </thead>
             <tbody>
-              {paged.map((s) => (
+              {paged.map(s => (
                 <tr key={s.id || s.url}>
                   <td>
-                    {s.url
-                      ? <a href={s.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 500 }}>
-                          {s.title || "(no title)"}
-                        </a>
-                      : <span style={{ fontWeight: 500 }}>{s.title || "(no title)"}</span>
-                    }
-                    {s.short_summary && (
-                      <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", marginTop: "3px", lineHeight: 1.4 }}>
-                        {s.short_summary.slice(0, 130)}{s.short_summary.length > 130 ? "…" : ""}
+                    <div className="hz-src-title-cell">
+                      <TrustDot tier={s.trust_tier} />
+                      <div>
+                        {s.url
+                          ? <a href={s.url} target="_blank" rel="noopener noreferrer" className="hz-src-link">
+                              {s.title || "(no title)"}
+                            </a>
+                          : <span className="hz-src-link-plain">{s.title || "(no title)"}</span>
+                        }
+                        {(s.short_summary || s.summary) && (
+                          <div className="hz-src-summary">
+                            {(s.short_summary || s.summary).slice(0, 120)}
+                            {(s.short_summary || s.summary).length > 120 ? "…" : ""}
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </td>
-                  <td style={{ fontSize: "0.78rem", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
-                    {s.publisher || "—"}
+                  <td className="hz-src-publisher">{s.publisher || "—"}</td>
+                  {activeTab === "all" && (
+                    <td>
+                      <span
+                        className="hz-src-cat-badge"
+                        style={{
+                          background: `${CAT_COLOR[s.main_category] || "#94a3b8"}18`,
+                          color: CAT_COLOR[s.main_category] || "#64748b",
+                          borderColor: `${CAT_COLOR[s.main_category] || "#94a3b8"}40`,
+                        }}
+                      >
+                        {CAT_LABEL[s.main_category] || s.main_category || "—"}
+                      </span>
+                    </td>
+                  )}
+                  <td>
+                    <div className="hz-src-tags">
+                      {(s.tags || []).slice(0, 3).map(t => (
+                        <button
+                          key={t}
+                          className={`hz-src-tag${activeTags.includes(t) ? " active" : ""}`}
+                          onClick={() => activeTab !== "all" && toggleTag(t)}
+                          style={{
+                            cursor: activeTab !== "all" ? "pointer" : "default",
+                            ...(activeTags.includes(t) ? { background: tabColor, borderColor: tabColor, color: "#fff" } : {}),
+                          }}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                      {(s.tags || []).length > 3 && (
+                        <span className="hz-src-tag-more">+{s.tags.length - 3}</span>
+                      )}
+                    </div>
                   </td>
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    <CategoryDot category={s.main_category} />
-                    <span style={{ fontSize: "0.74rem", color: "var(--text-secondary)" }}>
-                      {CAT_LABEL[s.main_category] || s.main_category || "—"}
-                    </span>
-                  </td>
-                  <td><TrustBadge tier={s.trust_tier} /></td>
-                  <td style={{ fontSize: "0.74rem", color: "var(--text-tertiary)", whiteSpace: "nowrap" }}>
+                  <td className="hz-src-date">
                     {s.date_published ? s.date_published.slice(0, 10) : "—"}
                   </td>
                 </tr>
@@ -338,26 +346,24 @@ export function SourcesPage({ data, period: globalPeriod, onPeriodChange }) {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", marginTop: "16px" }}>
+        <div className="hz-pagination">
           <button
-            className="hz-cat-pill"
+            className="hz-page-btn"
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={page === 1}
-            style={{ opacity: page === 1 ? 0.4 : 1 }}
           >
-            ← Previous
+            ← Prev
           </button>
-          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-            Page {page} of {totalPages}
-            <span style={{ color: "var(--text-tertiary)", marginLeft: "4px" }}>
-              ({(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length})
+          <span className="hz-page-info">
+            {page} / {totalPages}
+            <span className="hz-page-info-range">
+              &nbsp;({(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length})
             </span>
           </span>
           <button
-            className="hz-cat-pill"
+            className="hz-page-btn"
             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            style={{ opacity: page === totalPages ? 0.4 : 1 }}
           >
             Next →
           </button>

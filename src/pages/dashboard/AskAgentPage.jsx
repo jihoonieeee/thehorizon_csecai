@@ -18,14 +18,33 @@ const SUGGESTIONS = [
 // Handles: 1. / 1 numbered points, section headers, --- dividers,
 // "Confirmed: YES/NO/PARTIAL" status lines, **bold**, plain paragraphs.
 
-function renderInline(text) {
+function renderInline(text, sourceRefs) {
   if (!text) return null;
   const parts = [];
-  const re = /\*\*(.+?)\*\*/g;
+  // Match **bold** and [src-N] citation markers
+  const re = /\*\*(.+?)\*\*|\[src-(\d+)\]/g;
   let last = 0, m;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(text.slice(last, m.index));
-    parts.push(<strong key={m.index}>{m[1]}</strong>);
+    if (m[1] !== undefined) {
+      // **bold**
+      parts.push(<strong key={m.index}>{m[1]}</strong>);
+    } else {
+      // [src-N] inline citation
+      const n = parseInt(m[2], 10);
+      const src = Array.isArray(sourceRefs) ? sourceRefs[n - 1] : null;
+      const label = src?.publisher || src?.title?.slice(0, 24) || `${n}`;
+      if (src?.url) {
+        parts.push(
+          <a key={m.index} href={src.url} target="_blank" rel="noopener noreferrer"
+             className="hz-inline-ref" title={src.title || src.publisher}>
+            {n}
+          </a>
+        );
+      } else {
+        parts.push(<span key={m.index} className="hz-inline-ref hz-inline-ref-nolink">{n}</span>);
+      }
+    }
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push(text.slice(last));
@@ -40,7 +59,7 @@ const isHeading = (t) =>
 // Detect exploitation status lines
 const statusMatch = (t) => t.match(/^(confirmed\s+exploitation[^:]*:?\s*)(YES\.?|NO\.?|PARTIAL\.?)/i);
 
-function StructuredText({ text }) {
+function StructuredText({ text, sourceRefs }) {
   if (!text) return null;
 
   // Normalise: collapse 3+ newlines → 2, mark --- dividers
@@ -102,11 +121,11 @@ function StructuredText({ text }) {
                 item.num ? (
                   <li key={li} className="hz-response-point">
                     <span className="hz-point-num">{item.num}</span>
-                    <span className="hz-point-text">{renderInline(item.text)}</span>
+                    <span className="hz-point-text">{renderInline(item.text, sourceRefs)}</span>
                   </li>
                 ) : (
                   <li key={li} className="hz-response-point hz-response-point-plain">
-                    <span className="hz-point-text">{renderInline(item.text)}</span>
+                    <span className="hz-point-text">{renderInline(item.text, sourceRefs)}</span>
                   </li>
                 )
               )}
@@ -117,7 +136,7 @@ function StructuredText({ text }) {
         // Plain paragraph
         return (
           <p key={bi} className="hz-response-para">
-            {renderInline(lines.join(" "))}
+            {renderInline(lines.join(" "), sourceRefs)}
           </p>
         );
       })}
@@ -161,17 +180,30 @@ function Message({ msg, onFollowUp }) {
   return (
     <div className="hz-msg-assistant">
       <div className="hz-msg-assistant-content">
-        <StructuredText text={msg.content} />
+        <StructuredText text={msg.content} sourceRefs={msg.source_refs} />
       </div>
 
-      {msg.citations?.length > 0 && (
-        <div className="hz-source-row">
-          <span className="hz-source-row-label">Sources</span>
-          <div className="hz-source-buttons">
-            {msg.citations.map((c, i) => <SourceButton key={i} c={c} index={i} />)}
+      {msg.citations?.length > 0 && (() => {
+        const isAIID = (c) => c.url?.includes("incidentdatabase.ai") || /ai incident database/i.test(c.publisher || "");
+        const main = msg.citations.filter(c => !isAIID(c));
+        const aiid = msg.citations.filter(c => isAIID(c));
+        return (
+          <div className="hz-source-row">
+            <span className="hz-source-row-label">Sources</span>
+            <div className="hz-source-buttons">
+              {main.map((c, i) => <SourceButton key={i} c={c} index={i} />)}
+            </div>
+            {aiid.length > 0 && (
+              <div className="hz-source-aiid-group">
+                <span className="hz-source-aiid-note">AI Incident Database — incidents are user-reported; treat as indicators, not verified findings</span>
+                <div className="hz-source-buttons">
+                  {aiid.map((c, i) => <SourceButton key={main.length + i} c={c} index={main.length + i} />)}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <div className="hz-msg-meta">
         {msg.confidence && (
@@ -181,6 +213,14 @@ function Message({ msg, onFollowUp }) {
         )}
         {msg.temporal_scope && (
           <span className="hz-msg-scope">{msg.temporal_scope}</span>
+        )}
+        {msg.token_usage && (
+          <span
+            className="hz-msg-tokens"
+            title={`Input: ${msg.token_usage.input_tokens.toLocaleString()} · Output: ${msg.token_usage.output_tokens.toLocaleString()} · ${msg.token_usage.rounds} round${msg.token_usage.rounds !== 1 ? "s" : ""}`}
+          >
+            {msg.token_usage.total_tokens.toLocaleString()} tokens · ${msg.token_usage.estimated_cost_usd < 0.01 ? "<$0.01" : `$${msg.token_usage.estimated_cost_usd.toFixed(3)}`}
+          </span>
         )}
       </div>
 
@@ -234,16 +274,33 @@ export function AskAgentPage({ data, period }) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || `API error ${res.status}`);
 
-      setMessages(prev => [...prev, {
+      const assistantMsg = {
         role:                "assistant",
         content:             json.answer || "No answer returned.",
         citations:           json.citations            || [],
+        source_refs:         json.source_refs          || [],
         confidence:          json.confidence           || null,
         confidence_reason:   json.confidence_reason    || "",
         caveat:              json.caveat               || null,
         suggested_followups: json.suggested_followups  || [],
         temporal_scope:      json.temporal_scope       || null,
-      }]);
+        token_usage:         json.token_usage          || null,
+      };
+      setMessages(prev => [...prev, assistantMsg]);
+
+      // Persist call log entry to localStorage for the Logs page
+      try {
+        const logEntry = {
+          ts:           new Date().toISOString(),
+          query:        q,
+          confidence:   json.confidence || null,
+          tools:        (json.tool_calls || []).map(t => t.tool),
+          token_usage:  json.token_usage || null,
+        };
+        const stored = JSON.parse(localStorage.getItem("hz_agent_log") || "[]");
+        stored.unshift(logEntry);
+        localStorage.setItem("hz_agent_log", JSON.stringify(stored.slice(0, 100)));
+      } catch (_) {}
     } catch (err) {
       setMessages(prev => [...prev, {
         role: "assistant",

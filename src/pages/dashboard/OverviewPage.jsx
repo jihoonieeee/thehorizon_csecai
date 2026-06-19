@@ -1,8 +1,10 @@
 /**
- * Overview — 4 category cards, summary bar, and weekly sparkline.
+ * OverviewPage — weekly / monthly / quarterly insight switcher.
+ * Month view uses live data; week + quarter show placeholders.
  */
 
-// Category colors: keep the brand palette
+import { useState } from "react";
+
 const CAT_COLOR = {
   traditional_ai_threats: "#3583C9",
   llm_threats:            "#9C62A7",
@@ -10,7 +12,14 @@ const CAT_COLOR = {
   ai_enabled_threats:     "#FFAA22",
 };
 
-// ── Inline SVG sparkline ──────────────────────────────────────────────────────
+const CAT_LABEL = {
+  traditional_ai_threats: "Traditional AI Threats",
+  llm_threats:            "LLM Threats",
+  agentic_ai_threats:     "Agentic AI Threats",
+  ai_enabled_threats:     "AI-Enabled Threats",
+};
+
+// ── Sparkline ─────────────────────────────────────────────────────────────────
 
 function Sparkline({ values, color, width = 100, height = 36 }) {
   if (!values || values.length < 2) return null;
@@ -21,159 +30,237 @@ function Sparkline({ values, color, width = 100, height = 36 }) {
     const y = height - Math.round((v / max) * (height - 4)) - 2;
     return `${x},${y}`;
   });
-  const polyline = pts.join(" ");
-  // Area fill path
   const areaPath =
-    `M${pts[0]} ` +
-    pts.slice(1).map((p) => `L${p}`).join(" ") +
+    `M${pts[0]} ` + pts.slice(1).map(p => `L${p}`).join(" ") +
     ` L${(values.length - 1) * step},${height} L0,${height} Z`;
 
   return (
-    <svg
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      style={{ display: "block" }}
-    >
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}
+      fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: "block" }}>
       <path d={areaPath} fill={color} opacity="0.12" />
-      <polyline points={polyline} stroke={color} strokeWidth="1.5" fill="none" strokeLinejoin="round" strokeLinecap="round" />
-      {/* Last dot */}
+      <polyline points={pts.join(" ")} stroke={color} strokeWidth="1.5"
+        fill="none" strokeLinejoin="round" strokeLinecap="round" />
       {(() => {
-        const lastX = (values.length - 1) * step;
-        const lastY = height - Math.round((values[values.length - 1] / max) * (height - 4)) - 2;
-        return <circle cx={lastX} cy={lastY} r="2.5" fill={color} />;
+        const lx = (values.length - 1) * step;
+        const ly = height - Math.round((values[values.length - 1] / max) * (height - 4)) - 2;
+        return <circle cx={lx} cy={ly} r="2.5" fill={color} />;
       })()}
     </svg>
   );
 }
 
-// ── Confidence badge ──────────────────────────────────────────────────────────
+// ── Period switcher ────────────────────────────────────────────────────────────
 
-function ConfBadge({ confidence }) {
-  const cls = confidence === "high" ? "high"
-    : confidence === "medium" ? "medium"
-    : confidence === "low"    ? "low"
-    : "assessed";
-  return <span className={`hz-conf ${cls}`}>{confidence || "—"}</span>;
+function PeriodSwitcher({ value, onChange }) {
+  const options = [
+    { id: "week",    label: "This Week" },
+    { id: "month",   label: "This Month" },
+    { id: "quarter", label: "Last 90 Days" },
+  ];
+  return (
+    <div className="hz-seg-group">
+      {options.map((o) => (
+        <button
+          key={o.id}
+          className={`hz-seg-btn${value === o.id ? " active" : ""}`}
+          onClick={() => onChange(o.id)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
-// ── Category card ─────────────────────────────────────────────────────────────
+// ── Insight stat block ────────────────────────────────────────────────────────
+
+function StatBlock({ stats }) {
+  return (
+    <div className="hz-insight-stats">
+      {stats.map((s, i) => (
+        <div key={i} className="hz-insight-stat">
+          <span className="hz-insight-stat-value">{s.value}</span>
+          <span className="hz-insight-stat-label">{s.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Placeholder finding card ──────────────────────────────────────────────────
+
+function FindingCard({ color, label, finding, note }) {
+  return (
+    <div className="hz-finding-card" style={{ borderLeftColor: color }}>
+      <div className="hz-finding-card-cat" style={{ color }}>{label}</div>
+      <div className="hz-finding-card-text">{finding}</div>
+      {note && <div className="hz-finding-card-note">{note}</div>}
+    </div>
+  );
+}
+
+// ── Category card (month view) ────────────────────────────────────────────────
 
 function CategoryCard({ cat }) {
-  const color    = CAT_COLOR[cat.key || cat.id] || "#64748b";
-  const isGap    = cat.assessed === false || cat.assessment_status === "evidence_insufficient";
-  const count    = cat.source_count ?? 0;
-  const monthly  = cat.monthly_counts;
-
+  const color = CAT_COLOR[cat.key] || "#64748b";
+  const count = cat.source_count ?? 0;
   return (
-    <div className="hz-cat-card" style={{ opacity: isGap ? 0.7 : 1 }}>
-      {/* Color strip */}
+    <div className="hz-cat-card">
       <div className="hz-cat-card-strip" style={{ background: color }} />
-
-      {/* Top row: count + confidence */}
       <div className="hz-cat-card-top">
         <div>
           <div className="hz-cat-card-count">{count}</div>
           <div className="hz-cat-card-count-label">sources</div>
         </div>
-        <ConfBadge confidence={cat.confidence} />
+        {cat.confidence && (
+          <span className={`hz-conf ${cat.confidence}`}>{cat.confidence}</span>
+        )}
       </div>
-
-      {/* Name */}
       <div className="hz-cat-card-name">{cat.label}</div>
-
-      {/* Headline */}
-      {cat.headline && (
-        <div className="hz-cat-card-headline">{cat.headline}</div>
-      )}
-
-      {/* Top signal */}
-      {!isGap && cat.top_signal && (
-        <div
-          className="hz-cat-card-signal"
-          style={{ borderLeftColor: `${color}60` }}
-        >
+      {cat.headline && <div className="hz-cat-card-headline">{cat.headline}</div>}
+      {cat.top_signal && (
+        <div className="hz-cat-card-signal" style={{ borderLeftColor: `${color}60` }}>
           {cat.top_signal}
         </div>
       )}
-
-      {/* Footer: claim counts + sparkline */}
-      <div className="hz-cat-card-footer">
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          {(cat.claim_counts?.critical || 0) > 0 && (
-            <span style={{ fontSize: "0.68rem", fontWeight: 600, color: "#dc2626", background: "#fee2e2", padding: "1px 7px", borderRadius: "10px" }}>
-              {cat.claim_counts.critical} critical
-            </span>
-          )}
-          {(cat.claim_counts?.high || 0) > 0 && (
-            <span style={{ fontSize: "0.68rem", fontWeight: 600, color: "#d97706", background: "#fef9c3", padding: "1px 7px", borderRadius: "10px" }}>
-              {cat.claim_counts.high} high
-            </span>
-          )}
-          {(cat.claim_counts?.medium || 0) > 0 && (
-            <span style={{ fontSize: "0.68rem", fontWeight: 600, color: "#475569", background: "#f1f5f9", padding: "1px 7px", borderRadius: "10px" }}>
-              {cat.claim_counts.medium} medium
-            </span>
-          )}
+      {cat.monthly_counts?.length > 1 && (
+        <div className="hz-cat-card-footer">
+          <Sparkline values={cat.monthly_counts} color={color} width={80} height={28} />
         </div>
-        {monthly && monthly.length > 1 && (
-          <Sparkline values={monthly} color={color} width={80} height={32} />
-        )}
+      )}
+    </div>
+  );
+}
+
+// ── Week view (placeholder) ───────────────────────────────────────────────────
+
+function WeekView() {
+  return (
+    <div className="hz-insight-view">
+      <StatBlock stats={[
+        { value: "—", label: "New sources" },
+        { value: "—", label: "High-trust" },
+        { value: "—", label: "New findings" },
+      ]} />
+      <div className="hz-insight-section-title">Key developments this week</div>
+      <div className="hz-finding-list">
+        <FindingCard
+          color={CAT_COLOR.llm_threats}
+          label="LLM Threats"
+          finding="Weekly ingestion data will appear here once pipeline runs are available for the current 7-day window."
+          note="Placeholder — connect pipeline to populate"
+        />
+        <FindingCard
+          color={CAT_COLOR.agentic_ai_threats}
+          label="Agentic AI Threats"
+          finding="Agent-related threat intelligence from this week will surface here automatically."
+          note="Placeholder — connect pipeline to populate"
+        />
+        <FindingCard
+          color={CAT_COLOR.ai_enabled_threats}
+          label="AI-Enabled Threats"
+          finding="Deepfake, phishing, and AI-assisted attack reports from the past 7 days."
+          note="Placeholder — connect pipeline to populate"
+        />
+      </div>
+      <div className="hz-insight-placeholder-banner">
+        Weekly insights require a completed pipeline run within the last 7 days.
+        Run <code>npx vercel dev</code> and trigger <code>/api/refresh</code> to populate.
       </div>
     </div>
   );
 }
 
-// ── Weekly trend sparkline card ───────────────────────────────────────────────
+// ── Month view (live data) ────────────────────────────────────────────────────
 
-function TrendCard({ trend }) {
-  const values = trend?.total_sources;
-  if (!values || values.length === 0) return null;
+function MonthView({ data, loading }) {
+  const { summary, categories = [] } = data || {};
+  const cats = categories.map(c => ({ ...c, key: c.key || c.id }));
 
-  const weeks = values.length;
-  const total = values.reduce((a, b) => a + b, 0);
+  const now = new Date();
+  const monthLabel = now.toLocaleDateString("en-SG", { month: "long", year: "numeric" });
+
+  if (loading) {
+    return (
+      <div className="hz-insight-view">
+        <p className="hz-insight-loading">Loading {monthLabel} data…</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="hz-trend-card">
-      <div className="hz-trend-header">
-        <span className="hz-trend-title">Weekly source volume</span>
-        <span className="hz-trend-sub">{weeks} weeks / {total} total</span>
+    <div className="hz-insight-view">
+      <StatBlock stats={[
+        { value: summary?.total_sources     ?? "—", label: "Sources ingested" },
+        { value: summary?.sources_validated ?? "—", label: "Validated" },
+        { value: summary?.categories_assessed ?? (cats.length || "—"), label: "Categories" },
+        ...(summary?.date_range?.start ? [{
+          value: `${summary.date_range.start.slice(5)} – ${summary.date_range.end.slice(5)}`,
+          label: "Date range",
+        }] : []),
+      ]} />
+
+      {summary?.executive_headline && (
+        <div className="hz-insight-headline">{summary.executive_headline}</div>
+      )}
+
+      {cats.length > 0 ? (
+        <>
+          <div className="hz-insight-section-title">Threat categories</div>
+          <div className="hz-cat-grid">
+            {cats.map(cat => <CategoryCard key={cat.key} cat={cat} />)}
+          </div>
+        </>
+      ) : (
+        <div className="hz-insight-empty">
+          No category data available for this month yet.
+          Run the pipeline to populate this view.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Quarter view (placeholder) ────────────────────────────────────────────────
+
+function QuarterView() {
+  return (
+    <div className="hz-insight-view">
+      <StatBlock stats={[
+        { value: "—", label: "Total sources (90d)" },
+        { value: "—", label: "Unique publishers" },
+        { value: "—", label: "Peak week" },
+        { value: "—", label: "Trend direction" },
+      ]} />
+      <div className="hz-insight-section-title">90-day threat landscape</div>
+      <div className="hz-finding-list">
+        <FindingCard
+          color={CAT_COLOR.traditional_ai_threats}
+          label="Traditional AI Threats"
+          finding="Quarterly trend data for adversarial ML, model extraction, and data poisoning will be synthesised here."
+          note="Placeholder — requires 90-day pipeline analysis"
+        />
+        <FindingCard
+          color={CAT_COLOR.llm_threats}
+          label="LLM Threats"
+          finding="Prompt injection and jailbreak activity trends across the past quarter will appear here."
+          note="Placeholder — requires 90-day pipeline analysis"
+        />
+        <FindingCard
+          color={CAT_COLOR.agentic_ai_threats}
+          label="Agentic AI Threats"
+          finding="MCP vulnerability and autonomous agent abuse patterns over the past 90 days."
+          note="Placeholder — requires 90-day pipeline analysis"
+        />
+        <FindingCard
+          color={CAT_COLOR.ai_enabled_threats}
+          label="AI-Enabled Threats"
+          finding="Deepfake, AI phishing, and voice cloning incident volume across the past quarter."
+          note="Placeholder — requires 90-day pipeline analysis"
+        />
       </div>
-      <svg
-        width="100%"
-        height="64"
-        viewBox={`0 0 ${weeks} 64`}
-        preserveAspectRatio="none"
-        xmlns="http://www.w3.org/2000/svg"
-        style={{ display: "block" }}
-      >
-        {values.map((v, i) => {
-          const max = Math.max(...values, 1);
-          const h = Math.max(2, Math.round((v / max) * 56));
-          const x = i * (100 / weeks);
-          const w = (100 / weeks) - 0.5;
-          return (
-            <rect
-              key={i}
-              x={`${x}%`}
-              y={64 - h}
-              width={`${w}%`}
-              height={h}
-              rx="1"
-              fill={i === values.length - 1 ? "#2563eb" : "#93c5fd"}
-              opacity={i === values.length - 1 ? 0.9 : 0.5}
-            >
-              <title>{`Week ${i + 1}: ${v} sources`}</title>
-            </rect>
-          );
-        })}
-      </svg>
-      {/* Week labels — first and last */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px" }}>
-        <span style={{ fontSize: "0.68rem", color: "var(--text-tertiary)" }}>12 weeks ago</span>
-        <span style={{ fontSize: "0.68rem", color: "var(--text-tertiary)" }}>This week</span>
+      <div className="hz-insight-placeholder-banner">
+        Quarterly synthesis requires the L6 pipeline to run across the 90-day window.
       </div>
     </div>
   );
@@ -181,81 +268,22 @@ function TrendCard({ trend }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-export function OverviewPage({ data }) {
-  if (!data) return null;
-
-  const { summary, categories = [], trend } = data;
-
-  // Normalise categories — handle both dashboard API shape (key) and mock shape (id)
-  const cats = categories.map((c) => ({
-    ...c,
-    key: c.key || c.id,
-  }));
-
-  const periodLabel = summary?.period_label || data.period || "—";
+export function OverviewPage({ data, loading }) {
+  const [view, setView] = useState("month");
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-
-      {/* Page heading */}
-      <div>
-        <h1 className="hz-page-title">AI Threat Landscape</h1>
-        <p className="hz-page-sub">{periodLabel} — {summary?.executive_headline || "Horizon scan overview"}</p>
+    <div className="hz-overview-page">
+      <div className="hz-overview-header">
+        <div>
+          <h1 className="hz-page-title">AI Threat Landscape</h1>
+          <p className="hz-page-sub">Horizon scan overview across time windows</p>
+        </div>
+        <PeriodSwitcher value={view} onChange={setView} />
       </div>
 
-      {/* Summary bar */}
-      <div className="hz-summary-bar">
-        <div className="hz-summary-stat">
-          <span className="hz-summary-stat-value">{summary?.total_sources ?? "—"}</span>
-          <span className="hz-summary-stat-label">Sources</span>
-        </div>
-        <div className="hz-summary-divider" />
-        <div className="hz-summary-stat">
-          <span className="hz-summary-stat-value">{summary?.sources_validated ?? "—"}</span>
-          <span className="hz-summary-stat-label">Validated</span>
-        </div>
-        <div className="hz-summary-divider" />
-        <div className="hz-summary-stat">
-          <span className="hz-summary-stat-value">{summary?.categories_assessed ?? cats.length}</span>
-          <span className="hz-summary-stat-label">Categories assessed</span>
-        </div>
-        {summary?.date_range?.start && (
-          <>
-            <div className="hz-summary-divider" />
-            <div className="hz-summary-stat">
-              <span className="hz-summary-stat-value" style={{ fontSize: "0.9rem" }}>
-                {summary.date_range.start} – {summary.date_range.end}
-              </span>
-              <span className="hz-summary-stat-label">Date window</span>
-            </div>
-          </>
-        )}
-        {summary?.caveat && (
-          <div style={{ marginLeft: "auto", maxWidth: 380, fontSize: "0.75rem", color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "4px 10px", lineHeight: 1.4 }}>
-            {summary.caveat}
-          </div>
-        )}
-      </div>
-
-      {/* 4 category cards */}
-      <section>
-        <p className="hz-section-title">Threat categories</p>
-        <div className="hz-cat-grid">
-          {cats.map((cat) => (
-            <CategoryCard key={cat.key || cat.id} cat={cat} />
-          ))}
-        </div>
-      </section>
-
-      {/* Weekly trend */}
-      {trend?.total_sources && (
-        <TrendCard trend={trend} />
-      )}
-      {/* six_month_trend from mock data */}
-      {!trend?.total_sources && data.six_month_trend?.total_sources && (
-        <TrendCard trend={{ total_sources: data.six_month_trend.total_sources }} />
-      )}
-
+      {view === "week"    && <WeekView />}
+      {view === "month"   && <MonthView data={data} loading={loading} />}
+      {view === "quarter" && <QuarterView />}
     </div>
   );
 }

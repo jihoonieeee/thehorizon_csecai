@@ -151,7 +151,9 @@ Then one sentence on what defenders should do. Then one sentence on what the dat
 
 Do not use dashes or asterisks. Do not write markdown headers. Number your points with "1." "2." etc. Write each point as a full sentence, not a fragment. Keep it conversational and direct — like briefing a smart colleague.
 
-When you cite a source, just mention the publisher naturally in the sentence: "According to Google Project Zero..." or "CISA reported that..." Do not write out URLs — the clickable source links appear automatically below your response.
+When you cite a specific source in a sentence, add a citation marker immediately after that sentence in the format [src-N], where N is the ref number shown in the search results (e.g. ref: "src-1"). For example: "Indirect prompt injection via RAG documents is confirmed in operational deployments. [src-3]" or "CISA documented three incidents this period involving tool-call hijacking. [src-1][src-4]"
+
+These markers become inline clickable links in the UI — they are the primary way users navigate to sources. Use them precisely: only cite a source with [src-N] if that source actually supports the sentence. You may cite multiple sources for one sentence. Do not write out raw URLs.
 
 If evidence is thin (fewer than 3 sources), say so plainly. If you cannot answer from the corpus, say what's missing. Do not invent sources or statistics. No hype language.
 
@@ -367,8 +369,14 @@ export default async function handler(req, res) {
   const messages = [...historyMessages, { role: "user", content: userText }];
   const evidenceIndex = {};
   let sourceRefs = [];
+  let srcCounter = 0;        // global counter so refs stay unique across multiple search_corpus calls
   const citationPool = [];   // all source URLs harvested from any tool call
   const toolCallLog = [];
+  let totalInputTokens  = 0;
+  let totalOutputTokens = 0;
+
+  // Sonnet 4.6 pricing (USD per 1M tokens)
+  const AGENT_PRICING = { input: 3.00, output: 15.00 };
 
   try {
     // ── Tool use loop ──────────────────────────────────────────────────────────
@@ -380,6 +388,10 @@ export default async function handler(req, res) {
         tools:      TOOLS,
         messages,
       });
+
+      // Accumulate token usage from every round
+      totalInputTokens  += response.usage?.input_tokens  || 0;
+      totalOutputTokens += response.usage?.output_tokens || 0;
 
       if (response.stop_reason === "end_turn") {
         // Extract final text answer
@@ -400,23 +412,40 @@ export default async function handler(req, res) {
         const citations = extractCitations(parsed.answer, evidenceIndex, sourceRefs);
 
         // Surface every URL from the full pool (tool results + harvested from text)
-        const citedUrls = new Set(citations.map(c => c.url).filter(Boolean));
+        // Normalize URLs for dedup: lowercase domain, strip trailing punctuation/slashes
+        const normalizeUrl = (u) => u?.replace(/[.,;:!?/]+$/, "").toLowerCase().replace(/^https?:\/\//, "");
+        const citedUrls = new Set(citations.map(c => normalizeUrl(c.url)).filter(Boolean));
         for (const src of citationPool) {
-          if (!src.url || citedUrls.has(src.url)) continue;
+          if (!src.url || citedUrls.has(normalizeUrl(src.url))) continue;
           citations.push({ source_title: src.source_title, url: src.url, publisher: src.publisher, trust_tier: src.trust_tier });
-          citedUrls.add(src.url);
+          citedUrls.add(normalizeUrl(src.url));
           if (citations.length >= 15) break;
         }
 
-        const qaIssues = qaResponse(cleanAnswer, citations, evidenceIndex);
+        // Final dedup: remove any remaining duplicate URLs (can occur when extractCitations
+        // and harvested pool both capture the same URL via different regex paths)
+        const seen = new Set();
+        const dedupedCitations = citations.filter(c => {
+          const key = normalizeUrl(c.url) || c.source_title;
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+        const qaIssues = qaResponse(cleanAnswer, dedupedCitations, evidenceIndex);
 
         console.log(`[agent] tools called: ${toolCallLog.map(t => t.tool).join(', ')}`);
         console.log(`[agent] citationPool (${citationPool.length}):`, citationPool.slice(0, 5).map(c => `${c.publisher || '?'} → ${c.url?.slice(0, 60)}`).join(' | '));
-        console.log(`[agent] citations returned (${citations.length}):`, citations.slice(0, 5).map(c => `${c.publisher || '?'} → ${c.url?.slice(0, 60)}`).join(' | '));
+        console.log(`[agent] citations returned (${dedupedCitations.length}):`, dedupedCitations.slice(0, 5).map(c => `${c.publisher || '?'} → ${c.url?.slice(0, 60)}`).join(' | '));
+
+        const estimatedCostUsd =
+          (totalInputTokens  / 1_000_000) * AGENT_PRICING.input +
+          (totalOutputTokens / 1_000_000) * AGENT_PRICING.output;
 
         return res.status(200).json({
           answer:              cleanAnswer,
-          citations,
+          citations:           dedupedCitations,
+          source_refs:         sourceRefs,   // ordered list for [src-N] inline linking
           confidence:          parsed.confidence,
           confidence_reason:   parsed.confidence_reason,
           caveat:              parsed.caveat,
@@ -427,6 +456,14 @@ export default async function handler(req, res) {
           qa_pass:             qaIssues.length === 0,
           evidence_items_used: Object.keys(evidenceIndex).length,
           temporal_scope:      temporal.scope_label,
+          token_usage: {
+            input_tokens:       totalInputTokens,
+            output_tokens:      totalOutputTokens,
+            total_tokens:       totalInputTokens + totalOutputTokens,
+            estimated_cost_usd: estimatedCostUsd,
+            model:              ANTHROPIC_MODELS.sonnet,
+            rounds:             round + 1,
+          },
         });
       }
 
@@ -471,8 +508,13 @@ export default async function handler(req, res) {
             }
           }
           if (block.name === "search_corpus" && result.sources) {
-            sourceRefs = [...sourceRefs, ...result.sources];
-            for (const s of result.sources) {
+            // Renumber with a global offset so src-N refs stay unique across multiple calls
+            const offset = srcCounter;
+            const renumbered = result.sources.map((s, i) => ({ ...s, ref: `src-${offset + i + 1}` }));
+            srcCounter += renumbered.length;
+            result = { ...result, sources: renumbered };
+            sourceRefs = [...sourceRefs, ...renumbered];
+            for (const s of renumbered) {
               if (s.url) citationPool.push({ source_title: s.title || "", url: s.url, publisher: s.publisher || "", trust_tier: s.trust_tier || null });
             }
           }
