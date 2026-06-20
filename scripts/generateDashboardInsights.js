@@ -85,21 +85,21 @@ function windowMeta(win, now = new Date()) {
 
 // ── LLM call ─────────────────────────────────────────────────────────────────
 
-async function callHaiku(systemPrompt, userPrompt) {
+async function callSonnet(systemPrompt, userPrompt) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(60000),
     headers: {
       "Content-Type":      "application/json",
       "x-api-key":         apiKey,
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model:      process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
-      max_tokens: 600,
+      model:      process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
+      max_tokens: 800,
       system:     systemPrompt,
       messages:   [{ role: "user", content: userPrompt }],
     }),
@@ -112,7 +112,6 @@ async function callHaiku(systemPrompt, userPrompt) {
   const data = await res.json();
   const text = data.content?.[0]?.text?.trim() || "";
 
-  // Parse JSON from response
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error(`No JSON in response: ${text.slice(0, 200)}`);
   const parsed = JSON.parse(match[0]);
@@ -120,22 +119,32 @@ async function callHaiku(systemPrompt, userPrompt) {
   return parsed.points;
 }
 
-const SYSTEM = `You are a senior AI threat intelligence analyst writing a weekly briefing.
-Your job: write 2-4 concise bullet points summarising the key threat developments for one category.
+const SYSTEM = `You are a principal AI threat intelligence analyst writing a strategic briefing for a CISO and security leadership team.
 
-Rules — each bullet MUST:
-- Be one sentence, 12-20 words
-- Name something specific: a technique, CVE, actor, product, or measurable outcome
-- Use active voice and plain language
-- Represent a real development from the provided source summaries
+Your job: synthesise 2-4 strategic bullet points from a set of sources covering one threat category over a specific time period.
 
-Rules — bullets must NOT:
-- Start with "Research shows", "It is important", "This indicates", or similar hedges
-- Repeat the same finding in different words
-- Be vague generalisations ("AI threats are increasing")
+WHAT A STRATEGIC BULLET DOES:
+It answers "What does this mean for defenders?" — what assumption breaks, what attack surface expands, what control now fails, or what adversary capability has shifted. It is a synthesis across sources, not a description of any single one.
 
-If fewer than 2 distinct developments are visible in the sources, return 1-2 high-quality bullets.
-Return ONLY valid JSON, no markdown: {"points": ["...", "..."]}`;
+GOOD (strategic, implication-first):
+- "Safety filters in generative models are bypassable without touching model weights — the defence boundary shifts to training pipeline integrity."
+- "Indirect prompt injection is confirmed at deployment scale, making RAG document pipelines an untrusted input surface by default."
+- "Autonomous LLM red-teaming is compressing exploit development from months to days, outpacing enterprise patch cycles."
+
+BAD (descriptive, source-summarising):
+- "DiffusionHijack exploits PRNG dependencies to control Stable Diffusion outputs."
+- "Researchers demonstrated a new jailbreak with high success rates."
+- "A CVE allows unauthenticated access to an API endpoint."
+
+RULES:
+- 15-22 words per bullet, one sentence, active voice
+- Each bullet must state a defender implication or landscape shift, not describe a technique
+- Cover different angles across the set: e.g. capability shift / broken assumption / maturity signal / recommended posture change
+- Ground every bullet in the provided source summaries — do not invent statistics, actors, or claims absent from the sources
+- Thin periods (1-2 sources): write 1-2 strong bullets, never pad with weak ones
+- Never start with: "Research shows", "Studies indicate", "It is important", "This highlights"
+
+Return ONLY valid JSON: {"points": ["...", "..."]}`;
 
 function buildUserPrompt(catLabel, windowLabel, summaries) {
   const lines = summaries.slice(0, 20).map((s, i) => `${i + 1}. ${s}`).join("\n");
@@ -215,7 +224,7 @@ async function main() {
 
     let points;
     try {
-      points = await callHaiku(SYSTEM, buildUserPrompt(cat.label, meta.label, summaries));
+      points = await callSonnet(SYSTEM, buildUserPrompt(cat.label, meta.label, summaries));
     } catch (err) {
       console.log(`FAIL (${err.message.slice(0, 60)})`);
       continue;
