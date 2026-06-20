@@ -162,4 +162,7 @@ async function main() {
   }
 }
 
-main().catch(err => { console.error(err); process.exit(1); });
+import { flushCostBuffer } from "../lib/llm/usagePersistence.js";
+main()
+  .then(() => flushCostBuffer())
+  .catch(err => { console.error(err); process.exit(1); });

@@ -275,4 +275,7 @@ async function main() {
   console.log(`  Patterns:  ${(cross_category.patterns||[]).length} cross-category`);
 }
 
-main().catch(err => { console.error("\nFATAL:", err.message, "\n", err.stack?.slice(0, 600)); process.exit(1); });
+import { flushCostBuffer } from "../lib/llm/usagePersistence.js";
+main()
+  .then(() => flushCostBuffer())
+  .catch(err => { console.error("\nFATAL:", err.message, "\n", err.stack?.slice(0, 600)); process.exit(1); });

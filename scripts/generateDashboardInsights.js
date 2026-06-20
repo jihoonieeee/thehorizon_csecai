@@ -346,4 +346,7 @@ async function main() {
   console.log(`\n  Done: ${generated} generated, ${skipped} skipped`);
 }
 
-main().catch(err => { console.error("\nFATAL:", err.message); process.exit(1); });
+import { flushCostBuffer } from "../lib/llm/usagePersistence.js";
+main()
+  .then(() => flushCostBuffer())
+  .catch(err => { console.error("\nFATAL:", err.message); process.exit(1); });
