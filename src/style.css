@@ -447,14 +447,39 @@ a:hover { text-decoration: underline; }
 }
 
 .hz-cat-card-insight {
-  font-size: 0.78rem;
-  color: var(--text-primary);
-  line-height: 1.55;
   margin-top: 8px;
   padding: 8px 10px;
   background: color-mix(in srgb, var(--cat-color) 6%, transparent);
   border-left: 2px solid var(--cat-color);
   border-radius: 0 4px 4px 0;
+}
+.hz-cat-card-insight-from {
+  font-size: 0.68rem;
+  color: var(--text-tertiary, #9ca3af);
+  margin-bottom: 4px;
+  font-style: italic;
+}
+.hz-cat-card-insight-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.hz-cat-card-insight-list li {
+  font-size: 0.76rem;
+  color: var(--text-primary);
+  line-height: 1.45;
+  padding-left: 12px;
+  position: relative;
+}
+.hz-cat-card-insight-list li::before {
+  content: "·";
+  position: absolute;
+  left: 2px;
+  color: var(--cat-color);
+  font-weight: 700;
 }
 
 .hz-cat-card-empty {

@@ -10,9 +10,10 @@ name: Pipeline — Enrich & Synthesize
 
 on:
   schedule:
-    - cron: '30 22 * * *'   # daily enrichment
-    - cron: '0 1 * * 1'     # weekly synthesis (Monday 09:00 SGT)
-    - cron: '0 1 1 * *'     # monthly synthesis (1st of month 09:00 SGT)
+    - cron: '30 22 * * *'      # daily enrichment (22:30 UTC = 06:30 SGT next day)
+    - cron: '0 1 * * 1'        # weekly synthesis + insights (Monday 01:00 UTC = 09:00 SGT)
+    - cron: '0 1 1 * *'        # monthly synthesis + insights (1st 01:00 UTC = 09:00 SGT)
+    - cron: '0 0 1 1,4,7,10 *' # quarterly insights (1st Jan/Apr/Jul/Oct 00:00 UTC = 08:00 SGT)
   workflow_dispatch:
     inputs:
       run_synthesis:
@@ -23,6 +24,10 @@ on:
         description: 'Synthesis lookback window in days (default: 90)'
         type: string
         default: '90'
+      run_insights:
+        description: 'Generate dashboard insights? (week|month|quarter|all)'
+        type: string
+        default: ''
 
 jobs:
   # ── Job 1: Enrich new sources ──────────────────────────────────────────────
@@ -51,6 +56,52 @@ jobs:
           ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
           GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
           OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
+
+  # ── Job 1b: Dashboard insights ────────────────────────────────────────────
+  # Generates per-category bullet-point insights for the Overview page.
+  # Idempotent: skips window_key × category rows that already exist.
+  # Runs on: weekly (week insights), monthly (month + quarter if applicable),
+  #          quarterly cron (quarter insights), manual dispatch with run_insights set.
+  insights:
+    name: Dashboard insights
+    needs: enrich
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule != '30 22 * * *') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_insights != '')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Weekly insights (Monday)
+        if: github.event.schedule == '0 1 * * 1' || contains(github.event.inputs.run_insights, 'week') || github.event.inputs.run_insights == 'all'
+        run: node scripts/generateDashboardInsights.js --window week
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Monthly insights (1st of month)
+        if: github.event.schedule == '0 1 1 * *' || contains(github.event.inputs.run_insights, 'month') || github.event.inputs.run_insights == 'all'
+        run: node scripts/generateDashboardInsights.js --window month
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Quarterly insights (1st Jan/Apr/Jul/Oct)
+        if: github.event.schedule == '0 0 1 1,4,7,10 *' || contains(github.event.inputs.run_insights, 'quarter') || github.event.inputs.run_insights == 'all'
+        run: node scripts/generateDashboardInsights.js --window quarter
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
 
   # ── Job 2: Synthesize + QA ─────────────────────────────────────────────────
   # Runs after enrichment completes, but only on weekly/monthly schedules

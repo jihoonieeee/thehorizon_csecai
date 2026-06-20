@@ -160,8 +160,17 @@ function CategoryCard({ cat, trendValues }) {
 
         <div className="hz-cat-card-name">{cat.label}</div>
 
-        {cat.strategic_insight && (
-          <div className="hz-cat-card-insight">{cat.strategic_insight}</div>
+        {cat.insight_points?.length > 0 && (
+          <div className="hz-cat-card-insight">
+            {cat.insight_from && (
+              <div className="hz-cat-card-insight-from">From {cat.insight_from}</div>
+            )}
+            <ul className="hz-cat-card-insight-list">
+              {cat.insight_points.map((pt, i) => (
+                <li key={i}>{pt}</li>
+              ))}
+            </ul>
+          </div>
         )}
 
         {count === 0 && (

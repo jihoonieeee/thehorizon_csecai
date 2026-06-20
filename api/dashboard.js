@@ -105,43 +105,74 @@ function weekLabel(weekEndDate) {
   return weekEndDate.toLocaleDateString("en-SG", { month: "short", day: "numeric" });
 }
 
-// ── Cached synthesis insights (refresh every 30 min) ─────────────────────────
-let _insightCache = null;
-let _insightCacheAt = 0;
+// ── Window key helpers (must match generateDashboardInsights.js) ──────────────
+
+function isoWeek(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const year = d.getUTCFullYear();
+  const week = Math.ceil(((d - new Date(Date.UTC(year, 0, 1))) / 86400000 + 1) / 7);
+  return `${year}-W${String(week).padStart(2, "0")}`;
+}
+
+function windowKey(win, now = new Date()) {
+  if (win === "week")    return isoWeek(now);
+  if (win === "month")   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  if (win === "quarter") return `${now.getUTCFullYear()}-Q${Math.ceil((now.getUTCMonth() + 1) / 3)}`;
+  return isoWeek(now);
+}
+
+// ── Cached dashboard insights (per window, refresh every 30 min) ──────────────
+const _insightCache = new Map(); // win → { data, at }
 const INSIGHT_TTL_MS = 30 * 60 * 1000;
 
-async function getLatestCategoryInsights() {
-  if (_insightCache && Date.now() - _insightCacheAt < INSIGHT_TTL_MS) {
-    return _insightCache;
-  }
+async function getWindowInsights(win) {
+  const cached = _insightCache.get(win);
+  if (cached && Date.now() - cached.at < INSIGHT_TTL_MS) return cached.data;
+
   try {
-    // Read from synthesis_insights table (written by runSynthesisOnly.js).
-    // Get the most recent run_id and all its category rows.
-    const { data: latest } = await supabase
-      .from("synthesis_insights")
-      .select("run_id")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const key = windowKey(win);
 
-    if (!latest?.run_id) return {};
+    // Try exact window_key first
+    let { data: rows } = await supabase
+      .from("dashboard_insights")
+      .select("category,points,window_label,source_count,created_at")
+      .eq("window_key", key);
 
-    const { data: rows } = await supabase
-      .from("synthesis_insights")
-      .select("category,insight_text")
-      .eq("run_id", latest.run_id);
+    let fromLabel = null;
 
-    const insights = {};
-    for (const row of (rows || [])) {
-      if (row.category && row.insight_text) {
-        insights[row.category] = row.insight_text;
+    // Fallback: most recent prior period of the same window type
+    if (!rows?.length) {
+      const { data: prior } = await supabase
+        .from("dashboard_insights")
+        .select("category,points,window_label,source_count,window_key,created_at")
+        .eq("win", win)
+        .order("created_at", { ascending: false })
+        .limit(4); // up to 4 categories
+
+      if (prior?.length) {
+        rows = prior;
+        fromLabel = prior[0]?.window_label || null;
       }
     }
-    _insightCache   = insights;
-    _insightCacheAt = Date.now();
-    return insights;
+
+    if (!rows?.length) {
+      _insightCache.set(win, { data: { insights: {}, fromLabel: null }, at: Date.now() });
+      return { insights: {}, fromLabel: null };
+    }
+
+    const insights = {};
+    for (const row of rows) {
+      if (row.category && Array.isArray(row.points) && row.points.length) {
+        insights[row.category] = row.points;
+      }
+    }
+
+    const result = { insights, fromLabel };
+    _insightCache.set(win, { data: result, at: Date.now() });
+    return result;
   } catch {
-    return {};
+    return { insights: {}, fromLabel: null };
   }
 }
 
@@ -150,8 +181,8 @@ export default async function handler(req, res) {
     const win = (req.query?.window || "quarter").toLowerCase();
     const { from, to, label: windowLabel } = windowRange(win);
 
-    // Load synthesis insights once (cached 30 min)
-    const categoryInsights = await getLatestCategoryInsights();
+    // Load timeframe-scoped insights (cached 30 min per window)
+    const { insights: categoryInsights, fromLabel: insightFromLabel } = await getWindowInsights(win);
 
     // ── 1. Fetch all validated sources in window ──────────────────────────────
     const { data: sources, error: srcErr } = await supabase
@@ -191,7 +222,8 @@ export default async function handler(req, res) {
         short:            c.short,
         source_count:     srcs.length,
         top_sources:      top,
-        strategic_insight: categoryInsights[c.key] || null,
+        insight_points:   categoryInsights[c.key] || null,   // array of strings
+        insight_from:     categoryInsights[c.key] ? insightFromLabel : null,
       };
     });
 
