@@ -109,6 +109,36 @@ const PUBLISHERS = [
     indexFilter: /blog/,
   },
 
+  // ── AI-enabled threat sources ────────────────────────────────────────────────
+  {
+    name:        "DFRLab (Atlantic Council)",
+    publisher:   "Atlantic Council DFRLab",
+    strategy:    "sitemap",
+    sitemaps:    ["https://dfrlab.org/post-sitemap.xml", "https://dfrlab.org/post-sitemap2.xml"],
+    trust_tier:  "high",
+    source_type: "threat_intelligence",
+    urlFilter:   /dfrlab\.org\/\d{4}\/\d{2}\//,
+  },
+  {
+    name:        "404 Media",
+    publisher:   "404 Media",
+    strategy:    "ghost_rss",
+    rssBase:     "https://www.404media.co/rss/",
+    trust_tier:  "medium",
+    source_type: "news_article",
+  },
+  {
+    name:        "The Record",
+    publisher:   "The Record",
+    strategy:    "sitemap",
+    sitemaps:    ["https://therecord.media/sitemap.xml"],
+    trust_tier:  "medium",
+    source_type: "news_article",
+    urlFilter:   /therecord\.media\/[a-z0-9-]+\/?$/,
+    isSitemapIndex: true,
+    indexFilter: /sitemaps\/page/,
+  },
+
   // ── Sitemap + HTML (static sites / Hugo / Jekyll — no JS rendering) ────────
   {
     name:        "Google Security Blog",
