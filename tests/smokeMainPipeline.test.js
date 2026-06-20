@@ -225,6 +225,7 @@ const result = await runSlidesLayer(SYNTHESIS_RESULT, {
 
 const { slides, slide_plan, counts, deck_version,
         content_qa_report, notes_qa_report, deck_qa_report } = result;
+// notes_qa_report expected to be undefined after speaker notes removal
 
 // ── 1. Shape and version ──────────────────────────────────────────────────────
 console.log("── 1. Shape and deck version ──────────────────────────────────────");
@@ -315,12 +316,10 @@ console.log("\n── 8. Cross-slide stat reconciliation ───────�
 test("cross_slide_stat_issues present in report (no crash)",
   () => assert.ok("cross_slide_stat_issues" in (content_qa_report || {})));
 
-// ── 9. Speaker notes QA ran ──────────────────────────────────────────────────
-console.log("\n── 9. Speaker notes QA ────────────────────────────────────────────");
+// ── 9. Speaker notes removed ─────────────────────────────────────────────────
+console.log("\n── 9. Speaker notes (removed) ─────────────────────────────────────");
 
-test("notes_qa_report is present",             () => assert.ok(notes_qa_report));
-test("notes_qa_pass is a boolean",             () => assert.equal(typeof notes_qa_report?.notes_qa_pass, "boolean"));
-test("notes_qa_report.total_slides > 0",       () => assert.ok((notes_qa_report?.total_slides ?? 0) > 0));
+test("notes_qa_report absent (speaker notes removed)", () => assert.equal(notes_qa_report, undefined));
 
 // ── 10. PPTX renderer branch (unit-level) ────────────────────────────────────
 console.log("\n── 10. PPTX renderer visual_requirement branch ────────────────────");
