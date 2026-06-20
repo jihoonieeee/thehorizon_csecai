@@ -33,48 +33,48 @@ const CATEGORIES = [
   { key: "ai_enabled_threats",     label: "AI-Enabled Threats",     short: "AI-Enabled" },
 ];
 
-// Primary taxonomy tags (TAI/LLM/ASI/AE, 10 each)
+// Primary taxonomy tags — IDs match exactly what the enrichment pipeline writes to sources.tags[]
 const TAGS = [
-  { id: "TAI01_data_poisoning",                    label: "Data Poisoning",                  domain: "traditional_ai_threats" },
-  { id: "TAI02_model_poisoning",                   label: "Model Poisoning",                  domain: "traditional_ai_threats" },
-  { id: "TAI03_adversarial_evasion",               label: "Adversarial Evasion",              domain: "traditional_ai_threats" },
-  { id: "TAI04_adversarial_data",                  label: "Adversarial Data",                 domain: "traditional_ai_threats" },
-  { id: "TAI05_model_extraction",                  label: "Model Extraction",                 domain: "traditional_ai_threats" },
-  { id: "TAI06_model_inversion",                   label: "Model Inversion",                  domain: "traditional_ai_threats" },
-  { id: "TAI07_membership_inference",              label: "Membership Inference",             domain: "traditional_ai_threats" },
-  { id: "TAI08_inference_api_abuse",               label: "Inference API Abuse",              domain: "traditional_ai_threats" },
-  { id: "TAI09_model_denial_of_service",           label: "Model DoS",                        domain: "traditional_ai_threats" },
-  { id: "TAI10_ai_supply_chain_compromise",        label: "AI Supply Chain",                  domain: "traditional_ai_threats" },
-  { id: "LLM01_prompt_injection",                  label: "Prompt Injection",                 domain: "llm_threats" },
-  { id: "LLM02_sensitive_information_disclosure",  label: "Sensitive Info Disclosure",        domain: "llm_threats" },
-  { id: "LLM03_llm_supply_chain",                  label: "LLM Supply Chain",                 domain: "llm_threats" },
-  { id: "LLM04_data_model_poisoning",              label: "Data & Model Poisoning",           domain: "llm_threats" },
-  { id: "LLM05_improper_output_handling",          label: "Improper Output Handling",         domain: "llm_threats" },
-  { id: "LLM06_excessive_agency",                  label: "Excessive Agency",                 domain: "llm_threats" },
-  { id: "LLM07_system_prompt_leakage",             label: "System Prompt Leakage",            domain: "llm_threats" },
-  { id: "LLM08_vector_embedding_weaknesses",       label: "Vector/Embedding Weaknesses",      domain: "llm_threats" },
-  { id: "LLM09_misinformation",                    label: "Misinformation",                   domain: "llm_threats" },
-  { id: "LLM10_unbounded_consumption",             label: "Unbounded Consumption",            domain: "llm_threats" },
-  { id: "ASI01_agent_goal_hijack",                 label: "Agent Goal Hijack",                domain: "agentic_ai_threats" },
-  { id: "ASI02_tool_misuse_exploitation",          label: "Tool Misuse",                      domain: "agentic_ai_threats" },
-  { id: "ASI03_identity_privilege_abuse",          label: "Identity & Privilege Abuse",       domain: "agentic_ai_threats" },
-  { id: "ASI04_agentic_supply_chain_vulnerabilities", label: "Agentic Supply Chain",          domain: "agentic_ai_threats" },
-  { id: "ASI05_unexpected_code_execution",         label: "Unexpected Code Execution",        domain: "agentic_ai_threats" },
-  { id: "ASI06_memory_context_poisoning",          label: "Memory & Context Poisoning",       domain: "agentic_ai_threats" },
-  { id: "ASI07_insecure_inter_agent_communication",label: "Insecure Inter-Agent Comms",       domain: "agentic_ai_threats" },
-  { id: "ASI08_cascading_failures",                label: "Cascading Failures",               domain: "agentic_ai_threats" },
-  { id: "ASI09_human_agent_trust_exploitation",    label: "Human-Agent Trust Exploit",        domain: "agentic_ai_threats" },
-  { id: "ASI10_rogue_agents",                      label: "Rogue Agents",                     domain: "agentic_ai_threats" },
-  { id: "AE01_ai_enabled_reconnaissance",          label: "AI Reconnaissance",                domain: "ai_enabled_threats" },
-  { id: "AE02_ai_enabled_social_engineering",      label: "AI Social Engineering",            domain: "ai_enabled_threats" },
-  { id: "AE03_ai_enabled_vulnerability_research",  label: "AI Vuln Research",                 domain: "ai_enabled_threats" },
-  { id: "AE04_ai_enabled_exploit_development",     label: "AI Exploit Dev",                   domain: "ai_enabled_threats" },
-  { id: "AE05_ai_enabled_malware_development",     label: "AI Malware Dev",                   domain: "ai_enabled_threats" },
-  { id: "AE06_ai_enabled_evasion_obfuscation",     label: "AI Evasion & Obfuscation",         domain: "ai_enabled_threats" },
-  { id: "AE07_ai_enabled_identity_abuse",          label: "AI Identity Abuse",                domain: "ai_enabled_threats" },
-  { id: "AE08_ai_enabled_attack_orchestration",    label: "AI Attack Orchestration",          domain: "ai_enabled_threats" },
-  { id: "AE09_ai_enabled_disinformation_influence",label: "AI Disinformation",                domain: "ai_enabled_threats" },
-  { id: "AE10_ai_enabled_deepfake",                label: "Deepfake & Synthetic Media",       domain: "ai_enabled_threats" },
+  { id: "TAI01_data_poisoning",              label: "Data Poisoning",              domain: "traditional_ai_threats" },
+  { id: "TAI02_model_poisoning",             label: "Model Poisoning",             domain: "traditional_ai_threats" },
+  { id: "TAI03_adversarial_evasion",         label: "Adversarial Evasion",         domain: "traditional_ai_threats" },
+  { id: "TAI04_adversarial_data",            label: "Adversarial Data",            domain: "traditional_ai_threats" },
+  { id: "TAI05_model_extraction",            label: "Model Extraction",            domain: "traditional_ai_threats" },
+  { id: "TAI06_model_inversion",             label: "Model Inversion",             domain: "traditional_ai_threats" },
+  { id: "TAI07_membership_inference",        label: "Membership Inference",        domain: "traditional_ai_threats" },
+  { id: "TAI08_inference_api_abuse",         label: "Inference API Abuse",         domain: "traditional_ai_threats" },
+  { id: "TAI09_model_denial_of_service",     label: "Model DoS",                   domain: "traditional_ai_threats" },
+  { id: "TAI10_ai_supply_chain_compromise",  label: "AI Supply Chain",             domain: "traditional_ai_threats" },
+  { id: "LLM01_prompt_injection",            label: "Prompt Injection",            domain: "llm_threats" },
+  { id: "LLM02_sensitive_info_disclosure",   label: "Sensitive Info Disclosure",   domain: "llm_threats" },
+  { id: "LLM03_llm_supply_chain",            label: "LLM Supply Chain",            domain: "llm_threats" },
+  { id: "LLM04_data_model_poisoning",        label: "Data & Model Poisoning",      domain: "llm_threats" },
+  { id: "LLM05_improper_output_handling",    label: "Improper Output Handling",    domain: "llm_threats" },
+  { id: "LLM06_excessive_agency",            label: "Excessive Agency",            domain: "llm_threats" },
+  { id: "LLM07_system_prompt_leakage",       label: "System Prompt Leakage",       domain: "llm_threats" },
+  { id: "LLM08_vector_embedding_weakness",   label: "Vector/Embedding Weaknesses", domain: "llm_threats" },
+  { id: "LLM09_misinformation",              label: "Misinformation",              domain: "llm_threats" },
+  { id: "LLM10_unbounded_consumption",       label: "Unbounded Consumption",       domain: "llm_threats" },
+  { id: "ASI01_agent_goal_hijack",           label: "Agent Goal Hijack",           domain: "agentic_ai_threats" },
+  { id: "ASI02_tool_misuse_exploitation",    label: "Tool Misuse",                 domain: "agentic_ai_threats" },
+  { id: "ASI03_identity_privilege_abuse",    label: "Identity & Privilege Abuse",  domain: "agentic_ai_threats" },
+  { id: "ASI04_agentic_supply_chain",        label: "Agentic Supply Chain",        domain: "agentic_ai_threats" },
+  { id: "ASI05_unexpected_code_execution",   label: "Unexpected Code Execution",   domain: "agentic_ai_threats" },
+  { id: "ASI06_memory_context_poisoning",    label: "Memory & Context Poisoning",  domain: "agentic_ai_threats" },
+  { id: "ASI07_insecure_agent_comms",        label: "Insecure Inter-Agent Comms",  domain: "agentic_ai_threats" },
+  { id: "ASI08_cascading_failures",          label: "Cascading Failures",          domain: "agentic_ai_threats" },
+  { id: "ASI09_human_agent_trust_exploit",   label: "Human-Agent Trust Exploit",   domain: "agentic_ai_threats" },
+  { id: "ASI10_rogue_agents",               label: "Rogue Agents",                domain: "agentic_ai_threats" },
+  { id: "AE01_ai_recon",                    label: "AI Reconnaissance",           domain: "ai_enabled_threats" },
+  { id: "AE02_ai_social_engineering",       label: "AI Social Engineering",       domain: "ai_enabled_threats" },
+  { id: "AE03_ai_vuln_research",            label: "AI Vuln Research",            domain: "ai_enabled_threats" },
+  { id: "AE04_ai_exploit_dev",              label: "AI Exploit Dev",              domain: "ai_enabled_threats" },
+  { id: "AE05_ai_malware_dev",              label: "AI Malware Dev",              domain: "ai_enabled_threats" },
+  { id: "AE06_ai_evasion_obfuscation",      label: "AI Evasion & Obfuscation",    domain: "ai_enabled_threats" },
+  { id: "AE07_ai_identity_abuse",           label: "AI Identity Abuse",           domain: "ai_enabled_threats" },
+  { id: "AE08_ai_attack_orchestration",     label: "AI Attack Orchestration",     domain: "ai_enabled_threats" },
+  { id: "AE09_ai_disinformation",           label: "AI Disinformation",           domain: "ai_enabled_threats" },
+  { id: "AE10_ai_deepfake",                 label: "Deepfake & Synthetic Media",  domain: "ai_enabled_threats" },
 ];
 
 const TAG_IDS = new Set(TAGS.map(t => t.id));
@@ -115,38 +115,27 @@ async function getLatestCategoryInsights() {
     return _insightCache;
   }
   try {
-    const { data } = await supabase
-      .from("snapshots")
-      .select("snapshot_id,created_at,category_analyses")
-      .not("category_analyses", "is", null)
+    // Read from synthesis_insights table (written by runSynthesisOnly.js).
+    // Get the most recent run_id and all its category rows.
+    const { data: latest } = await supabase
+      .from("synthesis_insights")
+      .select("run_id")
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (!data?.category_analyses) return {};
+    if (!latest?.run_id) return {};
+
+    const { data: rows } = await supabase
+      .from("synthesis_insights")
+      .select("category,insight_text")
+      .eq("run_id", latest.run_id);
 
     const insights = {};
-    for (const ca of (data.category_analyses || [])) {
-      const approved = (ca.judgments || []).filter(j => !j.blocked);
-      const parts = [];
-
-      // Up to 2 approved judgment takeaways
-      for (const j of approved.slice(0, 2)) {
-        if (j.short_takeaway?.length > 10) parts.push(j.short_takeaway);
+    for (const row of (rows || [])) {
+      if (row.category && row.insight_text) {
+        insights[row.category] = row.insight_text;
       }
-
-      // Outlook observed basis if we have room
-      const obs = ca.outlook_assessment?.observed_basis;
-      if (obs?.length > 20 && parts.length < 2) parts.push(obs);
-
-      // Fallback to coverage assessment
-      if (!parts.length && ca.coverage_assessment?.length > 20) {
-        parts.push(ca.coverage_assessment);
-      }
-
-      insights[ca.category] = parts.length
-        ? parts.slice(0, 3).join(" ")
-        : null;
     }
     _insightCache   = insights;
     _insightCacheAt = Date.now();

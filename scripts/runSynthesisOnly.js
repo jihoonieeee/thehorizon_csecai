@@ -167,6 +167,39 @@ async function main() {
   // ── Persist to Supabase ────────────────────────────────────────────────────
   if (!NO_PERSIST) {
     console.log(`  Persisting to Supabase...`);
+
+    // Write per-category strategic insights for the dashboard
+    try {
+      const insightRows = category_analyses
+        .filter(ca => (ca.judgments||[]).some(j => !j.blocked))
+        .map(ca => {
+          const approved = (ca.judgments||[]).filter(j => !j.blocked);
+          const parts = [];
+          // Primary insight: first approved judgment's core finding
+          if (approved[0]?.judgment?.length > 20) parts.push(approved[0].judgment);
+          // Secondary: why it matters from the second judgment if available
+          if (approved[1]?.why_this_matters?.length > 20) parts.push(approved[1].why_this_matters);
+          else if (approved[0]?.why_this_matters?.length > 20 && parts.length < 2) parts.push(approved[0].why_this_matters);
+          // Tertiary: outlook
+          const obs = ca.outlook_assessment?.observed_basis;
+          if (obs?.length > 20 && parts.length < 3) parts.push(obs);
+
+          return {
+            run_id,
+            category:       ca.category,
+            insight_text:   parts.slice(0, 3).join(" "),
+            judgment_count: approved.length,
+          };
+        });
+
+      if (insightRows.length) {
+        const { error } = await supabase.from("synthesis_insights").upsert(insightRows, { onConflict: "run_id,category" });
+        if (error) console.warn(`  Insights persist failed: ${error.message}`);
+        else console.log(`  Insights saved: ${insightRows.length} categories`);
+      }
+    } catch (err) {
+      console.warn(`  Insights persist error: ${err.message}`);
+    }
     try {
       const snapshot_id = `snapshot-${run_id}`;
       await supabase.from("snapshots").upsert({
