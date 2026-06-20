@@ -160,8 +160,8 @@ function CategoryCard({ cat, trendValues }) {
 
         <div className="hz-cat-card-name">{cat.label}</div>
 
-        {cat.lead_summary && (
-          <div className="hz-cat-card-summary">{cat.lead_summary}</div>
+        {cat.strategic_insight && (
+          <div className="hz-cat-card-insight">{cat.strategic_insight}</div>
         )}
 
         {count === 0 && (

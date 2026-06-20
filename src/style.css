@@ -446,6 +446,17 @@ a:hover { text-decoration: underline; }
   overflow: hidden;
 }
 
+.hz-cat-card-insight {
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  line-height: 1.55;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--cat-color) 6%, transparent);
+  border-left: 2px solid var(--cat-color);
+  border-radius: 0 4px 4px 0;
+}
+
 .hz-cat-card-empty {
   font-size: 0.73rem;
   color: var(--text-tertiary);

@@ -105,10 +105,64 @@ function weekLabel(weekEndDate) {
   return weekEndDate.toLocaleDateString("en-SG", { month: "short", day: "numeric" });
 }
 
+// ── Cached synthesis insights (refresh every 30 min) ─────────────────────────
+let _insightCache = null;
+let _insightCacheAt = 0;
+const INSIGHT_TTL_MS = 30 * 60 * 1000;
+
+async function getLatestCategoryInsights() {
+  if (_insightCache && Date.now() - _insightCacheAt < INSIGHT_TTL_MS) {
+    return _insightCache;
+  }
+  try {
+    const { data } = await supabase
+      .from("snapshots")
+      .select("snapshot_id,created_at,category_analyses")
+      .not("category_analyses", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!data?.category_analyses) return {};
+
+    const insights = {};
+    for (const ca of (data.category_analyses || [])) {
+      const approved = (ca.judgments || []).filter(j => !j.blocked);
+      const parts = [];
+
+      // Up to 2 approved judgment takeaways
+      for (const j of approved.slice(0, 2)) {
+        if (j.short_takeaway?.length > 10) parts.push(j.short_takeaway);
+      }
+
+      // Outlook observed basis if we have room
+      const obs = ca.outlook_assessment?.observed_basis;
+      if (obs?.length > 20 && parts.length < 2) parts.push(obs);
+
+      // Fallback to coverage assessment
+      if (!parts.length && ca.coverage_assessment?.length > 20) {
+        parts.push(ca.coverage_assessment);
+      }
+
+      insights[ca.category] = parts.length
+        ? parts.slice(0, 3).join(" ")
+        : null;
+    }
+    _insightCache   = insights;
+    _insightCacheAt = Date.now();
+    return insights;
+  } catch {
+    return {};
+  }
+}
+
 export default async function handler(req, res) {
   try {
     const win = (req.query?.window || "quarter").toLowerCase();
     const { from, to, label: windowLabel } = windowRange(win);
+
+    // Load synthesis insights once (cached 30 min)
+    const categoryInsights = await getLatestCategoryInsights();
 
     // ── 1. Fetch all validated sources in window ──────────────────────────────
     const { data: sources, error: srcErr } = await supabase
@@ -141,19 +195,14 @@ export default async function handler(req, res) {
         date:      s.date_published?.slice(0, 10),
         summary:   (s.analyst_brief || s.short_summary || "").slice(0, 200) || null,
       }));
-      // Lead summary: use top source's analyst_brief if it exists
-      const leadSummary = srcs
-        .slice(0, 10)
-        .map(s => s.analyst_brief || s.short_summary || "")
-        .find(t => t.length > 40) || null;
 
       return {
-        key:          c.key,
-        label:        c.label,
-        short:        c.short,
-        source_count: srcs.length,
-        top_sources:  top,
-        lead_summary: leadSummary ? leadSummary.slice(0, 220) : null,
+        key:              c.key,
+        label:            c.label,
+        short:            c.short,
+        source_count:     srcs.length,
+        top_sources:      top,
+        strategic_insight: categoryInsights[c.key] || null,
       };
     });
 
@@ -215,10 +264,9 @@ export default async function handler(req, res) {
       }
     }
 
-    // Filter to tags with at least 1 occurrence
-    const activeTags = TAGS.filter(t =>
-      CATEGORIES.some(c => tagCounts[t.id][c.key] > 0)
-    );
+    // Always include all 40 tags so every domain section is visible.
+    // Zero-count cells render as empty — analysts see the full taxonomy.
+    const activeTags = TAGS;
 
     return res.status(200).json({
       window:       win,
