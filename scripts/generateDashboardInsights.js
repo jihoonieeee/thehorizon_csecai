@@ -157,6 +157,83 @@ ${lines}
 Generate 2-4 bullet points for this category and period.`;
 }
 
+// ── Second-model QA (Haiku checks Sonnet output) ──────────────────────────────
+
+const QA_SYSTEM = `You are a fact-checker for an AI threat intelligence briefing.
+
+You will receive strategic bullet points and the source summaries they were derived from.
+For each bullet, determine whether it is genuinely grounded in the provided sources.
+
+GROUNDED: Every specific claim in the bullet (numbers, percentages, named products, CVEs,
+  threat actors, technique names) is present in or directly inferable from the summaries.
+  Strategic implications drawn from the sources are acceptable even if not word-for-word.
+
+OVERREACH: The bullet states something specific that is NOT in the sources — an invented
+  statistic, an unnamed actor presented as named, a CVE not mentioned, a claim of
+  "confirmed" or "at scale" or "operational" when sources only show research/PoC.
+
+CONTRADICTED: The bullet directly contradicts a fact stated in the summaries.
+
+Be strict on invented specifics; be lenient on reasonable strategic inferences.
+Return ONLY valid JSON:
+{"verdicts": [{"index": 0, "verdict": "grounded"|"overreach"|"contradicted", "reason": "..."|null}]}`;
+
+async function qaPoints(points, summaries, catLabel) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return points; // skip QA if no key (shouldn't happen)
+
+  const userPrompt = `Category: ${catLabel}
+
+BULLETS TO VERIFY:
+${points.map((p, i) => `[${i}] ${p}`).join("\n")}
+
+SOURCE SUMMARIES (what the bullets must be grounded in):
+${summaries.slice(0, 20).map((s, i) => `${i + 1}. ${s}`).join("\n")}
+
+Check each bullet. Return a verdict for every index.`;
+
+  let verdicts;
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      signal: AbortSignal.timeout(30000),
+      headers: {
+        "Content-Type":      "application/json",
+        "x-api-key":         apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model:      process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
+        max_tokens: 600,
+        system:     QA_SYSTEM,
+        messages:   [{ role: "user", content: userPrompt }],
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const text = data.content?.[0]?.text?.trim() || "";
+    // Extract outermost JSON object (Haiku sometimes wraps with extra text)
+    const match = text.match(/\{\s*"verdicts"\s*:\s*\[[\s\S]*?\]\s*\}/);
+    if (!match) throw new Error("no JSON");
+    verdicts = JSON.parse(match[0]).verdicts;
+    if (!Array.isArray(verdicts)) throw new Error("no verdicts array");
+  } catch (err) {
+    console.log(`  [QA] check failed (${err.message.slice(0, 50)}) — keeping all points`);
+    return points;
+  }
+
+  const approved = [];
+  for (let i = 0; i < points.length; i++) {
+    const v = verdicts.find(v => v.index === i);
+    if (!v || v.verdict === "grounded") {
+      approved.push(points[i]);
+    } else {
+      console.log(`  [QA] REMOVED [${i}] ${v.verdict.toUpperCase()}: ${v.reason?.slice(0, 80)}`);
+    }
+  }
+  return approved;
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -222,6 +299,7 @@ async function main() {
       continue;
     }
 
+    // Pass 1: Sonnet generates strategic bullets
     let points;
     try {
       points = await callSonnet(SYSTEM, buildUserPrompt(cat.label, meta.label, summaries));
@@ -230,9 +308,22 @@ async function main() {
       continue;
     }
 
-    // Validate: must be non-empty strings
     points = points.filter(p => typeof p === "string" && p.trim().length > 10).slice(0, 4);
     if (!points.length) { console.log("FAIL (empty points)"); continue; }
+
+    // Pass 2: Haiku verifies grounding (second-model QA)
+    process.stdout.write(`\n  ${" ".repeat(28)} QA check (${points.length} bullets)... `);
+    const beforeQa = points.length;
+    points = await qaPoints(points, summaries, cat.label);
+
+    if (!points.length) {
+      console.log(`FAIL (all ${beforeQa} bullets removed by QA)`);
+      continue;
+    }
+
+    const removed = beforeQa - points.length;
+    console.log(`${points.length} approved${removed > 0 ? `, ${removed} removed` : ""}`);
+    points.forEach(p => console.log(`    • ${p}`));
 
     const { error: upsertErr } = await supabase.from("dashboard_insights").upsert({
       win:          WINDOW,
@@ -244,14 +335,11 @@ async function main() {
     }, { onConflict: "window_key,category" });
 
     if (upsertErr) {
-      console.log(`FAIL (DB: ${upsertErr.message.slice(0, 60)})`);
+      console.log(`  FAIL (DB: ${upsertErr.message.slice(0, 60)})`);
     } else {
-      console.log(`OK (${points.length} points)`);
-      points.forEach(p => console.log(`    • ${p}`));
       generated++;
     }
 
-    // Polite delay between LLM calls
     await new Promise(r => setTimeout(r, 500));
   }
 
