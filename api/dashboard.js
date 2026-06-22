@@ -341,7 +341,6 @@ export default async function handler(req, res) {
       // Lightweight historical comparison vs the previous period (from _period_meta).
       comparison: periodMeta ? {
         compared_to_label: periodMeta.compared_to_label || null,
-        whats_changed:      periodMeta.whats_changed      || null,
         assessment_changes: periodMeta.assessment_changes || [],
         emerging_signals:   periodMeta.emerging_signals   || [],
       } : null,

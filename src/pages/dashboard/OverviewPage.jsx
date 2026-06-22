@@ -140,17 +140,6 @@ function TrendChart({ trend }) {
 
 // ── Confidence chip + evidence-maturity bar ─────────────────────────────────────
 
-const CONF_CLS = { High: "hz-conf-high", Medium: "hz-conf-med", Low: "hz-conf-low" };
-
-function ConfidenceChip({ level, reason }) {
-  if (!level) return null;
-  return (
-    <span className={`hz-conf-chip ${CONF_CLS[level] || ""}`} title={reason || ""}>
-      {level} confidence
-    </span>
-  );
-}
-
 const MATURITY_RUNGS = [
   { key: "research",        label: "Research",       color: "#94a3b8" },
   { key: "vulnerabilities", label: "Vulnerabilities",color: "#f59e0b" },
@@ -189,7 +178,6 @@ function MaturityBar({ maturity }) {
 
 function CategoryCard({ cat, trendValues }) {
   const [showSources, setShowSources] = useState(false);
-  const [showReasoning, setShowReasoning] = useState(false);
   const color = CAT_COLOR[cat.key];
   const count = cat.source_count ?? 0;
   const hasTop = (cat.top_sources || []).length > 0;
@@ -211,9 +199,6 @@ function CategoryCard({ cat, trendValues }) {
 
         <div className="hz-cat-card-name">{cat.label}</div>
 
-        <div className="hz-cat-card-meta-row">
-          <ConfidenceChip level={cat.confidence} reason={cat.confidence_reason} />
-        </div>
         <MaturityBar maturity={cat.evidence_maturity} />
 
         {cat.assessment && (
@@ -227,41 +212,32 @@ function CategoryCard({ cat, trendValues }) {
             )}
             <ul className="hz-insight-list">
               {insights.map((p, i) => (
-                <li key={i} className="hz-insight-item">
+                <li key={i} className="hz-insight-item" tabIndex={0}>
                   <div className="hz-insight-headline">{p.insight}</div>
-                  {p.implication && (
-                    <div className="hz-insight-line">
-                      <span className="hz-insight-tag">So what</span>{p.implication}
-                    </div>
-                  )}
-                  {p.evidence && (
-                    <div className="hz-insight-line hz-insight-evidence">
-                      <span className="hz-insight-tag">Evidence</span>{p.evidence}
-                    </div>
-                  )}
-                  {showReasoning && p.broken_assumption && (
-                    <div className="hz-insight-line">
-                      <span className="hz-insight-tag">Broke</span>{p.broken_assumption}
-                    </div>
-                  )}
-                  {showReasoning && p.watch_next && (
-                    <div className="hz-insight-line">
-                      <span className="hz-insight-tag">Watch</span>{p.watch_next}
-                    </div>
-                  )}
-                  {showReasoning && p.confidence_reason && (
-                    <div className="hz-insight-line hz-insight-confreason">
-                      <span className="hz-insight-tag">Confidence</span>{p.confidence_reason}
+                  {(p.implication || p.evidence || p.broken_assumption) && (
+                    <div className="hz-insight-detail">
+                      <div className="hz-insight-detail-inner">
+                        {p.implication && (
+                          <div className="hz-insight-line">
+                            <span className="hz-insight-tag">So what</span>{p.implication}
+                          </div>
+                        )}
+                        {p.broken_assumption && (
+                          <div className="hz-insight-line">
+                            <span className="hz-insight-tag">Broke</span>{p.broken_assumption}
+                          </div>
+                        )}
+                        {p.evidence && (
+                          <div className="hz-insight-line hz-insight-evidence">
+                            <span className="hz-insight-tag">Evidence</span>{p.evidence}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </li>
               ))}
             </ul>
-            {insights.some(p => p.broken_assumption || p.watch_next) && (
-              <button className="hz-cat-card-toggle" onClick={() => setShowReasoning(r => !r)}>
-                {showReasoning ? "Hide reasoning ▲" : "Show broken assumptions & what to watch ▼"}
-              </button>
-            )}
           </div>
         )}
 
@@ -299,53 +275,69 @@ function CategoryCard({ cat, trendValues }) {
   );
 }
 
-// ── Historical comparison: What's Changed / Assessment Changes / Emerging ───────
+// ── Historical comparison: Assessment Changes / Emerging Signals ────────────────
 
-function WhatsChanged({ data }) {
-  if (!data) return null;
-  const groups = [
-    { key: "growing",   label: "Growing",   cls: "hz-chg-up"   },
-    { key: "new",       label: "New",       cls: "hz-chg-new"  },
-    { key: "declining", label: "Declining", cls: "hz-chg-down" },
-    { key: "stable",    label: "Stable",    cls: "hz-chg-stable" },
-  ].filter(g => (data[g.key] || []).length > 0);
-  if (!groups.length) return null;
+// Skimmable: one row per change — category chip, terse from→to shift, short reason.
+function AssessmentChanges({ items }) {
+  if (!items?.length) return null;
   return (
-    <div className="hz-chg-grid">
-      {groups.map(g => (
-        <div key={g.key} className={`hz-chg-col ${g.cls}`}>
-          <div className="hz-chg-col-title">{g.label}</div>
-          <ul className="hz-chg-list">
-            {(data[g.key] || []).slice(0, 5).map((it, i) => (
-              <li key={i}>
-                <span className="hz-chg-ind">{it.indicator === "new" ? "★" : it.indicator}</span>
-                <span className="hz-chg-label">{it.label}</span>
-                {it.note && <span className="hz-chg-note">{it.note}</span>}
-              </li>
-            ))}
-          </ul>
+    <div className="hz-ac-list">
+      {items.slice(0, 5).map((c, i) => (
+        <div key={i} className="hz-ac-row">
+          <span className="hz-ac-cat" style={{ background: CAT_COLOR[c.category] || "#475569" }}>
+            {CAT_LABEL[c.category] || c.category}
+          </span>
+          <span className="hz-ac-shift">
+            <span className="hz-ac-from">{c.from || c.previous}</span>
+            <span className="hz-ac-arrow">→</span>
+            <span className="hz-ac-to">{c.to || c.current}</span>
+          </span>
+          {c.reason && <span className="hz-ac-reason">{c.reason}</span>}
         </div>
       ))}
     </div>
   );
 }
 
-function AssessmentChanges({ items }) {
-  if (!items?.length) return null;
+// Emerging Signals: weak→emerging themes with analysis + explorable sources.
+function EmergingSignalCard({ s }) {
+  const [open, setOpen] = useState(false);
+  const sources = s.sources || [];
   return (
-    <div className="hz-assess-list">
-      {items.slice(0, 5).map((c, i) => (
-        <div key={i} className="hz-assess-row">
-          <div className="hz-assess-cat" style={{ color: CAT_COLOR[c.category] || "#475569" }}>
-            {CAT_LABEL[c.category] || c.category}
-          </div>
-          <div className="hz-assess-body">
-            <div className="hz-assess-prev"><span className="hz-assess-k">Was</span>{c.previous}</div>
-            <div className="hz-assess-curr"><span className="hz-assess-k">Now</span>{c.current}</div>
-            {c.reason && <div className="hz-assess-reason">{c.reason}</div>}
-          </div>
-        </div>
-      ))}
+    <div className="hz-es-card">
+      <div className="hz-es-head">
+        <span className="hz-es-name">{s.signal}</span>
+        <span className="hz-es-track">
+          <span className="hz-es-prev">{s.previous || "Weak signal"}</span>
+          <span className="hz-es-arrow">→</span>
+          <span className="hz-es-curr">{s.current || "Emerging trend"}</span>
+        </span>
+        {s.reason && <span className="hz-es-reason">{s.reason}</span>}
+      </div>
+      {s.analysis && <div className="hz-es-analysis">{s.analysis}</div>}
+      {s.watch && (
+        <div className="hz-es-watch"><span className="hz-insight-tag">Watch</span>{s.watch}</div>
+      )}
+      {sources.length > 0 && (
+        <>
+          <button className="hz-es-toggle" onClick={() => setOpen(o => !o)}>
+            {open ? "Hide sources ▲" : `Explore ${sources.length} source${sources.length !== 1 ? "s" : ""} ▼`}
+          </button>
+          {open && (
+            <ul className="hz-es-sources">
+              {sources.map((src, i) => (
+                <li key={i}>
+                  {src.url ? (
+                    <a href={src.url} target="_blank" rel="noopener noreferrer">{src.title || src.url}</a>
+                  ) : (<span>{src.title}</span>)}
+                  {src.publisher && <span className="hz-es-src-meta"> · {src.publisher}</span>}
+                  {src.date && <span className="hz-es-src-meta"> · {src.date}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -353,18 +345,8 @@ function AssessmentChanges({ items }) {
 function EmergingSignals({ items }) {
   if (!items?.length) return null;
   return (
-    <div className="hz-signal-list">
-      {items.slice(0, 5).map((s, i) => (
-        <div key={i} className="hz-signal-row">
-          <div className="hz-signal-name">{s.signal}</div>
-          <div className="hz-signal-track">
-            <span className="hz-signal-prev">{s.previous}</span>
-            <span className="hz-signal-arrow">→</span>
-            <span className="hz-signal-curr">{s.current}</span>
-          </div>
-          {s.reason && <div className="hz-signal-reason">{s.reason}</div>}
-        </div>
-      ))}
+    <div className="hz-es-list">
+      {items.slice(0, 5).map((s, i) => <EmergingSignalCard key={i} s={s} />)}
     </div>
   );
 }
@@ -694,11 +676,6 @@ export function OverviewPage() {
 
       {/* Historical comparison — supports analysis, not the main product */}
       {data?.comparison && (
-        (data.comparison.whats_changed && (
-          data.comparison.whats_changed.growing?.length ||
-          data.comparison.whats_changed.new?.length ||
-          data.comparison.whats_changed.declining?.length ||
-          data.comparison.whats_changed.stable?.length)) ||
         data.comparison.assessment_changes?.length ||
         data.comparison.emerging_signals?.length
       ) ? (
@@ -710,13 +687,6 @@ export function OverviewPage() {
             )}
           </div>
 
-          {data.comparison.whats_changed && (
-            <>
-              <div className="hz-overview-subtitle">What's changed</div>
-              <WhatsChanged data={data.comparison.whats_changed} />
-            </>
-          )}
-
           {data.comparison.assessment_changes?.length > 0 && (
             <>
               <div className="hz-overview-subtitle">Assessment changes</div>
@@ -726,7 +696,9 @@ export function OverviewPage() {
 
           {data.comparison.emerging_signals?.length > 0 && (
             <>
-              <div className="hz-overview-subtitle">Emerging signals</div>
+              <div className="hz-overview-subtitle">Emerging signals
+                <span className="hz-overview-section-note">weak last period, gaining evidence now</span>
+              </div>
               <EmergingSignals items={data.comparison.emerging_signals} />
             </>
           )}

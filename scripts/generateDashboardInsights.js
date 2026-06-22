@@ -229,7 +229,7 @@ Audit each. Return a verdict for every index.`;
 
 // ── Source loading ─────────────────────────────────────────────────────────────
 
-const SRC_SELECT = "main_category,short_summary,analyst_brief,intelligence,tags,source_type,title";
+const SRC_SELECT = "main_category,short_summary,analyst_brief,intelligence,tags,source_type,title,url,publisher,date_published";
 
 // Pipeline-enriched sources (via sourceEnrichmentStore) leave the top-level
 // short_summary/analyst_brief columns empty and stash the prose under
@@ -253,8 +253,9 @@ async function loadWindowSources(from, to) {
 
 // Tag counts + per-category source buckets from a raw source list.
 function bucketSources(rows) {
-  const byCategory = {};         // cat → [{summary, source_type}]
+  const byCategory = {};         // cat → [summary strings]
   const tagCounts  = {};         // tagId → count
+  const tagSources = {};         // tagId → [{title,url,publisher,date,summary}]
   const catCounts  = {};         // cat → count
   const catMaturitySrcs = {};    // cat → [sources] for maturity
   for (const c of CATEGORIES) { byCategory[c.key] = []; catCounts[c.key] = 0; catMaturitySrcs[c.key] = []; }
@@ -267,67 +268,152 @@ function bucketSources(rows) {
     const text = summaryText(s);
     if (text.length > 20) byCategory[cat].push(text);
     for (const tag of (s.tags || [])) {
-      if (getTag(tag)) tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+      if (!getTag(tag)) continue;
+      tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+      (tagSources[tag] ??= []).push({
+        title:     s.title,
+        url:       s.url,
+        publisher: s.publisher,
+        date:      s.date_published?.slice(0, 10),
+        summary:   text,
+      });
     }
   }
-  return { byCategory, tagCounts, catCounts, catMaturitySrcs };
+  return { byCategory, tagCounts, tagSources, catCounts, catMaturitySrcs };
 }
 
-// ── Historical comparison (deterministic for changes/signals) ──────────────────
+// ── Generic second-model QA for any generated statements ───────────────────────
+// Returns a boolean[] (true = grounded/keep) aligned to `statements`.
 
-function computeWhatsChanged(currTags, prevTags) {
-  const ids = new Set([...Object.keys(currTags), ...Object.keys(prevTags)]);
-  const growing = [], declining = [], stable = [], appeared = [];
-  for (const id of ids) {
-    const curr = currTags[id] || 0;
-    const prev = prevTags[id] || 0;
-    const delta = curr - prev;
-    const label = tagLabel(id);
-    if (prev === 0 && curr >= 2) {
-      appeared.push({ label, delta, indicator: "new", note: `${curr} new source${curr !== 1 ? "s" : ""}` });
-    } else if (delta >= 2 && curr >= prev * 1.3) {
-      growing.push({ label, delta, indicator: "+", note: `+${delta} vs last period` });
-    } else if (delta <= -2) {
-      declining.push({ label, delta, indicator: "-", note: `${delta} vs last period` });
-    } else if (curr >= 3 && Math.abs(delta) <= 1) {
-      stable.push({ label, delta, indicator: "stable", note: `~${curr} sources` });
-    }
+const STMT_QA_SYSTEM = `You fact-check statements in an AI threat intelligence briefing against the evidence they were derived from.
+
+For each statement return a verdict:
+- "ok": grounded — every specific claim is supported by or directly inferable from the evidence, and it does not assert confirmed/operational/in-the-wild activity beyond what the evidence shows.
+- "reject": ungrounded — invents specifics, overreaches the evidence maturity, or contradicts the evidence.
+
+Return ONLY JSON: {"verdicts":[{"index":0,"verdict":"ok"|"reject","reason":"..."|null}]}`;
+
+async function qaStatements(statements, evidenceText, kind = "statement") {
+  if (!statements.length || !process.env.ANTHROPIC_API_KEY) return statements.map(() => true);
+  const user = `Type: ${kind}
+
+STATEMENTS:
+${statements.map((s, i) => `[${i}] ${s}`).join("\n")}
+
+EVIDENCE they must be grounded in:
+${evidenceText}
+
+Verdict for every index.`;
+  try {
+    const out = await callAnthropic({
+      system: STMT_QA_SYSTEM, user,
+      model: process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
+      maxTokens: 700,
+    });
+    const verdicts = out.verdicts || [];
+    return statements.map((_, i) => {
+      const v = verdicts.find(v => v.index === i);
+      const keep = !v || v.verdict === "ok";
+      if (!keep) console.log(`  [QA:${kind}] REMOVED [${i}]: ${(v.reason || "").slice(0, 70)}`);
+      return keep;
+    });
+  } catch (err) {
+    console.log(`  [QA:${kind}] check failed (${err.message.slice(0, 40)}) — keeping all`);
+    return statements.map(() => true);
   }
-  const top = (arr, by) => arr.sort((a, b) => by(b) - by(a)).slice(0, 5);
-  return {
-    growing:   top(growing,   x => x.delta),
-    declining: top(declining, x => -x.delta),
-    stable:    top(stable,    x => Math.abs(x.delta) === 0 ? 1 : 0),
-    new:       top(appeared,  x => x.delta),
-  };
 }
 
-function computeEmergingSignals(currTags, prevTags) {
+// ── Emerging signals: weak-but-gaining themes, with analysis + explorable sources
+
+function detectEmergingSignals(currTags, prevTags) {
   const signals = [];
   for (const id of Object.keys(currTags)) {
     const curr = currTags[id] || 0;
     const prev = prevTags[id] || 0;
     // Weak-but-now-gaining: was a faint signal (1-3), now meaningfully larger.
     if (prev >= 1 && prev <= 3 && (curr - prev) >= 3) {
-      signals.push({
-        signal:   tagLabel(id),
-        previous: "Weak signal",
-        current:  "Emerging trend",
-        reason:   `+${curr - prev} new sources this period (${prev} → ${curr})`,
-        delta:    curr - prev,
-      });
+      signals.push({ tag_id: id, signal: tagLabel(id), prev, curr, delta: curr - prev });
     }
   }
   return signals.sort((a, b) => b.delta - a.delta).slice(0, 5);
+}
+
+const SIGNAL_SYSTEM = `You are an AI threat intelligence analyst writing the "Emerging Signals" watchlist — themes that were faint last period and are now gaining evidence.
+
+For each signal you are given its source summaries this period. Write a tight 2-part analysis:
+- "analysis": 1-2 sentences on WHAT is driving the uptick and WHY it matters for defenders (the shift in the threat, not a paper summary). 25-45 words.
+- "watch": one short clause on what would confirm or kill this as a real trend.
+
+Ground everything in the provided summaries. Do not claim confirmed/operational/in-the-wild activity unless the summaries show it. No paper-name-dropping.
+
+Return ONLY JSON: {"signals":[{"index":0,"analysis":"...","watch":"..."}]}`;
+
+async function enrichEmergingSignals(signals, currTagSources) {
+  if (!signals.length) return [];
+
+  // Attach explorable source refs (deduped by url/title), cap 8 per signal.
+  for (const sig of signals) {
+    const seen = new Set();
+    sig.sources = (currTagSources[sig.tag_id] || []).filter(s => {
+      const k = s.url || s.title; if (!k || seen.has(k)) return false; seen.add(k); return true;
+    }).slice(0, 8).map(({ summary, ...ref }) => ref); // strip summary from stored refs
+    sig.previous = "Weak signal";
+    sig.current  = "Emerging trend";
+    sig.reason   = `+${sig.delta} sources this period (${sig.prev} → ${sig.curr})`;
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) return signals;
+
+  // One LLM call for all signals' analysis, grounded in their summaries.
+  const blocks = signals.map((sig, i) => {
+    const sums = (currTagSources[sig.tag_id] || []).map(s => s.summary).filter(Boolean).slice(0, 6);
+    return `[${i}] Signal: ${sig.signal} (${sig.prev} → ${sig.curr} sources)\n` +
+      sums.map(s => `   - ${s.slice(0, 220)}`).join("\n");
+  }).join("\n\n");
+
+  let analyses = [];
+  try {
+    const out = await callAnthropic({
+      system: SIGNAL_SYSTEM,
+      user: `Write analysis for each emerging signal.\n\n${blocks}`,
+      maxTokens: 1200,
+    });
+    analyses = Array.isArray(out.signals) ? out.signals : [];
+  } catch (err) {
+    console.log(`  [emerging] analysis failed: ${err.message.slice(0, 40)}`);
+    return signals;
+  }
+
+  signals.forEach((sig, i) => {
+    const a = analyses.find(x => x.index === i) || analyses[i];
+    sig.analysis = (a?.analysis || "").trim() || null;
+    sig.watch    = (a?.watch || "").trim() || null;
+  });
+
+  // Second-model QA on the generated analyses.
+  const withAnalysis = signals.filter(s => s.analysis);
+  const verdicts = await qaStatements(
+    withAnalysis.map(s => s.analysis),
+    signals.map(s => `${s.signal}: ${(currTagSources[s.tag_id] || []).map(x => x.summary).filter(Boolean).slice(0, 4).join(" | ").slice(0, 400)}`).join("\n"),
+    "emerging-signal",
+  );
+  withAnalysis.forEach((s, i) => { if (!verdicts[i]) { s.analysis = null; s.watch = null; } });
+
+  return signals;
 }
 
 const ASSESS_CHANGE_SYSTEM = `You compare AI-threat category ASSESSMENTS between two consecutive periods and report ONLY material changes.
 
 A material change = the strategic posture moved (e.g. research-only → affecting production; emerging → established; contained → bypassable). Pure rewording is NOT material — omit it.
 
-For each material change return: category, previous (prior assessment), current (new assessment), reason (what evidence drove it, referencing the maturity deltas given).
+Write for SKIMMABILITY. For each material change return:
+- "category": the category key
+- "from": the OLD posture as a terse 2-5 word label (e.g. "research-stage")
+- "to": the NEW posture as a terse 2-5 word label (e.g. "production-affecting")
+- "reason": one tight clause (max 14 words) citing the evidence delta that drove it
+Do NOT restate the full assessment sentences. Keep every field short.
 
-Return ONLY JSON: {"changes":[{"category":"<key>","previous":"...","current":"...","reason":"..."}]}  (empty array if none material).`;
+Return ONLY JSON: {"changes":[{"category":"<key>","from":"...","to":"...","reason":"..."}]}  (empty array if none material).`;
 
 async function computeAssessmentChanges(currAssess, prevAssess, maturityDeltas) {
   const cats = Object.keys(currAssess).filter(c => prevAssess[c]);
@@ -339,17 +425,28 @@ async function computeAssessmentChanges(currAssess, prevAssess, maturityDeltas) 
   Current:  ${currAssess[c]}
   Evidence delta: ${Object.entries(d).map(([k, v]) => `${k} ${v >= 0 ? "+" : ""}${v}`).join(", ") || "n/a"}`;
   }).join("\n\n");
+  let changes = [];
   try {
     const out = await callAnthropic({
       system: ASSESS_CHANGE_SYSTEM,
-      user: `Compare the periods. Report only material changes.\n\n${user}`,
-      maxTokens: 800,
+      user: `Compare the periods. Report only material changes, terse.\n\n${user}`,
+      maxTokens: 700,
     });
-    return Array.isArray(out.changes) ? out.changes.slice(0, 5) : [];
+    changes = Array.isArray(out.changes) ? out.changes.slice(0, 5) : [];
   } catch (err) {
     console.log(`  [assessment-changes] failed: ${err.message.slice(0, 50)}`);
     return [];
   }
+
+  // Second-model QA: each change must be grounded in the assessments + deltas.
+  const evidence = cats.map(c =>
+    `${c}: prev="${prevAssess[c]}" curr="${currAssess[c]}" deltas=${Object.entries(maturityDeltas[c] || {}).map(([k, v]) => `${k}${v >= 0 ? "+" : ""}${v}`).join(",")}`
+  ).join("\n");
+  const verdicts = await qaStatements(
+    changes.map(c => `${c.category}: ${c.from} → ${c.to} (${c.reason})`),
+    evidence, "assessment-change",
+  );
+  return changes.filter((_, i) => verdicts[i]);
 }
 
 // ── Per-category generation ────────────────────────────────────────────────────
@@ -509,8 +606,10 @@ async function main() {
       if (r.points?.evidence_maturity) prevMaturity[r.category] = r.points.evidence_maturity;
     }
 
-    const whatsChanged    = computeWhatsChanged(curr.tagCounts, prev.tagCounts);
-    const emergingSignals = computeEmergingSignals(curr.tagCounts, prev.tagCounts);
+    const emergingSignals = await enrichEmergingSignals(
+      detectEmergingSignals(curr.tagCounts, prev.tagCounts),
+      curr.tagSources,
+    );
 
     // Maturity deltas per category for the assessment-change reasoning.
     const maturityDeltas = {};
@@ -536,7 +635,6 @@ async function main() {
         tag_counts:      curr.tagCounts,
         assessments:     currAssess,
       },
-      whats_changed:      whatsChanged,
       assessment_changes: assessmentChanges,
       emerging_signals:   emergingSignals,
     };
@@ -547,7 +645,7 @@ async function main() {
     }, { onConflict: "window_key,category" });
     if (metaErr) console.log(`  meta DB FAIL: ${metaErr.message.slice(0, 60)}`);
 
-    console.log(`  Comparison: ${whatsChanged.growing.length} growing, ${whatsChanged.new.length} new, ${whatsChanged.declining.length} declining; ${emergingSignals.length} emerging; ${assessmentChanges.length} assessment changes`);
+    console.log(`  Comparison: ${emergingSignals.length} emerging signals, ${assessmentChanges.length} assessment changes`);
   }
 
   console.log(`\n  Done: ${generated} generated, ${skipped} skipped`);
