@@ -192,7 +192,7 @@ export default async function handler(req, res) {
     // ── 1. Fetch all validated sources in window ──────────────────────────────
     const { data: sources, error: srcErr } = await supabase
       .from("sources")
-      .select("id,title,url,publisher,date_published,main_category,trust_tier,tags,source_type,analyst_brief,short_summary,validation_status")
+      .select("id,title,url,publisher,date_published,main_category,trust_tier,tags,source_type,analyst_brief,short_summary,intelligence,validation_status")
       .gte("date_published", from)
       .lte("date_published", to)
       .eq("validation_status", "pass")
@@ -218,7 +218,7 @@ export default async function handler(req, res) {
         url:       s.url,
         publisher: s.publisher,
         date:      s.date_published?.slice(0, 10),
-        summary:   (s.analyst_brief || s.short_summary || "").slice(0, 200) || null,
+        summary:   (s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "").slice(0, 200) || null,
       }));
 
       // Evidence maturity + confidence computed LIVE over the same source set the
@@ -282,7 +282,7 @@ export default async function handler(req, res) {
         date:      s.date_published?.slice(0, 10),
         category:  s.main_category,
         trust_tier: s.trust_tier,
-        summary:   (s.analyst_brief || s.short_summary || "").slice(0, 160) || null,
+        summary:   (s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "").slice(0, 160) || null,
       }));
 
     // ── 5. Tag matrix (40 tags × 4 categories) + per-tag source lists ─────────

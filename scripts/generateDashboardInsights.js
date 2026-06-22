@@ -229,7 +229,15 @@ Audit each. Return a verdict for every index.`;
 
 // ── Source loading ─────────────────────────────────────────────────────────────
 
-const SRC_SELECT = "main_category,short_summary,analyst_brief,tags,source_type,title";
+const SRC_SELECT = "main_category,short_summary,analyst_brief,intelligence,tags,source_type,title";
+
+// Pipeline-enriched sources (via sourceEnrichmentStore) leave the top-level
+// short_summary/analyst_brief columns empty and stash the prose under
+// intelligence.source_summary. Fall back to it so those sources still feed the
+// insight pipeline instead of looking unenriched.
+function summaryText(s) {
+  return (s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "").trim();
+}
 
 async function loadWindowSources(from, to) {
   const { data, error } = await supabase
@@ -256,7 +264,7 @@ function bucketSources(rows) {
     if (!byCategory[cat]) continue;
     catCounts[cat]++;
     catMaturitySrcs[cat].push(s);
-    const text = (s.analyst_brief || s.short_summary || "").trim();
+    const text = summaryText(s);
     if (text.length > 20) byCategory[cat].push(text);
     for (const tag of (s.tags || [])) {
       if (getTag(tag)) tagCounts[tag] = (tagCounts[tag] || 0) + 1;
