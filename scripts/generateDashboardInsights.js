@@ -2,24 +2,43 @@
 /**
  * generateDashboardInsights.js
  *
- * Generates per-category bullet-point insights for a specific dashboard
- * timeframe window. Called by GitHub Actions on a schedule; idempotent —
- * skips any window_key × category that already has rows in dashboard_insights.
+ * Generates per-category STRUCTURED strategic insights for a completed dashboard
+ * timeframe (week / month / quarter), plus a period snapshot used for historical
+ * comparison on the Overview page. Called by GitHub Actions on a schedule;
+ * idempotent — skips window_key × category rows that already exist (unless --force).
  *
- * Model: Haiku (cheap, fast, sufficient for 3-4 sentence summarisation).
- * Input: sources.short_summary / analyst_brief for the window period.
- * Output: JSON array of 2-4 tight, point-form insight strings per category.
+ * PIPELINE (per category) — never papers → insights directly:
+ *   Stage A (Sonnet):  source summaries → atomic findings → 2-5 themes
+ *   Stage B (Sonnet):  themes (NOT raw papers) → structured insights + assessment
+ *   QA      (Haiku):   reject paper-summaries / claims beyond the evidence maturity
+ *   Deterministic:     evidence maturity (from source_type) + confidence cap
+ *
+ * Each insight is an object: { insight, evidence, implication, broken_assumption,
+ *   watch_next, confidence, confidence_reason }.
+ *
+ * After all categories, a `_period_meta` row stores the snapshot and three
+ * lightweight historical-comparison blocks vs the previous period:
+ *   whats_changed (growing/stable/declining/new), assessment_changes, emerging_signals.
+ *
+ * Storage note: the structured payloads live inside the existing JSONB `points`
+ * column (no schema migration required). Category rows hold an object; the
+ * `_period_meta` row holds the snapshot + comparison object.
  *
  * Usage:
- *   node scripts/generateDashboardInsights.js --window week
- *   node scripts/generateDashboardInsights.js --window month
- *   node scripts/generateDashboardInsights.js --window quarter
- *   node scripts/generateDashboardInsights.js --window week --force   # overwrite
- *   node scripts/generateDashboardInsights.js --window week --dry-run # print only
+ *   node scripts/generateDashboardInsights.js --window week|month|quarter
+ *   node scripts/generateDashboardInsights.js --window month --force    # overwrite
+ *   node scripts/generateDashboardInsights.js --window month --dry-run  # print only
  */
 
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
+import { getCompletedPeriodWindow } from "../lib/time/reportingWindow.js";
+import { getTag } from "../lib/config/taxonomyRegistry.js";
+import {
+  computeEvidenceMaturity,
+  deriveConfidence,
+  maturityShortLine,
+} from "../lib/dashboard/evidenceMaturity.js";
 
 const args     = process.argv.slice(2);
 const getArg   = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i+1] ? args[i+1] : d; };
@@ -28,6 +47,10 @@ const hasFlag  = f => args.includes(f);
 const WINDOW   = getArg("--window", "week");
 const FORCE    = hasFlag("--force");
 const DRY_RUN  = hasFlag("--dry-run");
+// --asof <YYYY-MM-DD> overrides "now" so a historical completed period can be
+// backfilled (e.g. --window month --asof 2026-05-15 targets April). Defaults to now.
+const ASOF     = getArg("--asof", null);
+const NOW      = ASOF ? new Date(`${ASOF}T12:00:00Z`) : new Date();
 
 if (!["week", "month", "quarter"].includes(WINDOW)) {
   console.error("--window must be week | month | quarter"); process.exit(1);
@@ -38,6 +61,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+const META_CATEGORY = "_period_meta";
+
 const CATEGORIES = [
   { key: "traditional_ai_threats", label: "Traditional AI Threats" },
   { key: "llm_threats",            label: "LLM Threats" },
@@ -45,47 +70,11 @@ const CATEGORIES = [
   { key: "ai_enabled_threats",     label: "AI-Enabled Threats" },
 ];
 
-// ── Window key computation ────────────────────────────────────────────────────
+const tagLabel = (id) => getTag(id)?.label || id;
 
-function isoWeek(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-  const year = d.getUTCFullYear();
-  const week = Math.ceil(((d - new Date(Date.UTC(year, 0, 1))) / 86400000 + 1) / 7);
-  return `${year}-W${String(week).padStart(2, "0")}`;
-}
+// ── Generic Anthropic JSON call ────────────────────────────────────────────────
 
-function quarterOf(date) {
-  return `${date.getUTCFullYear()}-Q${Math.ceil((date.getUTCMonth() + 1) / 3)}`;
-}
-
-function windowMeta(win, now = new Date()) {
-  if (win === "week") {
-    const from = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10);
-    const key  = isoWeek(now);
-    // Label: "Week of Jun 23"
-    const weekStart = new Date(now.getTime() - ((now.getUTCDay() || 7) - 1) * 86400000);
-    const label = `Week of ${weekStart.toLocaleDateString("en-SG", { month: "short", day: "numeric", timeZone: "UTC" })}`;
-    return { key, label, from, to: now.toISOString().slice(0, 10) };
-  }
-  if (win === "month") {
-    const y = now.getUTCFullYear(), m = now.getUTCMonth();
-    const from = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
-    const key  = `${y}-${String(m + 1).padStart(2, "0")}`;
-    const label = now.toLocaleDateString("en-SG", { month: "long", year: "numeric", timeZone: "UTC" });
-    return { key, label, from, to: now.toISOString().slice(0, 10) };
-  }
-  // quarter
-  const y = now.getUTCFullYear(), q = Math.ceil((now.getUTCMonth() + 1) / 3);
-  const qStart = new Date(Date.UTC(y, (q - 1) * 3, 1));
-  const key    = quarterOf(now);
-  const label  = `Q${q} ${y}`;
-  return { key, label, from: qStart.toISOString().slice(0, 10), to: now.toISOString().slice(0, 10) };
-}
-
-// ── LLM call ─────────────────────────────────────────────────────────────────
-
-async function callSonnet(systemPrompt, userPrompt) {
+async function callAnthropic({ system, user, model, maxTokens = 1200 }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
 
@@ -98,10 +87,10 @@ async function callSonnet(systemPrompt, userPrompt) {
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model:      process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
-      max_tokens: 800,
-      system:     systemPrompt,
-      messages:   [{ role: "user", content: userPrompt }],
+      model:      model || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: "user", content: user }],
     }),
   });
 
@@ -111,236 +100,446 @@ async function callSonnet(systemPrompt, userPrompt) {
   }
   const data = await res.json();
   const text = data.content?.[0]?.text?.trim() || "";
-
   const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error(`No JSON in response: ${text.slice(0, 200)}`);
-  const parsed = JSON.parse(match[0]);
-  if (!Array.isArray(parsed.points)) throw new Error("No points[] array in response");
-  return parsed.points;
+  if (!match) throw new Error(`No JSON in response: ${text.slice(0, 160)}`);
+  return JSON.parse(match[0]);
 }
 
-const SYSTEM = `You are a principal AI threat intelligence analyst writing a strategic briefing for a CISO and security leadership team.
+// ── Stage A: findings → themes ─────────────────────────────────────────────────
 
-Your job: synthesise 2-4 strategic bullet points from a set of sources covering one threat category over a specific time period.
+const THEMES_SYSTEM = `You are an AI threat intelligence analyst. You are given source summaries for ONE threat category over ONE time period.
 
-WHAT A STRATEGIC BULLET DOES:
-It answers "What does this mean for defenders?" — what assumption breaks, what attack surface expands, what control now fails, or what adversary capability has shifted. It is a synthesis across sources, not a description of any single one.
+Do TWO things:
+1. Extract atomic FINDINGS — single, concrete things each source establishes (a capability shown, a control bypassed, a vulnerability class, a measured result). Strip the paper/CVE name; keep the substance.
+2. Cluster the findings into 2-5 THEMES — recurring patterns that span multiple findings. A theme is a pattern, not a single paper.
 
-GOOD (strategic, implication-first):
-- "Safety filters in generative models are bypassable without touching model weights — the defence boundary shifts to training pipeline integrity."
-- "Indirect prompt injection is confirmed at deployment scale, making RAG document pipelines an untrusted input surface by default."
-- "Autonomous LLM red-teaming is compressing exploit development from months to days, outpacing enterprise patch cycles."
+Do NOT write conclusions or implications yet. Just findings and the themes they form.
 
-BAD (descriptive, source-summarising):
-- "DiffusionHijack exploits PRNG dependencies to control Stable Diffusion outputs."
-- "Researchers demonstrated a new jailbreak with high success rates."
-- "A CVE allows unauthenticated access to an API endpoint."
+Return ONLY valid JSON:
+{"themes": [{"theme": "short theme name", "findings": ["finding", "finding", ...]}]}`;
 
-RULES:
-- 15-22 words per bullet, one sentence, active voice
-- Each bullet must state a defender implication or landscape shift, not describe a technique
-- Cover different angles across the set: e.g. capability shift / broken assumption / maturity signal / recommended posture change
-- Ground every bullet in the provided source summaries — do not invent statistics, actors, or claims absent from the sources
-- Thin periods (1-2 sources): write 1-2 strong bullets, never pad with weak ones
-- Never start with: "Research shows", "Studies indicate", "It is important", "This highlights"
-
-Return ONLY valid JSON: {"points": ["...", "..."]}`;
-
-function buildUserPrompt(catLabel, windowLabel, summaries) {
-  const lines = summaries.slice(0, 20).map((s, i) => `${i + 1}. ${s}`).join("\n");
+function buildThemesPrompt(catLabel, windowLabel, summaries) {
+  const lines = summaries.slice(0, 24).map((s, i) => `${i + 1}. ${s}`).join("\n");
   return `Category: ${catLabel}
 Period: ${windowLabel}
-Sources (${summaries.length} total, showing top 20):
+Sources (${summaries.length} total${summaries.length > 24 ? ", showing 24" : ""}):
 
 ${lines}
 
-Generate 2-4 bullet points for this category and period.`;
+Extract findings and cluster into themes.`;
 }
 
-// ── Second-model QA (Haiku checks Sonnet output) ──────────────────────────────
+// ── Stage B: themes → structured insights ──────────────────────────────────────
 
-const QA_SYSTEM = `You are a fact-checker for an AI threat intelligence briefing.
+const INSIGHTS_SYSTEM = `You are a principal AI threat intelligence analyst writing a horizon-scan briefing for security leadership. You synthesise THEMES (not individual papers) into strategic insights.
 
-You will receive strategic bullet points and the source summaries they were derived from.
-For each bullet, determine whether it is genuinely grounded in the provided sources.
+A real INSIGHT answers, in order:
+  WHAT CHANGED → WHAT ASSUMPTION BROKE → WHY IT MATTERS → WHAT TO WATCH NEXT.
+It teaches something about the threat landscape that survives the removal of every source name. If deleting the source/paper/CVE name leaves only a summary, it is NOT an insight — reject it.
 
-GROUNDED: Every specific claim in the bullet (numbers, percentages, named products, CVEs,
-  threat actors, technique names) is present in or directly inferable from the summaries.
-  Strategic implications drawn from the sources are acceptable even if not word-for-word.
+THE TEST (apply to every insight you write):
+- Remove all source names, paper titles, CVE numbers. Does it still teach a defender something about how the landscape is shifting? If no, rewrite or drop it.
 
-OVERREACH: The bullet states something specific that is NOT in the sources — an invented
-  statistic, an unnamed actor presented as named, a CVE not mentioned, a claim of
-  "confirmed" or "at scale" or "operational" when sources only show research/PoC.
+GOOD (strategic, names a control + failure mode + implication):
+- "Closed/API-only deployment no longer provides the defensive advantage it once did, because effective jailbreaks can now be automated without any model-internal access."
+- "Command denylists for terminal-capable agents are structurally defeatable, so blocklist sandboxing can no longer be a primary containment control."
 
-CONTRADICTED: The bullet directly contradicts a fact stated in the summaries.
+BAD (paper/observation summary — REJECT):
+- "Adversarial suffix attacks require no model internals." (observation, not insight)
+- "A new benchmark evaluated jailbreak robustness across models." (paper summary)
+- "DiffusionHijack exploits PRNG dependencies." (single-source description)
 
-Be strict on invented specifics; be lenient on reasonable strategic inferences.
+For EACH insight, produce these fields:
+- insight: one-sentence strategic judgment (what changed + why it matters), 18-30 words, active voice.
+- evidence: what in the themes supports it (kinds of evidence, e.g. "multiple research demonstrations across model families"), NOT a paper citation.
+- broken_assumption: the specific defensive assumption that no longer holds.
+- implication: what this means operationally for defenders (a posture/control change).
+- watch_next: what evidence would strengthen, weaken, or change this assessment.
+- confidence_reason: one clause tying confidence to evidence maturity (e.g. "research demonstrations only, no in-the-wild use").
+
+CALIBRATION (critical): You are told the EVIDENCE MATURITY for this category. If the evidence is research/vulnerability-only with no observed exploitation, you MUST NOT claim activity is "confirmed", "operational", "at scale", or "in the wild". Frame as demonstrated capability and shifting assumptions, not active campaigns.
+
+Also produce a one-sentence "assessment": the current overall posture for this category (used for period-over-period comparison), e.g. "Prompt injection is escalating from research into production agent systems."
+
+Write 2-4 insights for rich periods; 1-2 for thin ones. Never pad.
+
 Return ONLY valid JSON:
-{"verdicts": [{"index": 0, "verdict": "grounded"|"overreach"|"contradicted", "reason": "..."|null}]}`;
+{"assessment": "...", "insights": [{"insight": "...", "evidence": "...", "broken_assumption": "...", "implication": "...", "watch_next": "...", "confidence_reason": "..."}]}`;
 
-async function qaPoints(points, summaries, catLabel) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return points; // skip QA if no key (shouldn't happen)
+function buildInsightsPrompt(catLabel, windowLabel, themes, maturity, confidence) {
+  const themeLines = themes.map((t, i) =>
+    `Theme ${i + 1}: ${t.theme}\n` + (t.findings || []).slice(0, 8).map(f => `   - ${f}`).join("\n")
+  ).join("\n\n");
+  return `Category: ${catLabel}
+Period: ${windowLabel}
 
-  const userPrompt = `Category: ${catLabel}
+EVIDENCE MATURITY (this drives your calibration — do not overclaim beyond it):
+  ${maturityShortLine(maturity)}  (total ${maturity.total})
+  Confidence ceiling for this category: ${confidence.level} — ${confidence.reason}
 
-BULLETS TO VERIFY:
-${points.map((p, i) => `[${i}] ${p}`).join("\n")}
+THEMES (synthesise from these patterns, not from individual sources):
 
-SOURCE SUMMARIES (what the bullets must be grounded in):
-${summaries.slice(0, 20).map((s, i) => `${i + 1}. ${s}`).join("\n")}
+${themeLines}
 
-Check each bullet. Return a verdict for every index.`;
+Produce the assessment and structured insights.`;
+}
+
+// ── QA: Haiku rejects paper-summaries / overreach ──────────────────────────────
+
+const QA_SYSTEM = `You audit AI-threat insights for an intelligence briefing. For each insight, return one verdict.
+
+REJECT (verdict "summary") if the insight is merely a description of a paper, CVE, benchmark, or single source — i.e. removing source names would leave only an observation, not a landscape judgment.
+REJECT (verdict "overreach") if it claims confirmed/operational/in-the-wild/at-scale activity when the stated evidence maturity is research/vulnerability-only.
+KEEP (verdict "ok") if it states what changed + a broken assumption or operational implication, and stays within the evidence maturity.
+
+Return ONLY JSON: {"verdicts":[{"index":0,"verdict":"ok"|"summary"|"overreach","reason":"..."|null}]}`;
+
+async function qaInsights(insights, maturity, catLabel) {
+  if (!process.env.ANTHROPIC_API_KEY) return insights;
+  const user = `Category: ${catLabel}
+Evidence maturity: ${maturityShortLine(maturity)} (total ${maturity.total})
+
+INSIGHTS:
+${insights.map((p, i) => `[${i}] ${p.insight}  (implication: ${p.implication})`).join("\n")}
+
+Audit each. Return a verdict for every index.`;
 
   let verdicts;
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      signal: AbortSignal.timeout(30000),
-      headers: {
-        "Content-Type":      "application/json",
-        "x-api-key":         apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model:      process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
-        max_tokens: 600,
-        system:     QA_SYSTEM,
-        messages:   [{ role: "user", content: userPrompt }],
-      }),
+    const out = await callAnthropic({
+      system: QA_SYSTEM, user,
+      model: process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
+      maxTokens: 700,
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const text = data.content?.[0]?.text?.trim() || "";
-    // Extract outermost JSON object (Haiku sometimes wraps with extra text)
-    const match = text.match(/\{\s*"verdicts"\s*:\s*\[[\s\S]*?\]\s*\}/);
-    if (!match) throw new Error("no JSON");
-    verdicts = JSON.parse(match[0]).verdicts;
-    if (!Array.isArray(verdicts)) throw new Error("no verdicts array");
+    verdicts = out.verdicts;
+    if (!Array.isArray(verdicts)) throw new Error("no verdicts");
   } catch (err) {
-    console.log(`  [QA] check failed (${err.message.slice(0, 50)}) — keeping all points`);
-    return points;
+    console.log(`  [QA] check failed (${err.message.slice(0, 50)}) — keeping all`);
+    return insights;
   }
 
-  const approved = [];
-  for (let i = 0; i < points.length; i++) {
+  const kept = [];
+  insights.forEach((p, i) => {
     const v = verdicts.find(v => v.index === i);
-    if (!v || v.verdict === "grounded") {
-      approved.push(points[i]);
-    } else {
-      console.log(`  [QA] REMOVED [${i}] ${v.verdict.toUpperCase()}: ${v.reason?.slice(0, 80)}`);
-    }
-  }
-  return approved;
+    if (!v || v.verdict === "ok") kept.push(p);
+    else console.log(`  [QA] REMOVED [${i}] ${v.verdict.toUpperCase()}: ${(v.reason || "").slice(0, 80)}`);
+  });
+  return kept;
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── Source loading ─────────────────────────────────────────────────────────────
 
-async function main() {
-  const now  = new Date();
-  const meta = windowMeta(WINDOW, now);
+const SRC_SELECT = "main_category,short_summary,analyst_brief,tags,source_type,title";
 
-  console.log(`\n${"═".repeat(58)}`);
-  console.log(`  Dashboard Insights: ${WINDOW.toUpperCase()} / ${meta.key}`);
-  console.log(`  Period: ${meta.from} → ${meta.to}  Label: ${meta.label}`);
-  console.log(`  Mode: ${DRY_RUN ? "DRY RUN" : FORCE ? "FORCE (overwrite)" : "normal (skip existing)"}`);
-  console.log(`${"═".repeat(58)}\n`);
-
-  // ── Check which categories already have insights ──────────────────────────
-  const { data: existing } = await supabase
-    .from("dashboard_insights")
-    .select("category")
-    .eq("window_key", meta.key);
-
-  const existingCats = new Set((existing || []).map(r => r.category));
-
-  // ── Load sources for this window ──────────────────────────────────────────
-  const { data: sources, error } = await supabase
+async function loadWindowSources(from, to) {
+  const { data, error } = await supabase
     .from("sources")
-    .select("main_category,short_summary,analyst_brief")
+    .select(SRC_SELECT)
     .eq("validation_status", "pass")
-    .gte("date_published", meta.from)
-    .lte("date_published", meta.to)
+    .gte("date_published", from)
+    .lte("date_published", to)
     .not("main_category", "is", null);
+  if (error) throw new Error(error.message);
+  return data || [];
+}
 
-  if (error) { console.error("DB error:", error.message); process.exit(1); }
+// Tag counts + per-category source buckets from a raw source list.
+function bucketSources(rows) {
+  const byCategory = {};         // cat → [{summary, source_type}]
+  const tagCounts  = {};         // tagId → count
+  const catCounts  = {};         // cat → count
+  const catMaturitySrcs = {};    // cat → [sources] for maturity
+  for (const c of CATEGORIES) { byCategory[c.key] = []; catCounts[c.key] = 0; catMaturitySrcs[c.key] = []; }
 
-  const byCategory = {};
-  for (const cat of CATEGORIES) byCategory[cat.key] = [];
-  for (const s of (sources || [])) {
+  for (const s of rows) {
+    const cat = s.main_category;
+    if (!byCategory[cat]) continue;
+    catCounts[cat]++;
+    catMaturitySrcs[cat].push(s);
     const text = (s.analyst_brief || s.short_summary || "").trim();
-    if (text.length > 20 && byCategory[s.main_category]) {
-      byCategory[s.main_category].push(text);
+    if (text.length > 20) byCategory[cat].push(text);
+    for (const tag of (s.tags || [])) {
+      if (getTag(tag)) tagCounts[tag] = (tagCounts[tag] || 0) + 1;
     }
   }
+  return { byCategory, tagCounts, catCounts, catMaturitySrcs };
+}
+
+// ── Historical comparison (deterministic for changes/signals) ──────────────────
+
+function computeWhatsChanged(currTags, prevTags) {
+  const ids = new Set([...Object.keys(currTags), ...Object.keys(prevTags)]);
+  const growing = [], declining = [], stable = [], appeared = [];
+  for (const id of ids) {
+    const curr = currTags[id] || 0;
+    const prev = prevTags[id] || 0;
+    const delta = curr - prev;
+    const label = tagLabel(id);
+    if (prev === 0 && curr >= 2) {
+      appeared.push({ label, delta, indicator: "new", note: `${curr} new source${curr !== 1 ? "s" : ""}` });
+    } else if (delta >= 2 && curr >= prev * 1.3) {
+      growing.push({ label, delta, indicator: "+", note: `+${delta} vs last period` });
+    } else if (delta <= -2) {
+      declining.push({ label, delta, indicator: "-", note: `${delta} vs last period` });
+    } else if (curr >= 3 && Math.abs(delta) <= 1) {
+      stable.push({ label, delta, indicator: "stable", note: `~${curr} sources` });
+    }
+  }
+  const top = (arr, by) => arr.sort((a, b) => by(b) - by(a)).slice(0, 5);
+  return {
+    growing:   top(growing,   x => x.delta),
+    declining: top(declining, x => -x.delta),
+    stable:    top(stable,    x => Math.abs(x.delta) === 0 ? 1 : 0),
+    new:       top(appeared,  x => x.delta),
+  };
+}
+
+function computeEmergingSignals(currTags, prevTags) {
+  const signals = [];
+  for (const id of Object.keys(currTags)) {
+    const curr = currTags[id] || 0;
+    const prev = prevTags[id] || 0;
+    // Weak-but-now-gaining: was a faint signal (1-3), now meaningfully larger.
+    if (prev >= 1 && prev <= 3 && (curr - prev) >= 3) {
+      signals.push({
+        signal:   tagLabel(id),
+        previous: "Weak signal",
+        current:  "Emerging trend",
+        reason:   `+${curr - prev} new sources this period (${prev} → ${curr})`,
+        delta:    curr - prev,
+      });
+    }
+  }
+  return signals.sort((a, b) => b.delta - a.delta).slice(0, 5);
+}
+
+const ASSESS_CHANGE_SYSTEM = `You compare AI-threat category ASSESSMENTS between two consecutive periods and report ONLY material changes.
+
+A material change = the strategic posture moved (e.g. research-only → affecting production; emerging → established; contained → bypassable). Pure rewording is NOT material — omit it.
+
+For each material change return: category, previous (prior assessment), current (new assessment), reason (what evidence drove it, referencing the maturity deltas given).
+
+Return ONLY JSON: {"changes":[{"category":"<key>","previous":"...","current":"...","reason":"..."}]}  (empty array if none material).`;
+
+async function computeAssessmentChanges(currAssess, prevAssess, maturityDeltas) {
+  const cats = Object.keys(currAssess).filter(c => prevAssess[c]);
+  if (!cats.length || !process.env.ANTHROPIC_API_KEY) return [];
+  const user = cats.map(c => {
+    const d = maturityDeltas[c] || {};
+    return `Category: ${c}
+  Previous: ${prevAssess[c]}
+  Current:  ${currAssess[c]}
+  Evidence delta: ${Object.entries(d).map(([k, v]) => `${k} ${v >= 0 ? "+" : ""}${v}`).join(", ") || "n/a"}`;
+  }).join("\n\n");
+  try {
+    const out = await callAnthropic({
+      system: ASSESS_CHANGE_SYSTEM,
+      user: `Compare the periods. Report only material changes.\n\n${user}`,
+      maxTokens: 800,
+    });
+    return Array.isArray(out.changes) ? out.changes.slice(0, 5) : [];
+  } catch (err) {
+    console.log(`  [assessment-changes] failed: ${err.message.slice(0, 50)}`);
+    return [];
+  }
+}
+
+// ── Per-category generation ────────────────────────────────────────────────────
+
+async function generateCategory(cat, windowLabel, summaries, maturitySrcs) {
+  const maturity   = computeEvidenceMaturity(maturitySrcs);
+  const confidence = deriveConfidence(maturity);
+  const totalCount = maturitySrcs.length; // canonical = all validated sources (matches the card)
+
+  // Stage A: findings → themes
+  const themesOut = await callAnthropic({
+    system: THEMES_SYSTEM,
+    user: buildThemesPrompt(cat.label, windowLabel, summaries),
+    maxTokens: 1400,
+  });
+  const themes = Array.isArray(themesOut.themes) ? themesOut.themes : [];
+  if (!themes.length) throw new Error("no themes extracted");
+
+  // Stage B: themes → structured insights
+  const out = await callAnthropic({
+    system: INSIGHTS_SYSTEM,
+    user: buildInsightsPrompt(cat.label, windowLabel, themes, maturity, confidence),
+    maxTokens: 1600,
+  });
+  let insights = Array.isArray(out.insights) ? out.insights : [];
+  insights = insights
+    .filter(p => p && typeof p.insight === "string" && p.insight.trim().length > 15)
+    .map(p => ({
+      insight:           p.insight.trim(),
+      evidence:          (p.evidence || "").trim(),
+      broken_assumption: (p.broken_assumption || "").trim(),
+      implication:       (p.implication || "").trim(),
+      watch_next:        (p.watch_next || "").trim(),
+      confidence:        confidence.level,                 // deterministic, cannot be overstated
+      confidence_reason: (p.confidence_reason || confidence.reason).trim(),
+    }));
+  if (totalCount === 1) insights = insights.slice(0, 1);
+  if (!insights.length) throw new Error("no insights produced");
+
+  const beforeQa = insights.length;
+  insights = await qaInsights(insights, maturity, cat.label);
+  if (!insights.length) throw new Error(`all ${beforeQa} insights removed by QA`);
+
+  return {
+    insights,
+    assessment:        (out.assessment || "").trim() || null,
+    confidence:        confidence.level,
+    confidence_reason: confidence.reason,
+    evidence_maturity: maturity,
+    removed:           beforeQa - insights.length,
+  };
+}
+
+// ── Main ───────────────────────────────────────────────────────────────────────
+
+async function main() {
+  const now    = NOW;
+  const period = getCompletedPeriodWindow(WINDOW, now);
+  // Previous period of the same window type (for comparison): pick a date inside
+  // the current period and ask the helper for the period completed before it.
+  const prevPeriod = getCompletedPeriodWindow(WINDOW, new Date(`${period.date_from}T12:00:00Z`));
+
+  console.log(`\n${"═".repeat(60)}`);
+  console.log(`  Dashboard Insights v2: ${WINDOW.toUpperCase()} / ${period.key}`);
+  console.log(`  Period: ${period.date_from} → ${period.date_to}  (${period.label})`);
+  console.log(`  Compare vs: ${prevPeriod.key} (${prevPeriod.date_from} → ${prevPeriod.date_to})`);
+  console.log(`  Mode: ${DRY_RUN ? "DRY RUN" : FORCE ? "FORCE" : "normal (skip existing)"}`);
+  console.log(`${"═".repeat(60)}\n`);
+
+  const { data: existing } = await supabase
+    .from("dashboard_insights").select("category").eq("window_key", period.key);
+  const existingCats = new Set((existing || []).map(r => r.category));
+
+  const currRows = await loadWindowSources(period.date_from, period.date_to);
+  const curr     = bucketSources(currRows);
 
   let generated = 0, skipped = 0;
+  const currAssess = {};
+  const currMaturity = {};
 
   for (const cat of CATEGORIES) {
-    const summaries = byCategory[cat.key];
+    const summaries  = curr.byCategory[cat.key];
+    const mSrcs      = curr.catMaturitySrcs[cat.key];
+    const maturity   = computeEvidenceMaturity(mSrcs);
+    const confidence = deriveConfidence(maturity);
+    currMaturity[cat.key] = maturity;
 
     if (!FORCE && existingCats.has(cat.key)) {
       console.log(`  ${cat.label.padEnd(28)} SKIP (already generated)`);
-      skipped++;
-      continue;
+      // Pull its stored assessment so comparison still works.
+      const { data: row } = await supabase
+        .from("dashboard_insights").select("points")
+        .eq("window_key", period.key).eq("category", cat.key).maybeSingle();
+      if (row?.points?.assessment) currAssess[cat.key] = row.points.assessment;
+      skipped++; continue;
     }
-
+    const totalCount = mSrcs.length; // canonical (matches the dashboard card)
+    if (totalCount === 0) {
+      console.log(`  ${cat.label.padEnd(28)} SKIP (0 sources)`);
+      skipped++; continue;
+    }
     if (summaries.length === 0) {
-      console.log(`  ${cat.label.padEnd(28)} SKIP (0 sources in window)`);
-      skipped++;
-      continue;
+      console.log(`  ${cat.label.padEnd(28)} SKIP (${totalCount} sources but none enriched with summaries)`);
+      skipped++; continue;
     }
 
-    process.stdout.write(`  ${cat.label.padEnd(28)} generating (${summaries.length} sources)... `);
+    console.log(`  ${cat.label.padEnd(28)} ${totalCount} sources · ${maturityShortLine(maturity)} · conf=${confidence.level}`);
+    if (DRY_RUN) { skipped++; continue; }
 
-    if (DRY_RUN) {
-      console.log(`[dry-run] would generate from ${summaries.length} sources`);
-      summaries.slice(0, 3).forEach(s => console.log(`    • ${s.slice(0, 80)}`));
-      continue;
-    }
-
-    // Pass 1: Sonnet generates strategic bullets
-    let points;
+    let result;
     try {
-      points = await callSonnet(SYSTEM, buildUserPrompt(cat.label, meta.label, summaries));
+      result = await generateCategory(cat, period.label, summaries, mSrcs);
     } catch (err) {
-      console.log(`FAIL (${err.message.slice(0, 60)})`);
+      console.log(`     FAIL: ${err.message.slice(0, 70)}`);
       continue;
     }
 
-    points = points.filter(p => typeof p === "string" && p.trim().length > 10).slice(0, 4);
-    if (!points.length) { console.log("FAIL (empty points)"); continue; }
+    currAssess[cat.key] = result.assessment;
+    console.log(`     → ${result.insights.length} insights${result.removed ? `, ${result.removed} removed by QA` : ""} · "${(result.assessment || "").slice(0, 70)}"`);
+    result.insights.forEach(p => console.log(`        • ${p.insight}`));
 
-    // Pass 2: Haiku verifies grounding (second-model QA)
-    process.stdout.write(`\n  ${" ".repeat(28)} QA check (${points.length} bullets)... `);
-    const beforeQa = points.length;
-    points = await qaPoints(points, summaries, cat.label);
-
-    if (!points.length) {
-      console.log(`FAIL (all ${beforeQa} bullets removed by QA)`);
-      continue;
-    }
-
-    const removed = beforeQa - points.length;
-    console.log(`${points.length} approved${removed > 0 ? `, ${removed} removed` : ""}`);
-    points.forEach(p => console.log(`    • ${p}`));
-
-    const { error: upsertErr } = await supabase.from("dashboard_insights").upsert({
+    const { error: upErr } = await supabase.from("dashboard_insights").upsert({
       win:          WINDOW,
-      window_key:   meta.key,
-      window_label: meta.label,
+      window_key:   period.key,
+      window_label: period.label,
       category:     cat.key,
-      points,
-      source_count: summaries.length,
+      points:       {
+        schema:            "v2",
+        insights:          result.insights,
+        assessment:        result.assessment,
+        confidence:        result.confidence,
+        confidence_reason: result.confidence_reason,
+        evidence_maturity: result.evidence_maturity,
+      },
+      source_count: totalCount,
     }, { onConflict: "window_key,category" });
 
-    if (upsertErr) {
-      console.log(`  FAIL (DB: ${upsertErr.message.slice(0, 60)})`);
-    } else {
-      generated++;
+    if (upErr) console.log(`     DB FAIL: ${upErr.message.slice(0, 60)}`);
+    else generated++;
+    await new Promise(r => setTimeout(r, 400));
+  }
+
+  // ── Period snapshot + historical comparison ──────────────────────────────────
+  if (!DRY_RUN) {
+    console.log(`\n  Building period snapshot + comparison vs ${prevPeriod.key}...`);
+    const prevRows = await loadWindowSources(prevPeriod.date_from, prevPeriod.date_to);
+    const prev     = bucketSources(prevRows);
+
+    // Previous assessments from the stored prev-period category rows (if any).
+    const prevAssess = {};
+    const prevMaturity = {};
+    const { data: prevCatRows } = await supabase
+      .from("dashboard_insights").select("category,points")
+      .eq("window_key", prevPeriod.key).neq("category", META_CATEGORY);
+    for (const r of (prevCatRows || [])) {
+      if (r.points?.assessment) prevAssess[r.category] = r.points.assessment;
+      if (r.points?.evidence_maturity) prevMaturity[r.category] = r.points.evidence_maturity;
     }
 
-    await new Promise(r => setTimeout(r, 500));
+    const whatsChanged    = computeWhatsChanged(curr.tagCounts, prev.tagCounts);
+    const emergingSignals = computeEmergingSignals(curr.tagCounts, prev.tagCounts);
+
+    // Maturity deltas per category for the assessment-change reasoning.
+    const maturityDeltas = {};
+    for (const c of CATEGORIES) {
+      const cm = currMaturity[c.key] || {}, pm = prevMaturity[c.key] || {};
+      maturityDeltas[c.key] = {
+        research:      (cm.research || 0)      - (pm.research || 0),
+        vulnerabilities:(cm.vulnerabilities||0)- (pm.vulnerabilities || 0),
+        exploitation:  (cm.exploitation || 0)  - (pm.exploitation || 0),
+        incidents:     (cm.incidents || 0)     - (pm.incidents || 0),
+        operational:   (cm.operational || 0)   - (pm.operational || 0),
+      };
+    }
+    const assessmentChanges = await computeAssessmentChanges(currAssess, prevAssess, maturityDeltas);
+
+    const meta = {
+      schema: "meta-v1",
+      compared_to: prevPeriod.key,
+      compared_to_label: prevPeriod.label,
+      snapshot: {
+        total:           currRows.length,
+        category_counts: curr.catCounts,
+        tag_counts:      curr.tagCounts,
+        assessments:     currAssess,
+      },
+      whats_changed:      whatsChanged,
+      assessment_changes: assessmentChanges,
+      emerging_signals:   emergingSignals,
+    };
+
+    const { error: metaErr } = await supabase.from("dashboard_insights").upsert({
+      win: WINDOW, window_key: period.key, window_label: period.label,
+      category: META_CATEGORY, points: meta, source_count: currRows.length,
+    }, { onConflict: "window_key,category" });
+    if (metaErr) console.log(`  meta DB FAIL: ${metaErr.message.slice(0, 60)}`);
+
+    console.log(`  Comparison: ${whatsChanged.growing.length} growing, ${whatsChanged.new.length} new, ${whatsChanged.declining.length} declining; ${emergingSignals.length} emerging; ${assessmentChanges.length} assessment changes`);
   }
 
   console.log(`\n  Done: ${generated} generated, ${skipped} skipped`);

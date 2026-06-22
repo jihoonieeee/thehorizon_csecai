@@ -20,6 +20,10 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { getCompletedPeriodWindow } from "../lib/time/reportingWindow.js";
+import { computeEvidenceMaturity, deriveConfidence } from "../lib/dashboard/evidenceMaturity.js";
+
+const META_CATEGORY = "_period_meta";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -79,60 +83,46 @@ const TAGS = [
 
 const TAG_IDS = new Set(TAGS.map(t => t.id));
 
-function windowRange(win) {
-  const now   = new Date();
-  const todayISO = now.toISOString().slice(0, 10);
-
-  if (win === "week") {
-    const from = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10);
-    return { from, to: todayISO, label: "Last 7 days" };
-  }
-  if (win === "month") {
-    // Current calendar month in SGT (UTC+8); use UTC month as approximation
-    const y = now.getUTCFullYear();
-    const m = now.getUTCMonth();
-    const from = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
-    const label = now.toLocaleDateString("en-SG", { month: "long", year: "numeric", timeZone: "Asia/Singapore" });
-    return { from, to: todayISO, label };
-  }
-  // quarter = last 90 days
-  const from = new Date(now.getTime() - 90 * 86400000).toISOString().slice(0, 10);
-  return { from, to: todayISO, label: "Last 90 days" };
-}
-
 // ISO week label: "Jun 9"
 function weekLabel(weekEndDate) {
   return weekEndDate.toLocaleDateString("en-SG", { month: "short", day: "numeric" });
-}
-
-// ── Window key helpers (must match generateDashboardInsights.js) ──────────────
-
-function isoWeek(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-  const year = d.getUTCFullYear();
-  const week = Math.ceil(((d - new Date(Date.UTC(year, 0, 1))) / 86400000 + 1) / 7);
-  return `${year}-W${String(week).padStart(2, "0")}`;
-}
-
-function windowKey(win, now = new Date()) {
-  if (win === "week")    return isoWeek(now);
-  if (win === "month")   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-  if (win === "quarter") return `${now.getUTCFullYear()}-Q${Math.ceil((now.getUTCMonth() + 1) / 3)}`;
-  return isoWeek(now);
 }
 
 // ── Cached dashboard insights (per window, refresh every 30 min) ──────────────
 const _insightCache = new Map(); // win → { data, at }
 const INSIGHT_TTL_MS = 30 * 60 * 1000;
 
-async function getWindowInsights(win) {
-  const cached = _insightCache.get(win);
+// Looks up the LLM bullet insights for an exact completed-period key. If that
+// period was never generated, falls back to the most recent prior period of the
+// same window type and reports the period the bullets actually describe, so the
+// page can label them honestly instead of pretending they cover the current one.
+async function getWindowInsights(win, key) {
+  const cacheKey = `${win}:${key}`;
+  const cached = _insightCache.get(cacheKey);
   if (cached && Date.now() - cached.at < INSIGHT_TTL_MS) return cached.data;
 
-  try {
-    const key = windowKey(win);
+  const empty = { categories: {}, meta: null, fromLabel: null, stale: false };
 
+  // Normalise a stored `points` payload into structured insight objects.
+  // v2 rows store an object { insights[], assessment, confidence, ... }.
+  // Legacy rows store a bare string[] — wrap each into a minimal insight.
+  const normaliseCategory = (points) => {
+    if (Array.isArray(points)) {
+      return { insights: points.map(s => ({ insight: s })), assessment: null, confidence: null, confidence_reason: null };
+    }
+    if (points && Array.isArray(points.insights)) {
+      return {
+        insights:          points.insights,
+        assessment:        points.assessment || null,
+        confidence:        points.confidence || null,
+        confidence_reason: points.confidence_reason || null,
+        evidence_maturity: points.evidence_maturity || null,
+      };
+    }
+    return null;
+  };
+
+  try {
     // Try exact window_key first
     let { data: rows } = await supabase
       .from("dashboard_insights")
@@ -140,6 +130,7 @@ async function getWindowInsights(win) {
       .eq("window_key", key);
 
     let fromLabel = null;
+    let stale = false;
 
     // Fallback: most recent prior period of the same window type
     if (!rows?.length) {
@@ -148,46 +139,60 @@ async function getWindowInsights(win) {
         .select("category,points,window_label,source_count,window_key,created_at")
         .eq("win", win)
         .order("created_at", { ascending: false })
-        .limit(4); // up to 4 categories
+        .limit(8); // up to 4 categories + meta, plus headroom
 
       if (prior?.length) {
-        rows = prior;
+        // Keep only rows from the single most recent prior window_key.
+        const recentKey = prior[0].window_key;
+        rows = prior.filter(r => r.window_key === recentKey);
         fromLabel = prior[0]?.window_label || null;
+        stale = true; // insights are from an older period than the one displayed
       }
     }
 
     if (!rows?.length) {
-      _insightCache.set(win, { data: { insights: {}, fromLabel: null }, at: Date.now() });
-      return { insights: {}, fromLabel: null };
+      _insightCache.set(cacheKey, { data: empty, at: Date.now() });
+      return empty;
     }
 
-    const insights = {};
+    const categories = {};
+    let meta = null;
     for (const row of rows) {
-      if (row.category && Array.isArray(row.points) && row.points.length) {
-        insights[row.category] = row.points;
+      if (row.category === META_CATEGORY) {
+        meta = row.points && !Array.isArray(row.points) ? row.points : null;
+        continue;
       }
+      const norm = normaliseCategory(row.points);
+      if (norm && norm.insights.length) categories[row.category] = norm;
     }
 
-    const result = { insights, fromLabel };
-    _insightCache.set(win, { data: result, at: Date.now() });
+    const result = { categories, meta, fromLabel, stale };
+    _insightCache.set(cacheKey, { data: result, at: Date.now() });
     return result;
   } catch {
-    return { insights: {}, fromLabel: null };
+    return empty;
   }
 }
 
 export default async function handler(req, res) {
   try {
     const win = (req.query?.window || "quarter").toLowerCase();
-    const { from, to, label: windowLabel } = windowRange(win);
+    const period = getCompletedPeriodWindow(win);
+    const { key: windowKey, label: windowLabel, date_from: from, date_to: to } = period;
 
-    // Load timeframe-scoped insights (cached 30 min per window)
-    const { insights: categoryInsights, fromLabel: insightFromLabel } = await getWindowInsights(win);
+    // Load timeframe-scoped insights (cached 30 min per window). The key matches
+    // the period the live stats below describe, so bullets and numbers align.
+    const {
+      categories: categoryData,
+      meta: periodMeta,
+      fromLabel: insightFromLabel,
+      stale: insightsStale,
+    } = await getWindowInsights(win, windowKey);
 
     // ── 1. Fetch all validated sources in window ──────────────────────────────
     const { data: sources, error: srcErr } = await supabase
       .from("sources")
-      .select("id,title,url,publisher,date_published,main_category,trust_tier,tags,analyst_brief,short_summary,validation_status")
+      .select("id,title,url,publisher,date_published,main_category,trust_tier,tags,source_type,analyst_brief,short_summary,validation_status")
       .gte("date_published", from)
       .lte("date_published", to)
       .eq("validation_status", "pass")
@@ -216,14 +221,24 @@ export default async function handler(req, res) {
         summary:   (s.analyst_brief || s.short_summary || "").slice(0, 200) || null,
       }));
 
+      // Evidence maturity + confidence computed LIVE over the same source set the
+      // card counts, so the ladder, the count, and the confidence always agree.
+      const maturity   = computeEvidenceMaturity(srcs);
+      const confidence = deriveConfidence(maturity);
+      const cd         = categoryData[c.key] || null;
+
       return {
-        key:              c.key,
-        label:            c.label,
-        short:            c.short,
-        source_count:     srcs.length,
-        top_sources:      top,
-        insight_points:   categoryInsights[c.key] || null,   // array of strings
-        insight_from:     categoryInsights[c.key] ? insightFromLabel : null,
+        key:               c.key,
+        label:             c.label,
+        short:             c.short,
+        source_count:      srcs.length,
+        top_sources:       top,
+        insights:          cd?.insights || null,             // structured insight objects
+        assessment:        cd?.assessment || null,
+        confidence:        confidence.level,                 // deterministic, live
+        confidence_reason: confidence.reason,
+        evidence_maturity: maturity,
+        insight_from:      cd ? insightFromLabel : null,
       };
     });
 
@@ -270,9 +285,11 @@ export default async function handler(req, res) {
         summary:   (s.analyst_brief || s.short_summary || "").slice(0, 160) || null,
       }));
 
-    // ── 5. Tag matrix (40 tags × 4 categories) ────────────────────────────────
-    const tagCounts = {};
-    for (const t of TAGS)          tagCounts[t.id] = {};
+    // ── 5. Tag matrix (40 tags × 4 categories) + per-tag source lists ─────────
+    const tagCounts  = {};
+    const tagSources = {};  // tagId → [{ title, url, publisher, date, category }]
+    const TAG_SOURCE_CAP = 25;
+    for (const t of TAGS) { tagCounts[t.id] = {}; tagSources[t.id] = []; }
     for (const c of CATEGORIES)    for (const t of TAGS) tagCounts[t.id][c.key] = 0;
 
     for (const s of all) {
@@ -281,6 +298,15 @@ export default async function handler(req, res) {
       for (const tag of (s.tags || [])) {
         if (TAG_IDS.has(tag) && tagCounts[tag]?.[cat] !== undefined) {
           tagCounts[tag][cat]++;
+          if (tagSources[tag].length < TAG_SOURCE_CAP) {
+            tagSources[tag].push({
+              title:     s.title,
+              url:       s.url,
+              publisher: s.publisher,
+              date:      s.date_published?.slice(0, 10),
+              category:  cat,
+            });
+          }
         }
       }
     }
@@ -290,10 +316,12 @@ export default async function handler(req, res) {
     const activeTags = TAGS;
 
     return res.status(200).json({
-      window:       win,
-      window_label: windowLabel,
-      date_from:    from,
-      date_to:      to,
+      window:        win,
+      window_key:    windowKey,
+      window_label:  windowLabel,
+      date_from:     from,
+      date_to:       to,
+      insights_stale: insightsStale,   // true when bullets are from an older period
       summary: {
         total,
         high_trust: highTrust,
@@ -308,7 +336,15 @@ export default async function handler(req, res) {
       tag_matrix: {
         tags:        activeTags,
         by_category: tagCounts,
+        sources:     tagSources,
       },
+      // Lightweight historical comparison vs the previous period (from _period_meta).
+      comparison: periodMeta ? {
+        compared_to_label: periodMeta.compared_to_label || null,
+        whats_changed:      periodMeta.whats_changed      || null,
+        assessment_changes: periodMeta.assessment_changes || [],
+        emerging_signals:   periodMeta.emerging_signals   || [],
+      } : null,
     });
 
   } catch (err) {

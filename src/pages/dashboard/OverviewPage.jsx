@@ -38,10 +38,12 @@ const CAT_LABEL = {
 };
 
 const WINDOWS = [
-  { id: "week",    label: "This Week"   },
-  { id: "month",   label: "This Month"  },
-  { id: "quarter", label: "Last 90 Days" },
+  { id: "week",    label: "Last Week"    },
+  { id: "month",   label: "Last Month"   },
+  { id: "quarter", label: "Last Quarter" },
 ];
+
+const WINDOW_NOUN = { week: "Week", month: "Month", quarter: "Quarter" };
 
 const REFRESH_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -136,13 +138,62 @@ function TrendChart({ trend }) {
   );
 }
 
+// ── Confidence chip + evidence-maturity bar ─────────────────────────────────────
+
+const CONF_CLS = { High: "hz-conf-high", Medium: "hz-conf-med", Low: "hz-conf-low" };
+
+function ConfidenceChip({ level, reason }) {
+  if (!level) return null;
+  return (
+    <span className={`hz-conf-chip ${CONF_CLS[level] || ""}`} title={reason || ""}>
+      {level} confidence
+    </span>
+  );
+}
+
+const MATURITY_RUNGS = [
+  { key: "research",        label: "Research",       color: "#94a3b8" },
+  { key: "vulnerabilities", label: "Vulnerabilities",color: "#f59e0b" },
+  { key: "exploitation",    label: "Exploited",      color: "#ef4444" },
+  { key: "incidents",       label: "Incidents",      color: "#b91c1c" },
+  { key: "operational",     label: "Operational",    color: "#7f1d1d" },
+];
+
+function MaturityBar({ maturity }) {
+  const m = maturity || {};
+  const ladder = MATURITY_RUNGS.map(r => ({ ...r, n: m[r.key] || 0 }));
+  const sum = ladder.reduce((s, r) => s + r.n, 0);
+  if (!sum) return null;
+  return (
+    <div className="hz-maturity">
+      <div className="hz-maturity-bar">
+        {ladder.filter(r => r.n > 0).map(r => (
+          <span key={r.key} className="hz-maturity-seg"
+            style={{ flexGrow: r.n, background: r.color }}
+            title={`${r.label}: ${r.n}`} />
+        ))}
+      </div>
+      <div className="hz-maturity-legend">
+        {ladder.filter(r => r.n > 0).map(r => (
+          <span key={r.key} className="hz-maturity-legend-item">
+            <span className="hz-maturity-dot" style={{ background: r.color }} />
+            {r.label} {r.n}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Category card ─────────────────────────────────────────────────────────────
 
 function CategoryCard({ cat, trendValues }) {
-  const [open, setOpen] = useState(false);
+  const [showSources, setShowSources] = useState(false);
+  const [showReasoning, setShowReasoning] = useState(false);
   const color = CAT_COLOR[cat.key];
   const count = cat.source_count ?? 0;
   const hasTop = (cat.top_sources || []).length > 0;
+  const insights = cat.insights || [];
 
   return (
     <div className="hz-cat-card" style={{ "--cat-color": color }}>
@@ -160,30 +211,74 @@ function CategoryCard({ cat, trendValues }) {
 
         <div className="hz-cat-card-name">{cat.label}</div>
 
-        {cat.insight_points?.length > 0 && (
+        <div className="hz-cat-card-meta-row">
+          <ConfidenceChip level={cat.confidence} reason={cat.confidence_reason} />
+        </div>
+        <MaturityBar maturity={cat.evidence_maturity} />
+
+        {cat.assessment && (
+          <div className="hz-cat-card-assessment">{cat.assessment}</div>
+        )}
+
+        {insights.length > 0 && (
           <div className="hz-cat-card-insight">
             {cat.insight_from && (
               <div className="hz-cat-card-insight-from">From {cat.insight_from}</div>
             )}
-            <ul className="hz-cat-card-insight-list">
-              {cat.insight_points.map((pt, i) => (
-                <li key={i}>{pt}</li>
+            <ul className="hz-insight-list">
+              {insights.map((p, i) => (
+                <li key={i} className="hz-insight-item">
+                  <div className="hz-insight-headline">{p.insight}</div>
+                  {p.implication && (
+                    <div className="hz-insight-line">
+                      <span className="hz-insight-tag">So what</span>{p.implication}
+                    </div>
+                  )}
+                  {p.evidence && (
+                    <div className="hz-insight-line hz-insight-evidence">
+                      <span className="hz-insight-tag">Evidence</span>{p.evidence}
+                    </div>
+                  )}
+                  {showReasoning && p.broken_assumption && (
+                    <div className="hz-insight-line">
+                      <span className="hz-insight-tag">Broke</span>{p.broken_assumption}
+                    </div>
+                  )}
+                  {showReasoning && p.watch_next && (
+                    <div className="hz-insight-line">
+                      <span className="hz-insight-tag">Watch</span>{p.watch_next}
+                    </div>
+                  )}
+                  {showReasoning && p.confidence_reason && (
+                    <div className="hz-insight-line hz-insight-confreason">
+                      <span className="hz-insight-tag">Confidence</span>{p.confidence_reason}
+                    </div>
+                  )}
+                </li>
               ))}
             </ul>
+            {insights.some(p => p.broken_assumption || p.watch_next) && (
+              <button className="hz-cat-card-toggle" onClick={() => setShowReasoning(r => !r)}>
+                {showReasoning ? "Hide reasoning ▲" : "Show broken assumptions & what to watch ▼"}
+              </button>
+            )}
           </div>
         )}
 
+        {insights.length === 0 && count > 0 && (
+          <div className="hz-cat-card-empty">No analysis generated for this period yet.</div>
+        )}
         {count === 0 && (
           <div className="hz-cat-card-empty">No sources this period.</div>
         )}
 
         {hasTop && (
-          <button className="hz-cat-card-toggle" onClick={() => setOpen(o => !o)}>
-            {open ? "Hide sources ▲" : `Top sources ▼`}
+          <button className="hz-cat-card-toggle" onClick={() => setShowSources(o => !o)}>
+            {showSources ? "Hide sources ▲" : "Top sources ▼"}
           </button>
         )}
 
-        {open && hasTop && (
+        {showSources && hasTop && (
           <ul className="hz-cat-card-sources">
             {cat.top_sources.slice(0, 5).map((s, i) => (
               <li key={i}>
@@ -200,6 +295,76 @@ function CategoryCard({ cat, trendValues }) {
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Historical comparison: What's Changed / Assessment Changes / Emerging ───────
+
+function WhatsChanged({ data }) {
+  if (!data) return null;
+  const groups = [
+    { key: "growing",   label: "Growing",   cls: "hz-chg-up"   },
+    { key: "new",       label: "New",       cls: "hz-chg-new"  },
+    { key: "declining", label: "Declining", cls: "hz-chg-down" },
+    { key: "stable",    label: "Stable",    cls: "hz-chg-stable" },
+  ].filter(g => (data[g.key] || []).length > 0);
+  if (!groups.length) return null;
+  return (
+    <div className="hz-chg-grid">
+      {groups.map(g => (
+        <div key={g.key} className={`hz-chg-col ${g.cls}`}>
+          <div className="hz-chg-col-title">{g.label}</div>
+          <ul className="hz-chg-list">
+            {(data[g.key] || []).slice(0, 5).map((it, i) => (
+              <li key={i}>
+                <span className="hz-chg-ind">{it.indicator === "new" ? "★" : it.indicator}</span>
+                <span className="hz-chg-label">{it.label}</span>
+                {it.note && <span className="hz-chg-note">{it.note}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AssessmentChanges({ items }) {
+  if (!items?.length) return null;
+  return (
+    <div className="hz-assess-list">
+      {items.slice(0, 5).map((c, i) => (
+        <div key={i} className="hz-assess-row">
+          <div className="hz-assess-cat" style={{ color: CAT_COLOR[c.category] || "#475569" }}>
+            {CAT_LABEL[c.category] || c.category}
+          </div>
+          <div className="hz-assess-body">
+            <div className="hz-assess-prev"><span className="hz-assess-k">Was</span>{c.previous}</div>
+            <div className="hz-assess-curr"><span className="hz-assess-k">Now</span>{c.current}</div>
+            {c.reason && <div className="hz-assess-reason">{c.reason}</div>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EmergingSignals({ items }) {
+  if (!items?.length) return null;
+  return (
+    <div className="hz-signal-list">
+      {items.slice(0, 5).map((s, i) => (
+        <div key={i} className="hz-signal-row">
+          <div className="hz-signal-name">{s.signal}</div>
+          <div className="hz-signal-track">
+            <span className="hz-signal-prev">{s.previous}</span>
+            <span className="hz-signal-arrow">→</span>
+            <span className="hz-signal-curr">{s.current}</span>
+          </div>
+          {s.reason && <div className="hz-signal-reason">{s.reason}</div>}
+        </div>
+      ))}
     </div>
   );
 }
@@ -261,7 +426,7 @@ function cellIntensity(count, maxCount) {
   return Math.min(count / maxCount, 1);
 }
 
-function TaxonomyHeatmap({ tagMatrix }) {
+function TaxonomyHeatmap({ tagMatrix, onSelect, selected }) {
   const { tags = [], by_category = {} } = tagMatrix || {};
   if (!tags.length) return <p className="hz-overview-empty">No taxonomy data for this period.</p>;
 
@@ -299,9 +464,14 @@ function TaxonomyHeatmap({ tagMatrix }) {
               </tr>
               {domain.tags.map(tag => {
                 const rowTotal = CAT_HEADERS.reduce((s, c) => s + (by_category[tag.id]?.[c.key] || 0), 0);
+                const rowActive = selected?.tag === tag.id;
                 return (
-                  <tr key={tag.id} className="hz-heatmap-row">
-                    <td className="hz-heatmap-td-label" title={tag.id}>
+                  <tr key={tag.id} className={`hz-heatmap-row${rowActive ? " active" : ""}`}>
+                    <td
+                      className={`hz-heatmap-td-label${rowTotal > 0 ? " clickable" : ""}`}
+                      title={rowTotal > 0 ? `View ${rowTotal} source${rowTotal !== 1 ? "s" : ""} tagged ${tag.label}` : tag.id}
+                      onClick={rowTotal > 0 ? () => onSelect(tag, null) : undefined}
+                    >
                       {tag.label}
                     </td>
                     {CAT_HEADERS.map(c => {
@@ -311,10 +481,13 @@ function TaxonomyHeatmap({ tagMatrix }) {
                       const bg = alpha > 0
                         ? `${color}${Math.round(alpha * 200).toString(16).padStart(2, "0")}`
                         : "transparent";
+                      const cellActive = rowActive && selected?.category === c.key;
                       return (
-                        <td key={c.key} className="hz-heatmap-td-cell"
+                        <td key={c.key}
+                          className={`hz-heatmap-td-cell${count > 0 ? " clickable" : ""}${cellActive ? " active" : ""}`}
                           style={{ background: bg }}
-                          title={`${tag.label} × ${CAT_HEADERS.find(h => h.key === c.key)?.short}: ${count} source${count !== 1 ? "s" : ""}`}>
+                          title={`${tag.label} × ${CAT_HEADERS.find(h => h.key === c.key)?.short}: ${count} source${count !== 1 ? "s" : ""}${count > 0 ? " — click to explore" : ""}`}
+                          onClick={count > 0 ? () => onSelect(tag, c.key) : undefined}>
                           {count > 0 ? count : ""}
                         </td>
                       );
@@ -330,6 +503,63 @@ function TaxonomyHeatmap({ tagMatrix }) {
   );
 }
 
+// ── Tag drilldown panel (inline source explorer) ───────────────────────────────
+
+function TagDrilldownPanel({ tag, category, tagSources, onClose }) {
+  if (!tag) return null;
+  const all = tagSources?.[tag.id] || [];
+  const rows = category ? all.filter(s => s.category === category) : all;
+  const catLabel = category ? (CAT_LABEL[category] || category) : null;
+
+  return (
+    <div className="hz-tag-drilldown">
+      <div className="hz-tag-drilldown-header">
+        <div>
+          <span className="hz-tag-drilldown-title">{tag.label}</span>
+          {catLabel && (
+            <span className="hz-tag-drilldown-cat" style={{ color: CAT_COLOR[category] }}>
+              {" "}· {catLabel}
+            </span>
+          )}
+          <span className="hz-tag-drilldown-count"> · {rows.length} source{rows.length !== 1 ? "s" : ""}</span>
+        </div>
+        <button className="hz-tag-drilldown-close" onClick={onClose} title="Close">✕</button>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="hz-overview-empty">No sources for this selection in this period.</p>
+      ) : (
+        <ul className="hz-tag-drilldown-list">
+          {rows.map((s, i) => {
+            const color = CAT_COLOR[s.category] || "#64748b";
+            return (
+              <li key={i} className="hz-tag-drilldown-row">
+                <span className="hz-incident-dot" style={{ background: color }} />
+                <div className="hz-tag-drilldown-body">
+                  <div className="hz-tag-drilldown-src-title">
+                    {s.url ? (
+                      <a href={s.url} target="_blank" rel="noopener noreferrer">{s.title || s.url}</a>
+                    ) : (s.title || "Untitled")}
+                  </div>
+                  <div className="hz-incident-meta">
+                    {s.publisher && <span className="hz-incident-publisher">{s.publisher}</span>}
+                    {s.date && <span className="hz-incident-date">{s.date}</span>}
+                    {!category && (
+                      <span className="hz-incident-cat" style={{ color }}>
+                        {CAT_LABEL[s.category] || s.category}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function OverviewPage() {
@@ -338,6 +568,7 @@ export function OverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
   const [lastFetch, setLastFetch] = useState(null);
+  const [tagSelection, setTagSelection] = useState(null); // { tag, category }
   const timerRef = useRef(null);
 
   const load = useCallback((w) => {
@@ -351,6 +582,7 @@ export function OverviewPage() {
   // Initial load and window change
   useEffect(() => {
     load(win);
+    setTagSelection(null); // drilldown is window-scoped; clear when switching
   }, [win, load]);
 
   // Auto-refresh every 5 minutes
@@ -371,12 +603,24 @@ export function OverviewPage() {
           <h1 className="hz-page-title">AI Threat Landscape</h1>
           {data && !loading && (
             <p className="hz-page-sub">
-              {data.window_label} · {data.summary?.total ?? 0} validated sources
+              <strong>{WINDOW_NOUN[data.window] || ""} overview</strong>
+              {" · "}{data.window_label}
+              {data.date_from && data.date_to && (
+                <span className="hz-overview-daterange">
+                  {" "}({data.date_from} → {data.date_to}, SGT)
+                </span>
+              )}
+              {" · "}{data.summary?.total ?? 0} validated sources
               {lastFetch && (
                 <span className="hz-overview-refresh-ts">
                   {" "}· Updated {lastFetch.toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" })}
                 </span>
               )}
+            </p>
+          )}
+          {data && !loading && data.insights_stale && (
+            <p className="hz-overview-stale-note">
+              ⚠ No insights generated for this period yet — showing the most recent available analysis.
             </p>
           )}
           {loading && <p className="hz-page-sub">Loading…</p>}
@@ -448,6 +692,47 @@ export function OverviewPage() {
         </>
       )}
 
+      {/* Historical comparison — supports analysis, not the main product */}
+      {data?.comparison && (
+        (data.comparison.whats_changed && (
+          data.comparison.whats_changed.growing?.length ||
+          data.comparison.whats_changed.new?.length ||
+          data.comparison.whats_changed.declining?.length ||
+          data.comparison.whats_changed.stable?.length)) ||
+        data.comparison.assessment_changes?.length ||
+        data.comparison.emerging_signals?.length
+      ) ? (
+        <>
+          <div className="hz-overview-section-title">
+            Since last period
+            {data.comparison.compared_to_label && (
+              <span className="hz-overview-section-note">vs {data.comparison.compared_to_label}</span>
+            )}
+          </div>
+
+          {data.comparison.whats_changed && (
+            <>
+              <div className="hz-overview-subtitle">What's changed</div>
+              <WhatsChanged data={data.comparison.whats_changed} />
+            </>
+          )}
+
+          {data.comparison.assessment_changes?.length > 0 && (
+            <>
+              <div className="hz-overview-subtitle">Assessment changes</div>
+              <AssessmentChanges items={data.comparison.assessment_changes} />
+            </>
+          )}
+
+          {data.comparison.emerging_signals?.length > 0 && (
+            <>
+              <div className="hz-overview-subtitle">Emerging signals</div>
+              <EmergingSignals items={data.comparison.emerging_signals} />
+            </>
+          )}
+        </>
+      ) : null}
+
       {/* Trend chart */}
       {data?.trend?.week_labels?.length > 1 && (
         <>
@@ -482,9 +767,21 @@ export function OverviewPage() {
         <>
           <div className="hz-overview-section-title">
             Taxonomy coverage
-            <span className="hz-overview-section-note">sources per technique × category</span>
+            <span className="hz-overview-section-note">sources per technique × category · click a cell or technique to explore</span>
           </div>
-          <TaxonomyHeatmap tagMatrix={data.tag_matrix} />
+          <TaxonomyHeatmap
+            tagMatrix={data.tag_matrix}
+            selected={tagSelection ? { tag: tagSelection.tag.id, category: tagSelection.category } : null}
+            onSelect={(tag, category) => setTagSelection({ tag, category })}
+          />
+          {tagSelection && (
+            <TagDrilldownPanel
+              tag={tagSelection.tag}
+              category={tagSelection.category}
+              tagSources={data.tag_matrix?.sources}
+              onClose={() => setTagSelection(null)}
+            />
+          )}
         </>
       )}
 
