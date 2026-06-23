@@ -14,6 +14,7 @@
  *   --category <cat>     Filter by threat category
  *   --no-llm             Deterministic mode (no LLM calls, for testing)
  *   --no-slides          Skip slide generation (synthesis only)
+ *   --pptx               Render the deck to a .pptx file (and upload to Blob unless --no-persist)
  *   --no-persist         Do not write results to Supabase
  *   --out <dir>          Custom output directory (default: outputs/v2/<run_id>)
  *   --classify-only      Run L4 classification only: sets main_category on Supabase
@@ -59,6 +60,10 @@ const OUT_DIR          = getArg("--out");
 const CLASSIFY_ONLY    = hasFlag("--classify-only");
 const UNCLASSIFIED_ONLY= hasFlag("--unclassified-only");
 const PURGE            = hasFlag("--purge");
+const PPTX             = hasFlag("--pptx");
+// --per-category <n>: load N classified pass sources from EACH of the 4 threat
+// categories (balanced corpus for deck generation), instead of one windowed query.
+const PER_CATEGORY     = parseInt(getArg("--per-category", "0"), 10);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -175,24 +180,40 @@ async function main() {
       process.env.SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY,
     );
-    const since = new Date(Date.now() - DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    let query = supabase.from("sources").select("*")
-      .gte("date_published", since)
-      .order("date_published", { ascending: false })
-      .limit(LIMIT);
-    if (CATEGORY) query = query.eq("main_category", CATEGORY);
-    if (UNCLASSIFIED_ONLY) {
-      // Catch null AND the legacy 'uncategorised' value from the old MVP pipeline.
-      // NOTE: chaining .not() after .or() produces 0 results in Supabase PostgREST —
-      // use a second .or() to exclude rejected sources instead.
-      query = query
-        .or("main_category.is.null,main_category.eq.uncategorised")
-        .or("validation_status.is.null,validation_status.neq.reject");
-    }
+    if (PER_CATEGORY > 0) {
+      // Balanced load: N classified pass/review sources from each threat category.
+      const CATS = ["traditional_ai_threats", "llm_threats", "agentic_ai_threats", "ai_enabled_threats"];
+      sources = [];
+      for (const cat of CATS) {
+        const { data, error } = await supabase.from("sources").select("*")
+          .eq("main_category", cat)
+          .in("validation_status", ["pass", "review"])
+          .order("date_published", { ascending: false })
+          .limit(PER_CATEGORY);
+        if (error) { console.error(`DB error (${cat}):`, error.message); process.exit(1); }
+        console.log(`  ${cat}: loaded ${data?.length || 0}`);
+        sources.push(...(data || []));
+      }
+    } else {
+      const since = new Date(Date.now() - DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      let query = supabase.from("sources").select("*")
+        .gte("date_published", since)
+        .order("date_published", { ascending: false })
+        .limit(LIMIT);
+      if (CATEGORY) query = query.eq("main_category", CATEGORY);
+      if (UNCLASSIFIED_ONLY) {
+        // Catch null AND the legacy 'uncategorised' value from the old MVP pipeline.
+        // NOTE: chaining .not() after .or() produces 0 results in Supabase PostgREST —
+        // use a second .or() to exclude rejected sources instead.
+        query = query
+          .or("main_category.is.null,main_category.eq.uncategorised")
+          .or("validation_status.is.null,validation_status.neq.reject");
+      }
 
-    const { data, error } = await query;
-    if (error) { console.error("DB error:", error.message); process.exit(1); }
-    sources = data || [];
+      const { data, error } = await query;
+      if (error) { console.error("DB error:", error.message); process.exit(1); }
+      sources = data || [];
+    }
 
     // ── URL deduplication ──────────────────────────────────────────────────────
     const beforeDedup = sources.length;
@@ -350,8 +371,24 @@ async function main() {
   const md = exportMarkdown(result);
   save(outDir, "analysis-report.md", md);
 
+  let pptxPath = null;
   if (result.deck) {
     save(outDir, "slide-deck.json", result.deck);
+
+    // Optional: render the deck to a PowerPoint file
+    if (PPTX) {
+      try {
+        const { renderDeckPptx } = await import("../lib/pipeline/v2/renderDeckPptx.js");
+        pptxPath = path.join(outDir, `horizon-scan-${result.run_id.slice(-10)}.pptx`);
+        const { slide_count } = await renderDeckPptx(result.deck, pptxPath, {
+          title: `AI Cyber Threat Horizon Scan — ${result.corpus_summary?.date_range || result.run_date.slice(0, 10)}`,
+        });
+        console.log(`  → ${path.basename(pptxPath)} (${slide_count} slides)`);
+      } catch (err) {
+        console.warn(`  PPTX render failed: ${err.message}`);
+        pptxPath = null;
+      }
+    }
   }
 
   // Persist to Supabase: snapshot + deck blob + update source classifications
@@ -396,6 +433,24 @@ async function main() {
         deckId: `deck-v2-${result.run_id.slice(-10)}`,
       });
       console.log(`  Persisted deck to blob + decks table`);
+
+      // Upload the rendered PPTX alongside the deck JSON (binary blob)
+      if (pptxPath && fs.existsSync(pptxPath)) {
+        try {
+          const { put } = await import("@vercel/blob");
+          const buf = fs.readFileSync(pptxPath);
+          const blob = await put(`decks/deck-v2-${result.run_id.slice(-10)}.pptx`, buf, {
+            access: "private",
+            token: process.env.BLOB_READ_WRITE_TOKEN,
+            addRandomSuffix: false,
+            allowOverwrite: true,
+            contentType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          });
+          console.log(`  Uploaded PPTX to blob: ${blob.pathname}`);
+        } catch (err) {
+          console.warn(`  PPTX blob upload failed: ${err.message}`);
+        }
+      }
     } catch (err) {
       console.warn(`  Deck persist failed: ${err.message}`);
     }
