@@ -40,6 +40,7 @@
  */
 
 import "dotenv/config";
+import { flushCostBuffer }      from "../lib/llm/usagePersistence.js";
 import { collectRawSources }    from "../lib/pipeline/ingest/collectRawSources.js";
 import { saveSnapshotToDatabase } from "../lib/storage/snapshotDatabase.js";
 import { aiidConnector }        from "../lib/pipeline/ingest/connectors/aiidConnector.js";
@@ -194,3 +195,4 @@ if (errors > 0) console.log(`   Errors : ${errors}`);
 console.log(`\n Next: regenerate the analysis deck:`);
 console.log(`   npm run horizon:v2 -- --start ${startArg}`);
 console.log(`${"═".repeat(64)}\n`);
+await flushCostBuffer();

@@ -38,6 +38,7 @@ import fs   from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createClient }  from "@supabase/supabase-js";
+import { flushCostBuffer } from "../lib/llm/usagePersistence.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -489,8 +490,11 @@ async function main() {
   console.log(`${banner}\n`);
 }
 
-main().catch(err => {
-  console.error(`\nFATAL: ${err.message}`);
-  console.error(err.stack);
-  process.exit(1);
-});
+main()
+  .then(() => flushCostBuffer())
+  .catch(err => {
+    console.error(`\nFATAL: ${err.message}`);
+    console.error(err.stack);
+    process.exit(1);
+  })
+  .finally(() => flushCostBuffer());
