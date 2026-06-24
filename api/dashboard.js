@@ -255,13 +255,15 @@ export default async function handler(req, res) {
       ? new Date("2025-07-01T00:00:00.000Z")
       : new Date(Date.now() - 12 * 7 * 86400000);
 
-    const { data: trendRows } = await supabase
+    const trendQuery = supabase
       .from("sources")
       .select("date_published,main_category")
       .gte("date_published", trendFrom.toISOString().slice(0, 10))
-      .lte("date_published", to)
       .eq("validation_status", "pass")
       .not("main_category", "is", null);
+    // Annual: bound end at Jun 30 2026. Other windows: always show last 12 weeks from now.
+    if (useMonthlyBuckets) trendQuery.lte("date_published", "2026-06-30");
+    const { data: trendRows } = await trendQuery;
 
     const weekLabels = [];
     const byCategory = {};

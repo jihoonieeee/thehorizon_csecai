@@ -202,7 +202,7 @@ function InsightItem({ p }) {
           )}
           {p.broken_assumption && (
             <div className="hz-insight-line">
-              <span className="hz-insight-tag">Broke</span>{clip(p.broken_assumption, 120)}
+              <span className="hz-insight-tag">Shift</span>{clip(p.broken_assumption, 120)}
             </div>
           )}
           {p.evidence && (

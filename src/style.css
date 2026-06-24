@@ -525,16 +525,19 @@ a:hover { text-decoration: underline; }
 }
 /* Detail renders directly when open (controlled by React state) */
 .hz-insight-detail-inner {
-  display: flex; flex-direction: column; gap: 3px; margin-top: 5px;
-  padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--cat-color) 15%, transparent);
+  display: flex; flex-direction: column; gap: 7px; margin-top: 7px;
+  padding-top: 7px; border-top: 1px solid color-mix(in srgb, var(--cat-color) 15%, transparent);
 }
-.hz-insight-line { font-size: 0.72rem; line-height: 1.4; color: var(--text-secondary); }
+.hz-insight-line {
+  font-size: 0.73rem; line-height: 1.5; color: var(--text-secondary);
+  display: flex; align-items: flex-start; gap: 5px;
+}
 .hz-insight-evidence { color: var(--text-tertiary); }
 .hz-insight-tag {
   display: inline-block; font-size: 0.58rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.05em; color: var(--cat-color); margin-right: 5px;
-  padding: 1px 4px; border-radius: 3px; background: color-mix(in srgb, var(--cat-color) 10%, transparent);
-  flex-shrink: 0;
+  letter-spacing: 0.05em; color: var(--cat-color);
+  padding: 2px 5px; border-radius: 3px; background: color-mix(in srgb, var(--cat-color) 10%, transparent);
+  flex-shrink: 0; margin-top: 1px;
 }
 
 /* ── Historical comparison ───────────────────────────────────────────────── */
@@ -885,7 +888,7 @@ a:hover { text-decoration: underline; }
 .hz-insight-view { display: flex; flex-direction: column; gap: 20px; }
 .hz-insight-loading { color: var(--text-tertiary); font-size: 0.85rem; padding: 24px 0; margin: 0; }
 .hz-insight-empty   { color: var(--text-tertiary); font-size: 0.85rem; text-align: center; padding: 40px 0; }
-.hz-insight-headline { font-size: 0.95rem; font-weight: 500; color: var(--text-secondary); padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; line-height: 1.5; }
+.hz-insight-card-headline { font-size: 0.95rem; font-weight: 500; color: var(--text-secondary); padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; line-height: 1.5; }
 .hz-insight-section-title { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-tertiary); }
 .hz-finding-list { display: flex; flex-direction: column; gap: 10px; }
 .hz-finding-card { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--border); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 5px; }
