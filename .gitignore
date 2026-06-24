@@ -48,3 +48,4 @@ lib/config/taxonomy-provenance.md
 # Office temp lock files
 **/~$*
 debug/
+corpus_qa_report.json

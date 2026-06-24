@@ -10,7 +10,7 @@
  *   node scripts/backfillFromSitemaps.js [options]
  *
  * Options:
- *   --days N        How many days back to pull (default: 180)
+ *   --days N        How many days back to pull (default: 360 ≈ 2025 Q3 → now)
  *   --publisher X   Only this publisher name (case-insensitive substring match)
  *   --dry-run       Fetch + parse but don't write to DB
  *   --limit N       Max articles to ingest per publisher (default: 50)
@@ -33,7 +33,9 @@ const args         = process.argv.slice(2);
 const getArg       = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i+1] ? args[i+1] : d; };
 const hasFlag      = f => args.includes(f);
 
-const DAYS         = parseInt(getArg("--days",        "180"), 10);
+// Default window capped at ~360 days (≈ 2025 Q3 → now): the horizon scan only
+// wants recent operational evidence, not multi-year archives.
+const DAYS         = parseInt(getArg("--days",        "360"), 10);
 const PUBLISHER_F  = getArg("--publisher", "").toLowerCase();
 const DRY_RUN      = hasFlag("--dry-run");
 const PER_PUB_LIMIT= parseInt(getArg("--limit",       "50"),  10);
@@ -170,6 +172,44 @@ const PUBLISHERS = [
     urlFilter:   /adversa\.ai\/blog\//,
     isSitemapIndex: true,
     indexFilter: /blog/,
+  },
+
+  // ── Operational / incident-response publishers (deep sitemap scrape) ─────────
+  {
+    name:        "The DFIR Report",
+    publisher:   "The DFIR Report",
+    strategy:    "sitemap",
+    sitemaps:    ["https://thedfirreport.com/post-sitemap.xml"],
+    trust_tier:  "high",
+    source_type: "incident",
+    urlFilter:   /thedfirreport\.com\/20\d{2}\//,
+  },
+  {
+    name:        "Red Canary",
+    publisher:   "Red Canary",
+    strategy:    "sitemap",
+    sitemaps:    ["https://redcanary.com/post-sitemap.xml"],
+    trust_tier:  "high",
+    source_type: "incident",
+    urlFilter:   /redcanary\.com\/blog\//,
+  },
+  {
+    name:        "Huntress",
+    publisher:   "Huntress",
+    strategy:    "sitemap",
+    sitemaps:    ["https://www.huntress.com/sitemap.xml"],
+    trust_tier:  "high",
+    source_type: "incident",
+    urlFilter:   /huntress\.com\/blog\//,
+  },
+  {
+    name:        "Check Point Research",
+    publisher:   "Check Point Research",
+    strategy:    "sitemap",
+    sitemaps:    ["https://research.checkpoint.com/post-sitemap.xml"],
+    trust_tier:  "high",
+    source_type: "threat_intelligence",
+    urlFilter:   /research\.checkpoint\.com\/20\d{2}\//,
   },
 ];
 
