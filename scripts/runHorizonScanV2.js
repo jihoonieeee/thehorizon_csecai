@@ -333,6 +333,7 @@ async function main() {
   const result = await runPipelineV2(sources, {
     skipLlm:    NO_LLM,
     skipSlides: NO_SLIDES,
+    supabase:   NO_PERSIST ? null : supabase,   // cache/persist L5 evidence per source
     onProgress: (step, msg) => {},
     onCheckpoint: async (layer, data) => { checkpoints[layer] = data; },
   });
