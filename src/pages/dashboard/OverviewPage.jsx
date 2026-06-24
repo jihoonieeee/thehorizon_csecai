@@ -197,17 +197,20 @@ function InsightItem({ p }) {
         <div className="hz-insight-detail-inner">
           {p.implication && (
             <div className="hz-insight-line">
-              <span className="hz-insight-tag">So what</span>{clip(p.implication, 160)}
+              <span className="hz-insight-tag">So what</span>
+              <span>{p.implication}</span>
             </div>
           )}
           {p.broken_assumption && (
             <div className="hz-insight-line">
-              <span className="hz-insight-tag">Shift</span>{clip(p.broken_assumption, 120)}
+              <span className="hz-insight-tag">Shift</span>
+              <span>{p.broken_assumption}</span>
             </div>
           )}
           {p.evidence && (
             <div className="hz-insight-line hz-insight-evidence">
-              <span className="hz-insight-tag">Evidence</span>{clip(p.evidence, 160)}
+              <span className="hz-insight-tag">Evidence</span>
+              <span>{p.evidence}</span>
             </div>
           )}
         </div>

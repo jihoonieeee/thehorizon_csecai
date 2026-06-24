@@ -530,14 +530,15 @@ a:hover { text-decoration: underline; }
 }
 .hz-insight-line {
   font-size: 0.73rem; line-height: 1.5; color: var(--text-secondary);
-  display: flex; align-items: flex-start; gap: 5px;
+  display: flex; align-items: baseline; gap: 6px;
 }
+.hz-insight-line span:last-child { flex: 1; min-width: 0; }
 .hz-insight-evidence { color: var(--text-tertiary); }
 .hz-insight-tag {
   display: inline-block; font-size: 0.58rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.05em; color: var(--cat-color);
   padding: 2px 5px; border-radius: 3px; background: color-mix(in srgb, var(--cat-color) 10%, transparent);
-  flex-shrink: 0; margin-top: 1px;
+  flex-shrink: 0; white-space: nowrap;
 }
 
 /* ── Historical comparison ───────────────────────────────────────────────── */
