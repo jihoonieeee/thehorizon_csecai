@@ -242,7 +242,6 @@ function Message({ msg, onFollowUp }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function AskAgentPage() {
-  const data = null;
   const [messages, setMessages] = useState([]);
   const [query,    setQuery]    = useState("");
   const [loading,  setLoading]  = useState(false);
@@ -270,7 +269,7 @@ export function AskAgentPage() {
       const res  = await fetch("/api/agent", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ query: q, period: data?.period, history }),
+        body:    JSON.stringify({ query: q, history }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || `API error ${res.status}`);

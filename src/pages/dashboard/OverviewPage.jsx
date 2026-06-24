@@ -41,9 +41,10 @@ const WINDOWS = [
   { id: "week",    label: "Last Week"    },
   { id: "month",   label: "Last Month"   },
   { id: "quarter", label: "Last Quarter" },
+  { id: "annual",  label: "2025 Q3 – 2026 Q2" },
 ];
 
-const WINDOW_NOUN = { week: "Week", month: "Month", quarter: "Quarter" };
+const WINDOW_NOUN = { week: "Week", month: "Month", quarter: "Quarter", annual: "Annual" };
 
 const REFRESH_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -174,6 +175,47 @@ function MaturityBar({ maturity }) {
   );
 }
 
+// ── Insight item — terse by default, expandable on click ──────────────────────
+
+function clip(text, max) {
+  if (!text) return "";
+  const t = String(text).trim();
+  return t.length > max ? t.slice(0, max).trimEnd() + "…" : t;
+}
+
+function InsightItem({ p }) {
+  const [open, setOpen] = useState(false);
+  const hasDetail = p.implication || p.evidence || p.broken_assumption;
+
+  return (
+    <li
+      className={`hz-insight-item${hasDetail ? " expandable" : ""}`}
+      onClick={hasDetail ? () => setOpen(o => !o) : undefined}
+    >
+      <div className="hz-insight-headline">{clip(p.insight, 120)}</div>
+      {open && hasDetail && (
+        <div className="hz-insight-detail-inner">
+          {p.implication && (
+            <div className="hz-insight-line">
+              <span className="hz-insight-tag">So what</span>{clip(p.implication, 160)}
+            </div>
+          )}
+          {p.broken_assumption && (
+            <div className="hz-insight-line">
+              <span className="hz-insight-tag">Broke</span>{clip(p.broken_assumption, 120)}
+            </div>
+          )}
+          {p.evidence && (
+            <div className="hz-insight-line hz-insight-evidence">
+              <span className="hz-insight-tag">Evidence</span>{clip(p.evidence, 160)}
+            </div>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+
 // ── Category card ─────────────────────────────────────────────────────────────
 
 function CategoryCard({ cat, trendValues }) {
@@ -208,34 +250,11 @@ function CategoryCard({ cat, trendValues }) {
         {insights.length > 0 && (
           <div className="hz-cat-card-insight">
             {cat.insight_from && (
-              <div className="hz-cat-card-insight-from">From {cat.insight_from}</div>
+              <div className="hz-cat-card-insight-from">{cat.insight_from}</div>
             )}
             <ul className="hz-insight-list">
-              {insights.map((p, i) => (
-                <li key={i} className="hz-insight-item" tabIndex={0}>
-                  <div className="hz-insight-headline">{p.insight}</div>
-                  {(p.implication || p.evidence || p.broken_assumption) && (
-                    <div className="hz-insight-detail">
-                      <div className="hz-insight-detail-inner">
-                        {p.implication && (
-                          <div className="hz-insight-line">
-                            <span className="hz-insight-tag">So what</span>{p.implication}
-                          </div>
-                        )}
-                        {p.broken_assumption && (
-                          <div className="hz-insight-line">
-                            <span className="hz-insight-tag">Broke</span>{p.broken_assumption}
-                          </div>
-                        )}
-                        {p.evidence && (
-                          <div className="hz-insight-line hz-insight-evidence">
-                            <span className="hz-insight-tag">Evidence</span>{p.evidence}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </li>
+              {insights.slice(0, 2).map((p, i) => (
+                <InsightItem key={i} p={p} />
               ))}
             </ul>
           </div>
@@ -585,17 +604,13 @@ export function OverviewPage() {
           <h1 className="hz-page-title">AI Threat Landscape</h1>
           {data && !loading && (
             <p className="hz-page-sub">
-              <strong>{WINDOW_NOUN[data.window] || ""} overview</strong>
-              {" · "}{data.window_label}
-              {data.date_from && data.date_to && (
-                <span className="hz-overview-daterange">
-                  {" "}({data.date_from} → {data.date_to}, SGT)
-                </span>
-              )}
-              {" · "}{data.summary?.total ?? 0} validated sources
+              {data.date_from && data.date_to
+                ? `${data.date_from} → ${data.date_to}, SGT`
+                : data.window_label}
+              {" · "}{data.summary?.total ?? 0} sources
               {lastFetch && (
                 <span className="hz-overview-refresh-ts">
-                  {" "}· Updated {lastFetch.toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" })}
+                  {" "}· {lastFetch.toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" })}
                 </span>
               )}
             </p>
@@ -641,11 +656,7 @@ export function OverviewPage() {
         <div className="hz-insight-stats">
           <div className="hz-insight-stat">
             <span className="hz-insight-stat-value">{data.summary?.total ?? "—"}</span>
-            <span className="hz-insight-stat-label">Total sources</span>
-          </div>
-          <div className="hz-insight-stat">
-            <span className="hz-insight-stat-value">{data.summary?.high_trust ?? "—"}</span>
-            <span className="hz-insight-stat-label">High-trust</span>
+            <span className="hz-insight-stat-label">Sources</span>
           </div>
           {Object.entries(CAT_COLOR).map(([key, color]) => (
             <div key={key} className="hz-insight-stat">
@@ -708,7 +719,9 @@ export function OverviewPage() {
       {/* Trend chart */}
       {data?.trend?.week_labels?.length > 1 && (
         <>
-          <div className="hz-overview-section-title">Weekly source volume (12 weeks)</div>
+          <div className="hz-overview-section-title">
+            {data.window === "annual" ? "Monthly source volume" : "Weekly source volume"}
+          </div>
           <div className="hz-trend-panel">
             <TrendChart trend={data.trend} />
             <div className="hz-trend-legend">

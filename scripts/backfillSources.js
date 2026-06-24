@@ -1,20 +1,24 @@
 /**
  * Historical source backfill script.
  *
- * Runs the ingest pipeline (API connectors only — NVD, arXiv, AIID) week by
- * week for a given date range and saves results directly to Supabase.
+ * Runs the ingest pipeline (API connectors only) week by week for a given date
+ * range. RSS feeds are excluded — they have no historical depth.
+ * Run /api/refresh to pull what is currently in feeds.
  *
- * RSS feeds are excluded because they have no historical depth (only the
- * current ~10 items). Run /api/refresh to pull whatever is currently in feeds.
+ * API connectors with historical date-range support:
+ *   arxiv   — arXiv papers (operationally filtered queries)
+ *   nvd     — NVD CVEs matching AI/ML keyword list
+ *   ghsa    — GitHub Advisory Database: AI/ML package CVEs (LangChain, transformers, gradio…)
+ *   cisa_kev — CISA Known Exploited Vulnerabilities (AI-relevant subset)
  *
  * Usage:
  *   node scripts/backfillSources.js [start] [end] [connectors]
- *   node scripts/backfillSources.js 2026-01-01 2026-05-20
- *   node scripts/backfillSources.js 2026-01-01 2026-05-20 arxiv
- *   node scripts/backfillSources.js 2026-01-01 2026-05-20 nvd,aiid
+ *   node scripts/backfillSources.js 2025-07-01 2026-06-24
+ *   node scripts/backfillSources.js 2025-07-01 2026-06-24 arxiv
+ *   node scripts/backfillSources.js 2025-07-01 2026-06-24 nvd,ghsa,cisa_kev
  *   node scripts/backfillSources.js --feeds-only   # single RSS pull, no date range needed
  *
- * Connectors: arxiv | nvd | aiid | all (default: all)
+ * Connectors: arxiv | nvd | ghsa | cisa_kev | all (default: all)
  * Defaults to Jan 1 of current year → today.
  *
  * --feeds-only: runs a single collectRawSources with all 40 RSS feeds enabled.
@@ -120,7 +124,7 @@ const endUtc   = new Date(`${endArg}T23:59:59+08:00`).toISOString();
 
 const chunks = weekChunks(startUtc, endUtc);
 
-const connectorLabel = connectorFilter ? connectorFilter.join("+") : "nvd+arxiv+aiid";
+const connectorLabel = connectorFilter ? connectorFilter.join("+") : "nvd+arxiv+ghsa+cisa_kev";
 
 console.log(`\n${"═".repeat(60)}`);
 console.log(` Horizon Backfill: ${startArg} → ${endArg}`);

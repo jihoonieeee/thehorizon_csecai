@@ -2,6 +2,8 @@
  * Dashboard API client.
  */
 
+import { MONTHLY_DASHBOARD } from "../mockData/dashboardData.js";
+
 const BASE = "/api";
 
 /**

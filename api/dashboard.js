@@ -1,12 +1,13 @@
 /**
- * GET /api/dashboard?window=week|month|quarter
+ * GET /api/dashboard?window=week|month|quarter|annual
  *
  * Returns real corpus data for the Overview page.
  * All data read directly from Supabase — no hallucination.
  *
- * window=week    → last 7 days
- * window=month   → current calendar month (SGT)
- * window=quarter → last 90 days
+ * window=week    → last completed ISO week
+ * window=month   → previous complete calendar month
+ * window=quarter → previous complete calendar quarter
+ * window=annual  → fixed horizon: 2025-07-01 → 2026-06-30 (2025 Q3 – 2026 Q2)
  *
  * Response shape:
  * {
@@ -139,7 +140,7 @@ async function getWindowInsights(win, key) {
         .select("category,points,window_label,source_count,window_key,created_at")
         .eq("win", win)
         .order("created_at", { ascending: false })
-        .limit(8); // up to 4 categories + meta, plus headroom
+        .limit(30); // 5 categories × ≤3 fallback periods, plus meta rows
 
       if (prior?.length) {
         // Keep only rows from the single most recent prior window_key.
@@ -176,7 +177,10 @@ async function getWindowInsights(win, key) {
 
 export default async function handler(req, res) {
   try {
-    const win = (req.query?.window || "quarter").toLowerCase();
+    const VALID_WINDOWS = new Set(["week", "month", "quarter", "annual"]);
+    const win = VALID_WINDOWS.has((req.query?.window || "").toLowerCase())
+      ? req.query.window.toLowerCase()
+      : "quarter";
     const period = getCompletedPeriodWindow(win);
     const { key: windowKey, label: windowLabel, date_from: from, date_to: to } = period;
 
@@ -242,33 +246,61 @@ export default async function handler(req, res) {
       };
     });
 
-    // ── 3. 12-week trend, per category ───────────────────────────────────────
-    const trendFrom = new Date(Date.now() - 12 * 7 * 86400000);
+    // ── 3. Trend chart — bucket size adapts to window ────────────────────────
+    // week/month/quarter → 12 weekly buckets anchored to now
+    // annual             → 12 monthly buckets Jul 2025 – Jun 2026
+    const useMonthlyBuckets = win === "annual";
+
+    const trendFrom = useMonthlyBuckets
+      ? new Date("2025-07-01T00:00:00.000Z")
+      : new Date(Date.now() - 12 * 7 * 86400000);
+
     const { data: trendRows } = await supabase
       .from("sources")
       .select("date_published,main_category")
       .gte("date_published", trendFrom.toISOString().slice(0, 10))
+      .lte("date_published", to)
       .eq("validation_status", "pass")
       .not("main_category", "is", null);
 
-    const weekLabels  = [];
-    const byCategory  = {};
+    const weekLabels = [];
+    const byCategory = {};
     for (const c of CATEGORIES) byCategory[c.key] = [];
 
-    for (let w = 11; w >= 0; w--) {
-      const wEnd   = new Date(Date.now() - w * 7 * 86400000);
-      const wStart = new Date(wEnd.getTime() - 7 * 86400000);
-      weekLabels.push(weekLabel(wEnd));
+    if (useMonthlyBuckets) {
+      // 12 calendar months: Jul 2025 → Jun 2026
+      for (let mo = 0; mo < 12; mo++) {
+        const mStart = new Date(Date.UTC(2025, 6 + mo, 1));       // Jul=6, Aug=7, …
+        const mEnd   = new Date(Date.UTC(2025, 6 + mo + 1, 1));   // exclusive
+        weekLabels.push(mStart.toLocaleDateString("en-SG", { month: "short", year: "2-digit", timeZone: "UTC" }));
 
-      const counts = {};
-      for (const c of CATEGORIES) counts[c.key] = 0;
-      for (const s of (trendRows || [])) {
-        const d = new Date(s.date_published);
-        if (d >= wStart && d < wEnd && counts[s.main_category] !== undefined) {
-          counts[s.main_category]++;
+        const counts = {};
+        for (const c of CATEGORIES) counts[c.key] = 0;
+        for (const s of (trendRows || [])) {
+          const d = new Date(s.date_published);
+          if (d >= mStart && d < mEnd && counts[s.main_category] !== undefined) {
+            counts[s.main_category]++;
+          }
         }
+        for (const c of CATEGORIES) byCategory[c.key].push(counts[c.key]);
       }
-      for (const c of CATEGORIES) byCategory[c.key].push(counts[c.key]);
+    } else {
+      // 12 rolling weekly buckets anchored to now
+      for (let w = 11; w >= 0; w--) {
+        const wEnd   = new Date(Date.now() - w * 7 * 86400000);
+        const wStart = new Date(wEnd.getTime() - 7 * 86400000);
+        weekLabels.push(weekLabel(wEnd));
+
+        const counts = {};
+        for (const c of CATEGORIES) counts[c.key] = 0;
+        for (const s of (trendRows || [])) {
+          const d = new Date(s.date_published);
+          if (d >= wStart && d < wEnd && counts[s.main_category] !== undefined) {
+            counts[s.main_category]++;
+          }
+        }
+        for (const c of CATEGORIES) byCategory[c.key].push(counts[c.key]);
+      }
     }
 
     // ── 4. Top incidents (most recent high-value sources) ─────────────────────

@@ -3,25 +3,28 @@
  */
 
 import { useState } from "react";
-import { OverviewPage } from "../../pages/dashboard/OverviewPage.jsx";
-import { AskAgentPage } from "../../pages/dashboard/AskAgentPage.jsx";
-import { SourcesPage }  from "../../pages/dashboard/SourcesPage.jsx";
-import { LogsPage }     from "../../pages/dashboard/LogsPage.jsx";
+import { OverviewPage }       from "../../pages/dashboard/OverviewPage.jsx";
+import { AskAgentPage }       from "../../pages/dashboard/AskAgentPage.jsx";
+import { SourcesPage }        from "../../pages/dashboard/SourcesPage.jsx";
+import { LogsPage }           from "../../pages/dashboard/LogsPage.jsx";
+import { GenerateSlidesPage } from "../../pages/dashboard/GenerateSlidesPage.jsx";
 
 const NAV_ITEMS = [
-  { id: "overview", label: "Overview" },
-  { id: "ask",      label: "Ask Agent" },
-  { id: "sources",  label: "Sources" },
-  { id: "logs",     label: "Logs" },
+  { id: "overview",  label: "Overview"   },
+  { id: "ask",       label: "Ask Agent"  },
+  { id: "sources",   label: "Sources"    },
+  { id: "logs",      label: "Logs"       },
+  { id: "generate",  label: "Generate"   },
 ];
 
 function PageContent({ page }) {
   switch (page) {
-    case "overview": return <OverviewPage />;
-    case "ask":      return <AskAgentPage />;
-    case "sources":  return <SourcesPage />;
-    case "logs":     return <LogsPage />;
-    default:         return <OverviewPage />;
+    case "overview":  return <OverviewPage />;
+    case "ask":       return <AskAgentPage />;
+    case "sources":   return <SourcesPage />;
+    case "logs":      return <LogsPage />;
+    case "generate":  return <GenerateSlidesPage />;
+    default:          return <OverviewPage />;
   }
 }
 

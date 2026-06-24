@@ -10,15 +10,11 @@
     "horizon:v2": "node scripts/runHorizonScanV2.js",
     "horizon:v2:fast": "node scripts/runHorizonScanV2.js --no-slides",
     "horizon:v2:dry": "node scripts/runHorizonScanV2.js --no-llm --no-persist",
-    "horizon:mvp": "node scripts/runHorizonScanMVP.js",
     "smoke:v2": "node scripts/smokeTestV2.js",
     "smoke:v2:dry": "node scripts/smokeTestV2.js --no-llm --no-slides",
-    "debug:deep": "node scripts/deepDebugPipeline.js",
-    "debug:list": "node scripts/debugPipeline.js --list",
-    "debug:summary": "node scripts/debugPipeline.js --summary",
-    "debug:reports": "node scripts/debugPipeline.js --reports",
-    "test:debug5": "node scripts/debug5.js",
-    "test:debug5:diff": "node scripts/debug5diff.js"
+    "backfill:operational": "node scripts/backfillOperational.js",
+    "backfill:operational:aiid": "node scripts/backfillOperational.js 2025-07-01 $(date +%Y-%m-%d) aiid",
+    "backfill:operational:sitemap": "node scripts/backfillOperational.js 2025-07-01 $(date +%Y-%m-%d) sitemap"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.0.2",
