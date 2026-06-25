@@ -211,6 +211,42 @@ const PUBLISHERS = [
     source_type: "threat_intelligence",
     urlFilter:   /research\.checkpoint\.com\/20\d{2}\//,
   },
+
+  // ── Tier C: AI-native operational blogs with NO RSS (sitemap-only; added 2026-06-25)
+  //    These are the best-fit AI-security feeds (agent/copilot abuse, jailbreaks,
+  //    AI red-team research) but publish no RSS, so they cannot live in the daily
+  //    RSS registry — they are pulled here by periodic backfill instead.
+  //    Zenity sitemap carries <lastmod>; SPLX/Pillar do not, so their dates are
+  //    extracted from each article's HTML at fetch time (resolveUrls keeps dateless
+  //    URLs; fetchArticleText → extractDocumentSections recovers the date).
+  //    See docs/OPERATIONAL_SOURCE_EXPANSION_PLAN.md §3 (Tier C).
+  {
+    name:        "Zenity Labs",
+    publisher:   "Zenity",
+    strategy:    "sitemap",
+    sitemaps:    ["https://zenity.io/sitemap.xml"],
+    trust_tier:  "high",
+    source_type: "research_finding",
+    urlFilter:   /zenity\.io\/blog\//,
+  },
+  {
+    name:        "SPLX (Straiker)",
+    publisher:   "SPLX",
+    strategy:    "sitemap",
+    sitemaps:    ["https://splx.ai/sitemap.xml"],
+    trust_tier:  "high",
+    source_type: "research_finding",
+    urlFilter:   /splx\.ai\/blog\//,
+  },
+  {
+    name:        "Pillar Security",
+    publisher:   "Pillar Security",
+    strategy:    "sitemap",
+    sitemaps:    ["https://www.pillar.security/sitemap.xml"],
+    trust_tier:  "high",
+    source_type: "research_finding",
+    urlFilter:   /pillar\.security\/blog\//,
+  },
 ];
 
 // ── Ghost RSS paginator ────────────────────────────────────────────────────────

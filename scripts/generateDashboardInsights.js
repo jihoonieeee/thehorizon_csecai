@@ -259,10 +259,10 @@ Audit each. Return a verdict for every index.`;
 
 const SRC_SELECT = "id,main_category,short_summary,analyst_brief,intelligence,tags,source_type,title,url,publisher,date_published";
 
-// Pipeline-enriched sources (via sourceEnrichmentStore) leave the top-level
-// short_summary/analyst_brief columns empty and stash the prose under
-// intelligence.source_summary. Fall back to it so those sources still feed the
-// insight pipeline instead of looking unenriched.
+// Some pipeline-enriched sources leave the top-level short_summary/analyst_brief
+// columns empty and stash the prose under intelligence.source_summary. Fall back
+// to it so those sources still feed the insight pipeline instead of looking
+// unenriched.
 function summaryText(s) {
   return (s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "").trim();
 }
