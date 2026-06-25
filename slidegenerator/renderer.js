@@ -1,20 +1,12 @@
 /**
  * Slide Renderer — deck JSON → PPTX
  *
- * Palette: soft sky-blue · rose · slate · white/light-grey — nothing saturated.
+ * Design language: sharp, minimal, typographic. No rounded corners on structural
+ * elements, no decorative circles, no pastel fills. One strong blue accent and
+ * restraint everywhere else. Feels like a top-tier tech/consulting deck.
  *
- * Slide types:
- *   cover         — branded title slide
- *   section_intro — rotating light-background divider (3 styles)
- *   content       — headline + body, multiple layout variants
- *   references    — numbered source list
- *
- * Content layouts (slide.layout):
- *   default     — bullets + optional stat cards / diagram
- *   highlight   — hero stat or key quote
- *   timeline    — horizontal milestone cards
- *   team_cards  — person / feature card grid
- *   two_column  — dual bullet columns
+ * Slide types: cover · section_intro · content · references
+ * Content layouts: default · highlight · timeline · team_cards · two_column
  */
 
 import PptxGenJS from "pptxgenjs";
@@ -31,95 +23,81 @@ const CONTENT_BG  = path.join(ASSETS_DIR, "content_frame.png");
 const HAS_COVER   = fs.existsSync(COVER_BG);
 const HAS_CONTENT = fs.existsSync(CONTENT_BG);
 
-// ── Palette — soft, light, fresh ─────────────────────────────────────────────
+// ── Palette — precise, restrained ────────────────────────────────────────────
 const T = {
-  // Text
-  ink:      "1E293B",   // slate-800 — headings
-  body:     "334155",   // slate-700 — body
-  muted:    "64748B",   // slate-500 — secondary
-  ghost:    "94A3B8",   // slate-400 — page numbers, footnotes
-  // Sky blue (primary — not oversaturated)
-  sky:      "3B82F6",   // blue-500
-  skyDk:    "1D4ED8",   // blue-700 — sparingly
-  skyPale:  "EFF6FF",   // blue-50  — section bg 1
-  skyLight: "DBEAFE",   // blue-100 — fills
-  // Rose (warm accent — not harsh red)
-  rose:     "F43F5E",   // rose-500
-  rosePale: "FFF1F2",   // rose-50  — section bg 2
-  roseLight:"FFE4E6",   // rose-100 — fills
-  // Slate (neutral section bg)
-  slateN:   "F1F5F9",   // slate-100 — section bg 3
-  surface:  "F8FAFC",   // slate-50  — card/surface
-  border:   "E2E8F0",   // slate-200
-  white:    "FFFFFF",
-  // Variety accents (used in timelines, team cards)
-  violet:   "8B5CF6",
-  amber:    "F59E0B",
-  emerald:  "10B981",
-  sky2:     "0EA5E9",   // sky-500 variant
-  // Font
-  fontH:    "Calibri",
-  fontB:    "Calibri",
+  ink:     "0F172A",   // near-black — all headlines
+  body:    "334155",   // slate-700  — body text
+  muted:   "64748B",   // slate-500  — captions, secondary
+  ghost:   "94A3B8",   // slate-400  — page numbers
+  blue:    "2563EB",   // blue-600   — primary accent
+  blueDk:  "1E3A8A",   // blue-900   — dark blue for dividers / cover
+  blueXl:  "EFF6FF",   // blue-50    — very light section bg
+  red:     "E11D48",   // rose-600   — used only for a single accent element
+  silver:  "E2E8F0",   // slate-200  — borders, dividers
+  surface: "F8FAFC",   // slate-50   — card surfaces
+  offWhite:"F1F5F9",   // slate-100  — section bg variant
+  white:   "FFFFFF",
+  fontH:   "Calibri",
+  fontB:   "Calibri",
 };
 
-// Cycling accent palette for timelines, cards, etc.
-const ACCENTS = [T.sky, T.rose, T.violet, T.amber, T.emerald, T.sky2];
+// Accent colours for cycling elements — all toned, not garish
+const ACCENTS = ["2563EB", "E11D48", "0369A1", "7C3AED", "0F766E", "B45309"];
 
 // ── Layout ────────────────────────────────────────────────────────────────────
-const MARGIN   = 0.50;
+const MARGIN   = 0.55;
 const FULL_W   = W - MARGIN * 2;
-const SAFE_W   = 10.40;   // clear of CSA logo in content_frame.png
+const SAFE_W   = 10.40;
 const FOOTER_Y = 7.02;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Micro-helpers ─────────────────────────────────────────────────────────────
 const clamp = (s, n) => { s = String(s ?? ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
 const bt    = b      => (typeof b === "object" ? (b?.text ?? "") : String(b ?? "")).trim();
 const note  = (s, t) => { if (t) s.addNotes(String(t)); };
 
 function estLines(text, ptSize, widthIn) {
-  const cpl = Math.max(15, Math.floor(widthIn / (ptSize * 0.010)));
+  const cpl = Math.max(15, Math.floor(widthIn / (ptSize * 0.0098)));
   return Math.min(4, Math.max(1, Math.ceil(String(text || "").length / cpl)));
-}
-
-function softBar(slide) {
-  // Subtle 3-colour footer stripe on fallback slides
-  [[T.sky, 0], [T.rose, W / 3], [T.violet, (W / 3) * 2]].forEach(([c, x]) =>
-    slide.addShape("rect", { x, y: H - 0.08, w: W / 3, h: 0.08, fill: { color: c }, line: { color: c } })
-  );
 }
 
 // ── Chrome ────────────────────────────────────────────────────────────────────
 function chrome(slide, pageNum, total) {
-  if (!HAS_CONTENT) softBar(slide);
+  // Thin bottom rule on content slides (when no branded frame)
+  if (!HAS_CONTENT) {
+    slide.addShape("rect", { x: 0, y: H - 0.06, w: W, h: 0.06,
+      fill: { color: T.silver }, line: { color: T.silver } });
+  }
   slide.addText(`${pageNum}${total ? ` / ${total}` : ""}`, {
-    x: W - 1.20, y: FOOTER_Y + 0.04, w: 0.90, h: 0.22,
+    x: W - 1.10, y: FOOTER_Y + 0.04, w: 0.80, h: 0.22,
     fontSize: 8, color: T.ghost, fontFace: T.fontB, align: "right",
   });
 }
 
 // ── Title block ───────────────────────────────────────────────────────────────
-function addTitle(slide, headline, kicker, accentColor = T.sky) {
-  let y = 0.32;
+function addTitle(slide, headline, kicker) {
+  let y = 0.30;
   if (kicker) {
     slide.addText(clamp(kicker, 60).toUpperCase(), {
-      x: MARGIN, y, w: SAFE_W - MARGIN, h: 0.24,
-      fontSize: 10, bold: true, color: accentColor, fontFace: T.fontB, charSpacing: 1.5, valign: "middle",
+      x: MARGIN, y, w: SAFE_W - MARGIN, h: 0.22,
+      fontSize: 9, bold: true, color: T.blue, fontFace: T.fontB,
+      charSpacing: 2, valign: "middle",
     });
-    y += 0.26;
+    y += 0.24;
   }
-  const lines = estLines(headline, 25, SAFE_W - MARGIN);
-  const headH = Math.max(0.48, lines * 0.42);
+  const lines = estLines(headline, 24, SAFE_W - MARGIN);
+  const headH = Math.max(0.44, lines * 0.41);
   slide.addText(clamp(headline || "", 120), {
     x: MARGIN, y, w: SAFE_W - MARGIN, h: headH,
-    fontSize: 25, bold: true, color: T.ink, fontFace: T.fontH, valign: "top", wrap: true,
+    fontSize: 24, bold: true, color: T.ink, fontFace: T.fontH, valign: "top", wrap: true,
   });
   y += headH;
-  slide.addShape("rect", { x: MARGIN, y: y + 0.10, w: 3.60, h: 0.05,
-    fill: { color: accentColor }, line: { color: accentColor } });
-  return y + 0.10 + 0.05 + 0.22;
+  // Short sharp rule — 2.4in, 1pt thick
+  slide.addShape("rect", { x: MARGIN, y: y + 0.12, w: 2.40, h: 0.04,
+    fill: { color: T.blue }, line: { color: T.blue } });
+  return y + 0.12 + 0.04 + 0.24;
 }
 
-// ── Bullet list ───────────────────────────────────────────────────────────────
+// ── Bullets ───────────────────────────────────────────────────────────────────
 function addBullets(slide, items, x, y, w, h, opts = {}) {
   const list = (items || []).filter(b => bt(b)).slice(0, opts.max || 7);
   if (!list.length) return;
@@ -127,14 +105,15 @@ function addBullets(slide, items, x, y, w, h, opts = {}) {
     text: (opts.numbered ? `${i + 1}.   ` : "") + bt(b),
     options: {
       color: T.body,
-      ...(opts.numbered ? {} : { bullet: { code: "25AA", indent: 20 } }),
+      ...(opts.numbered ? {} : { bullet: { code: "2013", indent: 20 } }),  // en-dash bullet
       breakLine: true,
-      paraSpaceAfter: opts.gap ?? 12,
+      paraSpaceAfter: opts.gap ?? 11,
     },
   }));
   slide.addText(runs, {
-    x, y, w, h, fontSize: opts.sz || 17, fontFace: T.fontB, color: T.body,
-    valign: opts.valign || "top", wrap: true, lineSpacingMultiple: 1.10,
+    x, y, w, h,
+    fontSize: opts.sz || 17, fontFace: T.fontB, color: T.body,
+    valign: opts.valign || "top", wrap: true, lineSpacingMultiple: 1.12,
   });
 }
 
@@ -151,10 +130,10 @@ function pngSize(uri) {
 
 function embedDiagram(slide, diag, x, y, w, h) {
   if (!diag?.image_data) return false;
-  const FOOT = 0.20, capH = diag.caption ? 0.26 : 0;
+  const FOOT = 0.18, capH = diag.caption ? 0.24 : 0;
   const boxH = Math.max(0.5, h - capH - FOOT - 0.06), boxY = y + capH;
-  if (diag.caption) slide.addText(clamp(diag.caption, 80), { x, y, w, h: 0.24,
-    fontSize: 11, italic: true, color: T.ink, fontFace: T.fontB, valign: "middle" });
+  if (diag.caption) slide.addText(clamp(diag.caption, 80), { x, y, w, h: 0.22,
+    fontSize: 10, italic: true, color: T.muted, fontFace: T.fontB, valign: "middle" });
   let dw = w, dh = boxH, dx = x, dy = boxY;
   const sz = pngSize(diag.image_data);
   if (sz) {
@@ -169,91 +148,89 @@ function embedDiagram(slide, diag, x, y, w, h) {
   return true;
 }
 
-// ── Stat cards ────────────────────────────────────────────────────────────────
+// ── Stat cards — sharp rectangles, thin top border, big number ────────────────
 function statCards(slide, metrics, x, y, w, h) {
   const items = (metrics || []).slice(0, 4);
   if (!items.length) return;
-  const cardH = Math.min(1.55, (h - 0.10) / items.length - 0.14);
+  const gap   = 0.12;
+  const cardH = Math.min(1.50, (h - gap * (items.length - 1)) / items.length);
   items.forEach((m, i) => {
-    const cy  = y + i * (cardH + 0.14);
+    const cy  = y + i * (cardH + gap);
     const col = ACCENTS[i % ACCENTS.length];
-    // Card
-    slide.addShape("roundRect", { x, y: cy, w, h: cardH, rectRadius: 0.08,
-      fill: { color: T.surface }, line: { color: T.border, pt: 0.5 } });
-    // Thin top colour band
-    slide.addShape("roundRect", { x, y: cy, w, h: 0.10, rectRadius: 0.06,
+    // Card — sharp, white surface, thin border
+    slide.addShape("rect", { x, y: cy, w, h: cardH,
+      fill: { color: T.white }, line: { color: T.silver, pt: 0.75 } });
+    // Top colour border (3pt equivalent, drawn as a thin rect)
+    slide.addShape("rect", { x, y: cy, w, h: 0.06,
       fill: { color: col }, line: { color: col } });
-    slide.addShape("rect", { x, y: cy + 0.06, w, h: 0.04,
-      fill: { color: col }, line: { color: col } });
-    // Value
-    slide.addText(clamp(m.value, 12), { x: x + 0.18, y: cy + 0.16, w: w - 0.28, h: cardH * 0.50,
-      fontSize: 26, bold: true, color: col, fontFace: T.fontH, valign: "middle" });
-    // Label
-    slide.addText(clamp(m.label, 80), { x: x + 0.18, y: cy + cardH * 0.58, w: w - 0.28, h: cardH * 0.38,
+    // Value — large, coloured
+    slide.addText(clamp(m.value, 12), { x: x + 0.18, y: cy + 0.12, w: w - 0.28, h: cardH * 0.52,
+      fontSize: 28, bold: true, color: col, fontFace: T.fontH, valign: "middle" });
+    // Label — muted, small
+    slide.addText(clamp(m.label, 80), { x: x + 0.18, y: cy + cardH * 0.60, w: w - 0.28, h: cardH * 0.36,
       fontSize: 10, color: T.muted, fontFace: T.fontB, valign: "top", wrap: true });
   });
 }
 
 // ── Masters ───────────────────────────────────────────────────────────────────
 function defineMasters(pptx) {
-  // Content — white (or branded frame)
-  pptx.defineSlideMaster({ title: "CONTENT", background: HAS_CONTENT ? { path: CONTENT_BG } : { color: T.white } });
-  // Cover — branded or dark navy fallback
-  pptx.defineSlideMaster({ title: "COVER",   background: HAS_COVER ? { path: COVER_BG }   : { color: "0F172A" } });
-  // Light section backgrounds
-  pptx.defineSlideMaster({ title: "SEC_BLUE",  background: { color: T.skyPale  } });  // blue-50
-  pptx.defineSlideMaster({ title: "SEC_ROSE",  background: { color: T.rosePale } });  // rose-50
-  pptx.defineSlideMaster({ title: "SEC_SLATE", background: { color: T.slateN   } });  // slate-100
+  pptx.defineSlideMaster({ title: "CONTENT",   background: HAS_CONTENT ? { path: CONTENT_BG } : { color: T.white } });
+  pptx.defineSlideMaster({ title: "COVER",     background: HAS_COVER   ? { path: COVER_BG }   : { color: T.blueDk } });
+  pptx.defineSlideMaster({ title: "SEC_WHITE", background: { color: T.white } });
+  pptx.defineSlideMaster({ title: "SEC_LIGHT", background: { color: T.offWhite } });  // slate-100
+  pptx.defineSlideMaster({ title: "SEC_DARK",  background: { color: T.blueDk } });   // deep navy
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION DIVIDERS — 3 LIGHT-BACKGROUND STYLES
+// SECTION DIVIDERS — 3 STYLES, ALL ELEGANT
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Style A — SIDE PANEL on light blue
- * Blue-50 bg. Left panel in sky-100 with large section number. Title in ink on right.
+ * Style A — WHITE with left edge stripe
+ * White bg. Solid blue 8px left stripe the full height. Ghost section number
+ * top-left. "SECTION N" small label. Headline large, ink, left-aligned lower half.
  */
-function buildSectionBlue(pptx, slide, num) {
-  const s = pptx.addSlide({ masterName: "SEC_BLUE" });
-  const PW = 4.60;   // left panel width
+function buildSectionA(pptx, slide, num) {
+  const s  = pptx.addSlide({ masterName: "SEC_WHITE" });
+  const SW = 0.10;   // stripe width
 
-  // Left panel — sky-100
-  s.addShape("rect", { x: 0, y: 0, w: PW, h: H,
-    fill: { color: T.skyLight }, line: { color: T.skyLight } });
-  // Thin sky border on right edge of panel
-  s.addShape("rect", { x: PW - 0.06, y: 0, w: 0.06, h: H,
-    fill: { color: T.sky }, line: { color: T.sky } });
+  // Blue left stripe — full height
+  s.addShape("rect", { x: 0, y: 0, w: SW, h: H,
+    fill: { color: T.blue }, line: { color: T.blue } });
 
-  // Section number — large, sky blue in left panel
+  // Ghost section number — very large, barely visible, top-left area
   s.addText(String(num).padStart(2, "0"), {
-    x: 0.10, y: 0.50, w: PW - 0.30, h: 4.50,
-    fontSize: 200, bold: true, color: T.sky, fontFace: T.fontH, align: "center", valign: "top",
+    x: SW + 0.20, y: -0.30, w: 5.0, h: 4.20,
+    fontSize: 260, bold: true, color: T.silver, fontFace: T.fontH,
+    align: "left", valign: "top",
   });
 
-  // "SECTION" small label bottom of left panel
-  s.addText("SECTION", {
-    x: 0.10, y: H - 0.72, w: PW - 0.20, h: 0.30,
-    fontSize: 10, bold: true, color: T.sky, fontFace: T.fontB, charSpacing: 5, align: "center",
+  // "SECTION  01" — small, blue, spaced
+  s.addText(`SECTION  ${String(num).padStart(2, "0")}`, {
+    x: SW + 0.40, y: 0.42, w: 5.0, h: 0.26,
+    fontSize: 10, bold: true, color: T.blue, fontFace: T.fontB,
+    charSpacing: 3, align: "left",
   });
 
-  // Title — ink, right side, vertically centred
-  const hl    = clamp(slide.headline || "", 42);
-  const lines = estLines(hl, 36, W - PW - 0.70);
-  const headH = Math.max(0.75, lines * 0.62);
-  const headY = (H - headH - (slide.description ? 0.80 : 0)) / 2;
-  const RX = PW + 0.50, RW = W - PW - 0.70;
+  // Headline — ink, 40pt, left-aligned, vertically in lower half
+  const hl    = clamp(slide.headline || "", 50);
+  const titleW = W - SW - 0.60;
+  const lines = estLines(hl, 40, titleW);
+  const headH = Math.max(0.80, lines * 0.66);
+  const headY = H / 2 - headH / 2 + 0.30;
   s.addText(hl, {
-    x: RX, y: headY, w: RW, h: headH,
-    fontSize: 36, bold: true, color: T.ink, fontFace: T.fontH,
+    x: SW + 0.40, y: headY, w: titleW, h: headH,
+    fontSize: 40, bold: true, color: T.ink, fontFace: T.fontH,
     align: "left", valign: "middle", wrap: true,
   });
-  // Sky rule under title
-  s.addShape("rect", { x: RX, y: headY + headH + 0.18, w: Math.min(RW * 0.55, 2.80), h: 0.055,
-    fill: { color: T.sky }, line: { color: T.sky } });
+
+  // Thin horizontal rule under headline
+  s.addShape("rect", { x: SW + 0.40, y: headY + headH + 0.20, w: 2.60, h: 0.04,
+    fill: { color: T.blue }, line: { color: T.blue } });
+
   if (slide.description) {
-    s.addText(clamp(slide.description, 120), {
-      x: RX, y: headY + headH + 0.36, w: RW, h: 0.68,
+    s.addText(clamp(slide.description, 130), {
+      x: SW + 0.40, y: headY + headH + 0.38, w: titleW, h: 0.60,
       fontSize: 14, color: T.muted, fontFace: T.fontB, align: "left", wrap: true,
     });
   }
@@ -261,43 +238,41 @@ function buildSectionBlue(pptx, slide, num) {
 }
 
 /**
- * Style B — HEADLINE on light rose
- * Rose-50 bg. Centred large title. Rose circle watermark + small section badge top-left.
+ * Style B — LIGHT GREY, centered typographic
+ * Slate-100 bg. Full-width thin blue top line. Section number + headline
+ * typeset centred like a chapter title. No decoration beyond rule.
  */
-function buildSectionRose(pptx, slide, num) {
-  const s = pptx.addSlide({ masterName: "SEC_ROSE" });
+function buildSectionB(pptx, slide, num) {
+  const s = pptx.addSlide({ masterName: "SEC_LIGHT" });
 
-  // Large faint circle — decorative background element, top-right
-  s.addShape("ellipse", { x: W - 4.80, y: -1.40, w: 5.60, h: 5.60,
-    fill: { color: T.roseLight }, line: { color: T.roseLight } });
-  // Smaller rose circle overlapping, bottom-left
-  s.addShape("ellipse", { x: -1.20, y: H - 2.80, w: 3.60, h: 3.60,
-    fill: { color: T.roseLight }, line: { color: T.roseLight } });
+  // Full-width blue top rule — 3px
+  s.addShape("rect", { x: 0, y: 0, w: W, h: 0.06,
+    fill: { color: T.blue }, line: { color: T.blue } });
 
-  // Section badge — pill, top-left
-  s.addShape("roundRect", { x: MARGIN, y: 0.48, w: 1.80, h: 0.38, rectRadius: 0.19,
-    fill: { color: T.rose }, line: { color: T.rose } });
-  s.addText(`${String(num).padStart(2, "0")}  SECTION`, {
-    x: MARGIN, y: 0.48, w: 1.80, h: 0.38,
-    fontSize: 10, bold: true, color: T.white, fontFace: T.fontB, charSpacing: 1, align: "center", valign: "middle",
+  // Section label — centred, small, blue, spaced
+  s.addText(`${String(num).padStart(2, "0")}  ·  SECTION`, {
+    x: 1.5, y: 2.0, w: W - 3.0, h: 0.28,
+    fontSize: 10, bold: true, color: T.blue, fontFace: T.fontB,
+    charSpacing: 3, align: "center",
   });
 
-  // Headline — ink, large, centred vertically
-  const hl    = clamp(slide.headline || "", 46);
-  const lines = estLines(hl, 40, W - 3.0);
-  const headH = Math.max(0.85, lines * 0.68);
-  const headY = (H - headH) / 2 - 0.30;
+  // Headline — centred, 42pt ink
+  const hl    = clamp(slide.headline || "", 52);
+  const lines = estLines(hl, 42, W - 4.0);
+  const headH = Math.max(0.80, lines * 0.68);
   s.addText(hl, {
-    x: 1.50, y: headY, w: W - 3.0, h: headH,
-    fontSize: 40, bold: true, color: T.ink, fontFace: T.fontH,
-    align: "center", valign: "middle", wrap: true,
+    x: 2.0, y: 2.40, w: W - 4.0, h: headH,
+    fontSize: 42, bold: true, color: T.ink, fontFace: T.fontH,
+    align: "center", valign: "top", wrap: true,
   });
-  // Rose rule below
-  s.addShape("rect", { x: (W - 3.0) / 2, y: headY + headH + 0.20, w: 3.0, h: 0.06,
-    fill: { color: T.rose }, line: { color: T.rose } });
+
+  // Rule below headline
+  s.addShape("rect", { x: (W - 2.40) / 2, y: 2.40 + headH + 0.22, w: 2.40, h: 0.04,
+    fill: { color: T.blue }, line: { color: T.blue } });
+
   if (slide.description) {
     s.addText(clamp(slide.description, 120), {
-      x: 2.0, y: headY + headH + 0.40, w: W - 4.0, h: 0.65,
+      x: 2.0, y: 2.40 + headH + 0.40, w: W - 4.0, h: 0.60,
       fontSize: 14, color: T.muted, fontFace: T.fontB, align: "center", wrap: true,
     });
   }
@@ -305,48 +280,50 @@ function buildSectionRose(pptx, slide, num) {
 }
 
 /**
- * Style C — FULL STRIPE on light slate
- * Slate-100 bg. Thick sky-blue left stripe. Section number in stripe. Title right.
+ * Style C — DARK NAVY, white text
+ * Deep navy bg. White headline, large and left-aligned.
+ * Blue top stripe, red accent rule under headline, ghost section number top-right.
  */
-function buildSectionSlate(pptx, slide, num) {
-  const s   = pptx.addSlide({ masterName: "SEC_SLATE" });
-  const SW  = 0.70;   // stripe width
+function buildSectionC(pptx, slide, num) {
+  const s = pptx.addSlide({ masterName: "SEC_DARK" });
 
-  // Sky left stripe
-  s.addShape("rect", { x: 0, y: 0, w: SW, h: H,
-    fill: { color: T.sky }, line: { color: T.sky } });
+  // Blue top stripe
+  s.addShape("rect", { x: 0, y: 0, w: W, h: 0.08,
+    fill: { color: T.blue }, line: { color: T.blue } });
 
-  // Section number rotated — actually PptxGenJS can't rotate text cleanly.
-  // Instead place a number horizontally just to the right of the stripe.
+  // Ghost section number — top right, very faint
   s.addText(String(num).padStart(2, "0"), {
-    x: SW + 0.30, y: 0.30, w: 2.40, h: 2.40,
-    fontSize: 130, bold: true, color: T.skyLight, fontFace: T.fontH, align: "left", valign: "top",
+    x: W - 5.0, y: -0.40, w: 4.60, h: 4.0,
+    fontSize: 260, bold: true, color: "1E3570", fontFace: T.fontH,
+    align: "right", valign: "top",
   });
 
-  // "SECTION" tiny label above number
+  // "SECTION" small label
   s.addText("SECTION", {
-    x: SW + 0.30, y: 0.28, w: 2.0, h: 0.24,
-    fontSize: 9, bold: true, color: T.sky, fontFace: T.fontB, charSpacing: 4, align: "left",
+    x: MARGIN, y: 0.48, w: 5.0, h: 0.26,
+    fontSize: 10, bold: true, color: T.blue, fontFace: T.fontB,
+    charSpacing: 3, align: "left",
   });
 
-  // Thin horizontal rule between number and title
-  s.addShape("rect", { x: SW + 0.30, y: 2.85, w: W - SW - 0.60, h: 0.04,
-    fill: { color: T.border }, line: { color: T.border } });
-
-  // Title — ink, below the rule
-  const hl    = clamp(slide.headline || "", 50);
-  const lines = estLines(hl, 34, W - SW - 0.90);
-  const headH = Math.max(0.75, lines * 0.60);
+  // Headline — white, 40pt, left, vertically centred
+  const hl    = clamp(slide.headline || "", 48);
+  const lines = estLines(hl, 40, W - MARGIN * 2 - 0.20);
+  const headH = Math.max(0.80, lines * 0.66);
+  const headY = (H - headH) / 2;
   s.addText(hl, {
-    x: SW + 0.30, y: 3.05, w: W - SW - 0.60, h: headH,
-    fontSize: 34, bold: true, color: T.ink, fontFace: T.fontH,
-    align: "left", valign: "top", wrap: true,
+    x: MARGIN, y: headY, w: W - MARGIN * 2 - 0.20, h: headH,
+    fontSize: 40, bold: true, color: T.white, fontFace: T.fontH,
+    align: "left", valign: "middle", wrap: true,
   });
+
+  // Red accent rule under headline
+  s.addShape("rect", { x: MARGIN, y: headY + headH + 0.20, w: 2.20, h: 0.05,
+    fill: { color: T.red }, line: { color: T.red } });
 
   if (slide.description) {
-    s.addText(clamp(slide.description, 130), {
-      x: SW + 0.30, y: 3.05 + headH + 0.22, w: W - SW - 0.60, h: 0.72,
-      fontSize: 15, color: T.muted, fontFace: T.fontB, align: "left", wrap: true,
+    s.addText(clamp(slide.description, 120), {
+      x: MARGIN, y: headY + headH + 0.40, w: W - MARGIN * 2, h: 0.60,
+      fontSize: 14, color: "7FA8CC", fontFace: T.fontB, align: "left", wrap: true,
     });
   }
   note(s, slide.speaker_notes);
@@ -356,7 +333,7 @@ function buildSectionSlate(pptx, slide, num) {
 // CONTENT LAYOUTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** HIGHLIGHT — hero stat or key quote */
+/** HIGHLIGHT — single dominant stat or key quote */
 function buildHighlight(pptx, slide, pageNum, total) {
   const s   = pptx.addSlide({ masterName: "CONTENT" });
   const top = addTitle(s, slide.headline || "", slide.kicker || null);
@@ -364,48 +341,50 @@ function buildHighlight(pptx, slide, pageNum, total) {
   const mainM = slide.metrics?.[0];
   if (mainM) {
     const col = ACCENTS[0];
-    // Giant value
+    // Oversized number — all the space
     s.addText(clamp(mainM.value, 12), {
-      x: MARGIN, y: top + 0.10, w: FULL_W, h: 2.10,
-      fontSize: 92, bold: true, color: col, fontFace: T.fontH, align: "center", valign: "middle",
+      x: MARGIN, y: top + 0.05, w: FULL_W, h: 2.20,
+      fontSize: 100, bold: true, color: col, fontFace: T.fontH, align: "center", valign: "middle",
     });
+    // Thin rule below number
+    s.addShape("rect", { x: W / 2 - 1.5, y: top + 2.30, w: 3.0, h: 0.04,
+      fill: { color: T.silver }, line: { color: T.silver } });
     s.addText(clamp(mainM.label, 90), {
-      x: MARGIN, y: top + 2.30, w: FULL_W, h: 0.42,
-      fontSize: 17, color: T.muted, fontFace: T.fontB, align: "center",
+      x: MARGIN, y: top + 2.42, w: FULL_W, h: 0.38,
+      fontSize: 15, color: T.muted, fontFace: T.fontB, align: "center",
     });
+    // Secondary metrics as a clean row
     const rest = (slide.metrics || []).slice(1, 4);
     if (rest.length) {
       const cw = FULL_W / rest.length;
       rest.forEach((m, i) => {
         const cx  = MARGIN + i * cw;
         const rc  = ACCENTS[(i + 1) % ACCENTS.length];
-        s.addShape("rect", { x: cx + cw * 0.15, y: top + 3.0, w: cw * 0.70, h: 0.04,
-          fill: { color: T.border }, line: { color: T.border } });
-        s.addText(clamp(m.value, 10), { x: cx, y: top + 3.14, w: cw, h: 0.50,
-          fontSize: 30, bold: true, color: rc, fontFace: T.fontH, align: "center" });
-        s.addText(clamp(m.label, 60), { x: cx, y: top + 3.68, w: cw, h: 0.34,
-          fontSize: 11, color: T.muted, fontFace: T.fontB, align: "center", wrap: true });
+        // Left border only on secondary metrics
+        s.addShape("rect", { x: cx + 0.30, y: top + 3.10, w: 0.04, h: 0.90,
+          fill: { color: rc }, line: { color: rc } });
+        s.addText(clamp(m.value, 10), { x: cx + 0.50, y: top + 3.10, w: cw - 0.60, h: 0.50,
+          fontSize: 30, bold: true, color: rc, fontFace: T.fontH, align: "left" });
+        s.addText(clamp(m.label, 60), { x: cx + 0.50, y: top + 3.62, w: cw - 0.60, h: 0.30,
+          fontSize: 11, color: T.muted, fontFace: T.fontB, align: "left", wrap: true });
       });
     }
   } else {
-    // Key quote
+    // Large quote — left rule in blue, italic text
     const txt = bt(slide.bullets?.[0]) || "";
-    // Large decorative quote mark
-    s.addText("“", {
-      x: MARGIN - 0.10, y: top - 0.15, w: 1.0, h: 1.0,
-      fontSize: 90, color: T.skyLight, fontFace: T.fontH, align: "left",
-    });
+    s.addShape("rect", { x: MARGIN, y: top + 0.15, w: 0.06, h: 1.80,
+      fill: { color: T.blue }, line: { color: T.blue } });
     s.addText(clamp(txt, 200), {
-      x: MARGIN + 0.20, y: top + 0.30, w: FULL_W - 0.20, h: 2.0,
-      fontSize: 24, color: T.ink, fontFace: T.fontH, valign: "middle", wrap: true, italic: true,
+      x: MARGIN + 0.28, y: top + 0.12, w: FULL_W - 0.28, h: 1.90,
+      fontSize: 22, color: T.ink, fontFace: T.fontH, valign: "middle", wrap: true, italic: true,
     });
-    addBullets(s, (slide.bullets || []).slice(1), MARGIN, top + 2.55, FULL_W, FOOTER_Y - (top + 2.65), { sz: 16 });
+    addBullets(s, (slide.bullets || []).slice(1), MARGIN, top + 2.18, FULL_W, FOOTER_Y - (top + 2.28), { sz: 16, gap: 10 });
   }
   chrome(s, pageNum, total);
   note(s, slide.speaker_notes);
 }
 
-/** TIMELINE — horizontal milestone cards */
+/** TIMELINE — horizontal milestones, sharp rectangular cards */
 function buildTimeline(pptx, slide, pageNum, total) {
   const s   = pptx.addSlide({ masterName: "CONTENT" });
   const top = addTitle(s, slide.headline || "", slide.kicker || null);
@@ -423,39 +402,39 @@ function buildTimeline(pptx, slide, pageNum, total) {
 
   const MAX  = Math.min(items.length, 6);
   const list = items.slice(0, MAX);
-  const bw   = (FULL_W - 0.16 * (MAX - 1)) / MAX;
-  const lineY = top + 0.52;
+  const bw   = (FULL_W - 0.14 * (MAX - 1)) / MAX;
+  const lineY = top + 0.46;
 
   // Connector line
-  s.addShape("rect", { x: MARGIN, y: lineY, w: FULL_W, h: 0.03,
-    fill: { color: T.border }, line: { color: T.border } });
+  s.addShape("rect", { x: MARGIN, y: lineY, w: FULL_W, h: 0.02,
+    fill: { color: T.silver }, line: { color: T.silver } });
 
   list.forEach((item, i) => {
-    const cx  = MARGIN + i * (bw + 0.16);
+    const cx  = MARGIN + i * (bw + 0.14);
     const col = ACCENTS[i % ACCENTS.length];
 
-    // Label pill above line
-    s.addShape("roundRect", { x: cx, y: lineY - 0.44, w: bw, h: 0.32,
-      rectRadius: 0.16, fill: { color: col }, line: { color: col } });
-    s.addText(clamp(item.label || `${i + 1}`, 20), { x: cx, y: lineY - 0.44, w: bw, h: 0.32,
+    // Label — sharp rect, coloured, above line
+    s.addShape("rect", { x: cx, y: lineY - 0.38, w: bw, h: 0.28,
+      fill: { color: col }, line: { color: col } });
+    s.addText(clamp(item.label || `${i + 1}`, 20), { x: cx, y: lineY - 0.38, w: bw, h: 0.28,
       fontSize: 10, bold: true, color: T.white, fontFace: T.fontB, align: "center", valign: "middle" });
 
-    // Dot
-    s.addShape("ellipse", { x: cx + bw / 2 - 0.11, y: lineY - 0.07, w: 0.22, h: 0.22,
+    // Dot on line
+    s.addShape("ellipse", { x: cx + bw / 2 - 0.08, y: lineY - 0.05, w: 0.16, h: 0.16,
       fill: { color: col }, line: { color: T.white, pt: 1.5 } });
 
-    // Card below
-    const cY = lineY + 0.30, cH = FOOTER_Y - cY - 0.20;
-    s.addShape("roundRect", { x: cx, y: cY, w: bw, h: cH,
-      rectRadius: 0.08, fill: { color: T.surface }, line: { color: T.border, pt: 0.5 } });
-    // Left colour accent on card
-    s.addShape("roundRect", { x: cx, y: cY + 0.14, w: 0.06, h: cH - 0.28,
-      rectRadius: 0.03, fill: { color: col }, line: { color: col } });
+    // Sharp card below
+    const cY = lineY + 0.24, cH = FOOTER_Y - cY - 0.18;
+    s.addShape("rect", { x: cx, y: cY, w: bw, h: cH,
+      fill: { color: T.surface }, line: { color: T.silver, pt: 0.5 } });
+    // Colour top border strip on card
+    s.addShape("rect", { x: cx, y: cY, w: bw, h: 0.05,
+      fill: { color: col }, line: { color: col } });
 
-    s.addText(clamp(item.title || "", 55), { x: cx + 0.18, y: cY + 0.16, w: bw - 0.26, h: cH * 0.42,
+    s.addText(clamp(item.title || "", 55), { x: cx + 0.12, y: cY + 0.14, w: bw - 0.24, h: cH * 0.44,
       fontSize: 12, bold: true, color: T.ink, fontFace: T.fontH, valign: "top", wrap: true });
     if (item.detail) {
-      s.addText(clamp(item.detail, 100), { x: cx + 0.18, y: cY + cH * 0.50, w: bw - 0.26, h: cH * 0.46,
+      s.addText(clamp(item.detail, 100), { x: cx + 0.12, y: cY + cH * 0.50, w: bw - 0.24, h: cH * 0.46,
         fontSize: 10, color: T.muted, fontFace: T.fontB, valign: "top", wrap: true });
     }
   });
@@ -463,7 +442,7 @@ function buildTimeline(pptx, slide, pageNum, total) {
   note(s, slide.speaker_notes);
 }
 
-/** TEAM CARDS — person / feature grid */
+/** TEAM CARDS — minimal cards, thin top border, sharp */
 function buildTeamCards(pptx, slide, pageNum, total) {
   const s   = pptx.addSlide({ masterName: "CONTENT" });
   const top = addTitle(s, slide.headline || "", slide.kicker || null);
@@ -482,30 +461,32 @@ function buildTeamCards(pptx, slide, pageNum, total) {
   const COLS = list.length <= 2 ? 2 : list.length === 3 ? 3 : 2;
   const ROWS = Math.ceil(list.length / COLS);
   const cW   = (FULL_W - 0.20 * (COLS - 1)) / COLS;
-  const cH   = Math.min(2.40, (FOOTER_Y - top - 0.10 - 0.20 * (ROWS - 1)) / ROWS);
+  const cH   = Math.min(2.40, (FOOTER_Y - top - 0.08 - 0.20 * (ROWS - 1)) / ROWS);
 
   list.forEach((card, i) => {
     const col  = i % COLS, row = Math.floor(i / COLS);
     const cx   = MARGIN + col * (cW + 0.20);
-    const cy   = top + 0.05 + row * (cH + 0.20);
+    const cy   = top + 0.04 + row * (cH + 0.20);
     const ac   = ACCENTS[i % ACCENTS.length];
 
-    // Card shell
-    s.addShape("roundRect", { x: cx, y: cy, w: cW, h: cH,
-      rectRadius: 0.10, fill: { color: T.white }, line: { color: T.border, pt: 0.75 } });
-    // Top colour band
-    s.addShape("roundRect", { x: cx, y: cy, w: cW, h: 0.60, rectRadius: 0.10,
-      fill: { color: ac }, line: { color: ac } });
-    s.addShape("rect", { x: cx, y: cy + 0.36, w: cW, h: 0.24,
+    // Sharp card, white, light border
+    s.addShape("rect", { x: cx, y: cy, w: cW, h: cH,
+      fill: { color: T.white }, line: { color: T.silver, pt: 0.5 } });
+    // Thin top colour border (4pt equivalent)
+    s.addShape("rect", { x: cx, y: cy, w: cW, h: 0.07,
       fill: { color: ac }, line: { color: ac } });
 
-    // Name
-    s.addText(clamp(card.name || `Item ${i + 1}`, 42), { x: cx + 0.16, y: cy + 0.08, w: cW - 0.32, h: 0.44,
-      fontSize: 14, bold: true, color: T.white, fontFace: T.fontH, valign: "middle" });
+    // Name — ink, bold
+    s.addText(clamp(card.name || `Item ${i + 1}`, 42), { x: cx + 0.18, y: cy + 0.16, w: cW - 0.36, h: 0.38,
+      fontSize: 14, bold: true, color: T.ink, fontFace: T.fontH, valign: "middle" });
 
-    // Role — in softer accent tint below band
+    // Thin separator under name
+    s.addShape("rect", { x: cx + 0.18, y: cy + 0.58, w: cW - 0.36, h: 0.02,
+      fill: { color: T.silver }, line: { color: T.silver } });
+
+    // Role — accent colour, smaller
     if (card.role) {
-      s.addText(clamp(card.role, 60), { x: cx + 0.16, y: cy + 0.66, w: cW - 0.32, h: 0.34,
+      s.addText(clamp(card.role, 60), { x: cx + 0.18, y: cy + 0.66, w: cW - 0.36, h: 0.30,
         fontSize: 10, bold: true, color: ac, fontFace: T.fontB, valign: "middle" });
     }
 
@@ -514,11 +495,11 @@ function buildTeamCards(pptx, slide, pageNum, total) {
     if (pts.length) {
       const runs = pts.slice(0, 4).map(p => ({
         text: bt(p),
-        options: { bullet: { code: "25AA", indent: 14 }, color: T.body, breakLine: true, paraSpaceAfter: 4 },
+        options: { bullet: { code: "2013", indent: 14 }, color: T.body, breakLine: true, paraSpaceAfter: 3 },
       }));
       s.addText(runs, {
-        x: cx + 0.16, y: cy + (card.role ? 1.08 : 0.74), w: cW - 0.32,
-        h: cH - (card.role ? 1.20 : 0.86),
+        x: cx + 0.18, y: cy + (card.role ? 1.02 : 0.68), w: cW - 0.36,
+        h: cH - (card.role ? 1.14 : 0.80),
         fontSize: 11, fontFace: T.fontB, color: T.body, valign: "top", wrap: true,
       });
     }
@@ -527,23 +508,23 @@ function buildTeamCards(pptx, slide, pageNum, total) {
   note(s, slide.speaker_notes);
 }
 
-/** TWO COLUMN — dual bullet columns */
+/** TWO COLUMN — clean, with a sharp divider */
 function buildTwoColumn(pptx, slide, pageNum, total) {
   const s     = pptx.addSlide({ masterName: "CONTENT" });
   const top   = addTitle(s, slide.headline || "", slide.kicker || null);
   const contH = FOOTER_Y - top - 0.12;
-  const cw    = FULL_W / 2 - 0.18;
+  const cw    = FULL_W / 2 - 0.16;
   const all   = (slide.bullets || []).filter(b => bt(b));
   const mid   = Math.ceil(all.length / 2);
-  addBullets(s, all.slice(0, mid), MARGIN,             top, cw, contH, { sz: 16, gap: 11 });
-  addBullets(s, all.slice(mid),    MARGIN + cw + 0.36, top, cw, contH, { sz: 16, gap: 11 });
-  s.addShape("rect", { x: MARGIN + cw + 0.16, y: top + 0.08, w: 0.04, h: contH - 0.16,
-    fill: { color: T.border }, line: { color: T.border } });
+  addBullets(s, all.slice(0, mid), MARGIN,             top, cw, contH, { sz: 16, gap: 10 });
+  addBullets(s, all.slice(mid),    MARGIN + cw + 0.32, top, cw, contH, { sz: 16, gap: 10 });
+  s.addShape("rect", { x: MARGIN + cw + 0.14, y: top + 0.06, w: 0.04, h: contH - 0.12,
+    fill: { color: T.silver }, line: { color: T.silver } });
   chrome(s, pageNum, total);
   note(s, slide.speaker_notes);
 }
 
-/** DEFAULT — bullets left + optional right panel */
+/** DEFAULT — bullets + optional right panel */
 function buildDefault(pptx, slide, pageNum, total) {
   const s     = pptx.addSlide({ masterName: "CONTENT" });
   const top   = addTitle(s, slide.headline || "", slide.kicker || null);
@@ -552,17 +533,18 @@ function buildDefault(pptx, slide, pageNum, total) {
   const hasMetrics = !hasDiag && Array.isArray(slide.metrics) && slide.metrics.length > 0;
   const hasRight   = hasDiag || hasMetrics;
   const lw  = hasRight ? 7.10 : FULL_W;
-  const rx  = MARGIN + lw + 0.28, rw = W - rx - MARGIN;
+  const rx  = MARGIN + lw + 0.26, rw = W - rx - MARGIN;
 
   addBullets(s, slide.bullets, MARGIN, top, lw, contH, {
     sz: slide.type === "insights" ? 19 : 17,
-    gap: slide.type === "insights" ? 26 : 12,
+    gap: slide.type === "insights" ? 24 : 11,
     numbered: slide.type === "insights",
     max: slide.type === "insights" ? 3 : 6,
     valign: slide.type === "insights" ? "middle" : "top",
   });
+
   if (hasDiag)         embedDiagram(s, slide.diagram, rx, top + 0.05, rw, contH - 0.10);
-  else if (hasMetrics) statCards(s, slide.metrics, rx, top + 0.08, rw, contH - 0.16);
+  else if (hasMetrics) statCards(s, slide.metrics, rx, top + 0.06, rw, contH - 0.12);
 
   chrome(s, pageNum, total);
   note(s, slide.speaker_notes);
@@ -578,21 +560,23 @@ function buildCover(pptx, slide, opts) {
     });
     const sub = slide.subtitle || opts?.subtitle || "";
     if (sub) s.addText(clamp(sub, 110), { x: 0.74, y: 3.55, w: 7.80, h: 0.55,
-      fontSize: 16, color: "C7D6E5", fontFace: T.fontB, align: "left", wrap: true });
+      fontSize: 15, color: "C7D6E5", fontFace: T.fontB, align: "left", wrap: true });
   } else {
-    // Fallback: dark bg + sky accent bar at bottom, white title
-    s.addShape("rect", { x: 0, y: H - 1.20, w: W, h: 1.20,
-      fill: { color: T.sky }, line: { color: T.sky } });
-    s.addShape("rect", { x: 0, y: H - 1.20, w: W * 0.35, h: 1.20,
-      fill: { color: T.skyDk }, line: { color: T.skyDk } });
+    // Fallback: navy, blue accent bar bottom, white title left-aligned
+    s.addShape("rect", { x: 0, y: H - 0.10, w: W, h: 0.10,
+      fill: { color: T.blue }, line: { color: T.blue } });
+    s.addShape("rect", { x: 0, y: H - 0.10, w: 3.0, h: 0.10,
+      fill: { color: T.red }, line: { color: T.red } });
     const title = clamp(opts?.deckTitle || slide.headline || "Presentation", 50);
-    const lines = estLines(title, 42, W - 2.0);
-    s.addText(title, { x: 1.0, y: 1.60, w: W - 2.0, h: lines * 0.76 + 0.2,
-      fontSize: 42, bold: true, color: T.white, fontFace: T.fontH, align: "left", valign: "middle", wrap: true });
+    const lines = estLines(title, 44, W - 2.0);
+    s.addText(title, { x: 1.0, y: 1.80, w: W - 2.0, h: lines * 0.80 + 0.2,
+      fontSize: 44, bold: true, color: T.white, fontFace: T.fontH, align: "left", valign: "middle", wrap: true });
+    // Thin blue rule under title
+    s.addShape("rect", { x: 1.0, y: 1.80 + lines * 0.80 + 0.40, w: 2.0, h: 0.05,
+      fill: { color: T.blue }, line: { color: T.blue } });
     const sub = slide.subtitle || opts?.subtitle || "";
-    if (sub) s.addText(clamp(sub, 100), { x: 1.0, y: H - 0.95, w: W - 2.0, h: 0.50,
-      fontSize: 17, bold: true, color: T.white, fontFace: T.fontB, align: "left" });
-    softBar(slide);
+    if (sub) s.addText(clamp(sub, 100), { x: 1.0, y: 1.80 + lines * 0.80 + 0.62, w: W - 2.0, h: 0.48,
+      fontSize: 15, color: "7FA8CC", fontFace: T.fontB, align: "left" });
   }
   note(s, slide.speaker_notes);
 }
@@ -607,10 +591,10 @@ function buildReferences(pptx, slide, pageNum, total) {
     const chunk = refs.slice(p * PER, (p + 1) * PER), runs = [];
     chunk.forEach((b, i) => {
       const n = b.ref_num != null ? `[${b.ref_num}]  ` : `${i + 1}.  `;
-      runs.push({ text: n, options: { bold: true, color: T.sky, bullet: { code: "25AA", indent: 18 } } });
+      runs.push({ text: n, options: { bold: true, color: T.blue, bullet: { code: "2013", indent: 18 } } });
       runs.push({ text: clamp(b.text || bt(b), 120), options: { color: T.body, breakLine: !b.url } });
       if (b.url) {
-        runs.push({ text: clamp(b.url, 130), options: { color: T.sky, fontSize: 10, hyperlink: { url: b.url }, breakLine: true, paraSpaceAfter: 8 } });
+        runs.push({ text: clamp(b.url, 130), options: { color: T.blue, fontSize: 10, hyperlink: { url: b.url }, breakLine: true, paraSpaceAfter: 8 } });
       } else {
         runs[runs.length - 1].options.breakLine = true;
         runs[runs.length - 1].options.paraSpaceAfter = 8;
@@ -642,7 +626,7 @@ export async function renderDeck(deck, outputPath, opts = {}) {
   const total    = slides.length + refExtra;
   let page = 0, secNum = 0;
 
-  const SEC = [buildSectionBlue, buildSectionRose, buildSectionSlate];
+  const SEC = [buildSectionA, buildSectionB, buildSectionC];
 
   for (const slide of slides) {
     switch (slide.type) {
