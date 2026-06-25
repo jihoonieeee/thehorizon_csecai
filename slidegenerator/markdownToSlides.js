@@ -58,30 +58,68 @@ function planUser(text) {
 
 const FILL_SYSTEM = `You are writing ONE slide for a professional presentation. Return ONLY valid JSON — no markdown fences.
 
-Output format:
+━━ LAYOUT SELECTION ━━
+Choose the best layout for the content:
+
+  "default"     Standard: headline + 3-5 bullets, optional stat cards right. Use for most slides.
+  "highlight"   Hero stat or key quote takes centre stage. Use when there is one dominant number or single powerful statement. Provide metrics[] for numbers.
+  "timeline"    Horizontal milestone boxes. Use for roadmaps, dated plans, sequential steps. Provide timeline_items[].
+  "team_cards"  Grid of person or feature cards. Use for team bios, comparisons, feature lists. Provide cards[].
+  "two_column"  Two equal bullet columns. Use when there are 6+ bullets of similar weight.
+
+━━ OUTPUT FORMAT (include only the fields relevant to your chosen layout) ━━
+
+For layout "default":
 {
-  "headline": "The key claim (≤12 words, declarative, concrete)",
-  "bullets": [
-    { "text": "Key point (≤20 words)", "bullet_type": "claim" },
-    { "text": "What it means", "bullet_type": "implication" },
-    { "text": "Action to take", "bullet_type": "recommendation" }
-  ],
-  "speaker_notes": "2-3 sentences the presenter can say to add context",
-  "metrics": [{ "value": "45%", "label": "description of what this number means" }],
+  "layout": "default",
+  "headline": "...",
+  "bullets": [{ "text": "...", "bullet_type": "claim|data_point|implication|recommendation" }],
+  "speaker_notes": "...",
+  "metrics": [{ "value": "45%", "label": "context" }],
   "diagram_hint": false
 }
 
-bullet_type values: "claim" (fact/observation), "data_point" (number-backed fact), "implication" (what it means), "recommendation" (action to take).
+For layout "highlight":
+{
+  "layout": "highlight",
+  "headline": "...",
+  "bullets": [{ "text": "One key statement", "bullet_type": "claim" }],
+  "metrics": [{ "value": "340%", "label": "what this number means" }],
+  "speaker_notes": "..."
+}
 
-metrics: OPTIONAL. Only when 2–4 concrete numbers are worth visual callout. Omit entirely otherwise.
+For layout "timeline":
+{
+  "layout": "timeline",
+  "headline": "...",
+  "timeline_items": [
+    { "label": "Jul 2026", "title": "Milestone name (≤6 words)", "detail": "One line detail" }
+  ],
+  "speaker_notes": "..."
+}
 
-diagram_hint: true ONLY when the slide describes a multi-step process, workflow, org structure, timeline, or entity relationships that would read better as a visual diagram than as bullets. Default false.
+For layout "team_cards":
+{
+  "layout": "team_cards",
+  "headline": "...",
+  "cards": [
+    { "name": "Person Name", "role": "Title / Role", "points": ["key point 1", "key point 2"] }
+  ],
+  "speaker_notes": "..."
+}
 
-Rules:
-- Headline = the conclusion/claim, not the topic. BAD: "AI Security Trends". GOOD: "Prompt injection attacks tripled in six months".
-- Bullets support the headline. Lead with "claim" or "data_point", follow with "implication", end with "recommendation" if there's an action.
-- ≤20 words per bullet. Plain English. No jargon without explanation.
-- speaker_notes: nuance, caveats, what to watch — not a restatement of the slide.
+For layout "two_column":
+{
+  "layout": "two_column",
+  "headline": "...",
+  "bullets": [{ "text": "...", "bullet_type": "claim" }],
+  "speaker_notes": "..."
+}
+
+━━ RULES ━━
+- Headline = the conclusion/claim, ≤12 words. BAD: "Team Structure". GOOD: "Four specialist teams cover the full intelligence lifecycle".
+- metrics: omit entirely when layout is not "highlight" or "default" with numbers.
+- diagram_hint: true only for "default" slides describing multi-step processes or entity relationships. Default false.
 - Return ONLY valid JSON.`;
 
 function fillUser(plan, sourceText) {
@@ -96,43 +134,77 @@ ${sourceText}`;
 
 const ONE_SHOT_SYSTEM = `You are a professional presentation designer. Convert the given text or markdown into a complete slide deck. Return ONLY valid JSON — no markdown fences, no prose.
 
-Output format:
+━━ SLIDE TYPES ━━
+  cover        — first slide only, no other fields needed
+  section_intro — chapter divider; include "headline" and "description" (one sentence)
+  content      — all substantive slides; choose the best layout (see below)
+
+━━ CONTENT LAYOUTS — pick the best one per slide ━━
+  "default"    — headline + 3-5 bullets + optional metrics cards. Use for most slides.
+  "highlight"  — one dominant stat or quote. Use metrics[] for numbers, bullets[0] for quotes.
+  "timeline"   — horizontal milestones for roadmaps / dated plans. Use timeline_items[].
+  "team_cards" — person/feature cards in a grid. Use cards[].
+  "two_column" — 6+ bullets split into two equal columns.
+
+━━ OUTPUT FORMAT ━━
 {
   "title": "Deck title (≤8 words)",
   "subtitle": "One-line context or date",
   "slides": [
     { "type": "cover" },
-    { "type": "section_intro", "headline": "Section Name", "description": "One sentence what this section covers" },
+    { "type": "section_intro", "headline": "Section Name", "description": "One sentence" },
     {
       "type": "content",
-      "headline": "The key claim (≤12 words)",
-      "bullets": [
-        { "text": "Key point", "bullet_type": "claim" },
-        { "text": "What it means", "bullet_type": "implication" },
-        { "text": "What to do", "bullet_type": "recommendation" }
-      ],
-      "speaker_notes": "Presenter nuance — not a restatement.",
+      "layout": "default",
+      "headline": "The key claim (≤12 words, declarative — not a topic label)",
+      "bullets": [{ "text": "...", "bullet_type": "claim" }],
+      "speaker_notes": "Presenter nuance.",
       "metrics": [{ "value": "45%", "label": "context" }],
       "diagram_hint": false
+    },
+    {
+      "type": "content",
+      "layout": "timeline",
+      "headline": "...",
+      "timeline_items": [
+        { "label": "Jul 2026", "title": "Milestone (≤6 words)", "detail": "One line" }
+      ],
+      "speaker_notes": "..."
+    },
+    {
+      "type": "content",
+      "layout": "team_cards",
+      "headline": "...",
+      "cards": [
+        { "name": "Person Name", "role": "Title", "points": ["key point 1", "key point 2"] }
+      ],
+      "speaker_notes": "..."
+    },
+    {
+      "type": "content",
+      "layout": "highlight",
+      "headline": "...",
+      "metrics": [{ "value": "340%", "label": "what this number means" }],
+      "bullets": [{ "text": "Supporting context", "bullet_type": "implication" }],
+      "speaker_notes": "..."
     }
   ]
 }
 
-Rules:
-- First slide: type "cover" (no other fields needed).
-- Use "section_intro" sparingly for genuine topic shifts. Include "description" (one sentence) for context.
-- bullet_type ∈ { "claim", "data_point", "implication", "recommendation" }
-- metrics is OPTIONAL — only when 2–4 concrete numbers are worth visual callout. Omit entirely otherwise.
-- diagram_hint: set to true ONLY when the slide describes a multi-step process, workflow, timeline, or relationship between ≥2 entities that would read better as a diagram than as bullets. Default false.
-- 8–18 slides total. Plain English. Declarative headlines (the conclusion, not the topic).
+━━ RULES ━━
+- First slide must be type "cover".
+- section_intro: use sparingly — only when the topic genuinely shifts.
+- Headline = the CONCLUSION, not the topic. "AI Security Trends" is bad; "Prompt injection attacks tripled in six months" is good.
+- diagram_hint: true only for "default" slides about multi-step processes or entity relationships. Default false.
+- 8–18 slides total. Choose the layout that best communicates the content — don't always default to bullets.
 - Return ONLY valid JSON.`;
 
 // ── LLM caller ────────────────────────────────────────────────────────────────
 
-async function callClaude(client, system, user, model = DEFAULT_MODEL) {
+async function callClaude(client, system, user, model = DEFAULT_MODEL, maxTokens = 8192) {
   const msg = await client.messages.create({
     model,
-    max_tokens: 4096,
+    max_tokens: maxTokens,
     system,
     messages: [{ role: "user", content: user }],
   });
@@ -237,6 +309,6 @@ export async function convertTwoStep(text, opts = {}) {
  */
 export async function markdownToSlides(text, opts = {}) {
   const wordCount = text.split(/\s+/).length;
-  const useTwoStep = opts.twoStep || wordCount > 1500;
+  const useTwoStep = opts.twoStep || wordCount > 800;
   return useTwoStep ? convertTwoStep(text, opts) : convertInOneShot(text, opts);
 }
