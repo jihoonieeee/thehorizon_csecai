@@ -39,6 +39,7 @@ import {
   deriveConfidence,
   maturityShortLine,
 } from "../lib/dashboard/evidenceMaturity.js";
+import { persistCallCost, setCurrentRunId } from "../lib/llm/usagePersistence.js";
 
 const args     = process.argv.slice(2);
 const getArg   = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i+1] ? args[i+1] : d; };
@@ -73,11 +74,15 @@ const CATEGORIES = [
 const tagLabel = (id) => getTag(id)?.label || id;
 
 // ── Generic Anthropic JSON call ────────────────────────────────────────────────
+// This script calls the Anthropic API directly (not via llmRouter), so it must
+// persist its own cost events — otherwise dashboard-insight spend is invisible in
+// llm_cost_log. Every call logs its token usage under a `task` context.
 
-async function callAnthropic({ system, user, model, maxTokens = 1200 }) {
+async function callAnthropic({ system, user, model, maxTokens = 1200, task = "dashboard_insight" }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
 
+  const usedModel = model || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     signal: AbortSignal.timeout(60000),
@@ -87,7 +92,7 @@ async function callAnthropic({ system, user, model, maxTokens = 1200 }) {
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model:      model || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
+      model:      usedModel,
       max_tokens: maxTokens,
       system,
       messages: [{ role: "user", content: user }],
@@ -99,6 +104,18 @@ async function callAnthropic({ system, user, model, maxTokens = 1200 }) {
     throw new Error(`Anthropic ${res.status}: ${t.slice(0, 200)}`);
   }
   const data = await res.json();
+
+  // Persist cost (fire-and-forget; never let logging break generation).
+  try {
+    persistCallCost({
+      task,
+      provider:     "anthropic",
+      model:        usedModel,
+      inputTokens:  data.usage?.input_tokens  || 0,
+      outputTokens: data.usage?.output_tokens || 0,
+    });
+  } catch { /* ignore */ }
+
   const text = data.content?.[0]?.text?.trim() || "";
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error(`No JSON in response: ${text.slice(0, 160)}`);
@@ -114,15 +131,17 @@ Do TWO things:
 2. Cluster the findings into 2-5 THEMES — recurring patterns that span multiple findings. A theme is a pattern, not a single paper.
 
 Do NOT write conclusions or implications yet. Just findings and the themes they form.
+Keep each finding concise (under 20 words) — compress, do not echo source text verbatim.
 
 Return ONLY valid JSON:
 {"themes": [{"theme": "short theme name", "findings": ["finding", "finding", ...]}]}`;
 
-function buildThemesPrompt(catLabel, windowLabel, summaries) {
-  const lines = summaries.slice(0, 24).map((s, i) => `${i + 1}. ${s}`).join("\n");
+function buildThemesPrompt(catLabel, windowLabel, findings) {
+  // findings are already capped upstream (composeCategoryFindings); show all.
+  const lines = findings.map((s, i) => `${i + 1}. ${s}`).join("\n");
   return `Category: ${catLabel}
 Period: ${windowLabel}
-Sources (${summaries.length} total${summaries.length > 24 ? ", showing 24" : ""}):
+Source findings (${findings.length} grounded facts / summaries spanning the period's sources):
 
 ${lines}
 
@@ -159,7 +178,13 @@ For EACH insight, produce these fields:
 
 CALIBRATION (critical): You are told the EVIDENCE MATURITY for this category. If the evidence is research/vulnerability-only with no observed exploitation, you MUST NOT claim activity is "confirmed", "operational", "at scale", or "in the wild". Frame as demonstrated capability and shifting assumptions, not active campaigns.
 
-Also produce a one-sentence "assessment": the current overall posture for this category (used for period-over-period comparison), e.g. "Prompt injection is escalating from research into production agent systems."
+Also produce a one-sentence "assessment": the current overall posture for this category (used for period-over-period comparison). The assessment is bound by the SAME evidence-maturity calibration as the insights — its verb must match the evidence:
+  - research/vulnerability-only (no observed exploitation) → describe demonstrated capability and shifting assumptions. Use verbs like "research is demonstrating", "capability is maturing", "assumptions are weakening". Do NOT say "escalating into production", "moving in-the-wild", "being weaponised", or "confirmed in operations".
+  - exploitation/incidents/operational evidence present → you MAY describe escalation or operational use, proportional to that evidence.
+Examples calibrated to maturity:
+  - research-heavy:  "LLM jailbreak capability is maturing in research faster than guardrail designs can absorb."
+  - operational:     "AI-enabled deepfake fraud has crossed from demonstration into confirmed financial-loss incidents."
+Pick the verb that the stated maturity supports — an overreaching assessment will be rejected downstream.
 
 Write 2-4 insights for rich periods; 1-2 for thin ones. Never pad.
 
@@ -194,8 +219,9 @@ KEEP (verdict "ok") if it states what changed + a broken assumption or operation
 
 Return ONLY JSON: {"verdicts":[{"index":0,"verdict":"ok"|"summary"|"overreach","reason":"..."|null}]}`;
 
-async function qaInsights(insights, maturity, catLabel) {
-  if (!process.env.ANTHROPIC_API_KEY) return insights;
+async function qaInsights(insights, maturity, catLabel, status = {}) {
+  status.ran = false;
+  if (!process.env.ANTHROPIC_API_KEY) { status.reason = "no_api_key"; return insights; }
   const user = `Category: ${catLabel}
 Evidence maturity: ${maturityShortLine(maturity)} (total ${maturity.total})
 
@@ -207,13 +233,15 @@ Audit each. Return a verdict for every index.`;
   let verdicts;
   try {
     const out = await callAnthropic({
-      system: QA_SYSTEM, user,
+      system: QA_SYSTEM, user, task: "dashboard_insight_qa",
       model: process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
       maxTokens: 700,
     });
     verdicts = out.verdicts;
     if (!Array.isArray(verdicts)) throw new Error("no verdicts");
+    status.ran = true;
   } catch (err) {
+    status.reason = "error";
     console.log(`  [QA] check failed (${err.message.slice(0, 50)}) — keeping all`);
     return insights;
   }
@@ -229,7 +257,7 @@ Audit each. Return a verdict for every index.`;
 
 // ── Source loading ─────────────────────────────────────────────────────────────
 
-const SRC_SELECT = "main_category,short_summary,analyst_brief,intelligence,tags,source_type,title,url,publisher,date_published";
+const SRC_SELECT = "id,main_category,short_summary,analyst_brief,intelligence,tags,source_type,title,url,publisher,date_published";
 
 // Pipeline-enriched sources (via sourceEnrichmentStore) leave the top-level
 // short_summary/analyst_brief columns empty and stash the prose under
@@ -282,6 +310,84 @@ function bucketSources(rows) {
   return { byCategory, tagCounts, tagSources, catCounts, catMaturitySrcs };
 }
 
+// ── Evidence-backed findings (Layer-5 evidence table → insight input) ──────────
+// The dashboard previously fed insights from per-source summaries only, which
+// covered ~16% of the corpus. The `evidence` table holds grounded atomic facts
+// for far more sources; using those as Stage-A input both widens coverage and
+// improves grounding. Per-source summaries remain a fallback for sources that
+// have no evidence yet (so nothing regresses).
+
+const SPEC_RANK = { high: 3, medium: 2, low: 1 };
+
+// Load Layer-5 evidence rows for a set of source IDs. PostgREST caps .in() URL
+// length, so chunk the IDs; paginate each chunk past the 1000-row cap.
+async function loadWindowEvidence(sourceIds) {
+  const out = [];
+  const CHUNK = 150;
+  for (let i = 0; i < sourceIds.length; i += CHUNK) {
+    const ids = sourceIds.slice(i, i + CHUNK);
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabase
+        .from("evidence")
+        .select("source_id,fact,quote_grounded,specificity")
+        .in("source_id", ids)
+        .range(from, from + 999);
+      if (error) { console.log(`  [evidence load] ${error.message.slice(0, 60)}`); break; }
+      if (!data?.length) break;
+      out.push(...data);
+      if (data.length < 1000) break;
+    }
+  }
+  return out;
+}
+
+// Build the Stage-A input for one category: grounded evidence facts spread
+// round-robin across sources (breadth — every source contributes before any
+// source contributes a second fact), then per-source summaries as fallback for
+// sources with no evidence. No fuzzy importance ranking — within a single source
+// facts are ordered by the discrete quote_grounded + specificity flags only.
+function composeCategoryFindings(catRows, evItems = [], cap = 40) {
+  const bySource = new Map();
+  for (const e of evItems) {
+    const f = (e.fact || "").trim();
+    if (f.length < 15) continue;
+    if (!bySource.has(e.source_id)) bySource.set(e.source_id, []);
+    bySource.get(e.source_id).push(e);
+  }
+  for (const arr of bySource.values()) {
+    arr.sort((a, b) =>
+      (b.quote_grounded ? 1 : 0) - (a.quote_grounded ? 1 : 0) ||
+      (SPEC_RANK[b.specificity] || 0) - (SPEC_RANK[a.specificity] || 0));
+  }
+
+  const findings = [];
+  const queues = [...bySource.values()];
+  let i = 0, guard = 0;
+  const guardMax = cap * (queues.length + 1) + 20;
+  while (findings.length < cap && queues.some(q => q.length) && guard++ < guardMax) {
+    const q = queues[i++ % queues.length];
+    if (q.length) findings.push(q.shift().fact.trim());
+  }
+  const fromEvidence = findings.length;
+  const covered = new Set(bySource.keys());
+
+  if (findings.length < cap) {
+    for (const r of catRows) {
+      if (findings.length >= cap) break;
+      if (covered.has(r.id)) continue;
+      const t = summaryText(r);
+      if (t.length > 20) { findings.push(t); covered.add(r.id); }
+    }
+  }
+
+  return {
+    findings,
+    fromEvidence,
+    fromSummary: findings.length - fromEvidence,
+    evidenceSources: bySource.size,
+  };
+}
+
 // ── Generic second-model QA for any generated statements ───────────────────────
 // Returns a boolean[] (true = grounded/keep) aligned to `statements`.
 
@@ -293,8 +399,53 @@ For each statement return a verdict:
 
 Return ONLY JSON: {"verdicts":[{"index":0,"verdict":"ok"|"reject","reason":"..."|null}]}`;
 
-async function qaStatements(statements, evidenceText, kind = "statement") {
-  if (!statements.length || !process.env.ANTHROPIC_API_KEY) return statements.map(() => true);
+// Assessment QA — calibrated for a ONE-SENTENCE category posture (a generalization),
+// not a factual statement. An assessment is SUPPOSED to be broad; we only reject
+// maturity-overreach or a posture the validated insights don't support.
+const ASSESS_QA_SYSTEM = `You verify a one-sentence category ASSESSMENT (the overall threat posture for a category this period).
+
+An assessment is a GENERALIZATION that rolls up the category's validated insights. Do NOT reject it for being broad, high-level, or for not naming specific sources — that is its job.
+
+Return verdict "ok" unless one of these is true:
+- "overreach": it claims confirmed / operational / in-the-wild / at-scale activity when the stated evidence maturity is research- or vulnerability-only.
+- "unsupported": it asserts a posture or direction the validated insights below do not support (e.g. claims escalation the insights never indicate).
+
+Return ONLY JSON: {"verdict":"ok"|"overreach"|"unsupported","reason":"..."|null}`;
+
+async function qaAssessment(assessment, insights, maturity, status = {}) {
+  status.ran = false;
+  if (!assessment) { status.reason = "empty"; return true; }
+  if (!process.env.ANTHROPIC_API_KEY) { status.reason = "no_api_key"; return true; }
+  const user = `Evidence maturity: ${maturityShortLine(maturity)} (total ${maturity.total})
+
+VALIDATED INSIGHTS (already QA-passed — the assessment must be consistent with these):
+${insights.map((p, i) => `[${i}] ${p.insight}`).join("\n")}
+
+ASSESSMENT to verify:
+"${assessment}"
+
+Return the verdict.`;
+  try {
+    const out = await callAnthropic({
+      system: ASSESS_QA_SYSTEM, user, task: "dashboard_assessment_qa",
+      model: process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
+      maxTokens: 300,
+    });
+    status.ran = true;
+    const verdict = out.verdict || "ok";
+    if (verdict !== "ok") console.log(`     [QA] assessment ${verdict.toUpperCase()}: ${(out.reason || "").slice(0, 70)}`);
+    return verdict === "ok";
+  } catch (err) {
+    status.reason = "error";
+    console.log(`     [QA:assessment] check failed (${err.message.slice(0, 40)}) — keeping`);
+    return true;
+  }
+}
+
+async function qaStatements(statements, evidenceText, kind = "statement", status = {}) {
+  status.ran = false;
+  if (!statements.length) { status.reason = "empty"; return statements.map(() => true); }
+  if (!process.env.ANTHROPIC_API_KEY) { status.reason = "no_api_key"; return statements.map(() => true); }
   const user = `Type: ${kind}
 
 STATEMENTS:
@@ -306,11 +457,12 @@ ${evidenceText}
 Verdict for every index.`;
   try {
     const out = await callAnthropic({
-      system: STMT_QA_SYSTEM, user,
+      system: STMT_QA_SYSTEM, user, task: "dashboard_statement_qa",
       model: process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
       maxTokens: 700,
     });
     const verdicts = out.verdicts || [];
+    status.ran = true;
     return statements.map((_, i) => {
       const v = verdicts.find(v => v.index === i);
       const keep = !v || v.verdict === "ok";
@@ -318,6 +470,7 @@ Verdict for every index.`;
       return keep;
     });
   } catch (err) {
+    status.reason = "error";
     console.log(`  [QA:${kind}] check failed (${err.message.slice(0, 40)}) — keeping all`);
     return statements.map(() => true);
   }
@@ -374,7 +527,7 @@ async function enrichEmergingSignals(signals, currTagSources) {
   let analyses = [];
   try {
     const out = await callAnthropic({
-      system: SIGNAL_SYSTEM,
+      system: SIGNAL_SYSTEM, task: "dashboard_emerging_signals",
       user: `Write analysis for each emerging signal.\n\n${blocks}`,
       maxTokens: 1200,
     });
@@ -428,7 +581,7 @@ async function computeAssessmentChanges(currAssess, prevAssess, maturityDeltas) 
   let changes = [];
   try {
     const out = await callAnthropic({
-      system: ASSESS_CHANGE_SYSTEM,
+      system: ASSESS_CHANGE_SYSTEM, task: "dashboard_assessment_changes",
       user: `Compare the periods. Report only material changes, terse.\n\n${user}`,
       maxTokens: 700,
     });
@@ -451,23 +604,25 @@ async function computeAssessmentChanges(currAssess, prevAssess, maturityDeltas) 
 
 // ── Per-category generation ────────────────────────────────────────────────────
 
-async function generateCategory(cat, windowLabel, summaries, maturitySrcs) {
+async function generateCategory(cat, windowLabel, findings, maturitySrcs) {
   const maturity   = computeEvidenceMaturity(maturitySrcs);
   const confidence = deriveConfidence(maturity);
   const totalCount = maturitySrcs.length; // canonical = all validated sources (matches the card)
 
-  // Stage A: findings → themes
+  // Stage A: findings → themes. maxTokens scales with input — 40 evidence facts
+  // produce a longer themes payload than the old 24 summaries; too low truncates
+  // the JSON mid-array.
   const themesOut = await callAnthropic({
-    system: THEMES_SYSTEM,
-    user: buildThemesPrompt(cat.label, windowLabel, summaries),
-    maxTokens: 1400,
+    system: THEMES_SYSTEM, task: "dashboard_themes",
+    user: buildThemesPrompt(cat.label, windowLabel, findings),
+    maxTokens: 3000,
   });
   const themes = Array.isArray(themesOut.themes) ? themesOut.themes : [];
   if (!themes.length) throw new Error("no themes extracted");
 
   // Stage B: themes → structured insights
   const out = await callAnthropic({
-    system: INSIGHTS_SYSTEM,
+    system: INSIGHTS_SYSTEM, task: "dashboard_insights",
     user: buildInsightsPrompt(cat.label, windowLabel, themes, maturity, confidence),
     maxTokens: 1600,
   });
@@ -487,12 +642,39 @@ async function generateCategory(cat, windowLabel, summaries, maturitySrcs) {
   if (!insights.length) throw new Error("no insights produced");
 
   const beforeQa = insights.length;
-  insights = await qaInsights(insights, maturity, cat.label);
+  const insightQa = {};
+  insights = await qaInsights(insights, maturity, cat.label, insightQa);
   if (!insights.length) throw new Error(`all ${beforeQa} insights removed by QA`);
+
+  // QA the category ASSESSMENT sentence itself — it drives period-over-period
+  // comparison, so it must be grounded too. (Previously stored un-audited.)
+  let assessment = (out.assessment || "").trim() || null;
+  let assessment_qa = "not_generated";
+  if (assessment) {
+    const aStatus = {};
+    // Ground the assessment against the already-validated insights (+ maturity),
+    // using the calibrated assessment check that permits generalization.
+    const keepAssessment = await qaAssessment(assessment, insights, maturity, aStatus);
+    if (!aStatus.ran) {
+      assessment_qa = "degraded";              // QA could not run (keyless/error)
+    } else if (!keepAssessment) {
+      assessment_qa = "rejected";
+      assessment = null;                        // don't let an overreaching posture drive comparison
+    } else {
+      assessment_qa = "passed";
+    }
+  }
+
+  // Roll up an overall QA status the dashboard can display honestly.
+  const qa_status = insightQa.ran
+    ? "passed"
+    : (insightQa.reason === "no_api_key" ? "skipped_no_key" : "degraded");
 
   return {
     insights,
-    assessment:        (out.assessment || "").trim() || null,
+    assessment,
+    assessment_qa,
+    qa_status,
     confidence:        confidence.level,
     confidence_reason: confidence.reason,
     evidence_maturity: maturity,
@@ -505,6 +687,7 @@ async function generateCategory(cat, windowLabel, summaries, maturitySrcs) {
 async function main() {
   const now    = NOW;
   const period = getCompletedPeriodWindow(WINDOW, now);
+  setCurrentRunId(`dash-${WINDOW}-${period.key}`);   // attribute cost rows to this run
   // Previous period of the same window type (for comparison): pick a date inside
   // the current period and ask the helper for the period completed before it.
   const prevPeriod = getCompletedPeriodWindow(WINDOW, new Date(`${period.date_from}T12:00:00Z`));
@@ -523,16 +706,32 @@ async function main() {
   const currRows = await loadWindowSources(period.date_from, period.date_to);
   const curr     = bucketSources(currRows);
 
+  // Load Layer-5 evidence for the window's sources and bucket facts by the
+  // source's category (#1). This is the primary Stage-A input; summaries fall back.
+  const evRows = await loadWindowEvidence(currRows.map(r => r.id));
+  const catOf  = new Map(currRows.map(r => [r.id, r.main_category]));
+  const evidenceByCat = {};
+  for (const c of CATEGORIES) evidenceByCat[c.key] = [];
+  for (const e of evRows) {
+    const cat = catOf.get(e.source_id);
+    if (evidenceByCat[cat]) evidenceByCat[cat].push(e);
+  }
+  console.log(`  Evidence: ${evRows.length} facts across ${new Set(evRows.map(e => e.source_id)).size} sources\n`);
+
   let generated = 0, skipped = 0;
   const currAssess = {};
   const currMaturity = {};
 
   for (const cat of CATEGORIES) {
-    const summaries  = curr.byCategory[cat.key];
     const mSrcs      = curr.catMaturitySrcs[cat.key];
     const maturity   = computeEvidenceMaturity(mSrcs);
     const confidence = deriveConfidence(maturity);
     currMaturity[cat.key] = maturity;
+
+    // Compose findings: evidence facts (round-robin across sources) + summary fallback.
+    const catRows = currRows.filter(r => r.main_category === cat.key);
+    const { findings, fromEvidence, fromSummary, evidenceSources } =
+      composeCategoryFindings(catRows, evidenceByCat[cat.key], 40);
 
     if (!FORCE && existingCats.has(cat.key)) {
       console.log(`  ${cat.label.padEnd(28)} SKIP (already generated)`);
@@ -548,24 +747,24 @@ async function main() {
       console.log(`  ${cat.label.padEnd(28)} SKIP (0 sources)`);
       skipped++; continue;
     }
-    if (summaries.length === 0) {
-      console.log(`  ${cat.label.padEnd(28)} SKIP (${totalCount} sources but none enriched with summaries)`);
+    if (findings.length === 0) {
+      console.log(`  ${cat.label.padEnd(28)} SKIP (${totalCount} sources but no evidence facts or summaries)`);
       skipped++; continue;
     }
 
-    console.log(`  ${cat.label.padEnd(28)} ${totalCount} sources · ${maturityShortLine(maturity)} · conf=${confidence.level}`);
+    console.log(`  ${cat.label.padEnd(28)} ${totalCount} sources · ${findings.length} findings (${fromEvidence} facts/${evidenceSources} src + ${fromSummary} summaries) · ${maturityShortLine(maturity)} · conf=${confidence.level}`);
     if (DRY_RUN) { skipped++; continue; }
 
     let result;
     try {
-      result = await generateCategory(cat, period.label, summaries, mSrcs);
+      result = await generateCategory(cat, period.label, findings, mSrcs);
     } catch (err) {
       console.log(`     FAIL: ${err.message.slice(0, 70)}`);
       continue;
     }
 
     currAssess[cat.key] = result.assessment;
-    console.log(`     → ${result.insights.length} insights${result.removed ? `, ${result.removed} removed by QA` : ""} · "${(result.assessment || "").slice(0, 70)}"`);
+    console.log(`     → ${result.insights.length} insights${result.removed ? `, ${result.removed} removed by QA` : ""} · QA:${result.qa_status}/assess:${result.assessment_qa} · "${(result.assessment || "").slice(0, 60)}"`);
     result.insights.forEach(p => console.log(`        • ${p.insight}`));
 
     const { error: upErr } = await supabase.from("dashboard_insights").upsert({
@@ -580,6 +779,9 @@ async function main() {
         confidence:        result.confidence,
         confidence_reason: result.confidence_reason,
         evidence_maturity: result.evidence_maturity,
+        qa_status:         result.qa_status,         // #3: passed | degraded | skipped_no_key
+        assessment_qa:     result.assessment_qa,     // #3: passed | rejected | degraded | not_generated
+        findings_basis:    { facts: fromEvidence, summaries: fromSummary, evidence_sources: evidenceSources },
       },
       source_count: totalCount,
     }, { onConflict: "window_key,category" });

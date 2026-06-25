@@ -46,7 +46,7 @@ async function anthropicRequest(body, timeoutMs = 90000) {
   }
 }
 
-const MAX_ROUNDS = 6;
+const MAX_ROUNDS = 8;
 
 // ── Temporal intent parser ─────────────────────────────────────────────────────
 
@@ -138,6 +138,8 @@ WHEN TO USE TOOLS vs ANSWER DIRECTLY:
 If the user's question is a follow-up or clarification on what was just discussed (e.g. "what does that mean?", "can you elaborate?", "why is that significant?"), answer directly without calling any tools.
 
 For every NEW factual question, you MUST call search_corpus. This is non-negotiable — search_corpus is how citation links are generated and shown to the user. If you skip it, the user sees no source links. Call search_corpus in parallel with get_judgments in your first round. Never answer a new factual question without calling search_corpus at least once.
+
+BE EFFICIENT WITH TOOLS. Gather what you need in 1-2 rounds, then answer. Typical pattern: round 1 calls search_corpus (+ get_judgments and/or get_evidence in parallel); round 2 optionally one follow-up call to fill a specific gap. Do NOT repeatedly re-query with slight variations — if a tool returns enough to answer, stop searching and write the answer. Call get_evidence at most twice. You have a limited number of tool rounds; spend them, then conclude.
 
 HOW TO WRITE YOUR ANSWER:
 Use this structure every time:
@@ -424,9 +426,12 @@ export default async function handler(req, res) {
         }
 
         // Final dedup: remove any remaining duplicate URLs (can occur when extractCitations
-        // and harvested pool both capture the same URL via different regex paths)
+        // and harvested pool both capture the same URL via different regex paths).
+        // Also drop dead citations: an unresolved [src-N] with no URL and no real
+        // title would render as a useless "Unknown source" chip — never show it.
         const seen = new Set();
         const dedupedCitations = citations.filter(c => {
+          if (!c.url && (!c.source_title || c.source_title === "Unknown source")) return false;
           const key = normalizeUrl(c.url) || c.source_title;
           if (!key || seen.has(key)) return false;
           seen.add(key);
@@ -527,6 +532,23 @@ export default async function handler(req, res) {
               if (s.url) citationPool.push({ source_title: s.title || "", url: s.url, publisher: s.publisher || "", trust_tier: s.trust_tier || null });
             }
           }
+          // search_taxonomy also returns source lists the model cites with [src-N]
+          // (under .sources for a tag query, .recent_sources for a category query).
+          // Register them in the same global ref space so those markers resolve to links.
+          if (block.name === "search_taxonomy") {
+            const taxSources = result.sources || result.recent_sources;
+            if (Array.isArray(taxSources) && taxSources.length) {
+              const offset = srcCounter;
+              const renumbered = taxSources.map((s, i) => ({ ...s, ref: `src-${offset + i + 1}` }));
+              srcCounter += renumbered.length;
+              if (result.sources) result = { ...result, sources: renumbered };
+              else result = { ...result, recent_sources: renumbered };
+              sourceRefs = [...sourceRefs, ...renumbered];
+              for (const s of renumbered) {
+                if (s.url) citationPool.push({ source_title: s.title || "", url: s.url, publisher: s.publisher || "", trust_tier: s.trust_tier || null });
+              }
+            }
+          }
           if (block.name === "lookup_cve" && result.results) {
             for (const r of result.results) {
               if (r.nvd_url) citationPool.push({ source_title: r.cve_id, url: r.nvd_url, publisher: "NVD", trust_tier: "primary" });
@@ -548,7 +570,68 @@ export default async function handler(req, res) {
       break;
     }
 
-    // If we exhausted rounds without end_turn
+    // Exhausted rounds without end_turn — rather than discard everything the
+    // model already gathered, force ONE final answer with tools disabled so it
+    // must synthesise from the tool results it has. Far better than a canned
+    // "try again" that throws away real retrieved sources.
+    let finalRawText = "";
+    try {
+      messages.push({
+        role: "user",
+        content: "Stop searching now and write your final answer using only the information already gathered above. Follow the required answer format exactly, including the [src-N] citation markers and the CONFIDENCE/CONFIDENCE_REASON/CAVEAT/FOLLOWUP lines.",
+      });
+      const finalResp = await anthropicRequest({
+        model: ANTHROPIC_MODELS.sonnet, max_tokens: 4096, system, messages,  // no tools
+      });
+      totalInputTokens  += finalResp.usage?.input_tokens  || 0;
+      totalOutputTokens += finalResp.usage?.output_tokens || 0;
+      finalRawText = finalResp.content.find(b => b.type === "text")?.text || "";
+    } catch (e) {
+      finalRawText = "";
+    }
+
+    if (finalRawText) {
+      const parsed = parseResponse(finalRawText);
+      const { text: cleanAnswer, harvested } = harvestAndCleanAnswer(parsed.answer, evidenceIndex);
+      for (const h of harvested) {
+        if (h.url && !citationPool.some(c => c.url === h.url)) {
+          citationPool.push({ source_title: "", url: h.url, publisher: h.publisher, trust_tier: null });
+        }
+      }
+      const citations = extractCitations(parsed.answer, evidenceIndex, sourceRefs);
+      const normalizeUrl = (u) => u?.replace(/[.,;:!?/]+$/, "").toLowerCase().replace(/^https?:\/\//, "");
+      const citedUrls = new Set(citations.map(c => normalizeUrl(c.url)).filter(Boolean));
+      for (const src of citationPool) {
+        if (!src.url || citedUrls.has(normalizeUrl(src.url))) continue;
+        citations.push({ source_title: src.source_title, url: src.url, publisher: src.publisher, trust_tier: src.trust_tier });
+        citedUrls.add(normalizeUrl(src.url));
+        if (citations.length >= 15) break;
+      }
+      const seen = new Set();
+      const dedupedCitations = citations.filter(c => {
+        if (!c.url && (!c.source_title || c.source_title === "Unknown source")) return false;
+        const key = normalizeUrl(c.url) || c.source_title;
+        if (!key || seen.has(key)) return false;
+        seen.add(key); return true;
+      });
+      return res.status(200).json({
+        answer:              cleanAnswer,
+        citations:           dedupedCitations,
+        source_refs:         sourceRefs,
+        confidence:          parsed.confidence,
+        confidence_reason:   parsed.confidence_reason,
+        caveat:              parsed.caveat,
+        suggested_followups: parsed.followups,
+        tool_calls:          toolCallLog,
+        qa_issues:           qaResponse(cleanAnswer, dedupedCitations, evidenceIndex),
+        qa_pass:             true,
+        evidence_items_used: Object.keys(evidenceIndex).length,
+        temporal_scope:      temporal.scope_label,
+        forced_synthesis:    true,
+      });
+    }
+
+    // Truly nothing usable — last-resort message.
     return res.status(200).json({
       answer:      "Analysis is taking longer than expected. Please try a more specific question.",
       citations:   [],

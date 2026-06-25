@@ -177,11 +177,6 @@ function MaturityBar({ maturity }) {
 
 // ── Insight item — terse by default, expandable on click ──────────────────────
 
-function clip(text, max) {
-  if (!text) return "";
-  const t = String(text).trim();
-  return t.length > max ? t.slice(0, max).trimEnd() + "…" : t;
-}
 
 function InsightItem({ p }) {
   const [open, setOpen] = useState(false);
@@ -189,10 +184,10 @@ function InsightItem({ p }) {
 
   return (
     <li
-      className={`hz-insight-item${hasDetail ? " expandable" : ""}`}
+      className={`hz-insight-item${hasDetail ? " expandable" : ""}${open ? " open" : ""}`}
       onClick={hasDetail ? () => setOpen(o => !o) : undefined}
     >
-      <div className="hz-insight-headline">{clip(p.insight, 120)}</div>
+      <div className="hz-insight-headline">{p.insight}</div>
       {open && hasDetail && (
         <div className="hz-insight-detail-inner">
           {p.implication && (

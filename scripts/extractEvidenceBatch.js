@@ -38,14 +38,23 @@ const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_R
 
 console.log("Evidence backfill — finding pass sources without current evidence...");
 
-// Load classified pass sources (newest first).
-const { data, error } = await sb.from("sources")
-  .select("id, title, url, publisher, source_type, trust_tier, main_category, full_text")
-  .eq("validation_status", "pass")
-  .in("main_category", CATS)
-  .order("created_at", { ascending: false })
-  .limit(4000);
-if (error) { console.error("DB load failed:", error.message); process.exit(1); }
+// Load classified pass sources (newest first). PostgREST caps a single request
+// at 1000 rows regardless of .limit(), so paginate via .range() to see the WHOLE
+// corpus — otherwise older sources (beyond the newest 1000) are never enriched.
+const PAGE = 1000;
+let data = [];
+for (let from = 0; ; from += PAGE) {
+  const { data: page, error } = await sb.from("sources")
+    .select("id, title, url, publisher, source_type, trust_tier, main_category, full_text")
+    .eq("validation_status", "pass")
+    .in("main_category", CATS)
+    .order("created_at", { ascending: false })
+    .range(from, from + PAGE - 1);
+  if (error) { console.error("DB load failed:", error.message); process.exit(1); }
+  if (!page?.length) break;
+  data.push(...page);
+  if (page.length < PAGE) break;
+}
 
 const sources = (data || []).map(s => ({ ...s, category: s.main_category }));
 const haveHash = await getEvidenceHashes(sb, sources.map(s => s.id));
