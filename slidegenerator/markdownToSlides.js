@@ -12,6 +12,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { attachDiagrams } from "./generateDiagram.js";
 
 // Default model — good balance of quality and speed for slide work.
 // Set env SLIDE_MODEL to override (e.g. claude-opus-4-8 for best quality).
@@ -66,18 +67,19 @@ Output format:
     { "text": "Action to take", "bullet_type": "recommendation" }
   ],
   "speaker_notes": "2-3 sentences the presenter can say to add context",
-  "metrics": [
-    { "value": "45%", "label": "description of what this number means" }
-  ]
+  "metrics": [{ "value": "45%", "label": "description of what this number means" }],
+  "diagram_hint": false
 }
 
 bullet_type values: "claim" (fact/observation), "data_point" (number-backed fact), "implication" (what it means), "recommendation" (action to take).
 
-metrics: OPTIONAL. Only include if there are 2–4 concrete numbers worth calling out visually. Omit the field entirely otherwise.
+metrics: OPTIONAL. Only when 2–4 concrete numbers are worth visual callout. Omit entirely otherwise.
+
+diagram_hint: true ONLY when the slide describes a multi-step process, workflow, org structure, timeline, or entity relationships that would read better as a visual diagram than as bullets. Default false.
 
 Rules:
 - Headline = the conclusion/claim, not the topic. BAD: "AI Security Trends". GOOD: "Prompt injection attacks tripled in six months".
-- Bullets support the headline. Lead with a "claim" or "data_point", follow with "implication", end with "recommendation" if there's an action.
+- Bullets support the headline. Lead with "claim" or "data_point", follow with "implication", end with "recommendation" if there's an action.
 - ≤20 words per bullet. Plain English. No jargon without explanation.
 - speaker_notes: nuance, caveats, what to watch — not a restatement of the slide.
 - Return ONLY valid JSON.`;
@@ -100,6 +102,7 @@ Output format:
   "subtitle": "One-line context or date",
   "slides": [
     { "type": "cover" },
+    { "type": "section_intro", "headline": "Section Name", "description": "One sentence what this section covers" },
     {
       "type": "content",
       "headline": "The key claim (≤12 words)",
@@ -109,18 +112,19 @@ Output format:
         { "text": "What to do", "bullet_type": "recommendation" }
       ],
       "speaker_notes": "Presenter nuance — not a restatement.",
-      "metrics": [{ "value": "45%", "label": "context" }]
-    },
-    { "type": "section_intro", "headline": "Section Name" }
+      "metrics": [{ "value": "45%", "label": "context" }],
+      "diagram_hint": false
+    }
   ]
 }
 
 Rules:
 - First slide: type "cover" (no other fields needed).
-- Use "section_intro" sparingly for genuine topic shifts.
+- Use "section_intro" sparingly for genuine topic shifts. Include "description" (one sentence) for context.
 - bullet_type ∈ { "claim", "data_point", "implication", "recommendation" }
-- metrics is OPTIONAL — only when 2–4 concrete numbers are worth visual callout.
-- 8–16 slides total. Plain English. Declarative headlines (the conclusion, not the topic).
+- metrics is OPTIONAL — only when 2–4 concrete numbers are worth visual callout. Omit entirely otherwise.
+- diagram_hint: set to true ONLY when the slide describes a multi-step process, workflow, timeline, or relationship between ≥2 entities that would read better as a diagram than as bullets. Default false.
+- 8–18 slides total. Plain English. Declarative headlines (the conclusion, not the topic).
 - Return ONLY valid JSON.`;
 
 // ── LLM caller ────────────────────────────────────────────────────────────────
@@ -159,6 +163,9 @@ export async function convertInOneShot(text, opts = {}) {
     deck.slides = [{ type: "cover" }, ...(deck.slides || [])];
   }
   console.log(`  [plan+fill] ${deck.slides.length} slides planned`);
+  if (!opts.noDiagrams) {
+    await attachDiagrams(deck.slides, { model, maxDiagrams: opts.maxDiagrams ?? 5 });
+  }
   return deck;
 }
 
@@ -208,11 +215,15 @@ export async function convertTwoStep(text, opts = {}) {
   }
   process.stdout.write("\n");
 
-  return {
+  const deck = {
     title:    plan.title    || "Presentation",
     subtitle: plan.subtitle || "",
     slides:   filled,
   };
+  if (!opts.noDiagrams) {
+    await attachDiagrams(deck.slides, { model, maxDiagrams: opts.maxDiagrams ?? 5 });
+  }
+  return deck;
 }
 
 /**

@@ -170,13 +170,53 @@ function buildCover(pptx, slide, opts) {
 
 function buildSectionIntro(pptx, slide) {
   const s = pptx.addSlide({ masterName: "DIVIDER" });
-  s.addShape("rect", { x: 0, y: 0, w: 0.22, h: H, fill: { color: T.accent }, line: { color: T.accent } });
-  s.addText(clamp(slide.headline || "", 60), {
-    x: 0.62, y: 3.0, w: W - 1.4, h: 1.2,
-    fontSize: 36, bold: true, color: T.white, fontFace: T.fontTitle,
+
+  // Left panel: deep teal accent band (~38% of slide width)
+  const PANEL_W = 5.0;
+  s.addShape("rect", { x: 0, y: 0, w: PANEL_W, h: H, fill: { color: T.accent }, line: { color: T.accent } });
+
+  // Left panel — "SECTION" label + decorative horizontal rule
+  s.addText("SECTION", {
+    x: 0.45, y: 1.70, w: PANEL_W - 0.6, h: 0.35,
+    fontSize: 11, bold: true, color: T.navy, fontFace: T.fontBody,
+    charSpacing: 4, align: "left", valign: "middle",
+  });
+  s.addShape("rect", { x: 0.45, y: 2.10, w: 1.4, h: 0.05, fill: { color: T.navy }, line: { color: T.navy } });
+
+  // Left panel — section number (large, faint background art)
+  if (slide.section_number) {
+    s.addText(String(slide.section_number).padStart(2, "0"), {
+      x: 0.20, y: 2.3, w: PANEL_W - 0.4, h: 3.5,
+      fontSize: 160, bold: true, color: "0D8A72", fontFace: T.fontTitle,
+      align: "left", valign: "top", transparency: 45,
+    });
+  } else {
+    // decorative large accent glyph when no number
+    s.addShape("rect", { x: 0.45, y: 2.35, w: 0.06, h: 3.0, fill: { color: T.navy }, line: { color: T.navy } });
+  }
+
+  // Right panel — section headline (large, bold white)
+  const RX = PANEL_W + 0.55;
+  const RW = W - RX - 0.45;
+  s.addText(clamp(slide.headline || "", 55), {
+    x: RX, y: 2.40, w: RW, h: 2.2,
+    fontSize: 34, bold: true, color: T.white, fontFace: T.fontTitle,
     align: "left", valign: "middle", wrap: true,
   });
-  s.addShape("rect", { x: 0.64, y: 4.35, w: 2.6, h: 0.06, fill: { color: T.accent }, line: { color: T.accent } });
+
+  // Right panel — optional description (smaller, muted)
+  if (slide.description) {
+    s.addText(clamp(slide.description, 120), {
+      x: RX, y: 4.75, w: RW, h: 0.65,
+      fontSize: 14, color: "A8C4DC", fontFace: T.fontBody,
+      align: "left", valign: "top", wrap: true,
+    });
+  }
+
+  // Thin teal underline below the headline
+  s.addShape("rect", { x: RX, y: 4.62, w: Math.min(RW * 0.55, 3.2), h: 0.055,
+    fill: { color: T.accent }, line: { color: T.accent } });
+
   drawGradientBar(s);
   addNotes(s, slide.speaker_notes);
 }
@@ -210,16 +250,63 @@ function buildReferences(pptx, slide, pageNum, total) {
   return pages;
 }
 
+/** Read intrinsic pixel dimensions from a base64 PNG data URI. */
+function pngSize(dataUri) {
+  try {
+    const b64 = String(dataUri).split(";base64,")[1] || String(dataUri).split(",")[1];
+    if (!b64) return null;
+    const buf = Buffer.from(b64, "base64");
+    if (buf.length < 24 || buf.readUInt32BE(0) !== 0x89504e47) return null;
+    const w = buf.readUInt32BE(16), hgt = buf.readUInt32BE(20);
+    return (w > 0 && hgt > 0) ? { w, h: hgt } : null;
+  } catch { return null; }
+}
+
+/** Embed a base64 PNG diagram, fitted to its true aspect ratio, with caption + footnote. */
+function renderDiagram(s, diag, x, y, w, h) {
+  if (!diag?.image_data) return false;
+  const FOOT_H = 0.22;
+  const capH   = diag.caption ? 0.28 : 0;
+  const boxY   = y + capH;
+  const boxH   = Math.max(0.5, h - capH - FOOT_H - 0.06);
+
+  if (diag.caption) {
+    s.addText(clamp(diag.caption, 90), {
+      x, y, w, h: 0.26, fontSize: 11, italic: true, bold: true,
+      color: T.navy, fontFace: T.fontBody, valign: "middle",
+    });
+  }
+
+  let dw = w, dh = boxH, dx = x, dy = boxY;
+  const size = pngSize(diag.image_data);
+  if (size) {
+    const ar = size.w / size.h;
+    if (w / boxH > ar) { dh = boxH; dw = boxH * ar; dx = x + (w - dw) / 2; }
+    else               { dw = w;    dh = w / ar;    dy = boxY + (boxH - dh) / 2; }
+  }
+  try { s.addImage({ data: diag.image_data, x: dx, y: dy, w: dw, h: dh }); }
+  catch { return false; }
+
+  s.addText(diag.footnote || "AI-generated diagram — illustrative only.", {
+    x, y: boxY + boxH + 0.04, w, h: FOOT_H,
+    fontSize: 7, italic: true, color: T.amber, fontFace: T.fontBody, wrap: true,
+  });
+  return true;
+}
+
 function buildContent(pptx, slide, pageNum, total) {
   const s      = pptx.addSlide({ masterName: "CONTENT" });
   const kicker = slide.kicker || null;
   const top    = addTitle(s, slide.headline || "", kicker);
   const contH  = FOOTER_Y - top - 0.12;
 
-  // Stat cards if visual data is present
-  const metrics = slide.metrics;
-  const hasVis  = Array.isArray(metrics) && metrics.length > 0;
-  const LEFT_W  = hasVis ? 6.95 : FULL_W;
+  // Diagram takes the right panel (full-height); metrics cards as fallback
+  const hasDiagram = !!slide.diagram?.image_data;
+  const metrics    = slide.metrics;
+  const hasMetrics = !hasDiagram && Array.isArray(metrics) && metrics.length > 0;
+  const hasRight   = hasDiagram || hasMetrics;
+
+  const LEFT_W  = hasRight ? 6.95 : FULL_W;
   const RIGHT_X = MARGIN + LEFT_W + 0.30;
   const RIGHT_W = W - RIGHT_X - MARGIN;
 
@@ -231,7 +318,9 @@ function buildContent(pptx, slide, pageNum, total) {
     valign:     slide.type === "insights" ? "middle" : "top",
   });
 
-  if (hasVis) {
+  if (hasDiagram) {
+    renderDiagram(s, slide.diagram, RIGHT_X, top + 0.05, RIGHT_W, contH - 0.10);
+  } else if (hasMetrics) {
     const cardH = Math.min(1.55, (contH - 0.50) / Math.max(metrics.length, 1) - 0.16);
     const items = metrics.slice(0, 4);
     items.forEach((m, i) => {

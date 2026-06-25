@@ -39,6 +39,7 @@ Options:
                             claude-opus-4-8             (best quality)
   --two-step       Force two-step plan→fill mode (better for long documents)
   --one-shot       Force single-call mode (faster, best for short content)
+  --no-diagrams    Skip AI diagram generation (faster, fewer API calls)
   --help, -h       Show this help
 
 Environment:
@@ -71,6 +72,7 @@ const titleOverride = getFlag("title");
 const modelOverride = getFlag("model");
 const forceTwoStep  = hasFlag("two-step");
 const forceOneShot  = hasFlag("one-shot");
+const noDiagrams    = hasFlag("no-diagrams");
 
 // ── Read input ────────────────────────────────────────────────────────────────
 let text;
@@ -93,16 +95,17 @@ if (!text.trim()) {
 // ── Generate deck ─────────────────────────────────────────────────────────────
 const absOutput = path.resolve(process.cwd(), outputArg);
 const opts = {
-  model:   modelOverride || undefined,
-  twoStep: forceTwoStep  || undefined,
-  oneShot: forceOneShot  || undefined,
+  model:      modelOverride || undefined,
+  twoStep:    forceTwoStep  || undefined,
+  oneShot:    forceOneShot  || undefined,
+  noDiagrams: noDiagrams    || undefined,
 };
 
 console.log(`\nslide generator`);
 console.log(`  input : ${inputArg === "-" ? "stdin" : inputArg} (${text.split(/\s+/).length} words)`);
 console.log(`  output: ${outputArg}`);
 console.log(`  model : ${opts.model || process.env.SLIDE_MODEL || "claude-sonnet-4-6"}`);
-console.log(`  mode  : ${forceTwoStep ? "two-step" : forceOneShot ? "one-shot" : "auto"}`);
+console.log(`  mode  : ${forceTwoStep ? "two-step" : forceOneShot ? "one-shot" : "auto"}${noDiagrams ? " (no diagrams)" : ""}`);
 console.log("");
 
 (async () => {
