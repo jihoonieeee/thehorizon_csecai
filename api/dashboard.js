@@ -84,6 +84,22 @@ const TAGS = [
 
 const TAG_IDS = new Set(TAGS.map(t => t.id));
 
+// PostgREST caps a single response at 1000 rows regardless of how many match.
+// Annual windows hold >1000 PASS sources, so a plain .select() silently
+// undercounts. Paginate via .range() until a short page is returned.
+async function selectAll(buildQuery) {
+  const PAGE = 1000;
+  const rows = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await buildQuery().range(from, from + PAGE - 1);
+    if (error) throw error;
+    if (!data?.length) break;
+    rows.push(...data);
+    if (data.length < PAGE) break;
+  }
+  return rows;
+}
+
 // ISO week label: "Jun 9"
 function weekLabel(weekEndDate) {
   return weekEndDate.toLocaleDateString("en-SG", { month: "short", day: "numeric" });
@@ -194,16 +210,15 @@ export default async function handler(req, res) {
     } = await getWindowInsights(win, windowKey);
 
     // ── 1. Fetch all validated sources in window ──────────────────────────────
-    const { data: sources, error: srcErr } = await supabase
+    // Paginated: annual windows exceed PostgREST's 1000-row cap, which otherwise
+    // silently undercounts the corpus (total, category cards, tag matrix).
+    const all = await selectAll(() => supabase
       .from("sources")
       .select("id,title,url,publisher,date_published,main_category,trust_tier,tags,source_type,analyst_brief,short_summary,intelligence,validation_status")
       .gte("date_published", from)
       .lte("date_published", to)
       .eq("validation_status", "pass")
-      .order("date_published", { ascending: false });
-
-    if (srcErr) throw srcErr;
-    const all = sources || [];
+      .order("date_published", { ascending: false }));
 
     const total      = all.length;
     const highTrust  = all.filter(s => ["primary","high","curated"].includes(s.trust_tier)).length;
@@ -255,15 +270,20 @@ export default async function handler(req, res) {
       ? new Date("2025-07-01T00:00:00.000Z")
       : new Date(Date.now() - 12 * 7 * 86400000);
 
-    const trendQuery = supabase
-      .from("sources")
-      .select("date_published,main_category")
-      .gte("date_published", trendFrom.toISOString().slice(0, 10))
-      .eq("validation_status", "pass")
-      .not("main_category", "is", null);
-    // Annual: bound end at Jun 30 2026. Other windows: always show last 12 weeks from now.
-    if (useMonthlyBuckets) trendQuery.lte("date_published", "2026-06-30");
-    const { data: trendRows } = await trendQuery;
+    // Paginated for the same 1000-row-cap reason — the 12-month annual trend
+    // spans the whole corpus and would otherwise lose the oldest buckets.
+    const trendRows = await selectAll(() => {
+      const q = supabase
+        .from("sources")
+        .select("date_published,main_category")
+        .gte("date_published", trendFrom.toISOString().slice(0, 10))
+        .eq("validation_status", "pass")
+        .not("main_category", "is", null)
+        .order("date_published", { ascending: false });
+      // Annual: bound end at Jun 30 2026. Other windows: always show last 12 weeks from now.
+      if (useMonthlyBuckets) q.lte("date_published", "2026-06-30");
+      return q;
+    });
 
     const weekLabels = [];
     const byCategory = {};
