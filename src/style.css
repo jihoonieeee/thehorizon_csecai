@@ -537,10 +537,10 @@ a:hover { text-decoration: underline; }
   font-weight: 400;
 }
 
-/* Headline: two-line clamp when collapsed */
+/* Headline: show the full insight (no clamp) */
 .hz-insight-headline {
   font-size: 0.77rem; font-weight: 600; line-height: 1.45; color: var(--text-primary);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  overflow-wrap: break-word;
 }
 
 /* Detail section — shown when open */
