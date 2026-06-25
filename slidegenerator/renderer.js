@@ -156,11 +156,13 @@ function statCards(slide, metrics, x, y, w, h) {
   items.forEach((m, i) => {
     const cy  = y + i * (cardH + gap);
     const col = ACCENTS[i % ACCENTS.length];
-    // Card — sharp, white surface, thin border
-    slide.addShape("rect", { x, y: cy, w, h: cardH,
+    // Card — rounded, white surface, light border
+    slide.addShape("roundRect", { x, y: cy, w, h: cardH, rectRadius: 0.10,
       fill: { color: T.white }, line: { color: T.silver, pt: 0.75 } });
-    // Top colour border (3pt equivalent, drawn as a thin rect)
-    slide.addShape("rect", { x, y: cy, w, h: 0.06,
+    // Top colour band — rounded only at top
+    slide.addShape("roundRect", { x, y: cy, w, h: 0.22, rectRadius: 0.10,
+      fill: { color: col }, line: { color: col } });
+    slide.addShape("rect", { x, y: cy + 0.14, w, h: 0.08,
       fill: { color: col }, line: { color: col } });
     // Value — large, coloured
     slide.addText(clamp(m.value, 12), { x: x + 0.18, y: cy + 0.12, w: w - 0.28, h: cardH * 0.52,
@@ -382,8 +384,8 @@ function buildTimeline(pptx, slide, pageNum, total) {
     const cx  = MARGIN + i * (bw + 0.14);
     const col = ACCENTS[i % ACCENTS.length];
 
-    // Label — sharp rect, coloured, above line
-    s.addShape("rect", { x: cx, y: lineY - 0.38, w: bw, h: 0.28,
+    // Label pill — rounded, coloured, above line
+    s.addShape("roundRect", { x: cx, y: lineY - 0.38, w: bw, h: 0.28, rectRadius: 0.14,
       fill: { color: col }, line: { color: col } });
     s.addText(clamp(item.label || `${i + 1}`, 20), { x: cx, y: lineY - 0.38, w: bw, h: 0.28,
       fontSize: 10, bold: true, color: T.white, fontFace: T.fontB, align: "center", valign: "middle" });
@@ -392,12 +394,14 @@ function buildTimeline(pptx, slide, pageNum, total) {
     s.addShape("ellipse", { x: cx + bw / 2 - 0.08, y: lineY - 0.05, w: 0.16, h: 0.16,
       fill: { color: col }, line: { color: T.white, pt: 1.5 } });
 
-    // Sharp card below
+    // Rounded card below
     const cY = lineY + 0.24, cH = FOOTER_Y - cY - 0.18;
-    s.addShape("rect", { x: cx, y: cY, w: bw, h: cH,
+    s.addShape("roundRect", { x: cx, y: cY, w: bw, h: cH, rectRadius: 0.10,
       fill: { color: T.surface }, line: { color: T.silver, pt: 0.5 } });
-    // Colour top border strip on card
-    s.addShape("rect", { x: cx, y: cY, w: bw, h: 0.05,
+    // Colour top strip — rounded only at top
+    s.addShape("roundRect", { x: cx, y: cY, w: bw, h: 0.18, rectRadius: 0.10,
+      fill: { color: col }, line: { color: col } });
+    s.addShape("rect", { x: cx, y: cY + 0.10, w: bw, h: 0.08,
       fill: { color: col }, line: { color: col } });
 
     s.addText(clamp(item.title || "", 55), { x: cx + 0.12, y: cY + 0.14, w: bw - 0.24, h: cH * 0.44,
@@ -438,11 +442,13 @@ function buildTeamCards(pptx, slide, pageNum, total) {
     const cy   = top + 0.04 + row * (cH + 0.20);
     const ac   = ACCENTS[i % ACCENTS.length];
 
-    // Sharp card, white, light border
-    s.addShape("rect", { x: cx, y: cy, w: cW, h: cH,
+    // Rounded card, white, light border
+    s.addShape("roundRect", { x: cx, y: cy, w: cW, h: cH, rectRadius: 0.12,
       fill: { color: T.white }, line: { color: T.silver, pt: 0.5 } });
-    // Thin top colour border (4pt equivalent)
-    s.addShape("rect", { x: cx, y: cy, w: cW, h: 0.07,
+    // Rounded top colour band
+    s.addShape("roundRect", { x: cx, y: cy, w: cW, h: 0.24, rectRadius: 0.12,
+      fill: { color: ac }, line: { color: ac } });
+    s.addShape("rect", { x: cx, y: cy + 0.14, w: cW, h: 0.10,
       fill: { color: ac }, line: { color: ac } });
 
     // Name — ink, bold
