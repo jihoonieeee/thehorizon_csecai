@@ -23,26 +23,25 @@ const CONTENT_BG  = path.join(ASSETS_DIR, "content_frame.png");
 const HAS_COVER   = fs.existsSync(COVER_BG);
 const HAS_CONTENT = fs.existsSync(CONTENT_BG);
 
-// ── Palette — precise, restrained ────────────────────────────────────────────
+// ── Palette — muted, max 3 colours per slide ──────────────────────────────────
 const T = {
-  ink:     "0F172A",   // near-black — all headlines
-  body:    "334155",   // slate-700  — body text
-  muted:   "64748B",   // slate-500  — captions, secondary
-  ghost:   "94A3B8",   // slate-400  — page numbers
-  blue:    "2563EB",   // blue-600   — primary accent
-  blueDk:  "1E3A8A",   // blue-900   — dark blue for dividers / cover
-  blueXl:  "EFF6FF",   // blue-50    — very light section bg
-  red:     "E11D48",   // rose-600   — used only for a single accent element
-  silver:  "E2E8F0",   // slate-200  — borders, dividers
-  surface: "F8FAFC",   // slate-50   — card surfaces
-  offWhite:"F1F5F9",   // slate-100  — section bg variant
+  ink:     "1A2332",   // near-black — headlines
+  body:    "3D4F63",   // dark slate — body text
+  muted:   "7A8FA6",   // medium slate — captions, secondary
+  ghost:   "A8B8C8",   // light — page numbers
+  blue:    "3A6EA8",   // muted steel blue — primary accent
+  bluePale:"EBF1F8",   // very pale blue — section bg A, card fills
+  navy:    "1C2E45",   // dark navy — section bg C
+  silver:  "DDE4EC",   // light border
+  surface: "F5F7FA",   // near-white card surface
+  offWhite:"F0F3F7",   // section bg B
   white:   "FFFFFF",
   fontH:   "Calibri",
   fontB:   "Calibri",
 };
 
-// Accent colours for cycling elements — all toned, not garish
-const ACCENTS = ["2563EB", "E11D48", "0369A1", "7C3AED", "0F766E", "B45309"];
+// Cycling accent colours — all muted, never more than 3 on one slide
+const ACCENTS = ["3A6EA8", "5B7FA6", "2D5A8A", "4A7099", "1E4D7A", "638AAF"];
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 const MARGIN   = 0.55;
@@ -176,154 +175,124 @@ function statCards(slide, metrics, x, y, w, h) {
 function defineMasters(pptx) {
   pptx.defineSlideMaster({ title: "CONTENT",   background: HAS_CONTENT ? { path: CONTENT_BG } : { color: T.white } });
   pptx.defineSlideMaster({ title: "COVER",     background: HAS_COVER   ? { path: COVER_BG }   : { color: T.blueDk } });
-  pptx.defineSlideMaster({ title: "SEC_WHITE", background: { color: T.white } });
-  pptx.defineSlideMaster({ title: "SEC_LIGHT", background: { color: T.offWhite } });  // slate-100
-  pptx.defineSlideMaster({ title: "SEC_DARK",  background: { color: T.blueDk } });   // deep navy
+  pptx.defineSlideMaster({ title: "SEC_WHITE", background: { color: T.white    } });
+  pptx.defineSlideMaster({ title: "SEC_LIGHT", background: { color: T.bluePale } });
+  pptx.defineSlideMaster({ title: "SEC_DARK",  background: { color: T.navy    } });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION DIVIDERS — 3 STYLES, ALL ELEGANT
+// SECTION DIVIDERS — 3 STYLES, ALL SIMPLE
+// Number + title, big, left. No decoration beyond that.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Style A — WHITE with left edge stripe
- * White bg. Solid blue 8px left stripe the full height. Ghost section number
- * top-left. "SECTION N" small label. Headline large, ink, left-aligned lower half.
- */
-function buildSectionA(pptx, slide, num) {
-  const s  = pptx.addSlide({ masterName: "SEC_WHITE" });
-  const SW = 0.10;   // stripe width
+// Shared: render section number small + headline large, left-aligned, vertically centred.
+function renderSectionText(s, num, headline, numberColor, titleColor, descColor) {
+  const numStr = String(num).padStart(2, "0");
+  const hl     = clamp(headline || "", 52);
+  const lines  = estLines(hl, 46, W - MARGIN * 2);
+  const headH  = Math.max(0.80, lines * 0.74);
+  const blockH = 0.34 + 0.18 + headH;  // num label + gap + headline
+  const startY = (H - blockH) / 2 - 0.10;
 
-  // Blue left stripe — full height
-  s.addShape("rect", { x: 0, y: 0, w: SW, h: H,
-    fill: { color: T.blue }, line: { color: T.blue } });
-
-  // Ghost section number — very large, barely visible, top-left area
-  s.addText(String(num).padStart(2, "0"), {
-    x: SW + 0.20, y: -0.30, w: 5.0, h: 4.20,
-    fontSize: 260, bold: true, color: T.silver, fontFace: T.fontH,
-    align: "left", valign: "top",
+  // Section number — small, muted, spaced
+  s.addText(numStr, {
+    x: MARGIN, y: startY, w: W - MARGIN * 2, h: 0.34,
+    fontSize: 13, bold: true, color: numberColor, fontFace: T.fontB,
+    charSpacing: 4, align: "left", valign: "middle",
   });
 
-  // "SECTION  01" — small, blue, spaced
-  s.addText(`SECTION  ${String(num).padStart(2, "0")}`, {
-    x: SW + 0.40, y: 0.42, w: 5.0, h: 0.26,
-    fontSize: 10, bold: true, color: T.blue, fontFace: T.fontB,
-    charSpacing: 3, align: "left",
-  });
-
-  // Headline — ink, 40pt, left-aligned, vertically in lower half
-  const hl    = clamp(slide.headline || "", 50);
-  const titleW = W - SW - 0.60;
-  const lines = estLines(hl, 40, titleW);
-  const headH = Math.max(0.80, lines * 0.66);
-  const headY = H / 2 - headH / 2 + 0.30;
+  // Headline — large, bold
   s.addText(hl, {
-    x: SW + 0.40, y: headY, w: titleW, h: headH,
-    fontSize: 40, bold: true, color: T.ink, fontFace: T.fontH,
-    align: "left", valign: "middle", wrap: true,
+    x: MARGIN, y: startY + 0.34 + 0.10, w: W - MARGIN * 2, h: headH,
+    fontSize: 46, bold: true, color: titleColor, fontFace: T.fontH,
+    align: "left", valign: "top", wrap: true,
   });
 
-  // Thin horizontal rule under headline
-  s.addShape("rect", { x: SW + 0.40, y: headY + headH + 0.20, w: 2.60, h: 0.04,
-    fill: { color: T.blue }, line: { color: T.blue } });
+  // Optional description — one line, muted
+  if (descColor) {
+    s.addText(clamp(slide?.description || "", 120), {
+      x: MARGIN, y: startY + 0.34 + 0.10 + headH + 0.22, w: W - MARGIN * 2, h: 0.40,
+      fontSize: 14, color: descColor, fontFace: T.fontB, align: "left",
+    });
+  }
+}
 
+/** Style A — white bg, muted blue number, ink title */
+function buildSectionA(pptx, slide, num) {
+  const s = pptx.addSlide({ masterName: "SEC_WHITE" });
+  const hl     = clamp(slide.headline || "", 52);
+  const lines  = estLines(hl, 46, W - MARGIN * 2);
+  const headH  = Math.max(0.80, lines * 0.74);
+  const startY = (H - 0.34 - 0.10 - headH) / 2 - 0.10;
+
+  s.addText(String(num).padStart(2, "0"), {
+    x: MARGIN, y: startY, w: W - MARGIN * 2, h: 0.34,
+    fontSize: 13, bold: true, color: T.blue, fontFace: T.fontB,
+    charSpacing: 4, align: "left", valign: "middle",
+  });
+  s.addText(hl, {
+    x: MARGIN, y: startY + 0.44, w: W - MARGIN * 2, h: headH,
+    fontSize: 46, bold: true, color: T.ink, fontFace: T.fontH,
+    align: "left", valign: "top", wrap: true,
+  });
   if (slide.description) {
-    s.addText(clamp(slide.description, 130), {
-      x: SW + 0.40, y: headY + headH + 0.38, w: titleW, h: 0.60,
-      fontSize: 14, color: T.muted, fontFace: T.fontB, align: "left", wrap: true,
+    s.addText(clamp(slide.description, 120), {
+      x: MARGIN, y: startY + 0.44 + headH + 0.24, w: W - MARGIN * 2, h: 0.38,
+      fontSize: 14, color: T.muted, fontFace: T.fontB, align: "left",
     });
   }
   note(s, slide.speaker_notes);
 }
 
-/**
- * Style B — LIGHT GREY, centered typographic
- * Slate-100 bg. Full-width thin blue top line. Section number + headline
- * typeset centred like a chapter title. No decoration beyond rule.
- */
+/** Style B — pale blue bg, blue number, ink title */
 function buildSectionB(pptx, slide, num) {
   const s = pptx.addSlide({ masterName: "SEC_LIGHT" });
+  const hl     = clamp(slide.headline || "", 52);
+  const lines  = estLines(hl, 46, W - MARGIN * 2);
+  const headH  = Math.max(0.80, lines * 0.74);
+  const startY = (H - 0.34 - 0.10 - headH) / 2 - 0.10;
 
-  // Full-width blue top rule — 3px
-  s.addShape("rect", { x: 0, y: 0, w: W, h: 0.06,
-    fill: { color: T.blue }, line: { color: T.blue } });
-
-  // Section label — centred, small, blue, spaced
-  s.addText(`${String(num).padStart(2, "0")}  ·  SECTION`, {
-    x: 1.5, y: 2.0, w: W - 3.0, h: 0.28,
-    fontSize: 10, bold: true, color: T.blue, fontFace: T.fontB,
-    charSpacing: 3, align: "center",
+  s.addText(String(num).padStart(2, "0"), {
+    x: MARGIN, y: startY, w: W - MARGIN * 2, h: 0.34,
+    fontSize: 13, bold: true, color: T.blue, fontFace: T.fontB,
+    charSpacing: 4, align: "left", valign: "middle",
   });
-
-  // Headline — centred, 42pt ink
-  const hl    = clamp(slide.headline || "", 52);
-  const lines = estLines(hl, 42, W - 4.0);
-  const headH = Math.max(0.80, lines * 0.68);
   s.addText(hl, {
-    x: 2.0, y: 2.40, w: W - 4.0, h: headH,
-    fontSize: 42, bold: true, color: T.ink, fontFace: T.fontH,
-    align: "center", valign: "top", wrap: true,
+    x: MARGIN, y: startY + 0.44, w: W - MARGIN * 2, h: headH,
+    fontSize: 46, bold: true, color: T.ink, fontFace: T.fontH,
+    align: "left", valign: "top", wrap: true,
   });
-
-  // Rule below headline
-  s.addShape("rect", { x: (W - 2.40) / 2, y: 2.40 + headH + 0.22, w: 2.40, h: 0.04,
-    fill: { color: T.blue }, line: { color: T.blue } });
-
   if (slide.description) {
     s.addText(clamp(slide.description, 120), {
-      x: 2.0, y: 2.40 + headH + 0.40, w: W - 4.0, h: 0.60,
-      fontSize: 14, color: T.muted, fontFace: T.fontB, align: "center", wrap: true,
+      x: MARGIN, y: startY + 0.44 + headH + 0.24, w: W - MARGIN * 2, h: 0.38,
+      fontSize: 14, color: T.muted, fontFace: T.fontB, align: "left",
     });
   }
   note(s, slide.speaker_notes);
 }
 
-/**
- * Style C — DARK NAVY, white text
- * Deep navy bg. White headline, large and left-aligned.
- * Blue top stripe, red accent rule under headline, ghost section number top-right.
- */
+/** Style C — dark navy bg, pale number, white title */
 function buildSectionC(pptx, slide, num) {
   const s = pptx.addSlide({ masterName: "SEC_DARK" });
+  const hl     = clamp(slide.headline || "", 52);
+  const lines  = estLines(hl, 46, W - MARGIN * 2);
+  const headH  = Math.max(0.80, lines * 0.74);
+  const startY = (H - 0.34 - 0.10 - headH) / 2 - 0.10;
 
-  // Blue top stripe
-  s.addShape("rect", { x: 0, y: 0, w: W, h: 0.08,
-    fill: { color: T.blue }, line: { color: T.blue } });
-
-  // Ghost section number — top right, very faint
   s.addText(String(num).padStart(2, "0"), {
-    x: W - 5.0, y: -0.40, w: 4.60, h: 4.0,
-    fontSize: 260, bold: true, color: "1E3570", fontFace: T.fontH,
-    align: "right", valign: "top",
+    x: MARGIN, y: startY, w: W - MARGIN * 2, h: 0.34,
+    fontSize: 13, bold: true, color: "6B8FBA", fontFace: T.fontB,
+    charSpacing: 4, align: "left", valign: "middle",
   });
-
-  // "SECTION" small label
-  s.addText("SECTION", {
-    x: MARGIN, y: 0.48, w: 5.0, h: 0.26,
-    fontSize: 10, bold: true, color: T.blue, fontFace: T.fontB,
-    charSpacing: 3, align: "left",
-  });
-
-  // Headline — white, 40pt, left, vertically centred
-  const hl    = clamp(slide.headline || "", 48);
-  const lines = estLines(hl, 40, W - MARGIN * 2 - 0.20);
-  const headH = Math.max(0.80, lines * 0.66);
-  const headY = (H - headH) / 2;
   s.addText(hl, {
-    x: MARGIN, y: headY, w: W - MARGIN * 2 - 0.20, h: headH,
-    fontSize: 40, bold: true, color: T.white, fontFace: T.fontH,
-    align: "left", valign: "middle", wrap: true,
+    x: MARGIN, y: startY + 0.44, w: W - MARGIN * 2, h: headH,
+    fontSize: 46, bold: true, color: T.white, fontFace: T.fontH,
+    align: "left", valign: "top", wrap: true,
   });
-
-  // Red accent rule under headline
-  s.addShape("rect", { x: MARGIN, y: headY + headH + 0.20, w: 2.20, h: 0.05,
-    fill: { color: T.red }, line: { color: T.red } });
-
   if (slide.description) {
     s.addText(clamp(slide.description, 120), {
-      x: MARGIN, y: headY + headH + 0.40, w: W - MARGIN * 2, h: 0.60,
-      fontSize: 14, color: "7FA8CC", fontFace: T.fontB, align: "left", wrap: true,
+      x: MARGIN, y: startY + 0.44 + headH + 0.24, w: W - MARGIN * 2, h: 0.38,
+      fontSize: 14, color: "7A9EC0", fontFace: T.fontB, align: "left",
     });
   }
   note(s, slide.speaker_notes);
