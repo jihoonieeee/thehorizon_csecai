@@ -537,10 +537,15 @@ a:hover { text-decoration: underline; }
   font-weight: 400;
 }
 
-/* Headline: show the full insight (no clamp) */
+/* Headline: clamp to 3 lines so cards stay visually even at rest; the full
+   insight is revealed when the item is expanded (.open). */
 .hz-insight-headline {
   font-size: 0.77rem; font-weight: 600; line-height: 1.45; color: var(--text-primary);
   overflow-wrap: break-word;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.hz-insight-item.open .hz-insight-headline {
+  -webkit-line-clamp: unset; overflow: visible;
 }
 
 /* Detail section — shown when open */

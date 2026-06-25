@@ -184,7 +184,7 @@ function InsightItem({ p }) {
 
   return (
     <li
-      className={`hz-insight-item${hasDetail ? " expandable" : ""}`}
+      className={`hz-insight-item${hasDetail ? " expandable" : ""}${open ? " open" : ""}`}
       onClick={hasDetail ? () => setOpen(o => !o) : undefined}
     >
       <div className="hz-insight-headline">{p.insight}</div>
