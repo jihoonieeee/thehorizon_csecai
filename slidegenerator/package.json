@@ -1,0 +1,20 @@
+{
+  "name": "slidegenerator",
+  "version": "1.0.0",
+  "description": "Convert text or markdown into a styled CSA-template PowerPoint deck using Claude",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "slidegenerator": "./index.js"
+  },
+  "scripts": {
+    "generate": "node index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "pptxgenjs": "^4.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
