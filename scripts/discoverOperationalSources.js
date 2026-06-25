@@ -41,6 +41,11 @@ import { candidatesToSources } from "../lib/pipeline/discovery/candidateToSource
 import { normalizeSource } from "../lib/pipeline/ingest/normalizeSource.js";
 import { validateAndTypeSource } from "../lib/pipeline/validation/validateAndTypeSource.js";
 import { fetchPageText } from "../lib/pipeline/discovery/fetchCandidateText.js";
+import { understandSource } from "../lib/pipeline/v2/understandSource.js";
+import { DOMAINS } from "../lib/pipeline/v2/taxonomy.js";
+
+// Valid offensive/adjacent v2 domains (excludes the catch-all for the v2ok gate).
+const DOMAINS_SET = new Set(DOMAINS.filter(d => d !== "unclear_or_adjacent"));
 
 const args   = process.argv.slice(2);
 const getArg  = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i + 1] ? args[i + 1] : d; };
@@ -146,6 +151,25 @@ async function processOne(src) {
 
     const keep = v.validation_status === "pass" || v.validation_status === "review";
     if (keep && !DRY) {
+      // v2 understand-layer classification so discovered sources are born with a
+      // v2 main_category + tags + defensive flag (legacy validateAndTypeSource does
+      // not assign the v2 taxonomy, which left discovered sources at null category
+      // and invisible to the dashboard / insights / slides).
+      let u = null;
+      try { u = await understandSource(row); } catch { /* fall back to legacy */ }
+      const v2ok = u && u.relevant && DOMAINS_SET.has(u.category);
+
+      const tags = v2ok ? (u.primary_tags || []) : [];
+      const intelligence = v2ok
+        ? {
+            is_defensive:         u.is_defensive || false,
+            defended_category:    u.defended_category || null,
+            defensive_techniques: u.defensive_techniques || [],
+            key_entities:         u.key_entities || [],
+            main_claims:          u.main_claims || [],
+          }
+        : null;
+
       const { error } = await sb.from("sources").upsert({
         id:                 row.id,
         url:                row.url,
@@ -153,11 +177,14 @@ async function processOne(src) {
         publisher:          row.publisher,
         author:             row.publisher,
         date_published:     row.date_published,
-        source_type:        v.source_type || row.source_type,
+        source_type:        (v2ok && u.source_type) || v.source_type || row.source_type,
         full_text:          row.full_text,
         summary:            row.full_text?.slice(0, 500) || "",
-        trust_tier:         row.trust_tier,
-        main_category:      v.main_category || null,
+        short_summary:      v2ok ? (u.short_summary || null) : null,
+        trust_tier:         (v2ok && u.trust_tier && u.trust_tier !== "unknown") ? u.trust_tier : row.trust_tier,
+        main_category:      v2ok ? u.category : (v.main_category || null),
+        tags,
+        intelligence,
         validation_status:  v.validation_status,
         layer3_status:      v.layer3_status || v.validation_status,
         downstream_route:   v.downstream_route || null,
@@ -170,6 +197,10 @@ async function processOne(src) {
       }, { onConflict: "id" });
       if (error) { console.log(`  ! save failed ${id}: ${error.message}`); return; }
       tally.saved++;
+      const defMark = v2ok && u.is_defensive ? " [defensive]" : "";
+      const catMark = v2ok ? u.category.split("_")[0] : "null-cat";
+      process.stdout.write(`  ${v.validation_status.padEnd(6)} ${(DRY ? "would-save" : "saved").padEnd(10)} ${catMark.padEnd(12)}${defMark} ${(row.publisher || "").slice(0, 18).padEnd(18)} ${(row.title || "").slice(0, 42)}\n`);
+      return;
     }
     const mark = keep ? (DRY ? "would-save" : "saved") : "drop";
     process.stdout.write(`  ${v.validation_status.padEnd(6)} ${mark.padEnd(10)} ${(row.publisher || "").slice(0, 20).padEnd(20)} ${(row.title || "").slice(0, 46)}\n`);
