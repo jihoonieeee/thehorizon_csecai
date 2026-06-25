@@ -395,20 +395,29 @@ async function main() {
 
   // Persist to Supabase: snapshot + deck blob + update source classifications
   if (!NO_PERSIST && supabase) {
-    // 1. Snapshot row
+    // 1. Snapshot row.
+    // The `snapshots` table uses the ingest schema (snapshot_id, period, *_utc,
+    // count, blob_path, …) — it has NO dashboard_state/category_analyses/counts
+    // columns, and the dashboard reads v2 data from the `decks` table + the
+    // `dashboard_insights`/`sources` tables, NOT from here. Writing v2-only columns
+    // made the WHOLE upsert fail with a schema error that the old code swallowed
+    // (it never checked `error`), so no snapshot row was created at all. Write only
+    // real columns, and surface the error so a failure can never be logged as success.
     try {
       const snapshot_id = `snapshot-${result.run_id}`;
-      await supabase.from("snapshots").upsert({
+      const range = result.corpus_summary?.date_range?.split(" to ") || [];
+      const { error: snapErr } = await supabase.from("snapshots").upsert({
         snapshot_id,
-        run_id:            result.run_id,
-        created_at:        result.run_date,
-        source_count:      result.counts.sources_relevant,
-        pipeline_version:  result.pipeline_version,
-        dashboard_state:   result.dashboard_state,
-        category_analyses: result.category_analyses,
-        counts:            result.counts,
+        period:          "horizon_scan_v2",
+        generated_at:    result.run_date,
+        created_at:      result.run_date,
+        start_utc:       range[0] || null,
+        end_utc:         range[1] || null,
+        count:           result.counts.sources_relevant || 0,
+        discarded_count: result.counts.sources_discarded || 0,
       }, { onConflict: "snapshot_id" });
-      console.log(`  Persisted snapshot: ${snapshot_id}`);
+      if (snapErr) console.warn(`  Snapshot persist FAILED: ${snapErr.message}`);
+      else console.log(`  Persisted snapshot: ${snapshot_id}`);
     } catch (err) {
       console.warn(`  Snapshot persist failed: ${err.message}`);
     }
@@ -457,21 +466,23 @@ async function main() {
       console.warn(`  Deck persist failed: ${err.message}`);
     }
 
-    // 3. Write main_category and tags back to source rows so chatbot search works
+    // 3. Write main_category and tags back to source rows so chatbot search works.
+    // Check each update's error so a partial failure is reported, not silently
+    // counted as success.
     try {
       const relevant = result.relevant || [];
       const CHUNK = 20;
-      let updated = 0;
+      let updated = 0, failed = 0;
       for (let i = 0; i < relevant.length; i += CHUNK) {
-        await Promise.all(relevant.slice(i, i + CHUNK).map(src =>
+        const results = await Promise.all(relevant.slice(i, i + CHUNK).map(src =>
           supabase.from("sources").update({
             main_category: src.category,
             tags:          src.primary_tags || [],
           }).eq("id", src.id)
         ));
-        updated += Math.min(CHUNK, relevant.length - i);
+        for (const r of results) { if (r.error) failed++; else updated++; }
       }
-      if (updated) console.log(`  Updated main_category on ${updated} source rows`);
+      console.log(`  Updated main_category on ${updated} source rows${failed ? ` (${failed} FAILED)` : ""}`);
     } catch (err) {
       console.warn(`  Source classification persist failed: ${err.message}`);
     }
