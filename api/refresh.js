@@ -4,6 +4,7 @@ import {
   startIngestionRun,
   finishIngestionRun,
   failIngestionRun,
+  findRecentSuccessfulRun,
 } from "../lib/storage/ingestionRunStore.js";
 import { flushPipelineCostToDB } from "../lib/llm/usagePersistence.js";
 
@@ -44,6 +45,23 @@ export default async function handler(req, res) {
         end_sgt: new Date(end.getTime() + 8 * 60 * 60 * 1000).toISOString(),
       };
     })();
+
+    // Idempotency guard: suppress the duplicate daily cron invocation that fires
+    // a few minutes after the first and would re-run Layer-3 LLM validation over
+    // the same window for no new data. `?force=1` bypasses for manual re-runs.
+    if (req.query.force !== "1") {
+      const duplicate = await findRecentSuccessfulRun({ days, withinMinutes: 20 });
+      if (duplicate) {
+        return res.status(200).json({
+          skipped: true,
+          reason: "duplicate_run_suppressed",
+          days_window: days,
+          matched_run_id: duplicate.id,
+          matched_finished_at: duplicate.finished_at,
+          matched_source_count: duplicate.source_count,
+        });
+      }
+    }
 
     runId = await startIngestionRun();
 
