@@ -14,7 +14,7 @@
 
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
-import { classifyDefensiveSources } from "../lib/pipeline/v2/classifyDefensive.js";
+import { classifyDefensiveSources } from "../lib/pipeline/classifyDefensive.js";
 
 const args  = process.argv.slice(2);
 const LIMIT = parseInt((args[args.indexOf("--limit") + 1]) || "200", 10);

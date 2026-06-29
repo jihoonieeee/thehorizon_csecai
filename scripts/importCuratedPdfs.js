@@ -247,7 +247,7 @@ async function main() {
       full_text,
       summary:        full_text.slice(0, 500),
       validation_status: "pass",       // curated — bypasses Layer 3
-      claim_extraction_status: null,   // enrichCorpus will process these
+      claim_extraction_status: null,   // understandCorpus will process these
     };
 
     const { error } = await supabase.from("sources").upsert(row, { onConflict: "id" });
@@ -262,7 +262,7 @@ async function main() {
 
   console.log(`\nDone: ${imported} imported, ${skipped} skipped, ${failed} failed`);
   if (imported > 0 && !DRY_RUN) {
-    console.log("Run enrichment next:  node scripts/enrichCorpus.js --concurrency 2");
+    console.log("Run enrichment next:  node scripts/understandCorpus.js --concurrency 2");
   }
 }
 

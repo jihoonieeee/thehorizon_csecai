@@ -18,8 +18,8 @@
 
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
-import { understandAllSources } from "../lib/pipeline/v2/understandSource.js";
-import { splitByDefensive, classifyDefensiveSources } from "../lib/pipeline/v2/classifyDefensive.js";
+import { understandAllSources } from "../lib/pipeline/understandSource.js";
+import { splitByDefensive, classifyDefensiveSources } from "../lib/pipeline/classifyDefensive.js";
 
 const args  = process.argv.slice(2);
 const getArg = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i+1] ? args[i+1] : d; };
@@ -71,6 +71,7 @@ if (defensive.length) {
         defensive_techniques: s.defensive_techniques || [],
         defensive_analysis:   s.defensive_analysis || null,
         key_entities:         s.key_entities || [],
+        key_terms:            s.key_terms || [],
         main_claims:          s.main_claims || [],
       },
     }));

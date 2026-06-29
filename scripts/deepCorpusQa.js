@@ -8,7 +8,7 @@
  * remediation is delegated to the dedicated scripts it names in its findings:
  *   - unprocessed sources        → scripts/processUnvalidated.js
  *   - recoverable operational    → scripts/revalidateBacklog.js
- *   - missing enrichment         → scripts/enrichCorpus.js
+ *   - missing enrichment         → scripts/understandCorpus.js
  *
  * Checks
  *   1. Status distribution + UNPROCESSED (null/pending) sources         [CRITICAL if >0]
@@ -26,7 +26,7 @@
 import "dotenv/config";
 import fs from "fs";
 import { createClient } from "@supabase/supabase-js";
-import { buildCorpusComposition, formatCompositionReport, bucketForSourceType } from "../lib/pipeline/v2/corpusComposition.js";
+import { buildCorpusComposition, formatCompositionReport, bucketForSourceType } from "../lib/pipeline/corpusComposition.js";
 
 const args   = process.argv.slice(2);
 const getArg  = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i + 1] ? args[i + 1] : d; };
@@ -109,7 +109,7 @@ console.log(`     missing short_summary/analyst_brief: ${missingSummary.length} 
 console.log(`     missing intelligence:                ${missingIntel.length}\n`);
 if (summaryGapPct >= 15) {
   add("warning", "enrichment_gap",
-    `${missingSummary.length} pass sources (${summaryGapPct.toFixed(0)}%) lack a summary. Run: node scripts/enrichCorpus.js`,
+    `${missingSummary.length} pass sources (${summaryGapPct.toFixed(0)}%) lack a summary. Run: node scripts/understandCorpus.js`,
     { missing_summary: missingSummary.length, missing_intelligence: missingIntel.length });
 }
 

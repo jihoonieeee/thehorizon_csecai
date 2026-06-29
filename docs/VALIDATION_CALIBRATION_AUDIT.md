@@ -101,12 +101,12 @@ Consumers that hard-filter `pass` (so `review`/`null` are invisible):
 | `scripts/generateDashboardInsights.js` | :246 | dashboard insight cron |
 | `api/dashboard.js` | :198, :251 | dashboard API |
 | `lib/agent/agentTools.js` | :99 | Ask-Agent chatbot |
-| `scripts/enrichCorpus.js` | :56 | **enrichment — only `pass` gets LLM enrichment** |
+| `scripts/understandCorpus.js` | :56 | **enrichment — only `pass` gets LLM enrichment** |
 
 Already lenient: `api/sources.js:61` uses `.not(eq 'reject')` — the source browser
 **already shows `review` + `null`**; only the analytical layers exclude them.
 
-**Consequence of `enrichCorpus.js:56`:** `review`/`null` sources never receive
+**Consequence of `understandCorpus.js:56`:** `review`/`null` sources never receive
 `short_summary`/`intelligence`, so even if surfaced they'd be thin. Recovery must
 re-enrich, not just re-label.
 
@@ -122,7 +122,7 @@ OR (validation_status = 'review'
                         'governance_signal'))
 ```
 
-and widen `enrichCorpus`'s selection to match so those rows get enriched. This is
+and widen `understandCorpus`'s selection to match so those rows get enriched. This is
 strictly additive — it cannot remove anything currently shown.
 
 ---
@@ -132,7 +132,7 @@ strictly additive — it cannot remove anything currently shown.
 **They were never validated at all.** `ai_threat_focus` and `relevance_tier` are
 `null` on **all 195** — Layer 3 never ran. Root cause: they were saved with
 `validation_status = null` (RSS/sitemap ingest default), and the only
-re-processing job, `enrichCorpus.js`, selects `validation_status = 'pass'` — so
+re-processing job, `understandCorpus.js`, selects `validation_status = 'pass'` — so
 nothing ever picks them up. They are orphaned between ingest and validation.
 
 | Dimension | Breakdown |

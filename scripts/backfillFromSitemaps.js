@@ -451,7 +451,7 @@ async function upsertSource(row) {
   if (error) throw new Error(error.message);
 }
 
-// ── Ingest pipeline (simplified Layer 3 — save as 'review', enrichCorpus handles rest) ──
+// ── Ingest pipeline (simplified Layer 3 — save as 'review', understandCorpus handles rest) ──
 
 async function ingestArticle(url, lastmod, pub) {
   let articleText = "", articleTitle = "", articleDate = lastmod;
@@ -482,7 +482,7 @@ async function ingestArticle(url, lastmod, pub) {
     trust_tier:     pub.trust_tier,
   });
 
-  // Save with validation_status='review' — enrichCorpus + Layer 3 will classify
+  // Save with validation_status='review' — understandCorpus + Layer 3 will classify
   // (same flow as RSS feed items that need review)
   const validated = await validateAndTypeSource(row, { skipLlm: false });
   const dbRow = {
@@ -584,7 +584,7 @@ async function main() {
               full_text:      entry.text,
               trust_tier:     pub.trust_tier,
             });
-            // Run Layer 3 validation so only AI-relevant content passes to enrichCorpus
+            // Run Layer 3 validation so only AI-relevant content passes to understandCorpus
             const validated = await validateAndTypeSource(normalized, { skipLlm: false });
             const row = {
               id:                normalized.id,
@@ -635,7 +635,7 @@ async function main() {
     console.log(`\n  Next step — run the full ingest pipeline on new sources:`);
     console.log(`    node scripts/backfillSources.js --feeds-only`);
     console.log(`  Then enrich:`);
-    console.log(`    node scripts/enrichCorpus.js --concurrency 3`);
+    console.log(`    node scripts/understandCorpus.js --concurrency 3`);
   }
 }
 

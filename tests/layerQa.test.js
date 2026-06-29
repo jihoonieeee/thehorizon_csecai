@@ -4,7 +4,7 @@
  */
 
 import assert from "node:assert/strict";
-import { qaUnderstandLayer, qaEvidenceLayer, formatLayerQa } from "../lib/pipeline/v2/layerQa.js";
+import { qaUnderstandLayer, qaEvidenceLayer, formatLayerQa } from "../lib/pipeline/layerQa.js";
 
 let passed = 0, failed = 0;
 function test(name, fn) {

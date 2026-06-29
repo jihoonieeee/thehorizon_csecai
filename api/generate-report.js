@@ -25,8 +25,8 @@
 
 import { createClient }      from "@supabase/supabase-js";
 import { loadLatestDeck, listDecks, getDeck } from "../lib/storage/deckStore.js";
-import { runPipelineV2FromDB } from "../lib/pipeline/v2/runPipelineV2.js";
-import { renderDeckPptxToBuffer } from "../lib/pipeline/v2/renderDeckPptx.js";
+import { runPipelineFromDB } from "../lib/pipeline/runPipeline.js";
+import { renderDeckPptxToBuffer } from "../lib/pipeline/renderDeckPptx.js";
 
 const WINDOW_DAYS = {
   month:     30,
@@ -111,7 +111,7 @@ export default async function handler(req, res) {
         process.env.SUPABASE_SERVICE_ROLE_KEY,
       );
 
-      const result = await runPipelineV2FromDB(supabase, {
+      const result = await runPipelineFromDB(supabase, {
         days,
         skipLlm: Boolean(skipLlm),
         skipSlides: false,

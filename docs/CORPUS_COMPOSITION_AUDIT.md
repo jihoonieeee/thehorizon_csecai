@@ -274,7 +274,7 @@ dashboard query, or (b) add an LLM second-pass that promotes well-grounded
 
 **P3 — Re-validate the 195 `null` sources.** They were ingested but never gated.
 A one-off re-validation pass recovers whatever is genuinely relevant for free
-(no re-fetch). Run via `enrichCorpus.js` / a `validateAndTypeSource` sweep.
+(no re-fetch). Run via `understandCorpus.js` / a `validateAndTypeSource` sweep.
 
 **P4 — Backfill operational feeds historically (the answer to "can we
 backfill?": yes).** arXiv/NVD have months of depth because `backfillSources.js`

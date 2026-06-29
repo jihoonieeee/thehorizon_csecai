@@ -14,12 +14,6 @@ const CAT_COLOR = {
   ai_enabled_threats:     "#FFAA22",
 };
 
-const DOMAIN_COLOR = {
-  traditional_ai_threats: "#3583C9",
-  llm_threats:            "#9C62A7",
-  agentic_ai_threats:     "#19BC9D",
-  ai_enabled_threats:     "#FFAA22",
-};
 
 const TRUST_BADGE = {
   primary:  { label: "Primary",  cls: "hz-trust-primary"  },
@@ -320,20 +314,29 @@ function AssessmentChanges({ items }) {
 function EmergingSignalCard({ s }) {
   const [open, setOpen] = useState(false);
   const sources = s.sources || [];
+  // watch may be an array of points (new) or a single string (legacy data).
+  const watchPoints = Array.isArray(s.watch) ? s.watch.filter(Boolean) : (s.watch ? [s.watch] : []);
+  // Every signal gets elaboration: fall back to a deterministic, source-grounded
+  // line when the generated analysis is missing.
+  const analysisText = s.analysis || (
+    `Early signal — appeared in ${s.curr ?? "more"} source${s.curr === 1 ? "" : "s"} this period` +
+    `${s.prev != null ? `, up from ${s.prev}` : ""}. Evidence is still thin; watch for corroboration ` +
+    `before treating it as a confirmed trend.`
+  );
   return (
     <div className="hz-es-card">
       <div className="hz-es-head">
         <span className="hz-es-name">{s.signal}</span>
-        <span className="hz-es-track">
-          <span className="hz-es-prev">{s.previous || "Weak signal"}</span>
-          <span className="hz-es-arrow">→</span>
-          <span className="hz-es-curr">{s.current || "Emerging trend"}</span>
-        </span>
         {s.reason && <span className="hz-es-reason">{s.reason}</span>}
       </div>
-      {s.analysis && <div className="hz-es-analysis">{s.analysis}</div>}
-      {s.watch && (
-        <div className="hz-es-watch"><span className="hz-insight-tag">Watch</span>{s.watch}</div>
+      <div className="hz-es-analysis">{analysisText}</div>
+      {watchPoints.length > 0 && (
+        <div className="hz-es-watch">
+          <span className="hz-es-watch-label">Watch</span>
+          <ul className="hz-es-watch-list">
+            {watchPoints.map((w, i) => <li key={i}>{w}</li>)}
+          </ul>
+        </div>
       )}
       {sources.length > 0 && (
         <>
@@ -413,91 +416,51 @@ const DOMAINS = [
   { key: "ai_enabled_threats",     prefix: "AE",  label: "AI-Enabled"     },
 ];
 
-const CAT_HEADERS = [
-  { key: "traditional_ai_threats", short: "Traditional" },
-  { key: "llm_threats",            short: "LLM"         },
-  { key: "agentic_ai_threats",     short: "Agentic"     },
-  { key: "ai_enabled_threats",     short: "AI-Enabled"  },
-];
 
-function cellIntensity(count, maxCount) {
-  if (!count || !maxCount) return 0;
-  return Math.min(count / maxCount, 1);
-}
-
+// Taxonomy: one section per main category (4), each listing only its own tags
+// with that category's source count. Click a tag to explore its sources.
 function TaxonomyHeatmap({ tagMatrix, onSelect, selected }) {
   const { tags = [], by_category = {} } = tagMatrix || {};
   if (!tags.length) return <p className="hz-overview-empty">No taxonomy data for this period.</p>;
 
-  // Find global max for colour scaling
-  const allCounts = tags.flatMap(t => CAT_HEADERS.map(c => by_category[t.id]?.[c.key] || 0));
-  const maxCount  = Math.max(...allCounts, 1);
-
-  // Group tags by domain
   const grouped = DOMAINS.map(d => ({
     ...d,
-    tags: tags.filter(t => t.domain === d.key),
+    tags: tags
+      .filter(t => t.domain === d.key)
+      .map(t => ({ ...t, count: by_category[t.id]?.[d.key] || 0 }))
+      .sort((a, b) => b.count - a.count),
   })).filter(d => d.tags.length > 0);
 
   return (
-    <div className="hz-heatmap-wrap">
-      <table className="hz-heatmap-table">
-        <thead>
-          <tr>
-            <th className="hz-heatmap-th-label">Technique</th>
-            {CAT_HEADERS.map(c => (
-              <th key={c.key} className="hz-heatmap-th-cat">
-                <span style={{ color: CAT_COLOR[c.key] }}>{c.short}</span>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {grouped.map(domain => (
-            <>
-              <tr key={`domain-${domain.key}`} className="hz-heatmap-domain-row">
-                <td colSpan={5} className="hz-heatmap-domain-label"
-                  style={{ color: DOMAIN_COLOR[domain.key] }}>
-                  {domain.label}
-                </td>
-              </tr>
-              {domain.tags.map(tag => {
-                const rowTotal = CAT_HEADERS.reduce((s, c) => s + (by_category[tag.id]?.[c.key] || 0), 0);
-                const rowActive = selected?.tag === tag.id;
-                return (
-                  <tr key={tag.id} className={`hz-heatmap-row${rowActive ? " active" : ""}`}>
-                    <td
-                      className={`hz-heatmap-td-label${rowTotal > 0 ? " clickable" : ""}`}
-                      title={rowTotal > 0 ? `View ${rowTotal} source${rowTotal !== 1 ? "s" : ""} tagged ${tag.label}` : tag.id}
-                      onClick={rowTotal > 0 ? () => onSelect(tag, null) : undefined}
-                    >
-                      {tag.label}
-                    </td>
-                    {CAT_HEADERS.map(c => {
-                      const count = by_category[tag.id]?.[c.key] || 0;
-                      const alpha = cellIntensity(count, maxCount);
-                      const color = CAT_COLOR[c.key];
-                      const bg = alpha > 0
-                        ? `${color}${Math.round(alpha * 200).toString(16).padStart(2, "0")}`
-                        : "transparent";
-                      const cellActive = rowActive && selected?.category === c.key;
-                      return (
-                        <td key={c.key}
-                          className={`hz-heatmap-td-cell${count > 0 ? " clickable" : ""}${cellActive ? " active" : ""}`}
-                          style={{ background: bg }}
-                          title={`${tag.label} × ${CAT_HEADERS.find(h => h.key === c.key)?.short}: ${count} source${count !== 1 ? "s" : ""}${count > 0 ? " — click to explore" : ""}`}
-                          onClick={count > 0 ? () => onSelect(tag, c.key) : undefined}>
-                          {count > 0 ? count : ""}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </>
-          ))}
-        </tbody>
-      </table>
+    <div className="hz-taxonomy-cats">
+      {grouped.map(domain => (
+        <div key={domain.key} className="hz-taxonomy-cat">
+          <div className="hz-taxonomy-cat-head" style={{ borderColor: CAT_COLOR[domain.key] }}>
+            <span className="hz-taxonomy-cat-name" style={{ color: CAT_COLOR[domain.key] }}>
+              {CAT_LABEL[domain.key] || domain.label}
+            </span>
+          </div>
+          <div className="hz-taxonomy-tags">
+            {domain.tags.map(tag => {
+              const active = selected?.tag === tag.id;
+              const clickable = tag.count > 0;
+              return (
+                <button
+                  key={tag.id}
+                  className={`hz-taxonomy-tag${active ? " active" : ""}${clickable ? " clickable" : ""}`}
+                  style={active ? { borderColor: CAT_COLOR[domain.key] } : undefined}
+                  title={clickable ? `View ${tag.count} source${tag.count !== 1 ? "s" : ""} tagged ${tag.label}` : tag.id}
+                  onClick={clickable ? () => onSelect(tag, domain.key) : undefined}
+                  disabled={!clickable}
+                >
+                  <span className="hz-taxonomy-tag-label">{tag.label}</span>
+                  <span className="hz-taxonomy-tag-count">{tag.count}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -690,9 +653,12 @@ export function OverviewPage() {
       ) ? (
         <>
           <div className="hz-overview-section-title">
-            Since last period
-            {data.comparison.compared_to_label && (
-              <span className="hz-overview-section-note">vs {data.comparison.compared_to_label}</span>
+            This period vs last period
+            {(data.window_label || data.comparison.compared_to_label) && (
+              <span className="hz-overview-section-note">
+                {data.window_label || `${data.date_from} – ${data.date_to}`}
+                {data.comparison.compared_to_label ? ` vs ${data.comparison.compared_to_label}` : ""}
+              </span>
             )}
           </div>
 
@@ -705,9 +671,7 @@ export function OverviewPage() {
 
           {data.comparison.emerging_signals?.length > 0 && (
             <>
-              <div className="hz-overview-subtitle">Emerging signals
-                <span className="hz-overview-section-note">weak last period, gaining evidence now</span>
-              </div>
+              <div className="hz-overview-subtitle">Emerging signals</div>
               <EmergingSignals items={data.comparison.emerging_signals} />
             </>
           )}
