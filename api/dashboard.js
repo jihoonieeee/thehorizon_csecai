@@ -248,7 +248,9 @@ export default async function handler(req, res) {
         url:       s.url,
         publisher: s.publisher,
         date:      s.date_published?.slice(0, 10),
-        summary:   truncateAtWord(s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "", 200) || null,
+        // Full summary — the stored short_summary/analyst_brief is already a tight
+        // 1-2 sentence brief; show it whole rather than re-truncating.
+        summary:   (s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "").trim() || null,
       }));
 
       // Evidence maturity + confidence computed LIVE over the same source set the
@@ -347,7 +349,8 @@ export default async function handler(req, res) {
         date:      s.date_published?.slice(0, 10),
         category:  s.main_category,
         trust_tier: s.trust_tier,
-        summary:   truncateAtWord(s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "", 220) || null,
+        // Full summary — show the whole stored brief, not a re-truncated slice.
+        summary:   (s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "").trim() || null,
       }));
 
     // ── 5. Tag matrix (40 tags × 4 categories) + per-tag source lists ─────────
