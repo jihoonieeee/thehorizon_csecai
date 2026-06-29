@@ -71,6 +71,7 @@ if (defensive.length) {
         defensive_techniques: s.defensive_techniques || [],
         defensive_analysis:   s.defensive_analysis || null,
         key_entities:         s.key_entities || [],
+        key_terms:            s.key_terms || [],
         main_claims:          s.main_claims || [],
       },
     }));

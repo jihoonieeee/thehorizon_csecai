@@ -166,6 +166,7 @@ async function processOne(src) {
             defended_category:    u.defended_category || null,
             defensive_techniques: u.defensive_techniques || [],
             key_entities:         u.key_entities || [],
+            key_terms:            u.key_terms || [],
             main_claims:          u.main_claims || [],
           }
         : null;

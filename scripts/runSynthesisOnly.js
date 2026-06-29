@@ -63,6 +63,7 @@ function mapDbSource(row) {
     source_type:    row.source_type  || "unknown",
     trust_tier:     row.trust_tier   || "unknown",
     key_entities:   Array.isArray(intel.key_entities) ? intel.key_entities.filter(e => typeof e === "string") : [],
+    key_terms:      Array.isArray(intel.key_terms)    ? intel.key_terms.filter(e => typeof e === "string") : [],
     main_claims:    Array.isArray(intel.main_claims)  ? intel.main_claims  : [],
     key_numbers:    Array.isArray(intel.key_numbers)  ? intel.key_numbers  : [],
     short_summary:  row.short_summary || row.analyst_brief || "",

@@ -104,6 +104,7 @@ async function main() {
           analyst_brief:           cleanSummary,
           intelligence: {
             key_entities: u.key_entities || [],
+            key_terms:    u.key_terms    || [],
             main_claims:  u.main_claims  || [],
             key_numbers:  u.key_numbers  || [],
           },
