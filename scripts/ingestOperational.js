@@ -32,6 +32,8 @@ import { flushCostBuffer } from "../lib/llm/usagePersistence.js";
 const args = process.argv.slice(2);
 const di = args.indexOf("--days");
 const DAYS = di >= 0 && args[di + 1] ? Math.min(parseInt(args[di + 1], 10) || 7, 30) : 7;
+const qi = args.indexOf("--queries-per-mission");
+const QUERIES_PER_MISSION = qi >= 0 && args[qi + 1] ? Math.max(1, parseInt(args[qi + 1], 10) || 3) : 3;
 
 function buildWindow(days) {
   const end = new Date();
@@ -59,6 +61,10 @@ async function main() {
     connectors: [],               // skip NVD/arXiv/etc. — Vercel daily handles them
     extraConnectors: [sitemapConnector],
     webDiscovery: true,           // force on regardless of env (this is the discovery job)
+    // Bound discovery so triage (1 cheap-LLM call/candidate) finishes inside the
+    // CI job budget. 16 missions × 3 queries ≈ 300 candidates ≈ ~10 min, vs. the
+    // default 8/mission that overran a 30-min job.
+    discoveryMaxQueriesPerMission: QUERIES_PER_MISSION,
   });
 
   const snapshot = {
