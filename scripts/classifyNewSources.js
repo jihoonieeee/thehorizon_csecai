@@ -18,8 +18,8 @@
 
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
-import { understandAllSources } from "../lib/pipeline/v2/understandSource.js";
-import { splitByDefensive, classifyDefensiveSources } from "../lib/pipeline/v2/classifyDefensive.js";
+import { understandAllSources } from "../lib/pipeline/understandSource.js";
+import { splitByDefensive, classifyDefensiveSources } from "../lib/pipeline/classifyDefensive.js";
 
 const args  = process.argv.slice(2);
 const getArg = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i+1] ? args[i+1] : d; };

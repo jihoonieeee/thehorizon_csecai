@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * Horizon Scan v2 — Simplified Pipeline CLI
+ * Horizon Scan — Simplified Pipeline CLI
  *
- * Runs the v2 pipeline (understandSource → extractEvidence → synthesizeCategory
+ * Runs the pipeline (understandSource → extractEvidence → synthesizeCategory
  * → buildPresentation) on sources from the Supabase database or a test fixture set.
  *
  * Usage:
- *   node scripts/runHorizonScanV2.js [options]
+ *   node scripts/runHorizonScan.js [options]
  *
  * Options:
  *   --days <n>           Lookback window in days (default: 30)
@@ -16,7 +16,7 @@
  *   --no-slides          Skip slide generation (synthesis only)
  *   --pptx               Render the deck to a .pptx file (and upload to Blob unless --no-persist)
  *   --no-persist         Do not write results to Supabase
- *   --out <dir>          Custom output directory (default: outputs/v2/<run_id>)
+ *   --out <dir>          Custom output directory (default: outputs/<run_id>)
  *   --classify-only      Run L4 classification only: sets main_category on Supabase
  *                        source rows and marks irrelevant ones as rejected.
  *                        Does NOT run L5-L7 or generate slides.
@@ -26,11 +26,11 @@
  *                        'uncategorised' category from the DB. Run after --classify-only.
  *
  * Examples:
- *   node scripts/runHorizonScanV2.js --days 7
- *   node scripts/runHorizonScanV2.js --days 180 --limit 500 --classify-only
- *   node scripts/runHorizonScanV2.js --days 180 --limit 500 --classify-only --unclassified-only
- *   node scripts/runHorizonScanV2.js --purge
- *   node scripts/runHorizonScanV2.js --category llm_threats --days 90
+ *   node scripts/runHorizonScan.js --days 7
+ *   node scripts/runHorizonScan.js --days 180 --limit 500 --classify-only
+ *   node scripts/runHorizonScan.js --days 180 --limit 500 --classify-only --unclassified-only
+ *   node scripts/runHorizonScan.js --purge
+ *   node scripts/runHorizonScan.js --category llm_threats --days 90
  */
 
 import "dotenv/config";
@@ -158,7 +158,7 @@ async function main() {
   const banner = "═".repeat(64);
   const mode = CLASSIFY_ONLY ? "classify-only" : `full pipeline | Slides: ${NO_SLIDES ? "off" : "on"}`;
   console.log(`\n${banner}`);
-  console.log(`  Horizon Scan v2`);
+  console.log(`  Horizon Scan`);
   console.log(`  Days: ${DAYS} | Limit: ${LIMIT} | LLM: ${NO_LLM ? "off" : "on"} | ${mode}`);
   console.log(`${banner}\n`);
 
@@ -232,7 +232,7 @@ async function main() {
   // ── Classify-only mode: run L4, persist back to Supabase, skip L5-L7 ────────
   if (CLASSIFY_ONLY) {
     // Fix 1: correct function name (was understandSources, export is understandAllSources)
-    const { understandAllSources } = await import("../lib/pipeline/v2/understandSource.js");
+    const { understandAllSources } = await import("../lib/pipeline/understandSource.js");
     console.log(`  [L4] Classifying ${sources.length} sources...`);
 
     const { relevant, discarded } = await understandAllSources(sources, {
@@ -289,7 +289,7 @@ async function main() {
       console.error("  --purge requires Supabase credentials");
       process.exit(1);
     }
-    // Delete sources that are clearly irrelevant: unclear_or_adjacent (v2 reject),
+    // Delete sources that are clearly irrelevant: unclear_or_adjacent (pipeline reject),
     // the legacy 'uncategorised' value from the old MVP pipeline, and anything
     // explicitly rejected by the validation pipeline.
     console.log("  [PURGE] Deleting irrelevant sources from DB...");
@@ -310,7 +310,7 @@ async function main() {
       }
     }
 
-    // Delete ALL sources rejected by the v2 classify-only pipeline regardless of
+    // Delete ALL sources rejected by the classify-only pipeline regardless of
     // their previous main_category value (old MVP pipeline categories may still be set).
     const { count: rejCount, error: rejErr } = await supabase.from("sources")
       .delete({ count: "exact" })
@@ -328,10 +328,10 @@ async function main() {
   }
 
   // ── Run pipeline ────────────────────────────────────────────────────────────
-  const { runPipelineV2 } = await import("../lib/pipeline/v2/runPipelineV2.js");
+  const { runPipeline } = await import("../lib/pipeline/runPipeline.js");
 
   const checkpoints = {};
-  const result = await runPipelineV2(sources, {
+  const result = await runPipeline(sources, {
     skipLlm:    NO_LLM,
     skipSlides: NO_SLIDES,
     supabase:   NO_PERSIST ? null : supabase,   // cache/persist L5 evidence per source
@@ -342,7 +342,7 @@ async function main() {
   // ── Write outputs ───────────────────────────────────────────────────────────
   const outDir = OUT_DIR
     ? path.resolve(ROOT, OUT_DIR)
-    : path.join(ROOT, "outputs", "v2", result.run_id);
+    : path.join(ROOT, "outputs", result.run_id);
   fs.mkdirSync(outDir, { recursive: true });
 
   console.log(`\n  Writing outputs to: ${outDir}\n`);
@@ -380,7 +380,7 @@ async function main() {
     // Optional: render the deck to a PowerPoint file
     if (PPTX) {
       try {
-        const { renderDeckPptx } = await import("../lib/pipeline/v2/renderDeckPptx.js");
+        const { renderDeckPptx } = await import("../lib/pipeline/renderDeckPptx.js");
         pptxPath = path.join(outDir, `horizon-scan-${result.run_id.slice(-10)}.pptx`);
         const { slide_count } = await renderDeckPptx(result.deck, pptxPath, {
           title: `AI Cyber Threat Horizon Scan — ${result.corpus_summary?.date_range || result.run_date.slice(0, 10)}`,
@@ -398,8 +398,8 @@ async function main() {
     // 1. Snapshot row.
     // The `snapshots` table uses the ingest schema (snapshot_id, period, *_utc,
     // count, blob_path, …) — it has NO dashboard_state/category_analyses/counts
-    // columns, and the dashboard reads v2 data from the `decks` table + the
-    // `dashboard_insights`/`sources` tables, NOT from here. Writing v2-only columns
+    // columns, and the dashboard reads pipeline data from the `decks` table + the
+    // `dashboard_insights`/`sources` tables, NOT from here. Writing pipeline-only columns
     // made the WHOLE upsert fail with a schema error that the old code swallowed
     // (it never checked `error`), so no snapshot row was created at all. Write only
     // real columns, and surface the error so a failure can never be logged as success.
@@ -408,7 +408,7 @@ async function main() {
       const range = result.corpus_summary?.date_range?.split(" to ") || [];
       const { error: snapErr } = await supabase.from("snapshots").upsert({
         snapshot_id,
-        period:          "horizon_scan_v2",
+        period:          "horizon_scan",
         generated_at:    result.run_date,
         created_at:      result.run_date,
         start_utc:       range[0] || null,
@@ -436,7 +436,7 @@ async function main() {
           synthesis_version: result.pipeline_version,
         },
         deckResult,
-        qaResult: { overall_pass: true, summary: "v2 pipeline QA", qa_version: "v2" },
+        qaResult: { overall_pass: true, summary: "pipeline QA", qa_version: "pipeline" },
         window: {
           start: result.corpus_summary?.date_range?.split(" to ")?.[0],
           end:   result.corpus_summary?.date_range?.split(" to ")?.[1],

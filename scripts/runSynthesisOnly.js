@@ -3,7 +3,7 @@
  * runSynthesisOnly.js — Skip L2-L4, run L5+L6+QA on already-enriched corpus.
  *
  * Sources in the DB already have main_category, tags, short_summary, and
- * intelligence fields from enrichCorpus.js. This script maps those DB fields
+ * intelligence fields from understandCorpus.js. This script maps those DB fields
  * to the format expected by extractAllEvidence and synthesizeAllCategories,
  * bypassing the expensive understandAllSources re-classification step.
  *
@@ -97,12 +97,12 @@ async function main() {
   console.log(`  Loaded ${sources.length} enriched sources from DB (+${elapsed1}s)\n`);
 
   // ── L5: Extract evidence ───────────────────────────────────────────────────
-  const { extractAllEvidence } = await import("../lib/pipeline/v2/extractEvidence.js");
-  const { buildCorpusSummary, buildEvidenceGraph } = await import("../lib/pipeline/v2/corpusSummary.js");
-  const { synthesizeAllCategories, synthesizeCrossCategory } = await import("../lib/pipeline/v2/synthesizeCategory.js");
-  const { buildPresentation } = await import("../lib/pipeline/v2/buildPresentation.js");
-  const { buildDashboardState } = await import("../lib/pipeline/v2/dashboard.js");
-  const { DOMAINS } = await import("../lib/pipeline/v2/taxonomy.js");
+  const { extractAllEvidence } = await import("../lib/pipeline/extractEvidence.js");
+  const { buildCorpusSummary, buildEvidenceGraph } = await import("../lib/pipeline/corpusSummary.js");
+  const { synthesizeAllCategories, synthesizeCrossCategory } = await import("../lib/pipeline/synthesizeCategory.js");
+  const { buildPresentation } = await import("../lib/pipeline/buildPresentation.js");
+  const { buildDashboardState } = await import("../lib/pipeline/dashboard.js");
+  const { DOMAINS } = await import("../lib/pipeline/taxonomy.js");
 
   const ACTIVE_CATEGORIES = DOMAINS.filter(d => d !== "unclear_or_adjacent");
 

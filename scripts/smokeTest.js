@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * v2 Pipeline Smoke Test — 5 sources
+ * Pipeline Smoke Test — 5 sources
  *
- * Runs the full v2 pipeline on 5 hardcoded fixture sources (no DB required).
+ * Runs the full pipeline on 5 hardcoded fixture sources (no DB required).
  * Writes checkpoints + a readable audit report to debug/runs/<run_id>/.
  *
  * Usage:
- *   node scripts/smokeTestV2.js              # full run with LLM
- *   node scripts/smokeTestV2.js --no-llm     # deterministic stubs only
- *   node scripts/smokeTestV2.js --no-slides  # skip deck generation
+ *   node scripts/smokeTest.js              # full run with LLM
+ *   node scripts/smokeTest.js --no-llm     # deterministic stubs only
+ *   node scripts/smokeTest.js --no-slides  # skip deck generation
  */
 
 import "dotenv/config";
@@ -163,7 +163,7 @@ These tools are primarily observed being used by mid-tier financially motivated 
 
 // ── Output setup ──────────────────────────────────────────────────────────────
 
-const RUN_ID  = `smoke-v2-${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}`;
+const RUN_ID  = `smoke-${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}`;
 const OUT_DIR = path.join(ROOT, "debug", "runs", RUN_ID);
 const CK_DIR  = path.join(OUT_DIR, "checkpoints");
 fs.mkdirSync(CK_DIR, { recursive: true });
@@ -186,7 +186,7 @@ function buildAuditReport(result, checkpoints) {
   const lines = [];
   const t = s => String(s || "").slice(0, 150);
 
-  lines.push(`# v2 Smoke Test — Audit Report`);
+  lines.push(`# Smoke Test — Audit Report`);
   lines.push(`\n**Run ID**: \`${result.run_id}\`  `);
   lines.push(`**Mode**: ${NO_LLM ? "deterministic (--no-llm)" : "live LLM"}  `);
   lines.push(`**Elapsed**: ${result.elapsed_seconds}s  `);
@@ -421,14 +421,14 @@ function buildAuditReport(result, checkpoints) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  banner(`v2 Smoke Test — 5 fixtures | LLM: ${NO_LLM ? "OFF" : "ON"}`);
+  banner(`Smoke Test — 5 fixtures | LLM: ${NO_LLM ? "OFF" : "ON"}`);
   console.log(`  Run ID: ${RUN_ID}`);
   console.log(`  Output: debug/runs/${RUN_ID}/\n`);
 
-  const { runPipelineV2 } = await import("../lib/pipeline/v2/runPipelineV2.js");
+  const { runPipeline } = await import("../lib/pipeline/runPipeline.js");
 
   const checkpoints = {};
-  const result = await runPipelineV2(FIXTURES, {
+  const result = await runPipeline(FIXTURES, {
     skipLlm:    NO_LLM,
     skipSlides: NO_SLIDES,
     onProgress: () => {},

@@ -1,23 +1,24 @@
 #!/usr/bin/env node
 /**
- * enrichCorpus.js — LLM enrichment for all unenriched validated sources.
+ * understandCorpus.js — runs the understand layer over every validated source
+ * that has not yet been understood.
  *
- * Runs understandSource (v2 L3+L4 combined call) on every source where
+ * Runs understandSource (L3+L4 combined call) on every source where
  * claim_extraction_status IS NULL, then writes back:
  *   short_summary, analyst_brief, main_category, tags,
  *   source_type, trust_tier, intelligence (key_entities, main_claims, key_numbers),
  *   claim_extraction_status = 'success'
  *
  * Usage:
- *   node scripts/enrichCorpus.js [--dry-run] [--limit N] [--batch N] [--concurrency N]
+ *   node scripts/understandCorpus.js [--dry-run] [--limit N] [--batch N] [--concurrency N]
  *
  * Defaults: batch=20, concurrency=5, no limit.
- * Safe to re-run: skips already-enriched sources (claim_extraction_status IS NOT NULL).
+ * Safe to re-run: skips already-understood sources (claim_extraction_status IS NOT NULL).
  */
 
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
-import { understandSource } from "../lib/pipeline/v2/understandSource.js";
+import { understandSource } from "../lib/pipeline/understandSource.js";
 import { scrubImpliedQuantitatives } from "../lib/pipeline/analysis/statisticalClaimQa.js";
 
 const args        = process.argv.slice(2);
@@ -45,11 +46,11 @@ async function pMap(items, fn, concurrency) {
 
 async function main() {
   console.log(`\n${"═".repeat(60)}`);
-  console.log(`  Corpus Enrichment`);
+  console.log(`  Corpus Understanding`);
   console.log(`  Dry run: ${DRY_RUN} | Limit: ${LIMIT || "all"} | Batch: ${BATCH_SIZE} | Concurrency: ${CONCURRENCY}`);
   console.log(`${"═".repeat(60)}\n`);
 
-  // ── Load unenriched validated sources ────────────────────────────────────────
+  // ── Load not-yet-understood validated sources ────────────────────────────────────────
   let query = sb
     .from("sources")
     .select("id,title,url,publisher,date_published,main_category,trust_tier,source_type,full_text,summary,tags,validation_status")
@@ -61,9 +62,9 @@ async function main() {
 
   const { data: sources, error } = await query;
   if (error) { console.error("DB error:", error.message); process.exit(1); }
-  if (!sources?.length) { console.log("  No unenriched sources found. All done."); return; }
+  if (!sources?.length) { console.log("  No not-yet-understood sources found. All done."); return; }
 
-  console.log(`  Found ${sources.length} sources to enrich\n`);
+  console.log(`  Found ${sources.length} sources to understand\n`);
 
   const t0 = Date.now();
   let processed = 0, succeeded = 0, failed = 0;
@@ -72,7 +73,7 @@ async function main() {
   for (let i = 0; i < sources.length; i += BATCH_SIZE) {
     const batch = sources.slice(i, i + BATCH_SIZE);
 
-    const enriched = await pMap(batch, async (src) => {
+    const results = await pMap(batch, async (src) => {
       try {
         const understood = await understandSource(src);
         return { src, understood, ok: true };
@@ -82,7 +83,7 @@ async function main() {
     }, CONCURRENCY);
 
     // ── Write batch back to DB ─────────────────────────────────────────────────
-    const updates = enriched
+    const updates = results
       .filter(e => e.ok && e.understood.relevant !== false)
       .map(({ src, understood: u }) => {
         const sourceText = src.full_text || src.summary || "";
@@ -111,12 +112,12 @@ async function main() {
       });
 
     // Sources the LLM flagged as irrelevant get their status set to reject
-    const irrelevantIds = enriched
+    const irrelevantIds = results
       .filter(e => e.ok && e.understood.relevant === false)
       .map(e => e.src.id);
 
     if (!DRY_RUN) {
-      // Upsert enriched sources
+      // Upsert understood sources
       if (updates.length > 0) {
         const { error: upErr } = await sb.from("sources").upsert(updates, { onConflict: "id" });
         if (upErr) {
@@ -139,14 +140,14 @@ async function main() {
       succeeded += updates.length;
     }
 
-    failed += enriched.filter(e => !e.ok).length;
+    failed += results.filter(e => !e.ok).length;
     processed += batch.length;
 
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
     const rate    = processed / ((Date.now() - t0) / 1000);
     const eta     = Math.round((sources.length - processed) / rate);
     process.stdout.write(
-      `  ${processed}/${sources.length} processed | ${succeeded} enriched | ${failed} failed | ${elapsed}s elapsed | ETA ~${eta}s\r`
+      `  ${processed}/${sources.length} processed | ${succeeded} understood | ${failed} failed | ${elapsed}s elapsed | ETA ~${eta}s\r`
     );
   }
 
@@ -154,11 +155,11 @@ async function main() {
   console.log(`\n\n${"─".repeat(60)}`);
   console.log(`  Done in ${elapsed}s`);
   console.log(`  Processed : ${processed}`);
-  console.log(`  Enriched  : ${succeeded}${DRY_RUN ? " (dry run)" : ""}`);
+  console.log(`  Understood  : ${succeeded}${DRY_RUN ? " (dry run)" : ""}`);
   console.log(`  Failed    : ${failed}`);
   if (!DRY_RUN) {
     console.log(`\n  Next step: run the synthesis pipeline:`);
-    console.log(`  node scripts/runHorizonScanV2.js --days 365 --limit 1000 --no-slides`);
+    console.log(`  node scripts/runHorizonScan.js --days 365 --limit 1000 --no-slides`);
   }
 }
 

@@ -41,8 +41,8 @@ import { candidatesToSources } from "../lib/pipeline/discovery/candidateToSource
 import { normalizeSource } from "../lib/pipeline/ingest/normalizeSource.js";
 import { validateAndTypeSource } from "../lib/pipeline/validation/validateAndTypeSource.js";
 import { fetchPageText } from "../lib/pipeline/discovery/fetchCandidateText.js";
-import { understandSource } from "../lib/pipeline/v2/understandSource.js";
-import { DOMAINS } from "../lib/pipeline/v2/taxonomy.js";
+import { understandSource } from "../lib/pipeline/understandSource.js";
+import { DOMAINS } from "../lib/pipeline/taxonomy.js";
 
 // Valid offensive/adjacent v2 domains (excludes the catch-all for the v2ok gate).
 const DOMAINS_SET = new Set(DOMAINS.filter(d => d !== "unclear_or_adjacent"));
