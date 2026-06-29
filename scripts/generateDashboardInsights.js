@@ -117,9 +117,91 @@ async function callAnthropic({ system, user, model, maxTokens = 1200, task = "da
   } catch { /* ignore */ }
 
   const text = data.content?.[0]?.text?.trim() || "";
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error(`No JSON in response: ${text.slice(0, 160)}`);
-  return JSON.parse(match[0]);
+  return extractJson(text);
+}
+
+// Robust JSON extraction from an LLM response. Handles the common malformations
+// that broke the old greedy `text.match(/\{[\s\S]*\}/)` + raw JSON.parse:
+//   - ```json fences / prose around the object
+//   - trailing prose after the object (greedy regex swallowed it → parse error)
+//   - trailing commas before } or ]  ("Expected ',' or ']' after array element")
+//   - a truncated object (maxTokens hit) → close the open brackets so we recover
+//     whatever complete fields we can instead of throwing away the whole call.
+export function extractJson(raw) {
+  const text = String(raw || "").trim();
+  if (!text) throw new Error("empty response");
+
+  // Strip a leading ```json / ``` fence if present.
+  const unfenced = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+
+  // Locate the JSON object by balancing braces from the first "{", ignoring
+  // braces inside strings. This avoids grabbing trailing prose.
+  const start = unfenced.indexOf("{");
+  if (start === -1) throw new Error(`No JSON object in response: ${unfenced.slice(0, 120)}`);
+
+  let depth = 0, inStr = false, esc = false, end = -1;
+  for (let i = start; i < unfenced.length; i++) {
+    const ch = unfenced[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+    } else if (ch === '"') inStr = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}") { depth--; if (depth === 0) { end = i + 1; break; } }
+  }
+
+  // Complete object found, or truncated (depth>0) — take what we have and repair.
+  let candidate = end !== -1 ? unfenced.slice(start, end) : unfenced.slice(start);
+
+  const tryParse = (s) => { try { return JSON.parse(s); } catch { return undefined; } };
+
+  let parsed = tryParse(candidate);
+  if (parsed !== undefined) return parsed;
+
+  // Repair pass: drop trailing commas, then for truncation close any still-open
+  // strings/arrays/objects so a cut-off response yields its complete prefix.
+  let repaired = candidate.replace(/,\s*([}\]])/g, "$1");
+  parsed = tryParse(repaired);
+  if (parsed !== undefined) return parsed;
+
+  if (end === -1) {
+    repaired = closeTruncatedJson(candidate);
+    parsed = tryParse(repaired.replace(/,\s*([}\]])/g, "$1"));
+    if (parsed !== undefined) return parsed;
+  }
+
+  throw new Error(`Unparseable JSON: ${candidate.slice(0, 120)}`);
+}
+
+// Best-effort recovery of a truncated JSON object (maxTokens cut mid-response):
+// rewind to the last point where a complete value sat at an array/object
+// boundary, then close the brackets that were open AT THAT POINT. Snapshotting
+// the stack at each boundary (not just at the end) avoids emitting a dangling
+// key or half-written value.
+function closeTruncatedJson(s) {
+  let inStr = false, esc = false;
+  const stack = [];               // pending closers, outermost first
+  let safePos = 0;                // index after the last complete boundary value
+  let safeStack = [];             // stack snapshot at safePos
+  const snapshot = (i) => { safePos = i + 1; safeStack = stack.slice(); };
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;   // string closed — boundary only if a comma/close follows
+    } else if (ch === '"') inStr = true;
+    else if (ch === "{") stack.push("}");
+    else if (ch === "[") stack.push("]");
+    else if (ch === "}" || ch === "]") { stack.pop(); snapshot(i); }       // a value just completed
+    else if (ch === ",") snapshot(i - 1);   // value before the comma is complete; exclude the comma
+  }
+
+  if (!safePos) return s + stack.reverse().join("");   // nothing complete yet — close what we can
+  const head = s.slice(0, safePos).replace(/,\s*$/, "");
+  return head + safeStack.reverse().join("");
 }
 
 // ── Stage A: findings → themes ─────────────────────────────────────────────────
@@ -881,6 +963,12 @@ async function main() {
 }
 
 import { flushCostBuffer } from "../lib/llm/usagePersistence.js";
-main()
-  .then(() => flushCostBuffer())
-  .catch(err => { console.error("\nFATAL:", err.message); process.exit(1); });
+import { fileURLToPath } from "url";
+
+// Only run the pipeline when invoked as a CLI — importing the module (e.g. for
+// tests of extractJson) must not trigger generation.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main()
+    .then(() => flushCostBuffer())
+    .catch(err => { console.error("\nFATAL:", err.message); process.exit(1); });
+}
