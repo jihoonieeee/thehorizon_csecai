@@ -78,48 +78,79 @@ const tagLabel = (id) => getTag(id)?.label || id;
 // persist its own cost events — otherwise dashboard-insight spend is invisible in
 // llm_cost_log. Every call logs its token usage under a `task` context.
 
-async function callAnthropic({ system, user, model, maxTokens = 1200, task = "dashboard_insight" }) {
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// Transient: a 60–90s timeout/abort, or a retryable HTTP status (429 rate-limit,
+// 5xx, 529 overloaded). These spiked under API load and caused whole insight
+// sets to fall back; retry with backoff instead.
+function isRetryable(err) {
+  if (!err) return false;
+  if (err.name === "TimeoutError" || err.name === "AbortError") return true;
+  if (/aborted|timeout|fetch failed|ECONNRESET|ETIMEDOUT|network/i.test(err.message || "")) return true;
+  return [429, 500, 502, 503, 504, 529].includes(err.status);
+}
+
+async function callAnthropic({ system, user, model, maxTokens = 1200, task = "dashboard_insight", retries = 3 }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
 
   const usedModel = model || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    // 90s: the multi-signal emerging-signals / themes calls return large JSON and
-    // were tripping a 60s cap under API load, falling back unnecessarily.
-    signal: AbortSignal.timeout(90000),
-    headers: {
-      "Content-Type":      "application/json",
-      "x-api-key":         apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model:      usedModel,
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: "user", content: user }],
-    }),
-  });
 
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`Anthropic ${res.status}: ${t.slice(0, 200)}`);
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        // 90s: the multi-signal emerging-signals / themes calls return large JSON
+        // and were tripping a 60s cap under API load.
+        signal: AbortSignal.timeout(90000),
+        headers: {
+          "Content-Type":      "application/json",
+          "x-api-key":         apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model:      usedModel,
+          max_tokens: maxTokens,
+          system,
+          messages: [{ role: "user", content: user }],
+        }),
+      });
+
+      if (!res.ok) {
+        const t = await res.text().catch(() => "");
+        const e = new Error(`Anthropic ${res.status}: ${t.slice(0, 200)}`);
+        e.status = res.status;
+        throw e;
+      }
+      const data = await res.json();
+
+      // Persist cost (fire-and-forget; never let logging break generation).
+      try {
+        persistCallCost({
+          task,
+          provider:     "anthropic",
+          model:        usedModel,
+          inputTokens:  data.usage?.input_tokens  || 0,
+          outputTokens: data.usage?.output_tokens || 0,
+        });
+      } catch { /* ignore */ }
+
+      const text = data.content?.[0]?.text?.trim() || "";
+      return extractJson(text);
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries && isRetryable(err)) {
+        // Exponential backoff with jitter: ~2s, 4s, 8s.
+        const wait = Math.round(2000 * 2 ** attempt * (0.8 + Math.random() * 0.4));
+        console.log(`  [anthropic] ${task} ${err.name === "TimeoutError" ? "timeout" : (err.message || "").slice(0, 40)} — retry ${attempt + 1}/${retries} in ${wait}ms`);
+        await sleep(wait);
+        continue;
+      }
+      throw err;
+    }
   }
-  const data = await res.json();
-
-  // Persist cost (fire-and-forget; never let logging break generation).
-  try {
-    persistCallCost({
-      task,
-      provider:     "anthropic",
-      model:        usedModel,
-      inputTokens:  data.usage?.input_tokens  || 0,
-      outputTokens: data.usage?.output_tokens || 0,
-    });
-  } catch { /* ignore */ }
-
-  const text = data.content?.[0]?.text?.trim() || "";
-  return extractJson(text);
+  throw lastErr;
 }
 
 // Robust JSON extraction from an LLM response. Handles the common malformations
