@@ -609,7 +609,10 @@ a:hover { text-decoration: underline; }
 .hz-es-curr { color: #b45309; font-weight: 700; }
 .hz-es-reason { font-size: 0.68rem; color: var(--text-tertiary); margin-left: auto; }
 .hz-es-analysis { font-size: 0.78rem; line-height: 1.5; color: var(--text-secondary); margin-top: 6px; }
-.hz-es-watch { font-size: 0.72rem; color: var(--text-tertiary); margin-top: 5px; }
+.hz-es-watch { font-size: 0.72rem; color: var(--text-tertiary); margin-top: 8px; }
+.hz-es-watch-list { margin: 5px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
+.hz-es-watch-list li { position: relative; padding-left: 14px; line-height: 1.45; }
+.hz-es-watch-list li::before { content: "→"; position: absolute; left: 0; color: #b45309; }
 .hz-es-toggle {
   background: none; border: none; cursor: pointer; padding: 6px 0 0;
   font-size: 0.72rem; font-weight: 600; color: #b45309;

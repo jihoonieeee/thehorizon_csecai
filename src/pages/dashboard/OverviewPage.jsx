@@ -320,20 +320,29 @@ function AssessmentChanges({ items }) {
 function EmergingSignalCard({ s }) {
   const [open, setOpen] = useState(false);
   const sources = s.sources || [];
+  // watch may be an array of points (new) or a single string (legacy data).
+  const watchPoints = Array.isArray(s.watch) ? s.watch.filter(Boolean) : (s.watch ? [s.watch] : []);
+  // Every signal gets elaboration: fall back to a deterministic, source-grounded
+  // line when the generated analysis is missing.
+  const analysisText = s.analysis || (
+    `Early signal — appeared in ${s.curr ?? "more"} source${s.curr === 1 ? "" : "s"} this period` +
+    `${s.prev != null ? `, up from ${s.prev}` : ""}. Evidence is still thin; watch for corroboration ` +
+    `before treating it as a confirmed trend.`
+  );
   return (
     <div className="hz-es-card">
       <div className="hz-es-head">
         <span className="hz-es-name">{s.signal}</span>
-        <span className="hz-es-track">
-          <span className="hz-es-prev">{s.previous || "Weak signal"}</span>
-          <span className="hz-es-arrow">→</span>
-          <span className="hz-es-curr">{s.current || "Emerging trend"}</span>
-        </span>
         {s.reason && <span className="hz-es-reason">{s.reason}</span>}
       </div>
-      {s.analysis && <div className="hz-es-analysis">{s.analysis}</div>}
-      {s.watch && (
-        <div className="hz-es-watch"><span className="hz-insight-tag">Watch</span>{s.watch}</div>
+      <div className="hz-es-analysis">{analysisText}</div>
+      {watchPoints.length > 0 && (
+        <div className="hz-es-watch">
+          <span className="hz-insight-tag">Watch</span>
+          <ul className="hz-es-watch-list">
+            {watchPoints.map((w, i) => <li key={i}>{w}</li>)}
+          </ul>
+        </div>
       )}
       {sources.length > 0 && (
         <>
@@ -690,9 +699,12 @@ export function OverviewPage() {
       ) ? (
         <>
           <div className="hz-overview-section-title">
-            Since last period
-            {data.comparison.compared_to_label && (
-              <span className="hz-overview-section-note">vs {data.comparison.compared_to_label}</span>
+            This period vs last period
+            {(data.window_label || data.comparison.compared_to_label) && (
+              <span className="hz-overview-section-note">
+                {data.window_label || `${data.date_from} – ${data.date_to}`}
+                {data.comparison.compared_to_label ? ` vs ${data.comparison.compared_to_label}` : ""}
+              </span>
             )}
           </div>
 
@@ -705,9 +717,7 @@ export function OverviewPage() {
 
           {data.comparison.emerging_signals?.length > 0 && (
             <>
-              <div className="hz-overview-subtitle">Emerging signals
-                <span className="hz-overview-section-note">weak last period, gaining evidence now</span>
-              </div>
+              <div className="hz-overview-subtitle">Emerging signals</div>
               <EmergingSignals items={data.comparison.emerging_signals} />
             </>
           )}

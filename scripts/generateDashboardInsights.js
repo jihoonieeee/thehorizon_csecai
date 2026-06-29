@@ -493,13 +493,37 @@ function detectEmergingSignals(currTags, prevTags) {
 
 const SIGNAL_SYSTEM = `You are an AI threat intelligence analyst writing the "Emerging Signals" watchlist — themes that were faint last period and are now gaining evidence.
 
-For each signal you are given its source summaries this period. Write a tight 2-part analysis:
-- "analysis": 1-2 sentences on WHAT is driving the uptick and WHY it matters for defenders (the shift in the threat, not a paper summary). 25-45 words.
-- "watch": one short clause on what would confirm or kill this as a real trend.
+You are given EVERY signal by index, each with its source summaries this period. Return one object for EVERY index — never skip a signal. For each:
+- "analysis": 1-2 sentences (25-45 words) on WHAT is driving the uptick and WHY it matters for defenders — the shift in the threat, not a paper summary.
+- "watch": an array of 2-3 short, concrete monitoring points — specific things a defender should watch for that would confirm (or kill) this as a real trend. Each is a terse phrase (≤14 words), not a sentence, and they must be distinct and actionable.
+  GOOD watch point: "RAG backend credentials abused in a named real-world incident"
+  GOOD watch point: "exploit kits adding a retrieval-index poisoning module"
+  GOOD watch point: "the CVE moving from disclosure to observed exploitation"
+  BAD watch point:  "watch for more activity" (vague, not actionable)
 
 Ground everything in the provided summaries. Do not claim confirmed/operational/in-the-wild activity unless the summaries show it. No paper-name-dropping.
 
-Return ONLY JSON: {"signals":[{"index":0,"analysis":"...","watch":"..."}]}`;
+Return ONLY JSON: {"signals":[{"index":0,"analysis":"...","watch":["...","..."]}]}`;
+
+// Deterministic, source-grounded fallbacks so EVERY signal carries elaboration
+// even when the LLM skips one or its analysis fails QA.
+function fallbackAnalysis(sig) {
+  return `Early signal — ${sig.signal} appeared in ${sig.curr} source${sig.curr === 1 ? "" : "s"} this period, ` +
+    `up from ${sig.prev}. Evidence is still thin; treat it as an emerging watch item, not a confirmed trend.`;
+}
+function normalizeWatch(watch, sig) {
+  let pts = Array.isArray(watch)
+    ? watch
+    : (typeof watch === "string" && watch.trim() ? [watch.trim()] : []);
+  pts = pts.map(w => String(w).trim()).filter(Boolean).slice(0, 3);
+  if (!pts.length) {
+    pts = [
+      `Corroboration from a second, independent source type`,
+      `${sig.signal} moving from disclosure to observed exploitation`,
+    ];
+  }
+  return pts;
+}
 
 async function enrichEmergingSignals(signals, currTagSources) {
   if (!signals.length) return [];
@@ -539,18 +563,21 @@ async function enrichEmergingSignals(signals, currTagSources) {
 
   signals.forEach((sig, i) => {
     const a = analyses.find(x => x.index === i) || analyses[i];
-    sig.analysis = (a?.analysis || "").trim() || null;
-    sig.watch    = (a?.watch || "").trim() || null;
+    sig.analysis = (a?.analysis || "").trim() || fallbackAnalysis(sig);
+    sig.watch    = normalizeWatch(a?.watch, sig);
   });
 
-  // Second-model QA on the generated analyses.
-  const withAnalysis = signals.filter(s => s.analysis);
+  // Second-model QA on the generated analyses. A failed verdict means the LLM
+  // analysis wasn't grounded — swap in the deterministic fallback (grounded by
+  // construction) rather than blanking the signal, so every card keeps elaboration.
   const verdicts = await qaStatements(
-    withAnalysis.map(s => s.analysis),
+    signals.map(s => s.analysis),
     signals.map(s => `${s.signal}: ${(currTagSources[s.tag_id] || []).map(x => x.summary).filter(Boolean).slice(0, 4).join(" | ").slice(0, 400)}`).join("\n"),
     "emerging-signal",
   );
-  withAnalysis.forEach((s, i) => { if (!verdicts[i]) { s.analysis = null; s.watch = null; } });
+  signals.forEach((s, i) => {
+    if (!verdicts[i]) { s.analysis = fallbackAnalysis(s); s.watch = normalizeWatch(null, s); }
+  });
 
   return signals;
 }
