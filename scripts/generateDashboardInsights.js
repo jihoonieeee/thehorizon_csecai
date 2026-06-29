@@ -85,7 +85,9 @@ async function callAnthropic({ system, user, model, maxTokens = 1200, task = "da
   const usedModel = model || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    signal: AbortSignal.timeout(60000),
+    // 90s: the multi-signal emerging-signals / themes calls return large JSON and
+    // were tripping a 60s cap under API load, falling back unnecessarily.
+    signal: AbortSignal.timeout(90000),
     headers: {
       "Content-Type":      "application/json",
       "x-api-key":         apiKey,
@@ -623,12 +625,20 @@ async function enrichEmergingSignals(signals, currTagSources) {
 
   if (!process.env.ANTHROPIC_API_KEY) return signals;
 
+  // Evidence grounding per signal — built ONCE and shared by the analysis
+  // generator and the QA verifier. They must see the same summaries, otherwise
+  // the QA flags as "overreach" any specific (CVE / product / stat) the analysis
+  // legitimately drew from a source the QA couldn't see.
+  const signalEvidence = signals.map(sig =>
+    (currTagSources[sig.tag_id] || [])
+      .map(s => s.summary).filter(Boolean).slice(0, 6).map(s => s.slice(0, 220))
+  );
+
   // One LLM call for all signals' analysis, grounded in their summaries.
-  const blocks = signals.map((sig, i) => {
-    const sums = (currTagSources[sig.tag_id] || []).map(s => s.summary).filter(Boolean).slice(0, 6);
-    return `[${i}] Signal: ${sig.signal} (${sig.prev} → ${sig.curr} sources)\n` +
-      sums.map(s => `   - ${s.slice(0, 220)}`).join("\n");
-  }).join("\n\n");
+  const blocks = signals.map((sig, i) =>
+    `[${i}] Signal: ${sig.signal} (${sig.prev} → ${sig.curr} sources)\n` +
+    signalEvidence[i].map(s => `   - ${s}`).join("\n")
+  ).join("\n\n");
 
   let analyses = [];
   try {
@@ -654,7 +664,9 @@ async function enrichEmergingSignals(signals, currTagSources) {
   // construction) rather than blanking the signal, so every card keeps elaboration.
   const verdicts = await qaStatements(
     signals.map(s => s.analysis),
-    signals.map(s => `${s.signal}: ${(currTagSources[s.tag_id] || []).map(x => x.summary).filter(Boolean).slice(0, 4).join(" | ").slice(0, 400)}`).join("\n"),
+    // Same evidence the analysis was grounded in (signalEvidence), so QA verifies
+    // against what the generator actually saw — not a narrower slice.
+    signals.map((s, i) => `${s.signal}:\n${signalEvidence[i].map(x => `   - ${x}`).join("\n")}`).join("\n\n"),
     "emerging-signal",
   );
   signals.forEach((s, i) => {
