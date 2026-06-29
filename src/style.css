@@ -610,8 +610,13 @@ a:hover { text-decoration: underline; }
 .hz-es-reason { font-size: 0.68rem; color: var(--text-tertiary); margin-left: auto; }
 .hz-es-analysis { font-size: 0.78rem; line-height: 1.5; color: var(--text-secondary); margin-top: 6px; }
 .hz-es-watch { font-size: 0.72rem; color: var(--text-tertiary); margin-top: 8px; }
-.hz-es-watch-list { margin: 5px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
-.hz-es-watch-list li { position: relative; padding-left: 14px; line-height: 1.45; }
+.hz-es-watch-label {
+  display: block; text-align: left;
+  font-size: 0.58rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: #b45309; margin-bottom: 4px;
+}
+.hz-es-watch-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
+.hz-es-watch-list li { position: relative; padding-left: 14px; line-height: 1.45; text-align: left; }
 .hz-es-watch-list li::before { content: "→"; position: absolute; left: 0; color: #b45309; }
 .hz-es-toggle {
   background: none; border: none; cursor: pointer; padding: 6px 0 0;
@@ -793,85 +798,66 @@ a:hover { text-decoration: underline; }
 
 /* ── Taxonomy heatmap ──────────────────────────────────────────────────────── */
 
-.hz-heatmap-wrap {
-  overflow-x: auto;
+/* Taxonomy — one card per main category, listing only that category's tags */
+.hz-taxonomy-cats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.hz-taxonomy-cat {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
+  padding: 12px 14px;
 }
 
-.hz-heatmap-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.75rem;
+.hz-taxonomy-cat-head {
+  border-bottom: 2px solid;
+  padding-bottom: 7px;
+  margin-bottom: 9px;
 }
 
-.hz-heatmap-th-label {
-  text-align: left;
-  padding: 10px 14px;
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-tertiary);
-  border-bottom: 2px solid var(--border);
-  white-space: nowrap;
-  min-width: 180px;
-}
-
-.hz-heatmap-th-cat {
-  text-align: center;
-  padding: 10px 8px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 2px solid var(--border);
-  white-space: nowrap;
-  min-width: 90px;
-}
-
-.hz-heatmap-domain-row td {
-  padding: 8px 14px 4px;
-  font-size: 0.64rem;
+.hz-taxonomy-cat-name {
+  font-size: 0.74rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  border-bottom: 1px solid var(--border);
+  letter-spacing: 0.05em;
+}
+
+.hz-taxonomy-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hz-taxonomy-tag {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
   background: var(--surface-2);
-}
-
-.hz-heatmap-row { transition: background 0.1s; }
-.hz-heatmap-row:hover { filter: brightness(0.96); }
-
-.hz-heatmap-td-label {
-  padding: 7px 14px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  border-bottom: 1px solid var(--border);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
   font-size: 0.76rem;
+  color: var(--text-secondary);
 }
 
-.hz-heatmap-td-cell {
-  text-align: center;
-  padding: 7px 8px;
-  border-bottom: 1px solid var(--border);
-  border-left: 1px solid var(--border);
+.hz-taxonomy-tag.clickable { cursor: pointer; }
+.hz-taxonomy-tag.clickable:hover { border-color: var(--border-hover); color: var(--text-primary); }
+.hz-taxonomy-tag:disabled { opacity: 0.5; cursor: default; }
+.hz-taxonomy-tag.active { border-width: 1.5px; color: var(--text-primary); font-weight: 600; }
+
+.hz-taxonomy-tag-label { line-height: 1.3; }
+.hz-taxonomy-tag-count {
+  flex-shrink: 0;
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  font-size: 0.78rem;
+  font-weight: 700;
   color: var(--text-primary);
-  transition: background 0.15s;
-  min-width: 50px;
 }
-
-/* Clickable taxonomy cells + active selection */
-.hz-heatmap-td-label.clickable,
-.hz-heatmap-td-cell.clickable { cursor: pointer; }
-.hz-heatmap-td-label.clickable:hover { color: var(--text-primary); text-decoration: underline; }
-.hz-heatmap-td-cell.clickable:hover { outline: 2px solid var(--border-hover); outline-offset: -2px; }
-.hz-heatmap-row.active .hz-heatmap-td-label { font-weight: 700; color: var(--text-primary); }
-.hz-heatmap-td-cell.active { outline: 2px solid var(--text-primary); outline-offset: -2px; }
 
 /* Header timeframe + stale-insight note */
 .hz-overview-daterange { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }

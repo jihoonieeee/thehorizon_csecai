@@ -23,6 +23,17 @@
 import { createClient } from "@supabase/supabase-js";
 import { getCompletedPeriodWindow } from "../lib/time/reportingWindow.js";
 import { computeEvidenceMaturity, deriveConfidence } from "../lib/dashboard/evidenceMaturity.js";
+import { truncateAtWord } from "../lib/utils/truncate.js";
+
+// Some stored titles are CVE descriptions hard-cut mid-word at ingest (e.g.
+// "CVE-…: multiple functions in langchain_core.pro"). Clean those for display:
+// if a title looks mid-word-truncated, trim back to the last whole word + "…".
+function cleanTitle(title) {
+  const t = String(title || "").trim();
+  if (t.length < 150) return t;                 // short titles are fine as-is
+  if (/[.!?)"'\]]$/.test(t)) return t;          // ends on a sentence boundary — keep
+  return truncateAtWord(t, t.length - 1);       // ends mid-word — tidy the tail
+}
 
 const META_CATEGORY = "_period_meta";
 
@@ -233,11 +244,11 @@ export default async function handler(req, res) {
     const categories = CATEGORIES.map(c => {
       const srcs = catMap[c.key];
       const top  = srcs.slice(0, 5).map(s => ({
-        title:     s.title,
+        title:     cleanTitle(s.title),
         url:       s.url,
         publisher: s.publisher,
         date:      s.date_published?.slice(0, 10),
-        summary:   (s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "").slice(0, 200) || null,
+        summary:   truncateAtWord(s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "", 200) || null,
       }));
 
       // Evidence maturity + confidence computed LIVE over the same source set the
@@ -330,13 +341,13 @@ export default async function handler(req, res) {
       .filter(s => ["primary","high","curated"].includes(s.trust_tier))
       .slice(0, 12)
       .map(s => ({
-        title:     s.title,
+        title:     cleanTitle(s.title),
         url:       s.url,
         publisher: s.publisher,
         date:      s.date_published?.slice(0, 10),
         category:  s.main_category,
         trust_tier: s.trust_tier,
-        summary:   (s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "").slice(0, 160) || null,
+        summary:   truncateAtWord(s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "", 220) || null,
       }));
 
     // ── 5. Tag matrix (40 tags × 4 categories) + per-tag source lists ─────────
