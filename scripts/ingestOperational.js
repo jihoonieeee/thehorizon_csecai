@@ -37,6 +37,12 @@ const qi = args.indexOf("--queries-per-mission");
 const QUERIES_PER_MISSION = qi >= 0 && args[qi + 1] ? Math.max(1, parseInt(args[qi + 1], 10) || 3) : 3;
 const gi = args.indexOf("--mission-batch");
 const MISSION_BATCH = gi >= 0 && args[gi + 1] ? Math.max(1, parseInt(args[gi + 1], 10) || 4) : 4;
+// Discovery triage + Layer-3 validation are LLM calls. In CI the triage provider
+// rotation (Gemini/OpenAI/Ollama) is unreliable (quota/parse/absent), so every
+// triage retries to death and no batch ever checkpoints. --skip-llm runs the
+// discovery path on DETERMINISTIC gates only — fast and provider-independent —
+// and leaves relevance/typing/quality to the Anthropic-backed understand job.
+const SKIP_LLM = args.includes("--skip-llm");
 
 function chunk(arr, n) {
   const out = [];
@@ -64,7 +70,7 @@ async function main() {
   console.log(`\n${"═".repeat(60)}`);
   console.log(`  Operational ingestion — sitemaps + web discovery (incremental)`);
   console.log(`  Window: ${window.start_utc.slice(0, 10)} → ${window.end_utc.slice(0, 10)} (${DAYS}d)`);
-  console.log(`  Web discovery: ${process.env.WEB_DISCOVERY_ENABLED === "1" ? "ON" : "OFF (set WEB_DISCOVERY_ENABLED=1)"}`);
+  console.log(`  Web discovery: ${process.env.WEB_DISCOVERY_ENABLED === "1" ? "ON" : "OFF (set WEB_DISCOVERY_ENABLED=1)"} | LLM triage/validation: ${SKIP_LLM ? "OFF (deterministic; understand classifies)" : "ON"}`);
   console.log(`  Batches: 1 sitemap + ${missionGroups.length} discovery (${MISSION_BATCH} missions each, ${QUERIES_PER_MISSION} queries/mission)`);
   console.log(`${"═".repeat(60)}\n`);
 
@@ -93,6 +99,7 @@ async function main() {
       const result = await collectRawSources(window, {
         includeFeeds: false,        // registry RSS handled by the Vercel daily
         connectors: [],             // skip NVD/arXiv/etc. — Vercel daily handles them
+        skipLlm: SKIP_LLM,          // deterministic discovery; understand classifies later
         ...batch.opts,
       });
 
