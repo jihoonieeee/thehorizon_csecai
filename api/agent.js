@@ -12,12 +12,62 @@
  * All factual claims cite source publisher + URL; internal ev_xxx IDs are scrubbed before response.
  */
 
-import { TOOLS, executeTool } from "../lib/agent/agentTools.js";
+import { executeTool } from "../lib/agent/agentTools.js";
 import { ANTHROPIC_MODELS } from "../lib/llm/taskProfiles.js";
 import { logAgentCostToDB } from "../lib/llm/usagePersistence.js";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
+
+// Streaming variant: POSTs with stream:true, invokes onText(delta) for each
+// text delta, and returns accumulated token usage. Used for the single synthesis
+// pass so the answer renders progressively in the UI.
+async function anthropicStream(body, onText, timeoutMs = 90000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(ANTHROPIC_API_URL, {
+      method:  "POST",
+      signal:  controller.signal,
+      headers: {
+        "Content-Type":      "application/json",
+        "x-api-key":         process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": ANTHROPIC_VERSION,
+      },
+      body: JSON.stringify({ ...body, stream: true }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Anthropic HTTP ${res.status}: ${text.slice(0, 300)}`);
+    }
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    const usage   = { input_tokens: 0, output_tokens: 0 };
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop();   // keep the trailing partial line
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (!data || data === "[DONE]") continue;
+        let evt; try { evt = JSON.parse(data); } catch { continue; }
+        if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") onText(evt.delta.text);
+        else if (evt.type === "message_start") usage.input_tokens = evt.message?.usage?.input_tokens || 0;
+        else if (evt.type === "message_delta") usage.output_tokens = evt.usage?.output_tokens || usage.output_tokens;
+      }
+    }
+    clearTimeout(timer);
+    return usage;
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === "AbortError") throw new Error(`Anthropic stream timed out after ${timeoutMs}ms`);
+    throw err;
+  }
+}
 
 async function anthropicRequest(body, timeoutMs = 90000) {
   const controller = new AbortController();
@@ -46,7 +96,6 @@ async function anthropicRequest(body, timeoutMs = 90000) {
   }
 }
 
-const MAX_ROUNDS = 8;
 
 // ── Temporal intent parser ─────────────────────────────────────────────────────
 
@@ -137,9 +186,9 @@ ${scopeNote}
 WHEN TO USE TOOLS vs ANSWER DIRECTLY:
 If the user's question is a follow-up or clarification on what was just discussed (e.g. "what does that mean?", "can you elaborate?", "why is that significant?"), answer directly without calling any tools.
 
-For every NEW factual question, you MUST call search_corpus. This is non-negotiable — search_corpus is how citation links are generated and shown to the user. If you skip it, the user sees no source links. Call search_corpus in parallel with get_judgments in your first round. Never answer a new factual question without calling search_corpus at least once.
+INITIAL RETRIEVAL IS ALREADY DONE FOR YOU. Before this turn the system ran the corpus search, evidence lookup, and analytical judgments for the user's question and gave you the results above — that IS your retrieval. Those sources and their [src-N] refs are how citation links reach the user.
 
-BE EFFICIENT WITH TOOLS. Gather what you need in 1-2 rounds, then answer. Typical pattern: round 1 calls search_corpus (+ get_judgments and/or get_evidence in parallel); round 2 optionally one follow-up call to fill a specific gap. Do NOT repeatedly re-query with slight variations — if a tool returns enough to answer, stop searching and write the answer. Call get_evidence at most twice. You have a limited number of tool rounds; spend them, then conclude.
+You have everything you need: corpus sources, grounded evidence, analytical judgments, weekly trend data, and (when the question names a CVE) its live NVD severity are all provided above. Synthesise your answer NOW from that material and cite the [src-N] refs. Do not ask for more data — there are no tools to call; just write the answer.
 
 HOW TO WRITE YOUR ANSWER:
 Use this structure every time:
@@ -381,217 +430,89 @@ export default async function handler(req, res) {
   // Sonnet 4.6 pricing (USD per 1M tokens)
   const AGENT_PRICING = { input: 3.00, output: 15.00 };
 
+  // ── Prompt caching ───────────────────────────────────────────────────────────
+  // The system prompt (~215 lines) and tool definitions are static and re-sent on
+  // every round. Mark them cache_control:ephemeral so Anthropic bills cached reads
+  // at ~10% — a large saving across rounds, with zero effect on output.
+  // System prompt is static → cache it (cheaper across questions in a session).
+  const cachedSystem = [{ type: "text", text: system, cache_control: { type: "ephemeral" } }];
+
+  // Accumulate refs/evidence/citations from a tool result. Closure so it can
+  // reassign sourceRefs/srcCounter; shared by the deterministic pre-fetch and the
+  // model-driven loop. Returns the (renumbered) result to hand back to the model.
+  function accumulate(name, result) {
+    if (name === "get_evidence" && result.evidence_items) {
+      for (const ev of result.evidence_items) {
+        evidenceIndex[ev.evidence_id] = ev;
+        if (ev.source_url) citationPool.push({ source_title: ev.source_title || "", url: ev.source_url, publisher: ev.publisher || "", trust_tier: ev.trust_tier || null });
+      }
+    }
+    if (name === "get_judgments" && result.judgments) {
+      for (const j of result.judgments) for (const eid of (j.evidence_ids || [])) {
+        if (!evidenceIndex[eid]) evidenceIndex[eid] = { evidence_id: eid, fact: "", source_url: null, publisher: "", source_title: "" };
+      }
+    }
+    if (name === "search_corpus" && result.sources) {
+      const offset = srcCounter;
+      const renumbered = result.sources.map((s, i) => ({ ...s, ref: `src-${offset + i + 1}` }));
+      srcCounter += renumbered.length;
+      result = { ...result, sources: renumbered };
+      sourceRefs = [...sourceRefs, ...renumbered];
+      for (const s of renumbered) if (s.url) citationPool.push({ source_title: s.title || "", url: s.url, publisher: s.publisher || "", trust_tier: s.trust_tier || null });
+    }
+    if (name === "search_taxonomy") {
+      const taxSources = result.sources || result.recent_sources;
+      if (Array.isArray(taxSources) && taxSources.length) {
+        const offset = srcCounter;
+        const renumbered = taxSources.map((s, i) => ({ ...s, ref: `src-${offset + i + 1}` }));
+        srcCounter += renumbered.length;
+        if (result.sources) result = { ...result, sources: renumbered };
+        else result = { ...result, recent_sources: renumbered };
+        sourceRefs = [...sourceRefs, ...renumbered];
+        for (const s of renumbered) if (s.url) citationPool.push({ source_title: s.title || "", url: s.url, publisher: s.publisher || "", trust_tier: s.trust_tier || null });
+      }
+    }
+    if (name === "lookup_cve" && result.results) {
+      for (const r of result.results) if (r.nvd_url) citationPool.push({ source_title: r.cve_id, url: r.nvd_url, publisher: "NVD", trust_tier: "primary" });
+    }
+    return result;
+  }
+
   try {
-    // ── Tool use loop ──────────────────────────────────────────────────────────
-    for (let round = 0; round < MAX_ROUNDS; round++) {
-      const response = await anthropicRequest({
-        model:      ANTHROPIC_MODELS.sonnet,
-        max_tokens: 4096,
-        system,
-        tools:      TOOLS,
-        messages,
-      });
-
-      // Accumulate token usage from every round
-      totalInputTokens  += response.usage?.input_tokens  || 0;
-      totalOutputTokens += response.usage?.output_tokens || 0;
-
-      if (response.stop_reason === "end_turn") {
-        // Extract final text answer
-        const textBlock = response.content.find(b => b.type === "text");
-        const rawText   = textBlock?.text || "(No answer generated)";
-
-        const parsed                  = parseResponse(rawText);
-        const { text: cleanAnswer,
-                harvested }           = harvestAndCleanAnswer(parsed.answer, evidenceIndex);
-
-        // Harvested inline URLs (from answer text) go into citationPool first
-        for (const h of harvested) {
-          if (h.url && !citationPool.some(c => c.url === h.url)) {
-            citationPool.push({ source_title: "", url: h.url, publisher: h.publisher, trust_tier: null });
-          }
-        }
-
-        const citations = extractCitations(parsed.answer, evidenceIndex, sourceRefs);
-
-        // Surface every URL from the full pool (tool results + harvested from text)
-        // Normalize URLs for dedup: lowercase domain, strip trailing punctuation/slashes
-        const normalizeUrl = (u) => u?.replace(/[.,;:!?/]+$/, "").toLowerCase().replace(/^https?:\/\//, "");
-        const citedUrls = new Set(citations.map(c => normalizeUrl(c.url)).filter(Boolean));
-        for (const src of citationPool) {
-          if (!src.url || citedUrls.has(normalizeUrl(src.url))) continue;
-          citations.push({ source_title: src.source_title, url: src.url, publisher: src.publisher, trust_tier: src.trust_tier });
-          citedUrls.add(normalizeUrl(src.url));
-          if (citations.length >= 15) break;
-        }
-
-        // Final dedup: remove any remaining duplicate URLs (can occur when extractCitations
-        // and harvested pool both capture the same URL via different regex paths).
-        // Also drop dead citations: an unresolved [src-N] with no URL and no real
-        // title would render as a useless "Unknown source" chip — never show it.
-        const seen = new Set();
-        const dedupedCitations = citations.filter(c => {
-          if (!c.url && (!c.source_title || c.source_title === "Unknown source")) return false;
-          const key = normalizeUrl(c.url) || c.source_title;
-          if (!key || seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-
-        const qaIssues = qaResponse(cleanAnswer, dedupedCitations, evidenceIndex);
-
-        console.log(`[agent] tools called: ${toolCallLog.map(t => t.tool).join(', ')}`);
-        console.log(`[agent] citationPool (${citationPool.length}):`, citationPool.slice(0, 5).map(c => `${c.publisher || '?'} → ${c.url?.slice(0, 60)}`).join(' | '));
-        console.log(`[agent] citations returned (${dedupedCitations.length}):`, dedupedCitations.slice(0, 5).map(c => `${c.publisher || '?'} → ${c.url?.slice(0, 60)}`).join(' | '));
-
-        const estimatedCostUsd =
-          (totalInputTokens  / 1_000_000) * AGENT_PRICING.input +
-          (totalOutputTokens / 1_000_000) * AGENT_PRICING.output;
-
-        // Persist cost to DB (fire-and-forget — don't delay the response)
-        logAgentCostToDB({
-          inputTokens:  totalInputTokens,
-          outputTokens: totalOutputTokens,
-          rounds:       round + 1,
-          costUsd:      estimatedCostUsd,
-        }).catch(() => {});
-
-        return res.status(200).json({
-          answer:              cleanAnswer,
-          citations:           dedupedCitations,
-          source_refs:         sourceRefs,   // ordered list for [src-N] inline linking
-          confidence:          parsed.confidence,
-          confidence_reason:   parsed.confidence_reason,
-          caveat:              parsed.caveat,
-          suggested_followups: parsed.followups,
-          // metadata
-          tool_calls:          toolCallLog,
-          qa_issues:           qaIssues,
-          qa_pass:             qaIssues.length === 0,
-          evidence_items_used: Object.keys(evidenceIndex).length,
-          temporal_scope:      temporal.scope_label,
-          token_usage: {
-            input_tokens:       totalInputTokens,
-            output_tokens:      totalOutputTokens,
-            total_tokens:       totalInputTokens + totalOutputTokens,
-            estimated_cost_usd: estimatedCostUsd,
-            model:              ANTHROPIC_MODELS.sonnet,
-            rounds:             round + 1,
-          },
-        });
-      }
-
-      if (response.stop_reason === "tool_use") {
-        // Push assistant turn
-        messages.push({ role: "assistant", content: response.content });
-
-        // Execute all tool calls in this turn
-        const toolResults = [];
-        for (const block of response.content.filter(b => b.type === "tool_use")) {
-          toolCallLog.push({ tool: block.name, input: block.input });
-
-          let result;
-          try {
-            result = await executeTool(block.name, block.input);
-          } catch (err) {
-            result = { error: err.message };
-          }
-
-          // Accumulate evidence index and source refs from tool results
-          if (block.name === "get_evidence" && result.evidence_items) {
-            for (const ev of result.evidence_items) {
-              evidenceIndex[ev.evidence_id] = ev;
-              // Harvest source URL into citation pool
-              if (ev.source_url) {
-                citationPool.push({
-                  source_title: ev.source_title || "",
-                  url:          ev.source_url,
-                  publisher:    ev.publisher   || "",
-                  trust_tier:   ev.trust_tier  || null,
-                });
-              }
-            }
-          }
-          if (block.name === "get_judgments" && result.judgments) {
-            for (const j of result.judgments) {
-              for (const eid of (j.evidence_ids || [])) {
-                if (!evidenceIndex[eid]) {
-                  evidenceIndex[eid] = { evidence_id: eid, fact: "", source_url: null, publisher: "", source_title: "" };
-                }
-              }
-            }
-          }
-          if (block.name === "search_corpus" && result.sources) {
-            // Renumber with a global offset so src-N refs stay unique across multiple calls
-            const offset = srcCounter;
-            const renumbered = result.sources.map((s, i) => ({ ...s, ref: `src-${offset + i + 1}` }));
-            srcCounter += renumbered.length;
-            result = { ...result, sources: renumbered };
-            sourceRefs = [...sourceRefs, ...renumbered];
-            for (const s of renumbered) {
-              if (s.url) citationPool.push({ source_title: s.title || "", url: s.url, publisher: s.publisher || "", trust_tier: s.trust_tier || null });
-            }
-          }
-          // search_taxonomy also returns source lists the model cites with [src-N]
-          // (under .sources for a tag query, .recent_sources for a category query).
-          // Register them in the same global ref space so those markers resolve to links.
-          if (block.name === "search_taxonomy") {
-            const taxSources = result.sources || result.recent_sources;
-            if (Array.isArray(taxSources) && taxSources.length) {
-              const offset = srcCounter;
-              const renumbered = taxSources.map((s, i) => ({ ...s, ref: `src-${offset + i + 1}` }));
-              srcCounter += renumbered.length;
-              if (result.sources) result = { ...result, sources: renumbered };
-              else result = { ...result, recent_sources: renumbered };
-              sourceRefs = [...sourceRefs, ...renumbered];
-              for (const s of renumbered) {
-                if (s.url) citationPool.push({ source_title: s.title || "", url: s.url, publisher: s.publisher || "", trust_tier: s.trust_tier || null });
-              }
-            }
-          }
-          if (block.name === "lookup_cve" && result.results) {
-            for (const r of result.results) {
-              if (r.nvd_url) citationPool.push({ source_title: r.cve_id, url: r.nvd_url, publisher: "NVD", trust_tier: "primary" });
-            }
-          }
-
-          toolResults.push({
-            type:        "tool_result",
-            tool_use_id: block.id,
-            content:     JSON.stringify(result),
-          });
-        }
-
-        messages.push({ role: "user", content: toolResults });
-        continue;
-      }
-
-      // Unexpected stop reason — break
-      break;
+    // ── Deterministic pre-fetch (replaces the mandatory first tool round) ────────
+    // The corpus search + evidence + judgments the model would call on round 1 are
+    // run here in parallel and seeded as a completed tool turn, so the model can
+    // synthesise immediately (1 round) instead of spending a round deciding to
+    // retrieve. It can still issue targeted follow-up tool calls in later rounds.
+    const seedCalls = [
+      { id: "seed_corpus",    name: "search_corpus",  input: { query, ...(temporal.all_time ? {} : { date_from: temporal.date_from }), ...(category ? { categories: [category] } : {}) } },
+      { id: "seed_evidence",  name: "get_evidence",   input: { query, limit: 20, ...(category ? { categories: [category] } : {}) } },
+      { id: "seed_judgments", name: "get_judgments",  input: category ? { categories: [category] } : {} },
+      { id: "seed_trend",     name: "trend_analysis", input: category ? { categories: [category] } : {} },
+    ];
+    // If the question names specific CVEs, pre-fetch their live NVD severity too,
+    // so the synthesis needs no tool round at all (clean single streamed pass).
+    const cveIds = [...new Set((query.match(/CVE-\d{4}-\d{4,7}/gi) || []).map(s => s.toUpperCase()))].slice(0, 5);
+    if (cveIds.length) {
+      seedCalls.push({ id: "seed_cve", name: "lookup_cve", input: { cve_ids: cveIds } });
     }
+    const seedResults = await Promise.all(
+      seedCalls.map(c => executeTool(c.name, c.input).catch(err => ({ error: err.message })))
+    );
+    const seedToolResults = seedCalls.map((c, i) => {
+      toolCallLog.push({ tool: c.name, input: c.input, prefetch: true });
+      const out = accumulate(c.name, seedResults[i]);
+      return { type: "tool_result", tool_use_id: c.id, content: JSON.stringify(out) };
+    });
+    messages.push({ role: "assistant", content: seedCalls.map(c => ({ type: "tool_use", id: c.id, name: c.name, input: c.input })) });
+    messages.push({ role: "user", content: seedToolResults });
 
-    // Exhausted rounds without end_turn — rather than discard everything the
-    // model already gathered, force ONE final answer with tools disabled so it
-    // must synthesise from the tool results it has. Far better than a canned
-    // "try again" that throws away real retrieved sources.
-    let finalRawText = "";
-    try {
-      messages.push({
-        role: "user",
-        content: "Stop searching now and write your final answer using only the information already gathered above. Follow the required answer format exactly, including the [src-N] citation markers and the CONFIDENCE/CONFIDENCE_REASON/CAVEAT/FOLLOWUP lines.",
-      });
-      const finalResp = await anthropicRequest({
-        model: ANTHROPIC_MODELS.sonnet, max_tokens: 4096, system, messages,  // no tools
-      });
-      totalInputTokens  += finalResp.usage?.input_tokens  || 0;
-      totalOutputTokens += finalResp.usage?.output_tokens || 0;
-      finalRawText = finalResp.content.find(b => b.type === "text")?.text || "";
-    } catch (e) {
-      finalRawText = "";
-    }
-
-    if (finalRawText) {
-      const parsed = parseResponse(finalRawText);
+    // ── Single synthesis pass ────────────────────────────────────────────────────
+    // All retrieval is pre-fetched, so there are no tool rounds — one synthesis
+    // call produces the answer. buildPayload turns its text into the response
+    // (citations, confidence, etc.) and is shared by the streamed and buffered paths.
+    function buildPayload(rawText) {
+      const parsed = parseResponse(rawText || "(No answer generated)");
       const { text: cleanAnswer, harvested } = harvestAndCleanAnswer(parsed.answer, evidenceIndex);
       for (const h of harvested) {
         if (h.url && !citationPool.some(c => c.url === h.url)) {
@@ -612,9 +533,15 @@ export default async function handler(req, res) {
         if (!c.url && (!c.source_title || c.source_title === "Unknown source")) return false;
         const key = normalizeUrl(c.url) || c.source_title;
         if (!key || seen.has(key)) return false;
-        seen.add(key); return true;
+        seen.add(key);
+        return true;
       });
-      return res.status(200).json({
+      const qaIssues = qaResponse(cleanAnswer, dedupedCitations, evidenceIndex);
+      const estimatedCostUsd =
+        (totalInputTokens / 1_000_000) * AGENT_PRICING.input +
+        (totalOutputTokens / 1_000_000) * AGENT_PRICING.output;
+      logAgentCostToDB({ inputTokens: totalInputTokens, outputTokens: totalOutputTokens, rounds: 1, costUsd: estimatedCostUsd }).catch(() => {});
+      return {
         answer:              cleanAnswer,
         citations:           dedupedCitations,
         source_refs:         sourceRefs,
@@ -623,24 +550,59 @@ export default async function handler(req, res) {
         caveat:              parsed.caveat,
         suggested_followups: parsed.followups,
         tool_calls:          toolCallLog,
-        qa_issues:           qaResponse(cleanAnswer, dedupedCitations, evidenceIndex),
-        qa_pass:             true,
+        qa_issues:           qaIssues,
+        qa_pass:             qaIssues.length === 0,
         evidence_items_used: Object.keys(evidenceIndex).length,
         temporal_scope:      temporal.scope_label,
-        forced_synthesis:    true,
-      });
+        token_usage: {
+          input_tokens:       totalInputTokens,
+          output_tokens:      totalOutputTokens,
+          total_tokens:       totalInputTokens + totalOutputTokens,
+          estimated_cost_usd: estimatedCostUsd,
+          model:              ANTHROPIC_MODELS.sonnet,
+          rounds:             1,
+        },
+      };
     }
 
-    // Truly nothing usable — last-resort message.
-    return res.status(200).json({
-      answer:      "Analysis is taking longer than expected. Please try a more specific question.",
-      citations:   [],
-      confidence:  "low",
-      caveat:      "Tool loop did not complete within the allowed rounds.",
-      tool_calls:  toolCallLog,
-      qa_pass:     false,
-      qa_issues:   ["Tool loop did not complete"],
-    });
+    const synthBody = { model: ANTHROPIC_MODELS.sonnet, max_tokens: 4096, system: cachedSystem, messages };
+
+    // ── Streamed path (Server-Sent Events) ──────────────────────────────────────
+    if (req.body?.stream === true) {
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+      const sse = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+
+      // Only the answer body streams; the trailing CONFIDENCE/CAVEAT/FOLLOWUP
+      // metadata block is withheld until it's parsed and sent in the 'done' event.
+      const visible = (raw) => {
+        const m = raw.match(/(^|\n)(CONFIDENCE:|CONFIDENCE_REASON:|CAVEAT:|FOLLOWUP:)/);
+        return m ? raw.slice(0, m.index) : raw;
+      };
+      let fullText = "", emitted = 0;
+      try {
+        const usage = await anthropicStream(synthBody, (delta) => {
+          fullText += delta;
+          const vis = visible(fullText);
+          if (vis.length > emitted) { sse({ type: "delta", text: vis.slice(emitted) }); emitted = vis.length; }
+        });
+        totalInputTokens  += usage.input_tokens  || 0;
+        totalOutputTokens += usage.output_tokens || 0;
+        sse({ type: "done", ...buildPayload(fullText) });
+      } catch (err) {
+        sse({ type: "error", error: err.message });
+      }
+      res.end();
+      return;
+    }
+
+    // ── Buffered path (back-compatible JSON) ─────────────────────────────────────
+    const resp = await anthropicRequest(synthBody);
+    totalInputTokens  += resp.usage?.input_tokens  || 0;
+    totalOutputTokens += resp.usage?.output_tokens || 0;
+    const rawText = resp.content.find(b => b.type === "text")?.text || "(No answer generated)";
+    return res.status(200).json(buildPayload(rawText));
 
   } catch (err) {
     console.error("[agent] error:", err.message, err.stack?.slice(0, 500));
