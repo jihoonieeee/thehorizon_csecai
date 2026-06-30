@@ -144,7 +144,7 @@ function exportMarkdown(result) {
         lines.push(`- ${b.text}${evRef}`);
       }
       if (slide.speaker_notes) {
-        lines.push(`\n> _${slide.speaker_notes.replace(/\n/g, " ").slice(0, 200)}_\n`);
+        lines.push(`\n> _${String(slide.speaker_notes).replace(/\n/g, " ").slice(0, 200)}_\n`);
       }
     }
   }
