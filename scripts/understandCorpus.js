@@ -51,10 +51,15 @@ async function main() {
   console.log(`${"═".repeat(60)}\n`);
 
   // ── Load not-yet-understood validated sources ────────────────────────────────────────
+  // Include 'review' as well as 'pass': understand IS the layer that resolves
+  // relevance uncertainty (it re-judges and demotes irrelevant ones). Sources
+  // ingested without an LLM gate — e.g. the deterministic operational-discovery
+  // job — land in 'review' and would otherwise never be classified or reach the
+  // dashboard. Only hard 'reject' is excluded.
   let query = sb
     .from("sources")
     .select("id,title,url,publisher,date_published,main_category,trust_tier,source_type,full_text,summary,tags,validation_status")
-    .eq("validation_status", "pass")
+    .in("validation_status", ["pass", "review"])
     .is("claim_extraction_status", null)
     .order("date_published", { ascending: false });
 
@@ -96,6 +101,10 @@ async function main() {
 
         return {
           id:                      src.id,
+          // Promote understood-relevant 'review' sources to 'pass' so they reach
+          // the dashboard / downstream (which filter on validation_status='pass').
+          // Understand has now confirmed relevance, so the review state is resolved.
+          validation_status:       "pass",
           main_category:           u.category,
           tags:                    u.primary_tags || [],
           source_type:             u.source_type  || src.source_type || "unknown",
