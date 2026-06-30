@@ -78,48 +78,163 @@ const tagLabel = (id) => getTag(id)?.label || id;
 // persist its own cost events — otherwise dashboard-insight spend is invisible in
 // llm_cost_log. Every call logs its token usage under a `task` context.
 
-async function callAnthropic({ system, user, model, maxTokens = 1200, task = "dashboard_insight" }) {
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// Transient: a 60–90s timeout/abort, or a retryable HTTP status (429 rate-limit,
+// 5xx, 529 overloaded). These spiked under API load and caused whole insight
+// sets to fall back; retry with backoff instead.
+function isRetryable(err) {
+  if (!err) return false;
+  if (err.name === "TimeoutError" || err.name === "AbortError") return true;
+  if (/aborted|timeout|fetch failed|ECONNRESET|ETIMEDOUT|network/i.test(err.message || "")) return true;
+  return [429, 500, 502, 503, 504, 529].includes(err.status);
+}
+
+async function callAnthropic({ system, user, model, maxTokens = 1200, task = "dashboard_insight", retries = 3 }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
 
   const usedModel = model || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    signal: AbortSignal.timeout(60000),
-    headers: {
-      "Content-Type":      "application/json",
-      "x-api-key":         apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model:      usedModel,
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: "user", content: user }],
-    }),
-  });
 
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`Anthropic ${res.status}: ${t.slice(0, 200)}`);
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        // 90s: the multi-signal emerging-signals / themes calls return large JSON
+        // and were tripping a 60s cap under API load.
+        signal: AbortSignal.timeout(90000),
+        headers: {
+          "Content-Type":      "application/json",
+          "x-api-key":         apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model:      usedModel,
+          max_tokens: maxTokens,
+          system,
+          messages: [{ role: "user", content: user }],
+        }),
+      });
+
+      if (!res.ok) {
+        const t = await res.text().catch(() => "");
+        const e = new Error(`Anthropic ${res.status}: ${t.slice(0, 200)}`);
+        e.status = res.status;
+        throw e;
+      }
+      const data = await res.json();
+
+      // Persist cost (fire-and-forget; never let logging break generation).
+      try {
+        persistCallCost({
+          task,
+          provider:     "anthropic",
+          model:        usedModel,
+          inputTokens:  data.usage?.input_tokens  || 0,
+          outputTokens: data.usage?.output_tokens || 0,
+        });
+      } catch { /* ignore */ }
+
+      const text = data.content?.[0]?.text?.trim() || "";
+      return extractJson(text);
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries && isRetryable(err)) {
+        // Exponential backoff with jitter: ~2s, 4s, 8s.
+        const wait = Math.round(2000 * 2 ** attempt * (0.8 + Math.random() * 0.4));
+        console.log(`  [anthropic] ${task} ${err.name === "TimeoutError" ? "timeout" : (err.message || "").slice(0, 40)} — retry ${attempt + 1}/${retries} in ${wait}ms`);
+        await sleep(wait);
+        continue;
+      }
+      throw err;
+    }
   }
-  const data = await res.json();
+  throw lastErr;
+}
 
-  // Persist cost (fire-and-forget; never let logging break generation).
-  try {
-    persistCallCost({
-      task,
-      provider:     "anthropic",
-      model:        usedModel,
-      inputTokens:  data.usage?.input_tokens  || 0,
-      outputTokens: data.usage?.output_tokens || 0,
-    });
-  } catch { /* ignore */ }
+// Robust JSON extraction from an LLM response. Handles the common malformations
+// that broke the old greedy `text.match(/\{[\s\S]*\}/)` + raw JSON.parse:
+//   - ```json fences / prose around the object
+//   - trailing prose after the object (greedy regex swallowed it → parse error)
+//   - trailing commas before } or ]  ("Expected ',' or ']' after array element")
+//   - a truncated object (maxTokens hit) → close the open brackets so we recover
+//     whatever complete fields we can instead of throwing away the whole call.
+export function extractJson(raw) {
+  const text = String(raw || "").trim();
+  if (!text) throw new Error("empty response");
 
-  const text = data.content?.[0]?.text?.trim() || "";
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error(`No JSON in response: ${text.slice(0, 160)}`);
-  return JSON.parse(match[0]);
+  // Strip a leading ```json / ``` fence if present.
+  const unfenced = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+
+  // Locate the JSON object by balancing braces from the first "{", ignoring
+  // braces inside strings. This avoids grabbing trailing prose.
+  const start = unfenced.indexOf("{");
+  if (start === -1) throw new Error(`No JSON object in response: ${unfenced.slice(0, 120)}`);
+
+  let depth = 0, inStr = false, esc = false, end = -1;
+  for (let i = start; i < unfenced.length; i++) {
+    const ch = unfenced[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+    } else if (ch === '"') inStr = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}") { depth--; if (depth === 0) { end = i + 1; break; } }
+  }
+
+  // Complete object found, or truncated (depth>0) — take what we have and repair.
+  let candidate = end !== -1 ? unfenced.slice(start, end) : unfenced.slice(start);
+
+  const tryParse = (s) => { try { return JSON.parse(s); } catch { return undefined; } };
+
+  let parsed = tryParse(candidate);
+  if (parsed !== undefined) return parsed;
+
+  // Repair pass: drop trailing commas, then for truncation close any still-open
+  // strings/arrays/objects so a cut-off response yields its complete prefix.
+  let repaired = candidate.replace(/,\s*([}\]])/g, "$1");
+  parsed = tryParse(repaired);
+  if (parsed !== undefined) return parsed;
+
+  if (end === -1) {
+    repaired = closeTruncatedJson(candidate);
+    parsed = tryParse(repaired.replace(/,\s*([}\]])/g, "$1"));
+    if (parsed !== undefined) return parsed;
+  }
+
+  throw new Error(`Unparseable JSON: ${candidate.slice(0, 120)}`);
+}
+
+// Best-effort recovery of a truncated JSON object (maxTokens cut mid-response):
+// rewind to the last point where a complete value sat at an array/object
+// boundary, then close the brackets that were open AT THAT POINT. Snapshotting
+// the stack at each boundary (not just at the end) avoids emitting a dangling
+// key or half-written value.
+function closeTruncatedJson(s) {
+  let inStr = false, esc = false;
+  const stack = [];               // pending closers, outermost first
+  let safePos = 0;                // index after the last complete boundary value
+  let safeStack = [];             // stack snapshot at safePos
+  const snapshot = (i) => { safePos = i + 1; safeStack = stack.slice(); };
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;   // string closed — boundary only if a comma/close follows
+    } else if (ch === '"') inStr = true;
+    else if (ch === "{") stack.push("}");
+    else if (ch === "[") stack.push("]");
+    else if (ch === "}" || ch === "]") { stack.pop(); snapshot(i); }       // a value just completed
+    else if (ch === ",") snapshot(i - 1);   // value before the comma is complete; exclude the comma
+  }
+
+  if (!safePos) return s + stack.reverse().join("");   // nothing complete yet — close what we can
+  const head = s.slice(0, safePos).replace(/,\s*$/, "");
+  return head + safeStack.reverse().join("");
 }
 
 // ── Stage A: findings → themes ─────────────────────────────────────────────────
@@ -541,12 +656,20 @@ async function enrichEmergingSignals(signals, currTagSources) {
 
   if (!process.env.ANTHROPIC_API_KEY) return signals;
 
+  // Evidence grounding per signal — built ONCE and shared by the analysis
+  // generator and the QA verifier. They must see the same summaries, otherwise
+  // the QA flags as "overreach" any specific (CVE / product / stat) the analysis
+  // legitimately drew from a source the QA couldn't see.
+  const signalEvidence = signals.map(sig =>
+    (currTagSources[sig.tag_id] || [])
+      .map(s => s.summary).filter(Boolean).slice(0, 6).map(s => s.slice(0, 220))
+  );
+
   // One LLM call for all signals' analysis, grounded in their summaries.
-  const blocks = signals.map((sig, i) => {
-    const sums = (currTagSources[sig.tag_id] || []).map(s => s.summary).filter(Boolean).slice(0, 6);
-    return `[${i}] Signal: ${sig.signal} (${sig.prev} → ${sig.curr} sources)\n` +
-      sums.map(s => `   - ${s.slice(0, 220)}`).join("\n");
-  }).join("\n\n");
+  const blocks = signals.map((sig, i) =>
+    `[${i}] Signal: ${sig.signal} (${sig.prev} → ${sig.curr} sources)\n` +
+    signalEvidence[i].map(s => `   - ${s}`).join("\n")
+  ).join("\n\n");
 
   let analyses = [];
   try {
@@ -572,7 +695,9 @@ async function enrichEmergingSignals(signals, currTagSources) {
   // construction) rather than blanking the signal, so every card keeps elaboration.
   const verdicts = await qaStatements(
     signals.map(s => s.analysis),
-    signals.map(s => `${s.signal}: ${(currTagSources[s.tag_id] || []).map(x => x.summary).filter(Boolean).slice(0, 4).join(" | ").slice(0, 400)}`).join("\n"),
+    // Same evidence the analysis was grounded in (signalEvidence), so QA verifies
+    // against what the generator actually saw — not a narrower slice.
+    signals.map((s, i) => `${s.signal}:\n${signalEvidence[i].map(x => `   - ${x}`).join("\n")}`).join("\n\n"),
     "emerging-signal",
   );
   signals.forEach((s, i) => {
@@ -881,6 +1006,12 @@ async function main() {
 }
 
 import { flushCostBuffer } from "../lib/llm/usagePersistence.js";
-main()
-  .then(() => flushCostBuffer())
-  .catch(err => { console.error("\nFATAL:", err.message); process.exit(1); });
+import { fileURLToPath } from "url";
+
+// Only run the pipeline when invoked as a CLI — importing the module (e.g. for
+// tests of extractJson) must not trigger generation.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main()
+    .then(() => flushCostBuffer())
+    .catch(err => { console.error("\nFATAL:", err.message); process.exit(1); });
+}
