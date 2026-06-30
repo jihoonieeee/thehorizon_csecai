@@ -266,36 +266,69 @@ export function AskAgentPage() {
     const history = messages.map(m => ({ role: m.role, content: m.content }));
 
     try {
-      const res  = await fetch("/api/agent", {
+      const res = await fetch("/api/agent", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ query: q, history }),
+        body:    JSON.stringify({ query: q, history, stream: true }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || `API error ${res.status}`);
+      if (!res.ok || !res.body) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || `API error ${res.status}`);
+      }
 
-      const assistantMsg = {
-        role:                "assistant",
-        content:             json.answer || "No answer returned.",
-        citations:           json.citations            || [],
-        source_refs:         json.source_refs          || [],
-        confidence:          json.confidence           || null,
-        confidence_reason:   json.confidence_reason    || "",
-        caveat:              json.caveat               || null,
-        suggested_followups: json.suggested_followups  || [],
-        temporal_scope:      json.temporal_scope       || null,
-        token_usage:         json.token_usage          || null,
-      };
-      setMessages(prev => [...prev, assistantMsg]);
+      // Insert a placeholder assistant message we grow as deltas arrive.
+      setMessages(prev => [...prev, { role: "assistant", content: "", streaming: true, citations: [], source_refs: [] }]);
+      const setLast = (patch) => setMessages(prev => {
+        const m = [...prev];
+        m[m.length - 1] = typeof patch === "function" ? patch(m[m.length - 1]) : { ...m[m.length - 1], ...patch };
+        return m;
+      });
+
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "", done = null;
+      for (;;) {
+        const { done: finished, value } = await reader.read();
+        if (finished) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          const data = line.slice(5).trim();
+          if (!data) continue;
+          let e; try { e = JSON.parse(data); } catch { continue; }
+          if (e.type === "delta") {
+            setLast(prev => ({ ...prev, content: prev.content + e.text }));
+          } else if (e.type === "done") {
+            done = e;
+            setLast({
+              role:                "assistant",
+              content:             e.answer || "No answer returned.",
+              citations:           e.citations            || [],
+              source_refs:         e.source_refs          || [],
+              confidence:          e.confidence           || null,
+              confidence_reason:   e.confidence_reason    || "",
+              caveat:              e.caveat               || null,
+              suggested_followups: e.suggested_followups  || [],
+              temporal_scope:      e.temporal_scope       || null,
+              token_usage:         e.token_usage          || null,
+              streaming:           false,
+            });
+          } else if (e.type === "error") {
+            throw new Error(e.error);
+          }
+        }
+      }
 
       // Persist call log entry to localStorage for the Logs page
       try {
         const logEntry = {
-          ts:           new Date().toISOString(),
-          query:        q,
-          confidence:   json.confidence || null,
-          tools:        (json.tool_calls || []).map(t => t.tool),
-          token_usage:  json.token_usage || null,
+          ts:          new Date().toISOString(),
+          query:       q,
+          confidence:  done?.confidence || null,
+          tools:       (done?.tool_calls || []).map(t => t.tool),
+          token_usage: done?.token_usage || null,
         };
         const stored = JSON.parse(localStorage.getItem("hz_agent_log") || "[]");
         stored.unshift(logEntry);
@@ -340,12 +373,18 @@ export function AskAgentPage() {
           {messages.map((msg, i) => (
             <Message key={i} msg={msg} onFollowUp={send} />
           ))}
-          {loading && (
-            <div className="hz-loading-dot">
-              <span className="hz-loading-dots"><span /><span /><span /></span>
-              Thinking…
-            </div>
-          )}
+          {loading && (() => {
+            // Show "Thinking…" only until the first streamed token lands; once the
+            // assistant bubble has content, the streaming text itself is the signal.
+            const last = messages[messages.length - 1];
+            const streamingWithText = last && last.role === "assistant" && last.content;
+            return streamingWithText ? null : (
+              <div className="hz-loading-dot">
+                <span className="hz-loading-dots"><span /><span /><span /></span>
+                Thinking…
+              </div>
+            );
+          })()}
           <div ref={bottomRef} />
         </div>
       )}
