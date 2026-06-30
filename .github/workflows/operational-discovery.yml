@@ -1,0 +1,58 @@
+name: Operational Discovery (web + sitemaps)
+
+# Dedicated, lightweight, FREQUENT operational-source discovery — decoupled from
+# the heavy enrich/synthesize pipeline.
+#
+# Cold-cache web discovery (per-candidate text-fetch + triage) cannot finish a
+# large run inside a CI budget. Instead of one big run, we run small batches
+# often: incremental persist saves each completed batch, and cross-run dedup
+# (upsert by id) means successive runs accumulate coverage. The daily
+# pipeline.yml `understand` job then picks up whatever has accumulated.
+#
+# Schedule: every 6h (4×/day). 16 missions × 1 query, 2 missions/batch → 8 small
+# discovery batches + 1 sitemap, each checkpointed.
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # every 6 hours
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Lookback window in days'
+        type: string
+        default: '7'
+      queries_per_mission:
+        description: 'Searches per mission (lower = faster batches)'
+        type: string
+        default: '1'
+
+jobs:
+  discover:
+    name: Operational discovery
+    runs-on: ubuntu-latest
+    # Soft bound: incremental persist means whatever batches finish are saved;
+    # a cut-off only loses the in-flight batch.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run operational discovery
+        run: node scripts/ingestOperational.js --days ${{ github.event.inputs.days || '7' }} --queries-per-mission ${{ github.event.inputs.queries_per_mission || '1' }} --mission-batch 2
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BLOB_READ_WRITE_TOKEN:     ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
+          TAVILY_API_KEY:            ${{ secrets.TAVILY_API_KEY }}
+          TAVILY_API_KEY_2:          ${{ secrets.TAVILY_API_KEY_2 }}
+          TAVILY_API_KEY_3:          ${{ secrets.TAVILY_API_KEY_3 }}
+          TAVILY_API_KEY_4:          ${{ secrets.TAVILY_API_KEY_4 }}
+          SERPAPI_API_KEY:           ${{ secrets.SERPAPI_API_KEY }}
+          WEB_DISCOVERY_ENABLED:     "1"
