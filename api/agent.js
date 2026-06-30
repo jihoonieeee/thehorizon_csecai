@@ -344,8 +344,20 @@ function extractCitations(text, evidenceIndex, sourceRefs) {
 
 // ── QA check ─────────────────────────────────────────────────────────────────
 
-function qaResponse(text, citations, evidenceIndex) {
+function qaResponse(text, citations, evidenceIndex, groundingText = "") {
   const issues = [];
+
+  // ── Fact-check: specific claims must be grounded in retrieved material ─────────
+  // CVE IDs and named source/publisher mentions are the easiest to fabricate and
+  // the most damaging if wrong. Flag any that don't appear in what was retrieved.
+  if (groundingText) {
+    const g = groundingText;
+    const cves = [...new Set((text.match(/CVE-\d{4}-\d{4,7}/gi) || []).map(s => s.toUpperCase()))];
+    const ungroundedCves = cves.filter(c => !g.includes(c.toLowerCase()));
+    if (ungroundedCves.length) {
+      issues.push(`CVE(s) not found in retrieved sources: ${ungroundedCves.join(", ")} — possible fabrication`);
+    }
+  }
 
   // Flag if any raw ev_xxx IDs slipped through scrubbing into the visible answer
   if (/\bev[_-][a-zA-Z0-9_-]{4,}/.test(text)) {
@@ -513,14 +525,20 @@ export default async function handler(req, res) {
     // (citations, confidence, etc.) and is shared by the streamed and buffered paths.
     function buildPayload(rawText) {
       const parsed = parseResponse(rawText || "(No answer generated)");
-      const { text: cleanAnswer, harvested } = harvestAndCleanAnswer(parsed.answer, evidenceIndex);
-      for (const h of harvested) {
-        if (h.url && !citationPool.some(c => c.url === h.url)) {
-          citationPool.push({ source_title: "", url: h.url, publisher: h.publisher, trust_tier: null });
-        }
-      }
-      const citations = extractCitations(parsed.answer, evidenceIndex, sourceRefs);
       const normalizeUrl = (u) => u?.replace(/[.,;:!?/]+$/, "").toLowerCase().replace(/^https?:\/\//, "");
+
+      // Anti-hallucination allowlist: snapshot the URLs that actually came from
+      // retrieved tool results (citationPool is populated only by accumulate()).
+      // Any URL the model writes inline that is NOT in this set is fabricated and
+      // must never be surfaced as a citation.
+      const retrievedUrls = new Set(citationPool.map(c => normalizeUrl(c.url)).filter(Boolean));
+
+      const { text: cleanAnswer, harvested } = harvestAndCleanAnswer(parsed.answer, evidenceIndex);
+      // NOTE: do NOT add harvested inline URLs to the allowlist — they're from the
+      // model's prose and may be invented. Only real retrieved URLs are citable.
+
+      const citations = extractCitations(parsed.answer, evidenceIndex, sourceRefs)
+        .filter(c => !c.url || retrievedUrls.has(normalizeUrl(c.url)));   // drop fabricated URLs
       const citedUrls = new Set(citations.map(c => normalizeUrl(c.url)).filter(Boolean));
       for (const src of citationPool) {
         if (!src.url || citedUrls.has(normalizeUrl(src.url))) continue;
@@ -536,7 +554,17 @@ export default async function handler(req, res) {
         seen.add(key);
         return true;
       });
-      const qaIssues = qaResponse(cleanAnswer, dedupedCitations, evidenceIndex);
+
+      // Grounding text = everything actually retrieved (source titles/summaries +
+      // evidence facts/quotes). Used by qaResponse to fact-check that specific
+      // claims (CVE IDs, named entities) appear in the retrieved material.
+      const groundingText = [
+        ...citationPool.map(c => `${c.source_title || ""} ${c.publisher || ""}`),
+        ...sourceRefs.map(s => `${s.title || ""} ${s.summary || ""}`),
+        ...Object.values(evidenceIndex).map(ev => `${ev.fact || ""} ${ev.quote || ""}`),
+      ].join("\n").toLowerCase();
+
+      const qaIssues = qaResponse(cleanAnswer, dedupedCitations, evidenceIndex, groundingText);
       const estimatedCostUsd =
         (totalInputTokens / 1_000_000) * AGENT_PRICING.input +
         (totalOutputTokens / 1_000_000) * AGENT_PRICING.output;
