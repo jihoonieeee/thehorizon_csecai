@@ -38,10 +38,11 @@ jobs:
   ingest-operational:
     name: Operational ingestion (discovery + sitemaps)
     runs-on: ubuntu-latest
-    # Best-effort, decoupled (continue-on-error + downstream always()). Cold-cache
-    # web discovery (per-candidate text-fetch + triage) overran 45 min, so the cap
-    # is tight and the work bounded; sitemap crawl alone is fast and reliable.
-    timeout-minutes: 25
+    # Best-effort, decoupled (continue-on-error + downstream always()). The script
+    # now persists CUMULATIVELY after each batch (1 sitemap + 4 discovery groups),
+    # so the timeout is a soft bound: whatever batches finish are saved, and a
+    # cut-off only loses the in-flight batch instead of the whole run.
+    timeout-minutes: 35
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -52,7 +53,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run operational ingestion
-        run: node scripts/ingestOperational.js --days 7 --queries-per-mission 2
+        run: node scripts/ingestOperational.js --days 7 --queries-per-mission 2 --mission-batch 4
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
