@@ -209,9 +209,12 @@ These markers become inline clickable links in the UI — they are the primary w
 
 If evidence is thin (fewer than 3 sources), say so plainly. If you cannot answer from the corpus, say what's missing. Do not invent sources or statistics. No hype language.
 
+SCOPE: You are an AI threat-intelligence assistant for this corpus only (AI/ML security, LLM/agentic threats, AI-enabled attacks, related vulnerabilities and incidents). The pre-fetched results use loose keyword matching, so they may return tangential sources even when the question is NOT about AI security. If the question is clearly outside this scope — general chit-chat, weather, unrelated topics, or nonsensical input — do NOT force an answer or cite any sources. Instead reply in one or two sentences that you focus on AI threat intelligence and invite an in-scope question, set SCOPE: out_of_scope, and add NO [src-N] markers. For genuine in-scope questions, set SCOPE: in_scope.
+
 NEVER expose internal evidence tracking IDs (ev_xxx, ev-xxx).
 
 End with these lines exactly:
+SCOPE: in_scope|out_of_scope
 CONFIDENCE: high|moderate|low
 CONFIDENCE_REASON: one sentence
 CAVEAT: one specific limitation, or null
@@ -223,12 +226,13 @@ FOLLOWUP: a second follow-up question`;
 
 function parseResponse(text) {
   const lines = text.split("\n");
-  const metaFields = ["CONFIDENCE:", "CONFIDENCE_REASON:", "CAVEAT:", "FOLLOWUP:"];
   const answerLines = [];
-  const meta = { confidence: "low", confidence_reason: "", caveat: null, followups: [] };
+  const meta = { confidence: "low", confidence_reason: "", caveat: null, followups: [], out_of_scope: false };
 
   for (const line of lines) {
-    if (line.startsWith("CONFIDENCE_REASON:")) {
+    if (line.startsWith("SCOPE:")) {
+      meta.out_of_scope = /out_of_scope/i.test(line);
+    } else if (line.startsWith("CONFIDENCE_REASON:")) {
       meta.confidence_reason = line.replace("CONFIDENCE_REASON:", "").trim();
     } else if (line.startsWith("CONFIDENCE:")) {
       const val = line.replace("CONFIDENCE:", "").trim().toLowerCase();
@@ -547,13 +551,22 @@ export default async function handler(req, res) {
         if (citations.length >= 15) break;
       }
       const seen = new Set();
-      const dedupedCitations = citations.filter(c => {
+      let dedupedCitations = citations.filter(c => {
         if (!c.url && (!c.source_title || c.source_title === "Unknown source")) return false;
         const key = normalizeUrl(c.url) || c.source_title;
         if (!key || seen.has(key)) return false;
         seen.add(key);
         return true;
       });
+
+      // Off-topic guard: when the model judges the question out of scope, it
+      // answers briefly and cites nothing — so suppress the pre-fetched citations
+      // (loose keyword matching would otherwise attach tangential sources to a
+      // "this is out of scope" reply) and the followups.
+      if (parsed.out_of_scope) {
+        dedupedCitations = [];
+        sourceRefs = [];
+      }
 
       // Grounding text = everything actually retrieved (source titles/summaries +
       // evidence facts/quotes). Used by qaResponse to fact-check that specific
@@ -605,7 +618,7 @@ export default async function handler(req, res) {
       // Only the answer body streams; the trailing CONFIDENCE/CAVEAT/FOLLOWUP
       // metadata block is withheld until it's parsed and sent in the 'done' event.
       const visible = (raw) => {
-        const m = raw.match(/(^|\n)(CONFIDENCE:|CONFIDENCE_REASON:|CAVEAT:|FOLLOWUP:)/);
+        const m = raw.match(/(^|\n)(SCOPE:|CONFIDENCE:|CONFIDENCE_REASON:|CAVEAT:|FOLLOWUP:)/);
         return m ? raw.slice(0, m.index) : raw;
       };
       let fullText = "", emitted = 0;
