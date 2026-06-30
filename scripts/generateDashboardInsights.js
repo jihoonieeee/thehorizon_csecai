@@ -53,8 +53,8 @@ const DRY_RUN  = hasFlag("--dry-run");
 const ASOF     = getArg("--asof", null);
 const NOW      = ASOF ? new Date(`${ASOF}T12:00:00Z`) : new Date();
 
-if (!["week", "month", "quarter"].includes(WINDOW)) {
-  console.error("--window must be week | month | quarter"); process.exit(1);
+if (!["week", "month", "quarter", "annual"].includes(WINDOW)) {
+  console.error("--window must be week | month | quarter | annual"); process.exit(1);
 }
 
 const supabase = createClient(

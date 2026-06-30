@@ -3153,3 +3153,34 @@ details[open] .hz-gen-advanced-toggle::before { content: "▾ "; }
 .hz-snap-time { color: var(--text-tertiary); min-width: 70px; text-align: right; }
 
 .hz-badge-running { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+
+/* ── Ingestion page enhancements ─────────────────────────────────────────── */
+.hz-chart-box { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 14px 16px 8px; margin-bottom: 4px; }
+
+/* Source type bar */
+.hz-type-bar-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px; margin-bottom: 4px; }
+.hz-type-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; gap: 1px; margin-bottom: 10px; }
+.hz-type-bar-seg { height: 100%; min-width: 2px; border-radius: 2px; transition: opacity 0.15s; }
+.hz-type-bar-seg:hover { opacity: 0.75; }
+.hz-type-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.hz-type-legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.72rem; color: var(--text-secondary); }
+.hz-type-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.hz-type-label { color: var(--text-secondary); }
+.hz-type-count { font-weight: 700; color: var(--text-primary); }
+
+/* Connector table */
+.hz-conn-table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; margin-bottom: 4px; }
+.hz-conn-table { width: 100%; border-collapse: collapse; font-size: 0.76rem; }
+.hz-conn-table th { padding: 8px 12px; text-align: left; font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); border-bottom: 1px solid var(--border); white-space: nowrap; }
+.hz-conn-table td { padding: 7px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.hz-conn-table tr:last-child td { border-bottom: none; }
+.hz-conn-table tr:hover td { background: var(--surface-2); }
+.hz-col-r { text-align: right !important; }
+.hz-conn-name { font-weight: 600; color: var(--text-primary); white-space: nowrap; }
+.hz-conn-trust { font-size: 0.7rem; font-weight: 600; }
+.hz-conn-method { color: var(--text-tertiary); white-space: nowrap; }
+.hz-conn-total { font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.hz-conn-active { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.hz-conn-last  { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.hz-conn-fail-count { color: #b91c1c; font-weight: 700; }
+.hz-conn-ok-mark { color: #15803d; }
