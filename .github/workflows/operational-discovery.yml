@@ -59,3 +59,12 @@ jobs:
           TAVILY_API_KEY_4:          ${{ secrets.TAVILY_API_KEY_4 }}
           SERPAPI_API_KEY:           ${{ secrets.SERPAPI_API_KEY }}
           WEB_DISCOVERY_ENABLED:     "1"
+
+      # Record the operational-share snapshot each run so the trend is visible in
+      # the job log over time (the lane grows by flow, not one-shot). Non-fatal.
+      - name: Operational-share snapshot
+        if: always()
+        run: node scripts/operationalShareMonitor.js || true
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
