@@ -3104,3 +3104,52 @@ details[open] .hz-gen-advanced-toggle::before { content: "▾ "; }
   border-top: 1px solid var(--border);
   padding-top: 10px;
 }
+
+/* ── Ingestion page ─────────────────────────────────────────────────────────── */
+.hz-ingestion-page { max-width: 1000px; margin: 0 auto; padding: 20px 24px 60px; }
+.hz-ingestion-head { display: flex; justify-content: space-between; align-items: flex-start; }
+.hz-ingestion-title { font-size: 1.3rem; font-weight: 700; margin: 0; color: var(--text-primary); }
+.hz-ingestion-sub { font-size: 0.78rem; color: var(--text-tertiary); margin: 3px 0 0; }
+.hz-ingestion-fetched { color: var(--text-tertiary); }
+.hz-ingestion-refresh { background: var(--surface); border: 1px solid var(--border); border-radius: 7px; width: 34px; height: 34px; cursor: pointer; font-size: 1rem; color: var(--text-secondary); }
+.hz-ingestion-refresh:hover { border-color: var(--border-hover); color: var(--text-primary); }
+.hz-ingestion-error { margin: 12px 0; padding: 8px 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 7px; color: #991b1b; font-size: 0.8rem; }
+.hz-ingestion-loading, .hz-ingestion-empty { padding: 14px; color: var(--text-tertiary); font-size: 0.85rem; }
+
+.hz-ingestion-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 16px 0 8px; }
+.hz-ingestion-card { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 11px 14px; }
+.hz-ingestion-card-label { font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); }
+.hz-ingestion-card-value { font-size: 1.15rem; font-weight: 700; color: var(--text-primary); margin-top: 4px; }
+.hz-ingestion-conn { font-size: 0.9rem; display: flex; gap: 8px; }
+.hz-conn-ok { color: #15803d; } .hz-conn-empty { color: #a16207; } .hz-conn-fail { color: #b91c1c; }
+
+.hz-ingestion-section-title { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); margin: 22px 0 8px; }
+
+.hz-ingestion-runs { display: flex; flex-direction: column; gap: 5px; }
+.hz-run-row { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.hz-run-main { display: flex; align-items: center; gap: 12px; padding: 9px 13px; cursor: pointer; font-size: 0.8rem; }
+.hz-run-main:hover { background: var(--surface-2); }
+.hz-run-time { color: var(--text-secondary); min-width: 64px; }
+.hz-run-count { font-weight: 700; color: var(--text-primary); }
+.hz-run-meta { color: var(--text-tertiary); flex: 1; }
+.hz-run-dur { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.hz-run-toggle { color: var(--text-tertiary); font-size: 0.6rem; }
+.hz-run-detail { padding: 4px 13px 12px; border-top: 1px solid var(--border); }
+.hz-run-counts { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0; }
+.hz-run-count-chip { font-size: 0.68rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; padding: 2px 7px; color: var(--text-secondary); }
+.hz-run-count-chip b { color: var(--text-primary); }
+.hz-run-connectors { display: flex; flex-wrap: wrap; gap: 4px; }
+.hz-conn-chip { font-size: 0.65rem; border-radius: 5px; padding: 2px 6px; border: 1px solid; }
+.hz-conn-chip.ok { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+.hz-conn-chip.empty { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+.hz-conn-chip.fail { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+.hz-run-error { margin-top: 8px; font-size: 0.72rem; color: #b91c1c; font-family: ui-monospace, monospace; }
+
+.hz-ingestion-snaps { display: flex; flex-direction: column; gap: 3px; }
+.hz-snap-row { display: flex; align-items: center; gap: 14px; padding: 7px 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; font-size: 0.78rem; }
+.hz-snap-id { font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.hz-snap-period { color: var(--text-tertiary); text-transform: capitalize; }
+.hz-snap-count { font-weight: 700; color: var(--text-secondary); margin-left: auto; }
+.hz-snap-time { color: var(--text-tertiary); min-width: 70px; text-align: right; }
+
+.hz-badge-running { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
