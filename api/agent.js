@@ -46,7 +46,9 @@ async function anthropicRequest(body, timeoutMs = 90000) {
   }
 }
 
-const MAX_ROUNDS = 8;
+// With deterministic pre-fetch seeding the first retrieval, most questions are
+// answered in a single model round; the cap only bounds follow-up tool rounds.
+const MAX_ROUNDS = 5;
 
 // ── Temporal intent parser ─────────────────────────────────────────────────────
 
@@ -137,9 +139,9 @@ ${scopeNote}
 WHEN TO USE TOOLS vs ANSWER DIRECTLY:
 If the user's question is a follow-up or clarification on what was just discussed (e.g. "what does that mean?", "can you elaborate?", "why is that significant?"), answer directly without calling any tools.
 
-For every NEW factual question, you MUST call search_corpus. This is non-negotiable — search_corpus is how citation links are generated and shown to the user. If you skip it, the user sees no source links. Call search_corpus in parallel with get_judgments in your first round. Never answer a new factual question without calling search_corpus at least once.
+INITIAL RETRIEVAL IS ALREADY DONE FOR YOU. Before this turn the system ran the corpus search, evidence lookup, and analytical judgments for the user's question and gave you the results above — that IS your retrieval. Those sources and their [src-N] refs are how citation links reach the user.
 
-BE EFFICIENT WITH TOOLS. Gather what you need in 1-2 rounds, then answer. Typical pattern: round 1 calls search_corpus (+ get_judgments and/or get_evidence in parallel); round 2 optionally one follow-up call to fill a specific gap. Do NOT repeatedly re-query with slight variations — if a tool returns enough to answer, stop searching and write the answer. Call get_evidence at most twice. You have a limited number of tool rounds; spend them, then conclude.
+You have everything you need: corpus sources, grounded evidence, analytical judgments, AND weekly trend data are all provided above. Synthesise your answer NOW and cite the [src-N] refs — do not ask for more data. The ONLY tool available is lookup_cve; call it solely when the user explicitly asks about a specific CVE's severity/CVSS score. For every other question, answer directly in one turn.
 
 HOW TO WRITE YOUR ANSWER:
 Use this structure every time:
@@ -381,14 +383,91 @@ export default async function handler(req, res) {
   // Sonnet 4.6 pricing (USD per 1M tokens)
   const AGENT_PRICING = { input: 3.00, output: 15.00 };
 
+  // ── Prompt caching ───────────────────────────────────────────────────────────
+  // The system prompt (~215 lines) and tool definitions are static and re-sent on
+  // every round. Mark them cache_control:ephemeral so Anthropic bills cached reads
+  // at ~10% — a large saving across rounds, with zero effect on output.
+  const cachedSystem = [{ type: "text", text: system, cache_control: { type: "ephemeral" } }];
+  // Retrieval (corpus + evidence + judgments + trend) is pre-fetched and seeded
+  // below, so the model answers in a single round. Offering retrieval tools in the
+  // loop only tempts redundant extra rounds (Sonnet reflexively re-searches). The
+  // ONE tool kept is lookup_cve — live NVD scores the pre-fetch can't reproduce;
+  // the model calls it only for explicit CVE-severity questions.
+  const loopTools = TOOLS.filter(t => t.name === "lookup_cve");
+  const cachedTools = loopTools.map((t, i) =>
+    i === loopTools.length - 1 ? { ...t, cache_control: { type: "ephemeral" } } : t
+  );
+
+  // Accumulate refs/evidence/citations from a tool result. Closure so it can
+  // reassign sourceRefs/srcCounter; shared by the deterministic pre-fetch and the
+  // model-driven loop. Returns the (renumbered) result to hand back to the model.
+  function accumulate(name, result) {
+    if (name === "get_evidence" && result.evidence_items) {
+      for (const ev of result.evidence_items) {
+        evidenceIndex[ev.evidence_id] = ev;
+        if (ev.source_url) citationPool.push({ source_title: ev.source_title || "", url: ev.source_url, publisher: ev.publisher || "", trust_tier: ev.trust_tier || null });
+      }
+    }
+    if (name === "get_judgments" && result.judgments) {
+      for (const j of result.judgments) for (const eid of (j.evidence_ids || [])) {
+        if (!evidenceIndex[eid]) evidenceIndex[eid] = { evidence_id: eid, fact: "", source_url: null, publisher: "", source_title: "" };
+      }
+    }
+    if (name === "search_corpus" && result.sources) {
+      const offset = srcCounter;
+      const renumbered = result.sources.map((s, i) => ({ ...s, ref: `src-${offset + i + 1}` }));
+      srcCounter += renumbered.length;
+      result = { ...result, sources: renumbered };
+      sourceRefs = [...sourceRefs, ...renumbered];
+      for (const s of renumbered) if (s.url) citationPool.push({ source_title: s.title || "", url: s.url, publisher: s.publisher || "", trust_tier: s.trust_tier || null });
+    }
+    if (name === "search_taxonomy") {
+      const taxSources = result.sources || result.recent_sources;
+      if (Array.isArray(taxSources) && taxSources.length) {
+        const offset = srcCounter;
+        const renumbered = taxSources.map((s, i) => ({ ...s, ref: `src-${offset + i + 1}` }));
+        srcCounter += renumbered.length;
+        if (result.sources) result = { ...result, sources: renumbered };
+        else result = { ...result, recent_sources: renumbered };
+        sourceRefs = [...sourceRefs, ...renumbered];
+        for (const s of renumbered) if (s.url) citationPool.push({ source_title: s.title || "", url: s.url, publisher: s.publisher || "", trust_tier: s.trust_tier || null });
+      }
+    }
+    if (name === "lookup_cve" && result.results) {
+      for (const r of result.results) if (r.nvd_url) citationPool.push({ source_title: r.cve_id, url: r.nvd_url, publisher: "NVD", trust_tier: "primary" });
+    }
+    return result;
+  }
+
   try {
+    // ── Deterministic pre-fetch (replaces the mandatory first tool round) ────────
+    // The corpus search + evidence + judgments the model would call on round 1 are
+    // run here in parallel and seeded as a completed tool turn, so the model can
+    // synthesise immediately (1 round) instead of spending a round deciding to
+    // retrieve. It can still issue targeted follow-up tool calls in later rounds.
+    const seedCalls = [
+      { id: "seed_corpus",    name: "search_corpus",  input: { query, ...(temporal.all_time ? {} : { date_from: temporal.date_from }), ...(category ? { categories: [category] } : {}) } },
+      { id: "seed_evidence",  name: "get_evidence",   input: { query, limit: 20, ...(category ? { categories: [category] } : {}) } },
+      { id: "seed_judgments", name: "get_judgments",  input: category ? { categories: [category] } : {} },
+      { id: "seed_trend",     name: "trend_analysis", input: category ? { categories: [category] } : {} },
+    ];
+    const seedResults = await Promise.all(
+      seedCalls.map(c => executeTool(c.name, c.input).catch(err => ({ error: err.message })))
+    );
+    const seedToolResults = seedCalls.map((c, i) => {
+      toolCallLog.push({ tool: c.name, input: c.input, prefetch: true });
+      const out = accumulate(c.name, seedResults[i]);
+      return { type: "tool_result", tool_use_id: c.id, content: JSON.stringify(out) };
+    });
+    messages.push({ role: "assistant", content: seedCalls.map(c => ({ type: "tool_use", id: c.id, name: c.name, input: c.input })) });
+    messages.push({ role: "user", content: seedToolResults });
     // ── Tool use loop ──────────────────────────────────────────────────────────
     for (let round = 0; round < MAX_ROUNDS; round++) {
       const response = await anthropicRequest({
         model:      ANTHROPIC_MODELS.sonnet,
         max_tokens: 4096,
-        system,
-        tools:      TOOLS,
+        system:     cachedSystem,
+        tools:      cachedTools,
         messages,
       });
 
@@ -497,63 +576,8 @@ export default async function handler(req, res) {
             result = { error: err.message };
           }
 
-          // Accumulate evidence index and source refs from tool results
-          if (block.name === "get_evidence" && result.evidence_items) {
-            for (const ev of result.evidence_items) {
-              evidenceIndex[ev.evidence_id] = ev;
-              // Harvest source URL into citation pool
-              if (ev.source_url) {
-                citationPool.push({
-                  source_title: ev.source_title || "",
-                  url:          ev.source_url,
-                  publisher:    ev.publisher   || "",
-                  trust_tier:   ev.trust_tier  || null,
-                });
-              }
-            }
-          }
-          if (block.name === "get_judgments" && result.judgments) {
-            for (const j of result.judgments) {
-              for (const eid of (j.evidence_ids || [])) {
-                if (!evidenceIndex[eid]) {
-                  evidenceIndex[eid] = { evidence_id: eid, fact: "", source_url: null, publisher: "", source_title: "" };
-                }
-              }
-            }
-          }
-          if (block.name === "search_corpus" && result.sources) {
-            // Renumber with a global offset so src-N refs stay unique across multiple calls
-            const offset = srcCounter;
-            const renumbered = result.sources.map((s, i) => ({ ...s, ref: `src-${offset + i + 1}` }));
-            srcCounter += renumbered.length;
-            result = { ...result, sources: renumbered };
-            sourceRefs = [...sourceRefs, ...renumbered];
-            for (const s of renumbered) {
-              if (s.url) citationPool.push({ source_title: s.title || "", url: s.url, publisher: s.publisher || "", trust_tier: s.trust_tier || null });
-            }
-          }
-          // search_taxonomy also returns source lists the model cites with [src-N]
-          // (under .sources for a tag query, .recent_sources for a category query).
-          // Register them in the same global ref space so those markers resolve to links.
-          if (block.name === "search_taxonomy") {
-            const taxSources = result.sources || result.recent_sources;
-            if (Array.isArray(taxSources) && taxSources.length) {
-              const offset = srcCounter;
-              const renumbered = taxSources.map((s, i) => ({ ...s, ref: `src-${offset + i + 1}` }));
-              srcCounter += renumbered.length;
-              if (result.sources) result = { ...result, sources: renumbered };
-              else result = { ...result, recent_sources: renumbered };
-              sourceRefs = [...sourceRefs, ...renumbered];
-              for (const s of renumbered) {
-                if (s.url) citationPool.push({ source_title: s.title || "", url: s.url, publisher: s.publisher || "", trust_tier: s.trust_tier || null });
-              }
-            }
-          }
-          if (block.name === "lookup_cve" && result.results) {
-            for (const r of result.results) {
-              if (r.nvd_url) citationPool.push({ source_title: r.cve_id, url: r.nvd_url, publisher: "NVD", trust_tier: "primary" });
-            }
-          }
+          // Accumulate evidence index, source refs, and citations (shared helper).
+          result = accumulate(block.name, result);
 
           toolResults.push({
             type:        "tool_result",
@@ -581,7 +605,7 @@ export default async function handler(req, res) {
         content: "Stop searching now and write your final answer using only the information already gathered above. Follow the required answer format exactly, including the [src-N] citation markers and the CONFIDENCE/CONFIDENCE_REASON/CAVEAT/FOLLOWUP lines.",
       });
       const finalResp = await anthropicRequest({
-        model: ANTHROPIC_MODELS.sonnet, max_tokens: 4096, system, messages,  // no tools
+        model: ANTHROPIC_MODELS.sonnet, max_tokens: 4096, system: cachedSystem, messages,  // no tools
       });
       totalInputTokens  += finalResp.usage?.input_tokens  || 0;
       totalOutputTokens += finalResp.usage?.output_tokens || 0;
