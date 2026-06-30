@@ -1966,6 +1966,19 @@ a:hover { text-decoration: underline; }
   line-height: 1.5;
 }
 
+.hz-qa-warn {
+  max-width: 90%;
+  margin-top: 6px;
+  padding: 7px 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  color: #991b1b;
+  line-height: 1.5;
+}
+.hz-qa-warn strong { font-weight: 700; }
+
 .hz-followups {
   display: flex;
   gap: 5px;

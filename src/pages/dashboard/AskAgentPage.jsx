@@ -226,6 +226,13 @@ function Message({ msg, onFollowUp }) {
 
       {msg.caveat && <div className="hz-caveat">{msg.caveat}</div>}
 
+      {/* Quality/fact-check: surface flags when the automated checks did not pass */}
+      {msg.role === "assistant" && !msg.streaming && msg.qa_pass === false && msg.qa_issues?.length > 0 && (
+        <div className="hz-qa-warn" title="Automated quality & fact checks">
+          <strong>⚠ Quality check:</strong> {msg.qa_issues.join("; ")}
+        </div>
+      )}
+
       {msg.suggested_followups?.length > 0 && (
         <div className="hz-followups">
           {msg.suggested_followups.slice(0, 2).map((s, i) => (
@@ -313,6 +320,8 @@ export function AskAgentPage() {
               suggested_followups: e.suggested_followups  || [],
               temporal_scope:      e.temporal_scope       || null,
               token_usage:         e.token_usage          || null,
+              qa_issues:           e.qa_issues            || [],
+              qa_pass:             e.qa_pass !== false,
               streaming:           false,
             });
           } else if (e.type === "error") {
