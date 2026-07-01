@@ -382,7 +382,7 @@ function summaryText(s) {
   return (s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "").trim();
 }
 
-async function loadWindowSources(from, to) {
+export async function loadWindowSources(from, to) {
   const { data, error } = await supabase
     .from("sources")
     .select(SRC_SELECT)
@@ -754,6 +754,110 @@ async function computeAssessmentChanges(currAssess, prevAssess, maturityDeltas) 
   return changes.filter((_, i) => verdicts[i]);
 }
 
+// ── Source attribution: tag the critical contributing sources per insight ──────
+// After insights are generated + QA'd, this determines which real sources most
+// directly support each insight, so the dashboard can show clickable citations
+// instead of prose. The LLM may ONLY pick from the provided source list, so
+// citations are always resolvable to a real URL (no hallucinated references).
+
+// Maturity ordering used to rank which sources appear in the attribution
+// candidate pool (operational evidence first — it is the most citable).
+const SRC_TYPE_RANK = {
+  incident: 6, threat_intelligence: 6, adversary_adoption_signal: 6,
+  exploit_disclosure: 5, vulnerability: 4,
+  capability_demonstration: 3, benchmark_evaluation: 3, research_finding: 3,
+  defensive_capability: 2,
+  attack_surface_signal: 1, governance_signal: 1, societal_harm_signal: 1,
+  unknown: 0,
+};
+
+const titleOf = (t) => String(t || "").trim();
+
+const ATTRIBUTION_SYSTEM = `You are an AI threat intelligence analyst attributing SOURCES to strategic insights.
+
+You are given (1) a numbered list of INSIGHTS for one threat category, and (2) a numbered list of SOURCES (real articles, papers, CVEs, incident reports) available for that category and period.
+
+For EACH insight, identify the 2-5 SOURCES that most directly and critically support it — the specific findings, incidents, or disclosures a reader must see to trust that insight. Choose only sources whose content genuinely underpins the insight. Do NOT pad to a fixed count; if only two sources truly matter, return two.
+
+Rules:
+- Use ONLY source numbers from the provided list. Never invent a source number.
+- Order each insight's sources most-critical first.
+- A source may support more than one insight.
+- Prefer sources that establish the concrete evidence (an incident, an exploit, a measured result) over generic context.
+
+Return ONLY JSON: {"attributions":[{"insight_index":0,"source_numbers":[3,7,12]}]}`;
+
+function buildAttributionPrompt(catLabel, windowLabel, insights, sources) {
+  const insightLines = insights.map((p, i) => `[${i}] ${p.insight}`).join("\n");
+  const sourceLines = sources.map((s, i) =>
+    `${i + 1}. (${s.source_type || "unknown"}) ${titleOf(s.title).slice(0, 120)} — ${summaryText(s).slice(0, 160)}`
+  ).join("\n");
+  return `Category: ${catLabel}   Period: ${windowLabel}
+
+INSIGHTS:
+${insightLines}
+
+SOURCES (attribute supporting source numbers to each insight from THIS list only):
+${sourceLines}
+
+Return the attributions.`;
+}
+
+// Attach `sources: [{title,url,publisher,date,source_type}]` to each insight.
+// Best-effort: on any failure, insights get an empty sources array (UI hides it).
+export async function attributeSources(insights, catSources, windowLabel, catLabel) {
+  const withEmpty = insights.map(p => ({ ...p, sources: [] }));
+  if (!insights.length || !catSources?.length) return withEmpty;
+  if (!process.env.ANTHROPIC_API_KEY) return withEmpty;
+
+  // Candidate pool: sources with real summaries, richest evidence + most recent
+  // first, capped to keep the prompt bounded.
+  const ranked = [...catSources]
+    .filter(s => s.url && summaryText(s).length > 20)
+    .sort((a, b) =>
+      (SRC_TYPE_RANK[b.source_type] || 0) - (SRC_TYPE_RANK[a.source_type] || 0) ||
+      (b.date_published || "").localeCompare(a.date_published || ""))
+    .slice(0, 40);
+  if (!ranked.length) return withEmpty;
+
+  let attributions = [];
+  try {
+    const out = await callAnthropic({
+      system: ATTRIBUTION_SYSTEM, task: "dashboard_attribution",
+      user: buildAttributionPrompt(catLabel, windowLabel, insights, ranked),
+      maxTokens: 700,
+    });
+    attributions = Array.isArray(out.attributions) ? out.attributions : [];
+  } catch {
+    return withEmpty;
+  }
+
+  const byIndex = new Map(
+    attributions
+      .filter(a => Number.isInteger(a.insight_index))
+      .map(a => [a.insight_index, Array.isArray(a.source_numbers) ? a.source_numbers : []])
+  );
+
+  return insights.map((p, i) => {
+    const nums = (byIndex.get(i) || []).filter(n => Number.isInteger(n) && n >= 1 && n <= ranked.length);
+    const seen = new Set();
+    const srcs = [];
+    for (const n of nums.slice(0, 5)) {
+      const s = ranked[n - 1];
+      if (!s || seen.has(s.url)) continue;
+      seen.add(s.url);
+      srcs.push({
+        title:       titleOf(s.title),
+        url:         s.url,
+        publisher:   s.publisher || null,
+        date:        s.date_published?.slice(0, 10) || null,
+        source_type: s.source_type || null,
+      });
+    }
+    return { ...p, sources: srcs };
+  });
+}
+
 // ── Per-category generation ────────────────────────────────────────────────────
 
 async function generateCategory(cat, windowLabel, findings, maturitySrcs) {
@@ -797,6 +901,10 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs) {
   const insightQa = {};
   insights = await qaInsights(insights, maturity, cat.label, insightQa);
   if (!insights.length) throw new Error(`all ${beforeQa} insights removed by QA`);
+
+  // Attribution: tag the real sources that most critically support each insight,
+  // so the dashboard shows clickable citations rather than prose "evidence".
+  insights = await attributeSources(insights, maturitySrcs, windowLabel, cat.label);
 
   // QA the category ASSESSMENT sentence itself — it drives period-over-period
   // comparison, so it must be grounded too. (Previously stored un-audited.)

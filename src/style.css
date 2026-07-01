@@ -573,6 +573,25 @@ a:hover { text-decoration: underline; }
   display: block; width: 100%;
 }
 
+/* Evidence source citations — clickable links to the critical contributing sources */
+.hz-insight-sources {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.hz-insight-sources li {
+  position: relative; padding-left: 14px;
+  font-size: 0.72rem; line-height: 1.4;
+}
+.hz-insight-sources li::before {
+  content: "→"; position: absolute; left: 0;
+  color: var(--cat-color); font-weight: 700;
+}
+.hz-insight-sources a {
+  color: var(--cat-color); text-decoration: none; font-weight: 600;
+}
+.hz-insight-sources a:hover { text-decoration: underline; }
+.hz-insight-source-meta { color: var(--text-tertiary); font-size: 0.66rem; }
+
 /* ── Historical comparison ───────────────────────────────────────────────── */
 .hz-overview-subtitle {
   font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;

@@ -177,7 +177,8 @@ function InsightItem({ p }) {
   const [clamped, setClamped] = useState(false);
   const headlineRef = useRef(null);
 
-  const hasDetail = p.implication || p.evidence || p.broken_assumption || p.watch_next;
+  const sources = Array.isArray(p.sources) ? p.sources.filter(s => s && s.url) : [];
+  const hasDetail = p.implication || sources.length > 0;
   // The headline is clamped to 3 lines at rest. If the text overflows that clamp,
   // the item must be expandable even without detail fields — otherwise the full
   // insight is unreadable (cut off with "…" and no way to open it).
@@ -204,22 +205,28 @@ function InsightItem({ p }) {
               <span>{p.implication}</span>
             </div>
           )}
-          {p.broken_assumption && (
-            <div className="hz-insight-line">
-              <span className="hz-insight-tag">Shift</span>
-              <span>{p.broken_assumption}</span>
-            </div>
-          )}
-          {p.watch_next && (
-            <div className="hz-insight-line">
-              <span className="hz-insight-tag">Watch</span>
-              <span>{p.watch_next}</span>
-            </div>
-          )}
-          {p.evidence && (
+          {sources.length > 0 && (
             <div className="hz-insight-line hz-insight-evidence">
               <span className="hz-insight-tag">Evidence</span>
-              <span>{p.evidence}</span>
+              <ul className="hz-insight-sources">
+                {sources.map((s, i) => (
+                  <li key={i}>
+                    <a
+                      href={s.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {s.title || s.url}
+                    </a>
+                    {(s.publisher || s.date) && (
+                      <span className="hz-insight-source-meta">
+                        {" · "}{[s.publisher, s.date].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>
@@ -231,10 +238,8 @@ function InsightItem({ p }) {
 // ── Category card ─────────────────────────────────────────────────────────────
 
 function CategoryCard({ cat, trendValues }) {
-  const [showSources, setShowSources] = useState(false);
   const color = CAT_COLOR[cat.key];
   const count = cat.source_count ?? 0;
-  const hasTop = (cat.top_sources || []).length > 0;
   const insights = cat.insights || [];
 
   return (
@@ -278,29 +283,6 @@ function CategoryCard({ cat, trendValues }) {
         {count === 0 && (
           <div className="hz-cat-card-empty">No sources this period.</div>
         )}
-
-        {hasTop && (
-          <button className="hz-cat-card-toggle" onClick={() => setShowSources(o => !o)}>
-            {showSources ? "Hide sources ▲" : "Top sources ▼"}
-          </button>
-        )}
-
-        {showSources && hasTop && (
-          <ul className="hz-cat-card-sources">
-            {cat.top_sources.slice(0, 5).map((s, i) => (
-              <li key={i}>
-                {s.url ? (
-                  <a href={s.url} target="_blank" rel="noopener noreferrer">
-                    {s.title || s.url}
-                  </a>
-                ) : (
-                  <span>{s.title}</span>
-                )}
-                {s.publisher && <span className="hz-cat-card-pub"> · {s.publisher}</span>}
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
     </div>
   );
@@ -309,27 +291,6 @@ function CategoryCard({ cat, trendValues }) {
 // ── Historical comparison: Assessment Changes / Emerging Signals ────────────────
 
 // Skimmable: one row per change — category chip, terse from→to shift, short reason.
-function AssessmentChanges({ items }) {
-  if (!items?.length) return null;
-  return (
-    <div className="hz-ac-list">
-      {items.slice(0, 5).map((c, i) => (
-        <div key={i} className="hz-ac-row">
-          <span className="hz-ac-cat" style={{ background: CAT_COLOR[c.category] || "#475569" }}>
-            {CAT_LABEL[c.category] || c.category}
-          </span>
-          <span className="hz-ac-shift">
-            <span className="hz-ac-from">{c.from || c.previous}</span>
-            <span className="hz-ac-arrow">→</span>
-            <span className="hz-ac-to">{c.to || c.current}</span>
-          </span>
-          {c.reason && <span className="hz-ac-reason">{c.reason}</span>}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // Emerging Signals: weak→emerging themes with analysis + explorable sources.
 function EmergingSignalCard({ s }) {
   const [open, setOpen] = useState(false);
@@ -667,10 +628,7 @@ export function OverviewPage() {
       )}
 
       {/* Historical comparison — supports analysis, not the main product */}
-      {data?.comparison && (
-        data.comparison.assessment_changes?.length ||
-        data.comparison.emerging_signals?.length
-      ) ? (
+      {data?.comparison && data.comparison.emerging_signals?.length ? (
         <>
           <div className="hz-overview-section-title">
             This period vs last period
@@ -681,13 +639,6 @@ export function OverviewPage() {
               </span>
             )}
           </div>
-
-          {data.comparison.assessment_changes?.length > 0 && (
-            <>
-              <div className="hz-overview-subtitle">Assessment changes</div>
-              <AssessmentChanges items={data.comparison.assessment_changes} />
-            </>
-          )}
 
           {data.comparison.emerging_signals?.length > 0 && (
             <>
