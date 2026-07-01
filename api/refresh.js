@@ -1,5 +1,8 @@
-import { collectRawSources } from "../lib/pipeline/ingest/collectRawSources.js";
+import { collectRawSources }      from "../lib/pipeline/ingest/collectRawSources.js";
+import { understandAllSources }   from "../lib/pipeline/understandSource.js";
+import { qaClassificationLLM }    from "../lib/pipeline/qaClassification.js";
 import { saveSnapshotToDatabase } from "../lib/storage/snapshotDatabase.js";
+import { createClient }           from "@supabase/supabase-js";
 import {
   startIngestionRun,
   finishIngestionRun,
@@ -63,6 +66,11 @@ export default async function handler(req, res) {
       }
     }
 
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+    );
+
     runId = await startIngestionRun();
 
     const result = await collectRawSources(customWindow);
@@ -97,6 +105,36 @@ export default async function handler(req, res) {
 
     const stored = await saveSnapshotToDatabase(snapshot);
 
+    // ── Step 2: Classify + QA all new sources ──────────────────────────────
+    // Run understandAllSources on the sources that just came in. Already-
+    // classified sources (validation_status=pass) are skipped via the DB
+    // cache in understandAllSources; only truly new sources get LLM calls.
+    // The QA verifier then cross-checks every new source (full mode, since
+    // daily batches are small) and auto-fixes any misclassifications.
+    let classifyCounts = null;
+    let qaCounts       = null;
+    if (result.sources.length > 0) {
+      const { relevant, discarded, counts } = await understandAllSources(
+        result.sources,
+        { skipLlm: false, supabase, concurrency: 4 },
+      );
+      classifyCounts = counts;
+
+      // QA verifier — full mode on daily batches (always ≤200 sources)
+      const { report } = await qaClassificationLLM(relevant, {
+        skipLlm: false,
+        full:    true,
+        concurrency: 3,
+        supabase,
+      });
+      qaCounts = {
+        checked:    report.checked,
+        agreed:     report.agreed,
+        fixed:      report.fixed,
+        agreement_rate: report.agreement_rate,
+      };
+    }
+
     await finishIngestionRun(runId, snapshot);
     flushPipelineCostToDB(runId).catch(() => {}); // fire-and-forget
 
@@ -105,6 +143,8 @@ export default async function handler(req, res) {
       days_window: days,
       ...snapshot,
       stored,
+      classify_counts: classifyCounts,
+      qa_counts:       qaCounts,
     });
   } catch (error) {
     if (runId) {
