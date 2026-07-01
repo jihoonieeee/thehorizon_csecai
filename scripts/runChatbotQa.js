@@ -89,8 +89,9 @@ for (const tc of cases) {
     }
   }
   report.push({ id: tc.id, category: tc.category, question: tc.question, verdict, error: err,
-    results, answer: payload?.answer, citations: payload?.citations, confidence: payload?.confidence,
-    temporal_scope: payload?.temporal_scope, qa_pass: payload?.qa_pass, qa_blocked: payload?.qa_blocked });
+    results, answer: payload?.answer, citations: payload?.citations, source_refs: payload?.source_refs,
+    confidence: payload?.confidence, temporal_scope: payload?.temporal_scope,
+    qa_pass: payload?.qa_pass, qa_blocked: payload?.qa_blocked });
 }
 
 console.log(`\n${"─".repeat(60)}`);
