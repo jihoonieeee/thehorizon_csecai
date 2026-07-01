@@ -1,0 +1,40 @@
+name: Source Link Audit (dead-link + duplicate prune)
+
+# Catches link ROT — sources that were reachable at ingest but have since 404'd
+# (site migrations, pulled articles) — which the ingest-time Layer 3.5 check
+# cannot see. Also prunes URL-variant duplicates that slipped in. Confirmed-dead
+# only (404/410/DNS-failure via HEAD→GET); transient errors (timeout/5xx/429)
+# are treated as indeterminate and never purge a real source. Curated sources
+# are always protected.
+#
+# Schedule: weekly. Manual runs default to dry-run (report only) for safety.
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'   # Mondays 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      execute:
+        description: 'Actually delete (unchecked = dry-run report only)'
+        type: boolean
+        default: false
+
+jobs:
+  audit:
+    name: Audit source links
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run link audit
+        # Scheduled runs execute; manual runs honour the execute input (default dry).
+        run: node scripts/auditSourceLinks.js ${{ (github.event_name == 'schedule' || github.event.inputs.execute == 'true') && '--execute' || '' }}
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
