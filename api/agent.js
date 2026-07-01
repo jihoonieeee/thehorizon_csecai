@@ -179,21 +179,61 @@ const CATEGORY_LABELS_FOR_PROMPT = {
   ai_enabled_threats:     "AI-Enabled Threats",
 };
 
-// Detect when the question explicitly NAMES one of the four threat categories, so
-// the answer can be scoped to it. Returns the single category key, or null when
-// zero or MORE THAN ONE category is named (a cross-category question must stay
-// unscoped). Deliberately conservative — matches the category name, not loose
-// topic keywords — so genuinely cross-cutting questions are never force-scoped.
+// Category NAME matchers ("Traditional AI Threats", "LLM Threats", …).
+const CATEGORY_NAME_MATCHERS = {
+  traditional_ai_threats: [/\btraditional ai\b/],
+  llm_threats:            [/\bllm threats?\b/],
+  agentic_ai_threats:     [/\bagentic ai\b/],
+  ai_enabled_threats:     [/\bai[- ]enabled\b/],
+};
+
+// Technique → category matchers. These map a named ATTACK TECHNIQUE to the
+// category the taxonomy files it under (per CLAUDE.md), so a question like
+// "data poisoning and model backdoors" (which never says "Traditional AI") can
+// still be scoped. Phrases are specific to avoid collisions — e.g. "RAG
+// poisoning" is an LLM phrase, not caught by the Traditional "data poisoning".
+const TECHNIQUE_MATCHERS = {
+  traditional_ai_threats: [
+    /\bdata poisoning\b/, /\btraining[- ]data poisoning\b/, /\bmodel backdoor/,
+    /\bbackdoored? model/, /\badversarial example/, /\badversarial perturbation/,
+    /\bmodel extraction\b/, /\bmodel inversion\b/, /\bmembership inference\b/,
+    /\bmodel evasion\b/,
+  ],
+  llm_threats: [
+    /\bprompt injection\b/, /\bjailbreak/, /\brag poisoning\b/,
+    /\bretrieval[- ]poisoning\b/, /\bguardrail bypass\b/, /\bsystem[- ]prompt leak/,
+  ],
+  agentic_ai_threats: [
+    /\bmcp\b/, /\btool poisoning\b/, /\btool[- ]call injection\b/,
+    /\bagent hijack/, /\bautonomous agent abuse\b/,
+  ],
+  ai_enabled_threats: [
+    /\bdeepfake/, /\bvoice clon/, /\bai[- ]?(?:generated |enabled )?phish/,
+    /\bai[- ]?malware\b/, /\bvoice fraud\b/,
+  ],
+};
+
+const matchedCategories = (q, matchers) =>
+  Object.entries(matchers).filter(([, res]) => res.some(re => re.test(q))).map(([k]) => k);
+
+/**
+ * Decide whether to scope the answer to a single threat category.
+ *
+ * Collect every category implicated by the question — via its NAME ("top
+ * developments in LLM Threats") or a named ATTACK TECHNIQUE the taxonomy files
+ * under one category ("data poisoning and model backdoors" → Traditional AI) —
+ * then scope ONLY when the union is exactly one category. Anything implicating
+ * two or more (a cross-cutting question, or a technique applied to another
+ * category's context like "data poisoning in agentic AI systems") stays unscoped
+ * so the answer can legitimately span categories. Returns the key, or null.
+ */
 function detectCategoryInQuery(query) {
   const q = (query || "").toLowerCase();
-  const matchers = {
-    traditional_ai_threats: /\btraditional ai\b/,
-    llm_threats:            /\bllm threats?\b/,
-    agentic_ai_threats:     /\bagentic ai\b/,
-    ai_enabled_threats:     /\bai[- ]enabled\b/,
-  };
-  const hits = Object.entries(matchers).filter(([, re]) => re.test(q)).map(([k]) => k);
-  return hits.length === 1 ? hits[0] : null;
+  const implicated = new Set([
+    ...matchedCategories(q, CATEGORY_NAME_MATCHERS),
+    ...matchedCategories(q, TECHNIQUE_MATCHERS),
+  ]);
+  return implicated.size === 1 ? [...implicated][0] : null;
 }
 
 // ── System prompt builder ─────────────────────────────────────────────────────
