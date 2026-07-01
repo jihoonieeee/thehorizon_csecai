@@ -106,31 +106,37 @@ export default async function handler(req, res) {
     const stored = await saveSnapshotToDatabase(snapshot);
 
     // ── Step 2: Classify + QA all new sources ──────────────────────────────
-    // Run understandAllSources on the sources that just came in. Already-
-    // classified sources (validation_status=pass) are skipped via the DB
-    // cache in understandAllSources; only truly new sources get LLM calls.
-    // The QA verifier then cross-checks every new source (full mode, since
-    // daily batches are small) and auto-fixes any misclassifications.
+    // collectRawSources saves sources with main_category="unclassified" and
+    // validation_status="pass". Strip both so understandAllSources makes a
+    // fresh LLM call (its cache check requires a real domain + pass status).
+    // The QA verifier then cross-checks every new source (full mode — daily
+    // batches are always small) and auto-fixes any misclassifications.
     let classifyCounts = null;
     let qaCounts       = null;
     if (result.sources.length > 0) {
+      const toClassify = result.sources.map(s => ({
+        ...s,
+        main_category:     null,
+        validation_status: null,
+      }));
+
       const { relevant, discarded, counts } = await understandAllSources(
-        result.sources,
+        toClassify,
         { skipLlm: false, supabase, concurrency: 4 },
       );
       classifyCounts = counts;
 
       // QA verifier — full mode on daily batches (always ≤200 sources)
       const { report } = await qaClassificationLLM(relevant, {
-        skipLlm: false,
-        full:    true,
+        skipLlm:     false,
+        full:        true,
         concurrency: 3,
         supabase,
       });
       qaCounts = {
-        checked:    report.checked,
-        agreed:     report.agreed,
-        fixed:      report.fixed,
+        checked:        report.checked,
+        agreed:         report.agreed,
+        fixed:          report.fixed,
         agreement_rate: report.agreement_rate,
       };
     }
