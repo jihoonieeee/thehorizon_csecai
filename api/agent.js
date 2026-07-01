@@ -100,19 +100,27 @@ async function anthropicRequest(body, timeoutMs = 90000) {
 // ── Temporal intent parser ─────────────────────────────────────────────────────
 
 /**
- * Parse temporal phrases from a user query to determine the appropriate date_from.
- * Returns { date_from: string|null, scope_label: string, all_time: boolean }
+ * Parse temporal phrases from a user query.
+ * Returns { date_from, date_to, scope_label, all_time }
  *
- * Returning date_from=null with all_time=true means no date restriction.
- * Returning date_from=null with all_time=false means default 90-day scope.
+ * date_from / date_to are YYYY-MM-DD strings or null.
+ * date_to=null means "up to today".
+ * all_time=true means no date restriction at all.
  */
 function parseTemporalIntent(query) {
   const q = (query || "").toLowerCase();
   const now = new Date();
 
-  // Explicit "all time" / "entire corpus" / "ever" → unrestricted
+  const MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+  const MONTHS_SHORT = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+
+  function lastDayOfMonth(year, monthIdx) {
+    return new Date(year, monthIdx + 1, 0).getDate();
+  }
+
+  // Explicit "all time" / "entire corpus" / "ever"
   if (/\ball[- ]time\b|\bentire (?:database|corpus|history)\b|\bever\b|\bsince (?:the )?beginning\b|\ball (?:available |)(?:data|sources|records)\b|\bhistorical(?:ly)?\b/.test(q)) {
-    return { date_from: null, scope_label: "all available data", all_time: true };
+    return { date_from: null, date_to: null, scope_label: "all available data", all_time: true };
   }
 
   // "past N days/weeks/months/years" or "last N …"
@@ -124,9 +132,8 @@ function parseTemporalIntent(query) {
               : unit === "week"  ? 86400000 * 7 * n
               : unit === "month" ? 86400000 * 30 * n
               : 86400000 * 365 * n;
-    const d = new Date(Date.now() - ms);
-    const label = `last ${n} ${unit}${n !== 1 ? "s" : ""}`;
-    return { date_from: d.toISOString().slice(0, 10), scope_label: label, all_time: false };
+    const d = new Date(Date.now() - ms).toISOString().slice(0, 10);
+    return { date_from: d, date_to: null, scope_label: `last ${n} ${unit}${n !== 1 ? "s" : ""}`, all_time: false };
   }
 
   // "in the past/last N …" (variant)
@@ -138,36 +145,66 @@ function parseTemporalIntent(query) {
               : unit === "week"  ? 86400000 * 7 * n
               : unit === "month" ? 86400000 * 30 * n
               : 86400000 * 365 * n;
-    const d = new Date(Date.now() - ms);
-    return { date_from: d.toISOString().slice(0, 10), scope_label: `last ${n} ${unit}${n !== 1 ? "s" : ""}`, all_time: false };
+    const d = new Date(Date.now() - ms).toISOString().slice(0, 10);
+    return { date_from: d, date_to: null, scope_label: `last ${n} ${unit}${n !== 1 ? "s" : ""}`, all_time: false };
   }
 
-  // "this week" / "this month"
+  // "this week"
   if (/\bthis week\b/.test(q)) {
-    const d = new Date(Date.now() - 7 * 86400000);
-    return { date_from: d.toISOString().slice(0, 10), scope_label: "this week", all_time: false };
-  }
-  if (/\bthis month\b/.test(q)) {
-    return {
-      date_from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`,
-      scope_label: "this month",
-      all_time: false,
-    };
+    const d = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    return { date_from: d, date_to: null, scope_label: "this week", all_time: false };
   }
 
-  // "since Month [Year]" e.g. "since January" or "since January 2026"
-  const MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
-  const sinceMonth = q.match(/\bsince\s+(january|february|march|april|may|june|july|august|september|october|november|december)(?:\s+(\d{4}))?\b/);
+  // "this month"
+  if (/\bthis month\b/.test(q)) {
+    const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    return { date_from: from, date_to: null, scope_label: "this month", all_time: false };
+  }
+
+  // Specific month (with optional year): "in May", "for May", "May 2026", "of May", "month of May"
+  // "in May 2026", "during May", "from May 2026"
+  const MONTH_PAT = `(${MONTHS.join("|")}|${MONTHS_SHORT.join("|")})`;
+  const specificMonth = q.match(
+    new RegExp(`\\b(?:in|for|of|during|from|month of|throughout)?\\s*${MONTH_PAT}(?:\\s+(\\d{4}))?\\b`)
+  );
+  if (specificMonth) {
+    const rawMonth = specificMonth[1];
+    const monthIdx = MONTHS.includes(rawMonth) ? MONTHS.indexOf(rawMonth) : MONTHS_SHORT.indexOf(rawMonth);
+    if (monthIdx !== -1) {
+      // Infer year: if the month is in the future this year, assume last year
+      let year = specificMonth[2] ? parseInt(specificMonth[2], 10) : now.getFullYear();
+      if (!specificMonth[2] && monthIdx > now.getMonth()) year--;
+      const mm = String(monthIdx + 1).padStart(2, "0");
+      const lastDay = lastDayOfMonth(year, monthIdx);
+      const from = `${year}-${mm}-01`;
+      const to   = `${year}-${mm}-${String(lastDay).padStart(2, "0")}`;
+      const label = `${rawMonth.charAt(0).toUpperCase() + rawMonth.slice(1)} ${year}`;
+      // Only treat as a closed month window if user isn't asking "since Month"
+      // (handled below) — check the word before the month name
+      const isSince = /\bsince\b/.test(q.slice(0, q.indexOf(rawMonth)));
+      if (!isSince) {
+        return { date_from: from, date_to: to, scope_label: label, all_time: false };
+      }
+    }
+  }
+
+  // "since Month [Year]"
+  const sinceMonth = q.match(
+    new RegExp(`\\bsince\\s+${MONTH_PAT}(?:\\s+(\\d{4}))?\\b`)
+  );
   if (sinceMonth) {
-    const monthIdx = MONTHS.indexOf(sinceMonth[1]);
-    const year = sinceMonth[2] ? parseInt(sinceMonth[2], 10) : now.getFullYear();
-    const d = `${year}-${String(monthIdx + 1).padStart(2, "0")}-01`;
-    return { date_from: d, scope_label: `since ${sinceMonth[1]} ${year}`, all_time: false };
+    const rawMonth = sinceMonth[1];
+    const monthIdx = MONTHS.includes(rawMonth) ? MONTHS.indexOf(rawMonth) : MONTHS_SHORT.indexOf(rawMonth);
+    if (monthIdx !== -1) {
+      const year = sinceMonth[2] ? parseInt(sinceMonth[2], 10) : now.getFullYear();
+      const mm = String(monthIdx + 1).padStart(2, "0");
+      return { date_from: `${year}-${mm}-01`, date_to: null, scope_label: `since ${rawMonth} ${year}`, all_time: false };
+    }
   }
 
   // Default: last 90 days
-  const d90 = new Date(Date.now() - 90 * 86400000);
-  return { date_from: d90.toISOString().slice(0, 10), scope_label: "last 90 days (default)", all_time: false };
+  const d90 = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+  return { date_from: d90, date_to: null, scope_label: "last 90 days (default)", all_time: false };
 }
 
 // ── Category intent parser ──────────────────────────────────────────────────────
@@ -242,7 +279,7 @@ function buildSystem(temporal, focusCategory = null) {
   const today = new Date().toISOString().slice(0, 10);
   const scopeNote = temporal.all_time
     ? `The user is asking about all available data — do not add any date_from filter unless the question implies a specific window.`
-    : `Default data window: ${temporal.scope_label} (from ${temporal.date_from}). Use date_from="${temporal.date_from}" in search_corpus unless the user specifies otherwise. If they mention "all time" or need older context, omit date_from.`;
+    : `Default data window: ${temporal.scope_label} (${temporal.date_from}${temporal.date_to ? ` to ${temporal.date_to}` : " onwards"}). Use date_from="${temporal.date_from}"${temporal.date_to ? ` and date_to="${temporal.date_to}"` : ""} in search_corpus. Both bounds are required when the user asks about a specific month or period — omitting date_to would include newer sources. Only omit date_to when using open-ended ranges like "since May" or "last 3 months".`;
 
   const categoryNote = focusCategory
     ? `\nCATEGORY FOCUS: the user asked specifically about ${CATEGORY_LABELS_FOR_PROMPT[focusCategory]}. Keep your answer within that category. The pre-fetched sources may still include tangential items from other categories (Traditional AI, LLM, Agentic AI, AI-Enabled) because keyword matching is loose — cite only sources that belong to ${CATEGORY_LABELS_FOR_PROMPT[focusCategory]}. If a cross-cutting point from another category is essential, name the other category explicitly rather than blending it in.`
@@ -758,7 +795,7 @@ export default async function handler(req, res) {
     // synthesise immediately (1 round) instead of spending a round deciding to
     // retrieve. It can still issue targeted follow-up tool calls in later rounds.
     const seedCalls = [
-      { id: "seed_corpus",    name: "search_corpus",  input: { query, ...(temporal.all_time ? {} : { date_from: temporal.date_from }), ...(effectiveCategory ? { categories: [effectiveCategory] } : {}) } },
+      { id: "seed_corpus",    name: "search_corpus",  input: { query, ...(temporal.all_time ? {} : { date_from: temporal.date_from, ...(temporal.date_to ? { date_to: temporal.date_to } : {}) }), ...(effectiveCategory ? { categories: [effectiveCategory] } : {}) } },
       { id: "seed_evidence",  name: "get_evidence",   input: { query, limit: 20, ...(effectiveCategory ? { categories: [effectiveCategory] } : {}) } },
       { id: "seed_judgments", name: "get_judgments",  input: effectiveCategory ? { categories: [effectiveCategory] } : {} },
       { id: "seed_trend",     name: "trend_analysis", input: effectiveCategory ? { categories: [effectiveCategory] } : {} },
