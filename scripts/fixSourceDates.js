@@ -107,15 +107,15 @@ async function fetchArxivDates(ids) {
   return results;
 }
 
-// ── HTML meta date recovery ────────────────────────────────────────────────────
+// ── HTML date recovery ─────────────────────────────────────────────────────────
 
 const DATE_META_SELECTORS = [
-  // OpenGraph / article
+  // OpenGraph / article meta tags
   /<meta[^>]+property=["'](?:article:published_time|og:article:published_time)["'][^>]+content=["']([^"']+)["']/i,
   /<meta[^>]+content=["']([^"']+)["'][^>]+property=["'](?:article:published_time|og:article:published_time)["']/i,
-  // Schema.org / JSON-LD
-  /"datePublished"\s*:\s*"([^"]+)"/,
-  /"published"\s*:\s*"([^"]+)"/,
+  // Schema.org / JSON-LD (non-empty value only — Webflow sites blank this field)
+  /"datePublished"\s*:\s*"(202[0-9][^"]+)"/,
+  /"published"\s*:\s*"(202[0-9][^"]+)"/,
   // DC / Dublin Core
   /<meta[^>]+name=["']DC\.date["'][^>]+content=["']([^"']+)["']/i,
   /<meta[^>]+name=["']date["'][^>]+content=["']([^"']+)["']/i,
@@ -126,7 +126,26 @@ const DATE_META_SELECTORS = [
   /itemprop=["']datePublished["'][^>]*content=["']([^"']+)["']/i,
 ];
 
+// Month-spelled date in visible text — first match is the article's own date
+// (subsequent matches are related-post dates in sidebars/footers)
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const MONTH_MAP   = Object.fromEntries(MONTH_NAMES.map((m,i)=>[m, String(i+1).padStart(2,"0")]));
+const MONTH_TEXT_RE = new RegExp(
+  `(${MONTH_NAMES.join("|")})\\s+(\\d{1,2}),?\\s+(202\\d)`
+);
+
+function extractMonthDate(html) {
+  const m = MONTH_TEXT_RE.exec(html);
+  if (!m) return null;
+  const iso = `${m[3]}-${MONTH_MAP[m[1]]}-${m[2].padStart(2,"0")}`;
+  // Sanity check
+  const d = new Date(iso);
+  if (isNaN(d.getTime()) || iso > new Date().toISOString().slice(0,10)) return null;
+  return iso;
+}
+
 function extractDateFromHtml(html) {
+  // 1. Try structured meta/JSON-LD first (most reliable)
   for (const re of DATE_META_SELECTORS) {
     const m = re.exec(html);
     if (m?.[1]) {
@@ -140,7 +159,8 @@ function extractDateFromHtml(html) {
       }
     }
   }
-  return null;
+  // 2. Fall back to first month-spelled date in visible text
+  return extractMonthDate(html);
 }
 
 async function fetchPageDate(url, timeoutMs = 10000) {
