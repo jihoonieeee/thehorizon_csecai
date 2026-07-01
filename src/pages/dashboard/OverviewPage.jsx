@@ -174,14 +174,28 @@ function MaturityBar({ maturity }) {
 
 function InsightItem({ p }) {
   const [open, setOpen] = useState(false);
-  const hasDetail = p.implication || p.evidence || p.broken_assumption;
+  const [clamped, setClamped] = useState(false);
+  const headlineRef = useRef(null);
+
+  const hasDetail = p.implication || p.evidence || p.broken_assumption || p.watch_next;
+  // The headline is clamped to 3 lines at rest. If the text overflows that clamp,
+  // the item must be expandable even without detail fields — otherwise the full
+  // insight is unreadable (cut off with "…" and no way to open it).
+  const expandable = hasDetail || clamped;
+
+  useEffect(() => {
+    const el = headlineRef.current;
+    if (!el) return;
+    // scrollHeight exceeds clientHeight only when the 3-line clamp actually hides text.
+    setClamped(el.scrollHeight - el.clientHeight > 1);
+  }, [p.insight]);
 
   return (
     <li
-      className={`hz-insight-item${hasDetail ? " expandable" : ""}${open ? " open" : ""}`}
-      onClick={hasDetail ? () => setOpen(o => !o) : undefined}
+      className={`hz-insight-item${expandable ? " expandable" : ""}${open ? " open" : ""}`}
+      onClick={expandable ? () => setOpen(o => !o) : undefined}
     >
-      <div className="hz-insight-headline">{p.insight}</div>
+      <div className="hz-insight-headline" ref={headlineRef}>{p.insight}</div>
       {open && hasDetail && (
         <div className="hz-insight-detail-inner">
           {p.implication && (
@@ -194,6 +208,12 @@ function InsightItem({ p }) {
             <div className="hz-insight-line">
               <span className="hz-insight-tag">Shift</span>
               <span>{p.broken_assumption}</span>
+            </div>
+          )}
+          {p.watch_next && (
+            <div className="hz-insight-line">
+              <span className="hz-insight-tag">Watch</span>
+              <span>{p.watch_next}</span>
             </div>
           )}
           {p.evidence && (
