@@ -170,18 +170,49 @@ function parseTemporalIntent(query) {
   return { date_from: d90.toISOString().slice(0, 10), scope_label: "last 90 days (default)", all_time: false };
 }
 
+// ── Category intent parser ──────────────────────────────────────────────────────
+
+const CATEGORY_LABELS_FOR_PROMPT = {
+  traditional_ai_threats: "Traditional AI Threats",
+  llm_threats:            "LLM Threats",
+  agentic_ai_threats:     "Agentic AI Threats",
+  ai_enabled_threats:     "AI-Enabled Threats",
+};
+
+// Detect when the question explicitly NAMES one of the four threat categories, so
+// the answer can be scoped to it. Returns the single category key, or null when
+// zero or MORE THAN ONE category is named (a cross-category question must stay
+// unscoped). Deliberately conservative — matches the category name, not loose
+// topic keywords — so genuinely cross-cutting questions are never force-scoped.
+function detectCategoryInQuery(query) {
+  const q = (query || "").toLowerCase();
+  const matchers = {
+    traditional_ai_threats: /\btraditional ai\b/,
+    llm_threats:            /\bllm threats?\b/,
+    agentic_ai_threats:     /\bagentic ai\b/,
+    ai_enabled_threats:     /\bai[- ]enabled\b/,
+  };
+  const hits = Object.entries(matchers).filter(([, re]) => re.test(q)).map(([k]) => k);
+  return hits.length === 1 ? hits[0] : null;
+}
+
 // ── System prompt builder ─────────────────────────────────────────────────────
 
-function buildSystem(temporal) {
+function buildSystem(temporal, focusCategory = null) {
   const today = new Date().toISOString().slice(0, 10);
   const scopeNote = temporal.all_time
     ? `The user is asking about all available data — do not add any date_from filter unless the question implies a specific window.`
     : `Default data window: ${temporal.scope_label} (from ${temporal.date_from}). Use date_from="${temporal.date_from}" in search_corpus unless the user specifies otherwise. If they mention "all time" or need older context, omit date_from.`;
 
+  const categoryNote = focusCategory
+    ? `\nCATEGORY FOCUS: the user asked specifically about ${CATEGORY_LABELS_FOR_PROMPT[focusCategory]}. Keep your answer within that category. The pre-fetched sources may still include tangential items from other categories (Traditional AI, LLM, Agentic AI, AI-Enabled) because keyword matching is loose — cite only sources that belong to ${CATEGORY_LABELS_FOR_PROMPT[focusCategory]}. If a cross-cutting point from another category is essential, name the other category explicitly rather than blending it in.`
+    : "";
+
   return `You are a knowledgeable AI threat intelligence analyst. You speak directly and clearly, like a smart colleague briefing a security team.
 
 Today: ${today}
 ${scopeNote}
+${categoryNote}
 
 WHEN TO USE TOOLS vs ANSWER DIRECTLY:
 If the user's question is a follow-up or clarification on what was just discussed (e.g. "what does that mean?", "can you elaborate?", "why is that significant?"), answer directly without calling any tools.
@@ -206,6 +237,8 @@ Do not use dashes or asterisks. Do not write markdown headers. Number your point
 When you cite a specific source in a sentence, add a citation marker immediately after that sentence in the format [src-N], where N is the ref number shown in the search results (e.g. ref: "src-1"). For example: "Indirect prompt injection via RAG documents is confirmed in operational deployments. [src-3]" or "CISA documented three incidents this period involving tool-call hijacking. [src-1][src-4]"
 
 These markers become inline clickable links in the UI — they are the primary way users navigate to sources. Use them precisely: only cite a source with [src-N] if that source actually supports the sentence. You may cite multiple sources for one sentence. Do not write out raw URLs.
+
+CRITICAL citation format: a marker is EXACTLY [src-N] where N is a number — nothing else inside the brackets. Never write words inside the brackets. Wrong: [src-3, via evidence], [src-4 in evidence], [src-6 context], [src-evidence]. Right: [src-3][src-4]. If you have no ref number for a source, do not invent a marker — just describe it in prose. Anything other than [src-N] will not render as a link and will look broken to the user.
 
 If evidence is thin (fewer than 3 sources), say so plainly. If you cannot answer from the corpus, say what's missing. Do not invent sources or statistics. No hype language.
 
@@ -261,6 +294,30 @@ function parseResponse(text) {
  * `(Publisher, URL)` inline — the URLs must be captured before removal or
  * they disappear entirely.
  */
+/**
+ * Normalise citation markers so only clean [src-N] reaches the user and the
+ * citation extractor. The model sometimes writes explanatory prose INSIDE the
+ * bracket — "[src-3, via ]", "[src-4 in evidence]", "[src-6 context; ...]",
+ * "[src-evidence: , ]". The frontend (and extractCitations) only resolve a bare
+ * [src-N], so these otherwise render as visible junk AND drop the citation.
+ *
+ *   [src-N <anything>]  → [src-N]   (recover the number; keeps the citation)
+ *   [src- <no number>]  → removed   (nothing to point at)
+ */
+export function normalizeCitationMarkers(text = "") {
+  return String(text)
+    // Recover any marker whose first token after "src-" is a number.
+    .replace(/\[\s*src-\s*(\d+)[^\]]*\]/gi, "[src-$1]")
+    // Strip a leftover src marker that has no usable number, plus one leading
+    // space, so no orphan gap is left (guard preserves the just-recovered
+    // [src-N] because a digit follows "src-").
+    .replace(/ ?\[\s*src-(?!\s*\d)[^\]]*\]/gi, "")
+    // Tidy artefacts left behind (doubled spaces, space-before-punctuation).
+    .replace(/ {2,}/g, " ")
+    .replace(/\s+([.,;:])/g, "$1")
+    .replace(/\[\s*\]/g, "");
+}
+
 function harvestAndCleanAnswer(rawText, evidenceIndex) {
   const harvested = [];
 
@@ -559,7 +616,12 @@ export default async function handler(req, res) {
 
   // Parse temporal intent to guide the model's default date scope
   const temporal = parseTemporalIntent(query);
-  const system   = buildSystem(temporal);
+
+  // Effective category focus: an explicit filter from the dashboard wins; else a
+  // category named in the question itself (free-text "top developments in LLM
+  // Threats"). Scopes the pre-fetch and the prompt so the answer stays in-category.
+  const effectiveCategory = category || detectCategoryInQuery(query);
+  const system   = buildSystem(temporal, effectiveCategory);
 
   // If category filter set, inject it into the user question
   const userText = category
@@ -656,10 +718,10 @@ export default async function handler(req, res) {
     // synthesise immediately (1 round) instead of spending a round deciding to
     // retrieve. It can still issue targeted follow-up tool calls in later rounds.
     const seedCalls = [
-      { id: "seed_corpus",    name: "search_corpus",  input: { query, ...(temporal.all_time ? {} : { date_from: temporal.date_from }), ...(category ? { categories: [category] } : {}) } },
-      { id: "seed_evidence",  name: "get_evidence",   input: { query, limit: 20, ...(category ? { categories: [category] } : {}) } },
-      { id: "seed_judgments", name: "get_judgments",  input: category ? { categories: [category] } : {} },
-      { id: "seed_trend",     name: "trend_analysis", input: category ? { categories: [category] } : {} },
+      { id: "seed_corpus",    name: "search_corpus",  input: { query, ...(temporal.all_time ? {} : { date_from: temporal.date_from }), ...(effectiveCategory ? { categories: [effectiveCategory] } : {}) } },
+      { id: "seed_evidence",  name: "get_evidence",   input: { query, limit: 20, ...(effectiveCategory ? { categories: [effectiveCategory] } : {}) } },
+      { id: "seed_judgments", name: "get_judgments",  input: effectiveCategory ? { categories: [effectiveCategory] } : {} },
+      { id: "seed_trend",     name: "trend_analysis", input: effectiveCategory ? { categories: [effectiveCategory] } : {} },
     ];
     // If the question names specific CVEs, pre-fetch their live NVD severity too,
     // so the synthesis needs no tool round at all (clean single streamed pass).
@@ -684,6 +746,10 @@ export default async function handler(req, res) {
     // (citations, confidence, etc.) and is shared by the streamed and buffered paths.
     async function buildPayload(rawText) {
       const parsed = parseResponse(rawText || "(No answer generated)");
+      // Repair malformed [src-N …] markers up front so the cleaned answer AND the
+      // citation extractor both see clean [src-N] (recovers the citation and stops
+      // the junk from rendering). Everything downstream reads parsed.answer.
+      parsed.answer = normalizeCitationMarkers(parsed.answer);
       const normalizeUrl = (u) => u?.replace(/[.,;:!?/]+$/, "").toLowerCase().replace(/^https?:\/\//, "");
 
       // Anti-hallucination allowlist: snapshot the URLs that actually came from
