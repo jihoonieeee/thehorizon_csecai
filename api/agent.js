@@ -346,48 +346,203 @@ function extractCitations(text, evidenceIndex, sourceRefs) {
   return citations;
 }
 
-// ── QA check ─────────────────────────────────────────────────────────────────
+// ── QA engine: repair what's safe, block what isn't ──────────────────────────
+//
+// QA runs over BOTH the answer text and its citations, and each issue carries a
+// severity that determines the action:
+//   • "repaired"  — auto-fixed in place (hype softened, leaked IDs stripped,
+//                    dead/irrelevant citations dropped). The answer still ships.
+//   • "blocking"  — the answer cannot be trusted (fabricated CVE, or substantive
+//                    claims with no citation surviving validation). The answer is
+//                    replaced with a safe message and all citations are cleared.
+//
+// Everything here is deterministic — no extra LLM calls, so it adds no latency.
 
-function qaResponse(text, citations, evidenceIndex, groundingText = "") {
+const QA_STOPWORDS = new Set([
+  "the","and","for","are","with","that","this","from","into","what","how","why",
+  "does","is","of","to","a","in","on","an","about","which","were","was","has",
+  "have","can","could","would","should","their","they","there","these","those",
+  "then","than","also","been","being","such","other","more","most","some","any",
+  "when","where","while","because","after","before","over","under","between",
+  "threat","threats","attack","attacks","source","sources","security","model",
+  "models","system","systems","data","using","used","use","risk","risks",
+]);
+
+function qaContentTokens(s) {
+  const words = String(s || "").toLowerCase().match(/[a-z0-9]{4,}/g) || [];
+  return new Set(words.filter(w => !QA_STOPWORDS.has(w)));
+}
+
+// Deterministic hype → neutral rewrites (repairable).
+const HYPE_REPLACEMENTS = [
+  [/\bunprecedented\b/gi,      "notable"],
+  [/\bgame[- ]changing\b/gi,   "significant"],
+  [/\brapidly evolving\b/gi,   "evolving"],
+  [/\bcritical threat\b/gi,    "serious risk"],
+];
+
+// Curated denylist of vendor product-marketing / SEO "statistics" blogs. These
+// are company-owned promotional pages (listicles, "trends 2026", stat round-ups)
+// rather than security journalism or primary research, so they're dropped from
+// citations even though the corpus tiers them "medium" — the same tier as real
+// news outlets (The Record, BleepingComputer), which is why a blunt trust-tier
+// filter can't be used. Match is on the registrable domain (subdomains included).
+// Extend this list as new marketing blogs surface in citations.
+const MARKETING_BLOG_DOMAINS = new Set([
+  "adaptivesecurity.com",
+  "cybelangel.com",
+  "flutteris.com",
+  "techtimes.com",
+]);
+
+export function isMarketingBlog(url) {
+  let host;
+  try { host = new URL(url).hostname.toLowerCase().replace(/^www\./, ""); }
+  catch { return false; }
+  for (const d of MARKETING_BLOG_DOMAINS) {
+    if (host === d || host.endsWith("." + d)) return true;
+  }
+  return false;
+}
+
+/**
+ * Citation QA. Drops (a) confirmed-dead links and (b) cited sources with zero
+ * content overlap with the answer (irrelevant). Returns the surviving citations,
+ * the set of normalized URLs removed (so inline [src-N] refs can be de-linked to
+ * match), and issue records.
+ */
+function qaCitations(answer, citations, sourceContentByUrl, deadUrls, normalizeUrl) {
+  const aTokens = qaContentTokens(answer);
+  const kept = [];
+  const removedUrls = new Set();
   const issues = [];
+  let droppedDead = 0, droppedIrrelevant = 0, droppedMarketing = 0;
 
-  // ── Fact-check: specific claims must be grounded in retrieved material ─────────
-  // CVE IDs and named source/publisher mentions are the easiest to fabricate and
-  // the most damaging if wrong. Flag any that don't appear in what was retrieved.
-  if (groundingText) {
-    const g = groundingText;
-    const cves = [...new Set((text.match(/CVE-\d{4}-\d{4,7}/gi) || []).map(s => s.toUpperCase()))];
-    const ungroundedCves = cves.filter(c => !g.includes(c.toLowerCase()));
-    if (ungroundedCves.length) {
-      issues.push(`CVE(s) not found in retrieved sources: ${ungroundedCves.join(", ")} — possible fabrication`);
-    }
+  for (const c of citations) {
+    const key = c.url ? normalizeUrl(c.url) : null;
+
+    // (a) dead link — confirmed 404/410/DNS-failure upstream.
+    if (key && deadUrls.has(key)) { removedUrls.add(key); droppedDead++; continue; }
+
+    // (b) vendor/marketing blog — promotional company content, not a real source.
+    if (c.url && isMarketingBlog(c.url)) { if (key) removedUrls.add(key); droppedMarketing++; continue; }
+
+    // (c) relevance — compare the source's retrieved text against the answer.
+    // Keep when there's any shared meaningful token, or when we have no content
+    // to judge (never drop on missing data — that would risk a false positive).
+    const content = (key && sourceContentByUrl[key]) || "";
+    const judgeText = `${content} ${c.source_title || ""} ${c.publisher || ""}`.trim();
+    const sTokens = qaContentTokens(judgeText);
+    const hasOverlap = aTokens.size === 0 || sTokens.size === 0 || [...sTokens].some(t => aTokens.has(t));
+    if (!hasOverlap) { if (key) removedUrls.add(key); droppedIrrelevant++; continue; }
+
+    kept.push(c);
   }
 
-  // Flag if any raw ev_xxx IDs slipped through scrubbing into the visible answer
+  if (droppedDead)       issues.push({ code: "dead_citation",       severity: "repaired", detail: `Removed ${droppedDead} broken source link${droppedDead > 1 ? "s" : ""}.` });
+  if (droppedMarketing)  issues.push({ code: "marketing_citation",  severity: "repaired", detail: `Removed ${droppedMarketing} vendor/marketing blog source${droppedMarketing > 1 ? "s" : ""}.` });
+  if (droppedIrrelevant) issues.push({ code: "irrelevant_citation", severity: "repaired", detail: `Removed ${droppedIrrelevant} source${droppedIrrelevant > 1 ? "s" : ""} unrelated to the answer.` });
+
+  return { citations: kept, removedUrls, issues };
+}
+
+/**
+ * Content QA. Repairs the answer text in place (strips leaked internal IDs,
+ * softens hype) and returns blocking issues for anything unfixable (ungrounded
+ * CVEs, or substantive claims left with no citation). `citationCount` is the
+ * post-citation-QA count so the "unsupported" check reflects surviving sources.
+ */
+function qaContent(answer, citationCount, groundingText) {
+  const issues = [];
+  let text = answer;
+
+  // REPAIR: strip any internal evidence IDs that survived scrubbing.
   if (/\bev[_-][a-zA-Z0-9_-]{4,}/.test(text)) {
-    issues.push("Internal evidence IDs visible in response — scrubbing may have missed a pattern");
+    text = text.replace(/\bev[_-][a-zA-Z0-9_-]{4,}\b/g, "")
+               .replace(/\(\s*\)/g, "").replace(/ {2,}/g, " ").replace(/ \./g, ".").trim();
+    issues.push({ code: "leaked_evidence_id", severity: "repaired", detail: "Removed internal evidence IDs from the answer." });
   }
 
-  // Statistics without any citations
-  const hasStat = /\b\d+\.?\d*%|\bCVE-\d{4}|\b\d{1,3}\s*(?:sources|incidents|attacks|cases)\b/i.test(text);
-  if (hasStat && citations.length === 0) {
-    issues.push("Factual statistics present but no citations found");
+  // REPAIR: soften hype phrasing to neutral language.
+  for (const [re, repl] of HYPE_REPLACEMENTS) {
+    if (re.test(text)) { text = text.replace(re, repl); issues.push({ code: "hype_language", severity: "repaired", detail: `Softened hype phrasing to "${repl}".` }); }
   }
 
-  // Substantive response with zero citations (prose or bullets)
-  const bulletCount = (text.match(/^[-•*]\s/gm) || []).length;
-  const wordCount   = text.split(/\s+/).length;
-  if (wordCount > 80 && citations.length === 0) {
-    issues.push("Substantive response has no citations");
+  // BLOCK: a CVE stated in the answer that appears in NO retrieved source is a
+  // fabrication — never surface it.
+  if (groundingText) {
+    const cves = [...new Set((text.match(/CVE-\d{4}-\d{4,7}/gi) || []).map(s => s.toUpperCase()))];
+    const ungrounded = cves.filter(c => !groundingText.includes(c.toLowerCase()));
+    if (ungrounded.length) issues.push({ code: "ungrounded_cve", severity: "blocking", detail: `Referenced CVE(s) not found in any retrieved source: ${ungrounded.join(", ")}.` });
   }
 
-  // Hype language that slipped past the prompt
-  const hypePattern = /\bunprecedented\b|\bgame.changing\b|\brapidly evolving\b|\bcritical threat\b/i;
-  if (hypePattern.test(text)) {
-    issues.push("Hype language detected — response should use neutral, scoped language");
+  // BLOCK: substantive, claim-bearing answer with no citation left standing.
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  const hasStat   = /\b\d+\.?\d*%|\bCVE-\d{4}|\b\d{1,3}\s*(?:sources|incidents|attacks|cases)\b/i.test(text);
+  if (citationCount === 0 && (wordCount > 80 || hasStat)) {
+    issues.push({ code: "unsupported_no_citations", severity: "blocking", detail: "The answer makes substantive claims but no cited source survived validation." });
   }
 
-  return issues;
+  return { text, issues };
+}
+
+// ── Citation link liveness ──────────────────────────────────────────────────────
+
+/**
+ * Returns true only when a URL is DEFINITIVELY dead — a 404/410 response or a
+ * DNS/host-not-found failure. Ambiguous outcomes (403/405/429/5xx, timeouts,
+ * bot-blocking) are treated as live and kept, because many valid pages reject
+ * HEAD requests or block automated user agents. Conservative by design: we would
+ * rather keep a questionable link than drop a good source.
+ */
+export async function urlIsBroken(url) {
+  if (!url || !/^https?:\/\//i.test(url)) return false;
+  const UA = "Mozilla/5.0 (compatible; TheHorizon-LinkCheck/1.0)";
+
+  const probe = async (method, timeoutMs) => {
+    // Range keeps the GET body tiny — we only need the status line.
+    const headers = { "User-Agent": UA };
+    if (method === "GET") headers.Range = "bytes=0-0";
+    const res = await fetch(url, { method, redirect: "follow", signal: AbortSignal.timeout(timeoutMs), headers });
+    return res.status;
+  };
+
+  try {
+    // Fast HEAD first. A definite 404/410 is conclusive.
+    const headStatus = await probe("HEAD", 5000).catch(err => {
+      if (err.name === "TimeoutError" || err.name === "AbortError") return "ambiguous";
+      throw err; // network-level failure → handled below
+    });
+    if (headStatus === 404 || headStatus === 410) return true;
+
+    // HEAD is often blocked (403/405), unsupported, or slow. When it wasn't a
+    // clean 2xx/3xx, confirm with a ranged GET (what a browser would do) before
+    // deciding — this is what caught real 404s that answer HEAD inconsistently.
+    if (headStatus === "ambiguous" || typeof headStatus !== "number" || headStatus >= 400) {
+      const getStatus = await probe("GET", 8000);
+      return getStatus === 404 || getStatus === 410;
+    }
+    return false; // HEAD returned 2xx/3xx → live
+  } catch (err) {
+    if (err.name === "TimeoutError" || err.name === "AbortError") return false; // slow ≠ broken
+    const msg = String(err.message || err).toLowerCase();
+    // Host does not resolve / connection refused → the page genuinely isn't there.
+    return /enotfound|econnrefused|getaddrinfo|dns|name not resolved/.test(msg);
+  }
+}
+
+// Given a list of URLs, return a Set of the normalized ones that are definitively
+// dead. Runs the checks in parallel and dedupes first, so each distinct URL is
+// probed once. The referenced set is small (only what the answer cites), so this
+// adds at most one ~4s round to the 'done' event — after the answer text has
+// already streamed to the user.
+async function findDeadUrls(urls, normalizeUrl) {
+  const distinct = [...new Set(urls.filter(Boolean))];
+  if (!distinct.length) return new Set();
+  const verdicts = await Promise.all(distinct.map(u => urlIsBroken(u)));
+  const dead = new Set();
+  distinct.forEach((u, i) => { if (verdicts[i]) dead.add(normalizeUrl(u)); });
+  return dead;
 }
 
 // ── Handler ────────────────────────────────────────────────────────────────────
@@ -527,7 +682,7 @@ export default async function handler(req, res) {
     // All retrieval is pre-fetched, so there are no tool rounds — one synthesis
     // call produces the answer. buildPayload turns its text into the response
     // (citations, confidence, etc.) and is shared by the streamed and buffered paths.
-    function buildPayload(rawText) {
+    async function buildPayload(rawText) {
       const parsed = parseResponse(rawText || "(No answer generated)");
       const normalizeUrl = (u) => u?.replace(/[.,;:!?/]+$/, "").toLowerCase().replace(/^https?:\/\//, "");
 
@@ -541,15 +696,15 @@ export default async function handler(req, res) {
       // NOTE: do NOT add harvested inline URLs to the allowlist — they're from the
       // model's prose and may be invented. Only real retrieved URLs are citable.
 
+      // The end-of-response "Sources" list must reflect ONLY what the answer
+      // actually cited (resolved [src-N] refs, ev_xxx IDs, and inline
+      // (Publisher, URL) mentions). We deliberately do NOT append the rest of the
+      // pre-fetch pool: that pool comes from loose keyword matching, so dumping it
+      // surfaced irrelevant, vendor/marketing, and unused sources under every
+      // answer. Inline [src-N] links still resolve against source_refs, so precise
+      // in-text citations are unaffected.
       const citations = extractCitations(parsed.answer, evidenceIndex, sourceRefs)
         .filter(c => !c.url || retrievedUrls.has(normalizeUrl(c.url)));   // drop fabricated URLs
-      const citedUrls = new Set(citations.map(c => normalizeUrl(c.url)).filter(Boolean));
-      for (const src of citationPool) {
-        if (!src.url || citedUrls.has(normalizeUrl(src.url))) continue;
-        citations.push({ source_title: src.source_title, url: src.url, publisher: src.publisher, trust_tier: src.trust_tier });
-        citedUrls.add(normalizeUrl(src.url));
-        if (citations.length >= 15) break;
-      }
       const seen = new Set();
       let dedupedCitations = citations.filter(c => {
         if (!c.url && (!c.source_title || c.source_title === "Unknown source")) return false;
@@ -568,31 +723,89 @@ export default async function handler(req, res) {
         sourceRefs = [];
       }
 
+      // Per-source retrieved text, keyed by normalized URL — the basis for the
+      // citation-relevance check (does the cited source actually relate to the
+      // answer?). Built from source summaries, the pool, and evidence facts/quotes.
+      const sourceContentByUrl = {};
+      const addContent = (url, ...parts) => {
+        const k = url ? normalizeUrl(url) : null; if (!k) return;
+        sourceContentByUrl[k] = `${sourceContentByUrl[k] || ""} ${parts.filter(Boolean).join(" ")}`.slice(0, 1500);
+      };
+      for (const s of sourceRefs)                  addContent(s.url, s.title, s.summary);
+      for (const c of citationPool)                addContent(c.url, c.source_title, c.publisher);
+      for (const ev of Object.values(evidenceIndex)) addContent(ev.source_url, ev.fact, ev.quote, ev.source_title);
+
+      // Which source_refs the answer cites inline (via [src-N]) — only these can
+      // appear as in-text links, so only these need liveness checks alongside the
+      // bottom "Sources" list.
+      const citedRefIdx = new Set(
+        [...parsed.answer.matchAll(/\[src-(\d+)\]/g)].map(m => parseInt(m[1], 10) - 1)
+      );
+      const citedRefUrls = [...citedRefIdx]
+        .map(i => (Array.isArray(sourceRefs) ? sourceRefs[i]?.url : null))
+        .filter(Boolean);
+
+      // Probe every URL that could reach the user for liveness (confirmed-dead only).
+      const deadUrls = await findDeadUrls(
+        [...dedupedCitations.map(c => c.url), ...citedRefUrls],
+        normalizeUrl,
+      );
+
+      // ── CITATION QA: drop dead + irrelevant citations, then de-link matching
+      // inline [src-N] refs so the answer body and the "Sources" list stay in sync.
+      const citationQa = qaCitations(cleanAnswer, dedupedCitations, sourceContentByUrl, deadUrls, normalizeUrl);
+      dedupedCitations = citationQa.citations;
+      if (citationQa.removedUrls.size) {
+        sourceRefs = sourceRefs.map(s =>
+          s?.url && citationQa.removedUrls.has(normalizeUrl(s.url)) ? { ...s, url: null } : s
+        );
+      }
+
       // Grounding text = everything actually retrieved (source titles/summaries +
-      // evidence facts/quotes). Used by qaResponse to fact-check that specific
-      // claims (CVE IDs, named entities) appear in the retrieved material.
+      // evidence facts/quotes). Used by content QA to fact-check that specific
+      // claims (CVE IDs) appear in the retrieved material.
       const groundingText = [
         ...citationPool.map(c => `${c.source_title || ""} ${c.publisher || ""}`),
         ...sourceRefs.map(s => `${s.title || ""} ${s.summary || ""}`),
         ...Object.values(evidenceIndex).map(ev => `${ev.fact || ""} ${ev.quote || ""}`),
       ].join("\n").toLowerCase();
 
-      const qaIssues = qaResponse(cleanAnswer, dedupedCitations, evidenceIndex, groundingText);
+      // ── CONTENT QA: repair the text, collect blocking issues (post-citation-QA
+      // count so "unsupported" reflects the sources that actually survived).
+      const contentQa = qaContent(cleanAnswer, dedupedCitations.length, groundingText);
+      let finalAnswer = contentQa.text;
+
+      // Combine all QA findings; a single blocking issue fails the whole response.
+      const qaFindings = [...citationQa.issues, ...contentQa.issues];
+      const blockingFindings = qaFindings.filter(i => i.severity === "blocking");
+      const blocked = blockingFindings.length > 0;
+
+      if (blocked) {
+        // Replace the answer with a safe message and strip all citations/links —
+        // we will not stand behind an answer that failed a blocking check.
+        finalAnswer = `I can't give a reliable answer to this from the current corpus. The automated quality check flagged: ${blockingFindings.map(i => i.detail).join(" ")} Try rephrasing or narrowing the question so the answer can be grounded in verified sources.`;
+        dedupedCitations = [];
+        sourceRefs = [];
+      }
+
+      const qaIssues = qaFindings.map(i => i.detail);
       const estimatedCostUsd =
         (totalInputTokens / 1_000_000) * AGENT_PRICING.input +
         (totalOutputTokens / 1_000_000) * AGENT_PRICING.output;
       logAgentCostToDB({ inputTokens: totalInputTokens, outputTokens: totalOutputTokens, rounds: 1, costUsd: estimatedCostUsd }).catch(() => {});
       return {
-        answer:              cleanAnswer,
+        answer:              finalAnswer,
         citations:           dedupedCitations,
         source_refs:         sourceRefs,
-        confidence:          parsed.confidence,
+        confidence:          blocked ? "low" : parsed.confidence,
         confidence_reason:   parsed.confidence_reason,
         caveat:              parsed.caveat,
         suggested_followups: parsed.followups,
         tool_calls:          toolCallLog,
         qa_issues:           qaIssues,
-        qa_pass:             qaIssues.length === 0,
+        qa_pass:             !blocked,
+        qa_blocked:          blocked,
+        qa_report:           { blocked, blocking: blockingFindings, repaired: qaFindings.filter(i => i.severity === "repaired") },
         evidence_items_used: Object.keys(evidenceIndex).length,
         temporal_scope:      temporal.scope_label,
         token_usage: {
@@ -630,7 +843,7 @@ export default async function handler(req, res) {
         });
         totalInputTokens  += usage.input_tokens  || 0;
         totalOutputTokens += usage.output_tokens || 0;
-        sse({ type: "done", ...buildPayload(fullText) });
+        sse({ type: "done", ...(await buildPayload(fullText)) });
       } catch (err) {
         sse({ type: "error", error: err.message });
       }
@@ -643,7 +856,7 @@ export default async function handler(req, res) {
     totalInputTokens  += resp.usage?.input_tokens  || 0;
     totalOutputTokens += resp.usage?.output_tokens || 0;
     const rawText = resp.content.find(b => b.type === "text")?.text || "(No answer generated)";
-    return res.status(200).json(buildPayload(rawText));
+    return res.status(200).json(await buildPayload(rawText));
 
   } catch (err) {
     console.error("[agent] error:", err.message, err.stack?.slice(0, 500));
