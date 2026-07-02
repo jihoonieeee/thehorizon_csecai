@@ -573,6 +573,19 @@ a:hover { text-decoration: underline; }
   display: block; width: 100%;
 }
 
+/* "So what" rendered as digestible points rather than one paragraph */
+.hz-insight-points {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.hz-insight-points li {
+  position: relative; padding-left: 14px; line-height: 1.45;
+}
+.hz-insight-points li::before {
+  content: "•"; position: absolute; left: 2px;
+  color: var(--cat-color); font-weight: 700;
+}
+
 /* Evidence source citations — clickable links to the critical contributing sources */
 .hz-insight-sources {
   margin: 0; padding: 0; list-style: none;

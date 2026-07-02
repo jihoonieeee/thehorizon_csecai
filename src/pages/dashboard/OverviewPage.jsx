@@ -31,6 +31,14 @@ const CAT_LABEL = {
   ai_enabled_threats:     "AI-Enabled Threats",
 };
 
+// Short labels for the compact summary stat row (avoids ambiguous single words).
+const CAT_SHORT = {
+  traditional_ai_threats: "Traditional AI",
+  llm_threats:            "LLM",
+  agentic_ai_threats:     "Agentic",
+  ai_enabled_threats:     "AI-Enabled",
+};
+
 const WINDOWS = [
   { id: "week",    label: "Last Week"    },
   { id: "month",   label: "Last Month"   },
@@ -172,13 +180,24 @@ function MaturityBar({ maturity }) {
 // ── Insight item — terse by default, expandable on click ──────────────────────
 
 
+// Split a "so what" paragraph into digestible points. Prefer explicit sentence
+// boundaries; keep each point substantive (drop tiny fragments).
+function toPoints(text) {
+  if (!text) return [];
+  return String(text)
+    .split(/(?<=[.;])\s+(?=[A-Z0-9"'(])/)
+    .map(s => s.trim().replace(/[.;]\s*$/, ""))
+    .filter(s => s.length > 12);
+}
+
 function InsightItem({ p }) {
   const [open, setOpen] = useState(false);
   const [clamped, setClamped] = useState(false);
   const headlineRef = useRef(null);
 
   const sources = Array.isArray(p.sources) ? p.sources.filter(s => s && s.url) : [];
-  const hasDetail = p.implication || sources.length > 0;
+  const points  = toPoints(p.implication);
+  const hasDetail = points.length > 0 || sources.length > 0;
   // The headline is clamped to 3 lines at rest. If the text overflows that clamp,
   // the item must be expandable even without detail fields — otherwise the full
   // insight is unreadable (cut off with "…" and no way to open it).
@@ -199,10 +218,12 @@ function InsightItem({ p }) {
       <div className="hz-insight-headline" ref={headlineRef}>{p.insight}</div>
       {open && hasDetail && (
         <div className="hz-insight-detail-inner">
-          {p.implication && (
+          {points.length > 0 && (
             <div className="hz-insight-line">
               <span className="hz-insight-tag">So what</span>
-              <span>{p.implication}</span>
+              <ul className="hz-insight-points">
+                {points.map((pt, i) => <li key={i}>{pt}</li>)}
+              </ul>
             </div>
           )}
           {sources.length > 0 && (
@@ -259,10 +280,6 @@ function CategoryCard({ cat, trendValues }) {
         <div className="hz-cat-card-name">{cat.label}</div>
 
         <MaturityBar maturity={cat.evidence_maturity} />
-
-        {cat.assessment && (
-          <div className="hz-cat-card-assessment">{cat.assessment}</div>
-        )}
 
         {insights.length > 0 && (
           <div className="hz-cat-card-insight">
@@ -541,7 +558,7 @@ export function OverviewPage() {
               <span className="hz-insight-stat-value" style={{ color }}>
                 {data.summary?.by_category?.[key] ?? "—"}
               </span>
-              <span className="hz-insight-stat-label">{CAT_LABEL[key]?.split(" ")[0]}</span>
+              <span className="hz-insight-stat-label">{CAT_SHORT[key] || CAT_LABEL[key]}</span>
             </div>
           ))}
         </div>

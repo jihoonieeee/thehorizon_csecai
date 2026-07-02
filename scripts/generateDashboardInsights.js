@@ -830,6 +830,9 @@ export async function attributeSources(insights, catSources, windowLabel, catLab
   try {
     const out = await callAnthropic({
       system: ATTRIBUTION_SYSTEM, task: "dashboard_attribution",
+      // Attribution is a matching task (pick supporting source numbers) — Haiku
+      // handles it well at a fraction of Sonnet's cost.
+      model: process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
       user: buildAttributionPrompt(catLabel, windowLabel, insights, ranked),
       maxTokens: 700,
     });

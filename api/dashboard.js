@@ -354,9 +354,13 @@ export default async function handler(req, res) {
       }));
 
     // ── 5. Tag matrix (40 tags × 4 categories) + per-tag source lists ─────────
+    // The count (tagCounts[tag][cat]) and the drilldown list (tagSources[tag]
+    // filtered by cat) MUST derive from the same iteration so the number shown
+    // on a tag chip matches the number of sources the drilldown lists. Both are
+    // incremented in lockstep below — no source cap (a cap made the drilldown
+    // show fewer rows than the count).
     const tagCounts  = {};
     const tagSources = {};  // tagId → [{ title, url, publisher, date, category }]
-    const TAG_SOURCE_CAP = 25;
     for (const t of TAGS) { tagCounts[t.id] = {}; tagSources[t.id] = []; }
     for (const c of CATEGORIES)    for (const t of TAGS) tagCounts[t.id][c.key] = 0;
 
@@ -366,15 +370,13 @@ export default async function handler(req, res) {
       for (const tag of (s.tags || [])) {
         if (TAG_IDS.has(tag) && tagCounts[tag]?.[cat] !== undefined) {
           tagCounts[tag][cat]++;
-          if (tagSources[tag].length < TAG_SOURCE_CAP) {
-            tagSources[tag].push({
-              title:     s.title,
-              url:       s.url,
-              publisher: s.publisher,
-              date:      s.date_published?.slice(0, 10),
-              category:  cat,
-            });
-          }
+          tagSources[tag].push({
+            title:     s.title,
+            url:       s.url,
+            publisher: s.publisher,
+            date:      s.date_published?.slice(0, 10),
+            category:  cat,
+          });
         }
       }
     }
