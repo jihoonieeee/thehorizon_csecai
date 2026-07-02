@@ -354,14 +354,16 @@ const DOMAINS = [
 // Taxonomy: one section per main category (4), each listing only its own tags
 // with that category's source count. Click a tag to explore its sources.
 function TaxonomyHeatmap({ tagMatrix, onSelect, selected }) {
-  const { tags = [], by_category = {} } = tagMatrix || {};
+  const { tags = [], by_category = {}, defense = {} } = tagMatrix || {};
   if (!tags.length) return <p className="hz-overview-empty">No taxonomy data for this period.</p>;
 
   const grouped = DOMAINS.map(d => ({
     ...d,
+    // count = attack sources (defenses excluded); defCount = defensive sources
+    // that defend against this technique (shown as a separate badge).
     tags: tags
       .filter(t => t.domain === d.key)
-      .map(t => ({ ...t, count: by_category[t.id]?.[d.key] || 0 }))
+      .map(t => ({ ...t, count: by_category[t.id]?.[d.key] || 0, defCount: defense[t.id]?.[d.key] || 0 }))
       .sort((a, b) => b.count - a.count),
   })).filter(d => d.tags.length > 0);
 
@@ -383,12 +385,19 @@ function TaxonomyHeatmap({ tagMatrix, onSelect, selected }) {
                   key={tag.id}
                   className={`hz-taxonomy-tag${active ? " active" : ""}${clickable ? " clickable" : ""}`}
                   style={active ? { borderColor: CAT_COLOR[domain.key] } : undefined}
-                  title={clickable ? `View ${tag.count} source${tag.count !== 1 ? "s" : ""} tagged ${tag.label}` : tag.id}
+                  title={clickable
+                    ? `View ${tag.count} attack source${tag.count !== 1 ? "s" : ""} tagged ${tag.label}${tag.defCount ? ` · ${tag.defCount} defensive` : ""}`
+                    : (tag.defCount ? `${tag.defCount} defensive source${tag.defCount !== 1 ? "s" : ""}, no attack evidence` : tag.id)}
                   onClick={clickable ? () => onSelect(tag, domain.key) : undefined}
                   disabled={!clickable}
                 >
                   <span className="hz-taxonomy-tag-label">{tag.label}</span>
                   <span className="hz-taxonomy-tag-count">{tag.count}</span>
+                  {tag.defCount > 0 && (
+                    <span className="hz-taxonomy-tag-def" title={`${tag.defCount} defensive source${tag.defCount !== 1 ? "s" : ""}`}>
+                      🛡{tag.defCount}
+                    </span>
+                  )}
                 </button>
               );
             })}

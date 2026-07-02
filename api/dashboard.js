@@ -359,16 +359,28 @@ export default async function handler(req, res) {
     // on a tag chip matches the number of sources the drilldown lists. Both are
     // incremented in lockstep below — no source cap (a cap made the drilldown
     // show fewer rows than the count).
-    const tagCounts  = {};
-    const tagSources = {};  // tagId → [{ title, url, publisher, date, category }]
-    for (const t of TAGS) { tagCounts[t.id] = {}; tagSources[t.id] = []; }
-    for (const c of CATEGORIES)    for (const t of TAGS) tagCounts[t.id][c.key] = 0;
+    //
+    // A tag on a DEFENSIVE source names the attack it DEFENDS AGAINST, not an
+    // attack the source demonstrates. Counting those as attack evidence inflates
+    // the technique counts (e.g. adversarial-robustness papers under TAI03). So
+    // the attack count + drilldown exclude is_defensive sources; a separate
+    // defensive tally is surfaced per tag/category.
+    const tagCounts   = {};
+    const tagDefense  = {};  // tagId → { cat: defensiveCount }
+    const tagSources  = {};  // tagId → [{ title, url, publisher, date, category }] (attacks only)
+    for (const t of TAGS) { tagCounts[t.id] = {}; tagDefense[t.id] = {}; tagSources[t.id] = []; }
+    for (const c of CATEGORIES) for (const t of TAGS) { tagCounts[t.id][c.key] = 0; tagDefense[t.id][c.key] = 0; }
 
     for (const s of all) {
       const cat = s.main_category;
       if (!cat) continue;
+      const isDefensive = s.intelligence?.is_defensive === true || (s.tags || []).includes("defensive");
       for (const tag of (s.tags || [])) {
         if (TAG_IDS.has(tag) && tagCounts[tag]?.[cat] !== undefined) {
+          if (isDefensive) {
+            tagDefense[tag][cat]++;
+            continue;   // defenses don't count as attack evidence for this tag
+          }
           tagCounts[tag][cat]++;
           tagSources[tag].push({
             title:     s.title,
@@ -404,9 +416,10 @@ export default async function handler(req, res) {
       },
       top_incidents: topIncidents,
       tag_matrix: {
-        tags:        activeTags,
-        by_category: tagCounts,
-        sources:     tagSources,
+        tags:          activeTags,
+        by_category:   tagCounts,   // ATTACK counts (is_defensive excluded)
+        defense:       tagDefense,  // per-tag/category count of defensive sources
+        sources:       tagSources,  // attack sources only — matches by_category
       },
       // Lightweight historical comparison vs the previous period (from _period_meta).
       comparison: periodMeta ? {
