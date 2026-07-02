@@ -112,7 +112,12 @@ async function callAnthropic({ system, user, model, maxTokens = 1200, task = "da
         body: JSON.stringify({
           model:      usedModel,
           max_tokens: maxTokens,
-          system,
+          // Cache the (per-stage-identical) system prompt so the 4 category calls
+          // that share it re-read at ~0.1x. Only long prompts clear the cache
+          // minimum; short ones silently don't cache (harmless).
+          system: system && system.length >= 4000
+            ? [{ type: "text", text: system, cache_control: { type: "ephemeral" } }]
+            : system,
           messages: [{ role: "user", content: user }],
         }),
       });
@@ -133,6 +138,8 @@ async function callAnthropic({ system, user, model, maxTokens = 1200, task = "da
           model:        usedModel,
           inputTokens:  data.usage?.input_tokens  || 0,
           outputTokens: data.usage?.output_tokens || 0,
+          cacheReadTokens:     data.usage?.cache_read_input_tokens     || 0,
+          cacheCreationTokens: data.usage?.cache_creation_input_tokens || 0,
         });
       } catch { /* ignore */ }
 
