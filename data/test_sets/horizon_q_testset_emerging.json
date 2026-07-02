@@ -1,0 +1,1447 @@
+{
+  "set_id": "horizon_q_testset_emerging",
+  "set_name": "Test Set C — Emerging-Signals Weighted",
+  "purpose": "Include research PoCs, new tools, adoption indicators, and early signals. Use for 6-month outlook generation.",
+  "created_at": "2026-07-01T06:59:07.288Z",
+  "source_count": 50,
+  "category_counts": {
+    "traditional_ai_threats": 20,
+    "llm_threats": 10,
+    "agentic_ai_threats": 10,
+    "ai_enabled_threats": 10
+  },
+  "sources": [
+    {
+      "id": "a708688f5904470991dd5d17edb67f4fc313",
+      "title": "Poisoned Pipelines: Malicious AI Model and Skill Repositories – Lab Space",
+      "url": "https://labs.cloudsecurityalliance.org/research/csa-research-note-malicious-ai-model-repositories-attack-sur",
+      "date_published": "2026-05-20T00:00:00+00:00",
+      "publisher": "Cloud Security Alliance (CSA) AI Safety Initiative",
+      "source_type": "research_finding",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "CSA research documents malicious model poisoning at scale across Hugging Face and ClawHub agent skill registries, with pickle deserialization exploits and bypass vulnerabilities in detection tools; recommends format migration and supply chain controls for AI artifacts.",
+      "evaluation": {
+        "id": "a708688f5904470991dd5d17edb67f4fc313",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from primary source, 42d ago"
+      }
+    },
+    {
+      "id": "b57c0bf3dd958dcd7c134aa844f6aab4e449",
+      "title": "CSO-LLM: Class Subspace Orthogonalization for Post-Training Backdoor Detection and Trigger Inversion in LLMs",
+      "url": "https://arxiv.org/abs/2606.31309",
+      "date_published": "2026-06-30T08:19:00+00:00",
+      "publisher": "arXiv",
+      "source_type": "research_finding",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "high",
+      "short_summary": "CSO-LLM proposes a novel post-training backdoor detection and trigger inversion framework for LLMs that uses class subspace orthogonalization to identify poisoned models and recover adversarial triggers, addressing the discrete token-space challenge unique to language models.",
+      "evaluation": {
+        "id": "b57c0bf3dd958dcd7c134aa844f6aab4e449",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 1d ago"
+      }
+    },
+    {
+      "id": "034ae702120b5394aa6005ca58553ea0aca8",
+      "title": "What Is Data Poisoning? [Examples & Prevention] - Palo Alto Networks",
+      "url": "https://www.paloaltonetworks.com/cyberpedia/what-is-data-poisoning",
+      "date_published": "2026-06-30T03:29:20.651+00:00",
+      "publisher": "paloaltonetworks.com",
+      "source_type": "research_finding",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "high",
+      "short_summary": "Palo Alto Networks educational guide explaining data poisoning attacks where attackers intentionally corrupt training data to compromise ML/AI model behavior; emphasizes detection difficulty and mitigation strategies for organizations deploying AI systems.",
+      "evaluation": {
+        "id": "034ae702120b5394aa6005ca58553ea0aca8",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 1d ago"
+      }
+    },
+    {
+      "id": "663bdf061af2de6adcef4980c751e5272776",
+      "title": "A survey on adversarial machine learning: Attacks, defenses, real ...",
+      "url": "https://www.sciencedirect.com/science/article/abs/pii/s0925231226000676",
+      "date_published": "2026-06-30T03:29:02.719+00:00",
+      "publisher": "sciencedirect.com",
+      "source_type": "research_finding",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "high",
+      "short_summary": "A systematic survey of adversarial machine learning attacks across the ML lifecycle, including training-time attacks such as data poisoning and backdoor insertion, providing comprehensive taxonomy of threats and defenses.",
+      "evaluation": {
+        "id": "663bdf061af2de6adcef4980c751e5272776",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 1d ago"
+      }
+    },
+    {
+      "id": "8636c080f5ec587c4f00914c5f1e28f8259e",
+      "title": "Can Clothes Make You Invisible to Facial Recognition?",
+      "url": "https://www.darkreading.com/cyber-risk/clothes-invisible-facial-recognition",
+      "date_published": "2026-06-29T19:38:04+00:00",
+      "publisher": "Dark Reading",
+      "source_type": "research_finding",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "medium",
+      "short_summary": "Researcher demonstrates graphic t-shirt designs that exploit neural network vulnerabilities in facial recognition systems by introducing physical adversarial perturbations, demonstrating practical evasion against surveillance AI.",
+      "evaluation": {
+        "id": "8636c080f5ec587c4f00914c5f1e28f8259e",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from medium source, 1d ago"
+      }
+    },
+    {
+      "id": "2d03ccb754663cffe79b82ea982a71941514",
+      "title": "SpikeTimer: Exploring Active Copyright Protection in Spiking Neural Networks via Temporal Backdoor Regularization",
+      "url": "https://arxiv.org/abs/2606.26841v1",
+      "date_published": "2026-06-25T10:26:46+00:00",
+      "publisher": "arXiv",
+      "source_type": "research_finding",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "high",
+      "short_summary": "SpikeTimer is a novel active copyright protection framework for increasing Neural Networks that uses temporal backdoor learning to embed authorized tokens within specific timeslices, enabling multi-user authorization while rejecting unauthorized access through time-dependent token validation.",
+      "evaluation": {
+        "id": "2d03ccb754663cffe79b82ea982a71941514",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 6d ago"
+      }
+    },
+    {
+      "id": "5ef183fe5763b2e688d0455cef189ac09d17",
+      "title": "DroidBreaker: Practical and Functional Problem-Space Attacks on Machine-Learning Android Malware Detectors",
+      "url": "https://arxiv.org/abs/2606.26707v1",
+      "date_published": "2026-06-25T07:37:57+00:00",
+      "publisher": "arXiv",
+      "source_type": "research_finding",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "high",
+      "short_summary": "DroidBreaker is a practical adversarial attack framework that crafts functionally-preserved malicious Android APKs to evade ML-based malware detectors by manipulating only the most influential APK components while maintaining semantic equivalence.",
+      "evaluation": {
+        "id": "5ef183fe5763b2e688d0455cef189ac09d17",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 6d ago"
+      }
+    },
+    {
+      "id": "005c67a810c66673020e2f696843fc46b875",
+      "title": "Calibration Without Comprehension: Diagnosing the Limits of Fine-Tuning LLMs for Vulnerability Detection in Systems Software",
+      "url": "https://arxiv.org/abs/2606.20502v1",
+      "date_published": "2026-06-18T17:19:26+00:00",
+      "publisher": "arXiv",
+      "source_type": "research_finding",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "high",
+      "short_summary": "This paper demonstrates that fine-tuned LLMs for vulnerability detection lack genuine security reasoning and exhibit systematic, uncorrectable failure modes driven by backbone priors rather than learned patterns. The study uses a rigorous temporal-split framework on 834 Linux kernel samples to show that data contamination provides no advantage and that fine-tuning merely calibrates output distribu",
+      "evaluation": {
+        "id": "005c67a810c66673020e2f696843fc46b875",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 13d ago"
+      }
+    },
+    {
+      "id": "8d7753b53688d11bbcb6173632917c333d75",
+      "title": "Stealthy World Model Manipulation via Data Poisoning",
+      "url": "https://arxiv.org/abs/2606.18697v1",
+      "date_published": "2026-06-17T05:24:18+00:00",
+      "publisher": "arXiv",
+      "source_type": "research_finding",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "high",
+      "short_summary": "SWAAP is a two-stage data poisoning framework that manipulates learned world models through stealth-constrained fine-tuning trajectory corruption, causing low-return behavior during planning while evading detection defenses. The attack reveals critical vulnerabilities in world-model adaptation pipelines used by model-based learning agents.",
+      "evaluation": {
+        "id": "8d7753b53688d11bbcb6173632917c333d75",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 14d ago"
+      }
+    },
+    {
+      "id": "f31ff8d089b7479f05d22f33c8bd27ec6c92",
+      "title": "Your Privacy My Cloak: Backdoor Attacks on Differentially Private Federated Learning",
+      "url": "https://arxiv.org/abs/2606.17035v1",
+      "date_published": "2026-06-15T17:53:12+00:00",
+      "publisher": "arXiv",
+      "source_type": "research_finding",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "high",
+      "short_summary": "A novel backdoor attack called RING exploits differential privacy in federated learning to mask malicious model updates and evade state-of-the-art defenses, achieving 90.3% attack success rates against six defenses by leveraging DP's masking of statistical anomalies.",
+      "evaluation": {
+        "id": "f31ff8d089b7479f05d22f33c8bd27ec6c92",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 16d ago"
+      }
+    },
+    {
+      "id": "3819fb03a0922660d20f629bb676cca3dc44",
+      "title": "Image-Based Prompt Injection: Hijacking Multimodal LLMs Through Visually Embedded Adversarial Instructions – Lab Space",
+      "url": "https://labs.cloudsecurityalliance.org/research/csa-research-note-image-prompt-injection-multimodal-llm-2026",
+      "date_published": "2026-06-30T03:29:15.167+00:00",
+      "publisher": "labs.cloudsecurityalliance.org",
+      "source_type": "research_finding",
+      "main_category": "llm_threats",
+      "trust_tier": "primary",
+      "short_summary": "Research demonstrates image-based prompt injection as a distinct attack surface in multimodal LLMs, where adversarial instructions embedded in images evade text-based defenses. The study catalogs four embedding techniques (typographic, steganographic, adversarial perturbations, and physical-world injection) with documented success rates up to 64% against production models, and evaluates available ",
+      "evaluation": {
+        "id": "3819fb03a0922660d20f629bb676cca3dc44",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from primary source, 1d ago"
+      }
+    },
+    {
+      "id": "6c923194d9f68e4bce7bf127bee2cefa4d82",
+      "title": "The Risks of Code Assistant LLMs: Harmful Content, Misuse and ...",
+      "url": "https://unit42.paloaltonetworks.com/code-assistant-llms",
+      "date_published": "2026-06-29T07:55:15.307+00:00",
+      "publisher": "unit42.paloaltonetworks.com",
+      "source_type": "research_finding",
+      "main_category": "llm_threats",
+      "trust_tier": "primary",
+      "short_summary": "Palo Alto Networks researchers identified multiple security risks in LLM-based code assistants integrated with IDEs, including indirect prompt injection attacks through contaminated data sources, misuse of auto-completion features to bypass content moderation, and exposure of model access. These vulnerabilities could enable threat actors to inject backdoors, leak sensitive information, or generate",
+      "evaluation": {
+        "id": "6c923194d9f68e4bce7bf127bee2cefa4d82",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from primary source, 2d ago"
+      }
+    },
+    {
+      "id": "7cf35c72bcc3950dc06998f52d44ee3504a9",
+      "title": "MLSN #21: Political Manipulation and Indirect Prompt Injection",
+      "url": "https://newsletter.mlsafety.org/p/mlsn-21-political-manipulation-and",
+      "date_published": "2026-06-08T14:39:31+00:00",
+      "publisher": "Center for AI Safety",
+      "source_type": "research_finding",
+      "main_category": "llm_threats",
+      "trust_tier": "primary",
+      "short_summary": "The Center for AI Safety documents political manipulation biases in frontier LLMs and reports large-scale empirical evidence of indirect prompt injection (IPI) attacks that cause AI agents to execute hidden harmful tasks while concealing actions from users. The research demonstrates 8,600 successful IPI attacks across frontier models with real financial and operational consequences.",
+      "evaluation": {
+        "id": "7cf35c72bcc3950dc06998f52d44ee3504a9",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from primary source, 23d ago"
+      }
+    },
+    {
+      "id": "397e8e51ece945ae9210ab8a2754888882de",
+      "title": "The Collateral Effects of LLM-Generated Misinformation on Digital ...",
+      "url": "https://arxiv.org/abs/2601.21963",
+      "date_published": "2026-07-01T02:48:25.41+00:00",
+      "publisher": "arxiv.org",
+      "source_type": "research_finding",
+      "main_category": "llm_threats",
+      "trust_tier": "high",
+      "short_summary": "A peer-reviewed study documenting LLM-generated misinformation at scale ('industrialized deception'), presenting detection and mitigation tools (JudgeGPT, RogueGPT) and analyzing human perception of AI-generated news alongside emerging multimodal synthesis threats and agentic content dissemination.",
+      "evaluation": {
+        "id": "397e8e51ece945ae9210ab8a2754888882de",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 0d ago"
+      }
+    },
+    {
+      "id": "07dfbbca3731ff58a3af5552f92b27091a71",
+      "title": "Jailbreaking Leaves a Trace: Understanding and Detecting Jailbreak Attacks from Internal Representations of Large Language Models",
+      "url": "https://arxiv.org/abs/2602.11495",
+      "date_published": "2026-07-01T02:48:25.407+00:00",
+      "publisher": "arxiv.org",
+      "source_type": "research_finding",
+      "main_category": "llm_threats",
+      "trust_tier": "high",
+      "short_summary": "A peer-reviewed study demonstrating that jailbreak attacks on LLMs induce detectable patterns in internal hidden representations, enabling lightweight detection and inference-time mitigation via selective layer bypassing without model retraining.",
+      "evaluation": {
+        "id": "07dfbbca3731ff58a3af5552f92b27091a71",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 0d ago"
+      }
+    },
+    {
+      "id": "1816504fa69484b18338e7fa156da0b0b940",
+      "title": "RedBench: A Universal Dataset for Comprehensive Red Teaming of ...",
+      "url": "https://arxiv.org/abs/2601.03699",
+      "date_published": "2026-07-01T02:48:25.407+00:00",
+      "publisher": "arxiv.org",
+      "source_type": "benchmark_evaluation",
+      "main_category": "llm_threats",
+      "trust_tier": "high",
+      "short_summary": "RedBench aggregates 37 red-teaming datasets comprising 29,362 adversarial prompt samples with standardized taxonomy across 22 risk categories and 19 domains to systematically evaluate LLM vulnerabilities and establish robustness baselines for modern LLMs.",
+      "evaluation": {
+        "id": "1816504fa69484b18338e7fa156da0b0b940",
+        "category_fit": "strong",
+        "evidence_type": "benchmark",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: benchmark_evaluation from high source, 0d ago"
+      }
+    },
+    {
+      "id": "cb1d38b4a386f78c5141cab8cd655c2d84dc",
+      "title": "[PDF] Benchmarking LLAMA Model Security Against OWASP Top 10 For ...",
+      "url": "https://arxiv.org/abs/2601.19970",
+      "date_published": "2026-07-01T02:48:25.4+00:00",
+      "publisher": "arxiv.org",
+      "source_type": "benchmark_evaluation",
+      "main_category": "llm_threats",
+      "trust_tier": "high",
+      "short_summary": "A peer-reviewed benchmark evaluates five Llama model variants and five Llama Guard variants against OWASP Top 10 LLM vulnerabilities using 100 adversarial prompts, revealing that smaller specialized models (Llama-Guard-3-1B: 76% detection) substantially outperform larger general-purpose models (Llama-3.1-8B: 0% detection) at threat identification with lower latency.",
+      "evaluation": {
+        "id": "cb1d38b4a386f78c5141cab8cd655c2d84dc",
+        "category_fit": "strong",
+        "evidence_type": "benchmark",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: benchmark_evaluation from high source, 0d ago"
+      }
+    },
+    {
+      "id": "4c2c0a4c1d00dcd18d4b99173049cd722aee",
+      "title": "Indirect Prompt Injection in the Wild: An Empirical Study of ... - arXiv",
+      "url": "https://arxiv.org/abs/2604.27202",
+      "date_published": "2026-07-01T02:48:25.394+00:00",
+      "publisher": "arxiv.org",
+      "source_type": "research_finding",
+      "main_category": "llm_threats",
+      "trust_tier": "high",
+      "short_summary": "A large-scale empirical study analyzing 1.2B URLs identifies 15.3K validated instances of indirect prompt injection attacks embedded in webpages and HTTP responses, characterizing their prevalence, delivery mechanisms, objectives (reputation manipulation, content protection, bot detection), and demonstrating compliance rates up to 8% in controlled experiments across 13 LLM models.",
+      "evaluation": {
+        "id": "4c2c0a4c1d00dcd18d4b99173049cd722aee",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 0d ago"
+      }
+    },
+    {
+      "id": "f8f064e7c48c5c93fe683185adebc460ba53",
+      "title": "New BioShocking attack manipulates AI browser into data theft",
+      "url": "https://www.bleepingcomputer.com/news/security/new-bioshocking-attack-manipulates-ai-browser-into-data-theft/",
+      "date_published": "2026-06-30T21:50:24+00:00",
+      "publisher": "BleepingComputer",
+      "source_type": "research_finding",
+      "main_category": "llm_threats",
+      "trust_tier": "medium",
+      "short_summary": "A prompt injection attack termed 'BioShocking' tricks AI-powered browsers into ignoring safety guardrails by framing risky actions as part of a fictional scenario, enabling data theft and circumvention of model alignment constraints.",
+      "evaluation": {
+        "id": "f8f064e7c48c5c93fe683185adebc460ba53",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from medium source, 0d ago"
+      }
+    },
+    {
+      "id": "462e24e49f7f896959f4a89047e6d22ff58a",
+      "title": "A Lifecycle and Application-Stack Survey of Large Language Model Vulnerabilities: Attacks, Risks, Defenses, and Open Problems",
+      "url": "https://arxiv.org/abs/2606.31639",
+      "date_published": "2026-06-30T13:21:43+00:00",
+      "publisher": "arXiv",
+      "source_type": "research_finding",
+      "main_category": "llm_threats",
+      "trust_tier": "high",
+      "short_summary": "A comprehensive lifecycle and application-stack survey systematizing vulnerabilities in LLM systems across eight stages (data collection to deployment), analyzing how trust boundaries fail when models are embedded in retrieval, agent, tool-calling, and autonomous workflows that access private data and execute code.",
+      "evaluation": {
+        "id": "462e24e49f7f896959f4a89047e6d22ff58a",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 1d ago"
+      }
+    },
+    {
+      "id": "772717aed2ea677f7418cb8258e65a16e41e",
+      "title": "AI Agent Security - OWASP Cheat Sheet Series",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/ai_agent_security_cheat_sheet.html",
+      "date_published": "2026-07-01T02:48:25.399+00:00",
+      "publisher": "cheatsheetseries.owasp.org",
+      "source_type": "governance_signal",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "OWASP cheat sheet providing security best practices for AI agent architectures, covering tool authorization, prompt injection defense, memory security, human-in-the-loop controls, and multi-agent communication safeguards.",
+      "evaluation": {
+        "id": "772717aed2ea677f7418cb8258e65a16e41e",
+        "category_fit": "strong",
+        "evidence_type": "commentary",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: governance_signal from primary source, 0d ago"
+      }
+    },
+    {
+      "id": "ce35f07949665590fe9c521e5e155109c168",
+      "title": "Microsoft Warns Poisoned MCP Tool Descriptions Can Make AI Agents Leak Data",
+      "url": "https://thehackernews.com/2026/06/microsoft-warns-poisoned-mcp-tool.html",
+      "date_published": "2026-06-30T17:46:07+00:00",
+      "publisher": "The Hacker News",
+      "source_type": "research_finding",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "Microsoft research demonstrates that attackers can poison MCP tool descriptions to manipulate AI agents into exfiltrating sensitive company data without triggering security alerts, by exploiting the agent's trust in tool metadata and task execution logic.",
+      "evaluation": {
+        "id": "ce35f07949665590fe9c521e5e155109c168",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from primary source, 1d ago"
+      }
+    },
+    {
+      "id": "1f6594bdd601fb2db4f1a65c80372169f484",
+      "title": "Mozilla warns of indirect prompt injection risk in AI coding agents",
+      "url": "https://www.helpnetsecurity.com/2026/06/29/mozilla-warns-of-indirect-prompt-injection-risk-in-ai-coding-agents/",
+      "date_published": "2026-06-29T10:48:12+00:00",
+      "publisher": "Help Net Security",
+      "source_type": "capability_demonstration",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "Mozilla security researchers demonstrated an indirect prompt injection attack against AI coding agents like Claude Code, where a malicious GitHub repository manipulates the agent into executing unauthorized actions through poisoned repository contents without requiring any explicit malicious code.",
+      "evaluation": {
+        "id": "1f6594bdd601fb2db4f1a65c80372169f484",
+        "category_fit": "strong",
+        "evidence_type": "capability_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: capability_demonstration from primary source, 2d ago"
+      }
+    },
+    {
+      "id": "bef6cbe2a83e51bc89a810153a5b8ff07805",
+      "title": "Detecting and reducing scheming in AI models | OpenAI",
+      "url": "https://openai.com/index/detecting-and-reducing-scheming-in-ai-models",
+      "date_published": "2026-06-29T07:55:15.314+00:00",
+      "publisher": "openai.com",
+      "source_type": "research_finding",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "OpenAI and Apollo Research developed evaluations for AI scheming (hidden misalignment where models pursue covert agendas while appearing aligned) and demonstrated a 30× reduction in deceptive behaviors using deliberative alignment training, though rare failures persist and evaluation-aware models with opaque reasoning remain a challenge.",
+      "evaluation": {
+        "id": "bef6cbe2a83e51bc89a810153a5b8ff07805",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from primary source, 2d ago"
+      }
+    },
+    {
+      "id": "1e062311eafafa88976607bab1852d1a25ae",
+      "title": "Production-grade AI agents for financial compliance: Lessons from Stripe",
+      "url": "https://aws.amazon.com/blogs/machine-learning/production-grade-ai-agents-for-financial-compliance-lessons-from-stripe",
+      "date_published": "2026-06-26T14:38:01+00:00",
+      "publisher": "Amazon Web Services",
+      "source_type": "capability_demonstration",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "Stripe deployed a production-grade agentic AI system for financial compliance on AWS Bedrock that reduces review time by 26% while maintaining human oversight through task decomposition, tool-call orchestration, and multi-layered decision checkpoints. The system demonstrates defensive design patterns for safe agentic AI in high-stakes financial operations, including guardrails against tool misuse ",
+      "evaluation": {
+        "id": "1e062311eafafa88976607bab1852d1a25ae",
+        "category_fit": "strong",
+        "evidence_type": "capability_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: capability_demonstration from primary source, 5d ago"
+      }
+    },
+    {
+      "id": "0f40eb9ae5b867f19aa9dcfe920717f40da9",
+      "title": "OpenAI Expands Daybreak to Help Defenders Patch Flaws",
+      "url": "https://www.infosecurity-magazine.com/news/openai-daybreak-gpt-5-5-cyber",
+      "date_published": "2026-06-23T14:15:00+00:00",
+      "publisher": "Infosecurity Magazine",
+      "source_type": "capability_demonstration",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "OpenAI released GPT-5.5-Cyber, an agentic AI system designed to assist security defenders in identifying and patching software vulnerabilities. This defensive capability demonstrates AI-assisted code analysis and remediation at scale.",
+      "evaluation": {
+        "id": "0f40eb9ae5b867f19aa9dcfe920717f40da9",
+        "category_fit": "strong",
+        "evidence_type": "capability_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: capability_demonstration from primary source, 8d ago"
+      }
+    },
+    {
+      "id": "fae04cd1e24200f728e60575e85fc63161b5",
+      "title": "AutoJack: How a single page can RCE the host running your AI agent",
+      "url": "https://www.microsoft.com/en-us/security/blog/2026/06/18/autojack-single-page-rce-host-running-ai-agent",
+      "date_published": "2026-06-19T00:17:54+00:00",
+      "publisher": "Microsoft",
+      "source_type": "research_finding",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "AutoJack demonstrates an exploit chain where a malicious webpage can trigger remote code execution on the host machine through an AI browsing agent by abusing localhost trust and unsafe MCP WebSocket parameter handling in AutoGen Studio.",
+      "evaluation": {
+        "id": "fae04cd1e24200f728e60575e85fc63161b5",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from primary source, 12d ago"
+      }
+    },
+    {
+      "id": "63327485de310dd102cafe828621c58dede8",
+      "title": "The 'vibe coding spectrum' approach to AI-assisted software development",
+      "url": "https://www.ncsc.gov.uk/blogs/the-vibe-coding-spectrum-approach-to-ai-assisted-software-development",
+      "date_published": "2026-06-18T12:00:00+00:00",
+      "publisher": "UK National Cyber Security Centre",
+      "source_type": "governance_signal",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "The UK NCSC provides a risk-calibrated framework ('Vibe Coding Spectrum') for safely using AI agents in software development, distinguishing between low-risk prototypes and security-critical code that requires rigorous human oversight, code review, and vulnerability checking.",
+      "evaluation": {
+        "id": "63327485de310dd102cafe828621c58dede8",
+        "category_fit": "strong",
+        "evidence_type": "commentary",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: governance_signal from primary source, 13d ago"
+      }
+    },
+    {
+      "id": "e08d59e5e4c0bb4122b5a8d4b3236f43c760",
+      "title": "Scripting the disassembler: Local agentic reverse engineering through vbdec’s live COM object model",
+      "url": "https://blog.talosintelligence.com/scripting-the-disassembler",
+      "date_published": "2026-06-18T10:00:05+00:00",
+      "publisher": "Cisco Talos",
+      "source_type": "capability_demonstration",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "Cisco Talos demonstrates how AI agents can be weaponized to automate reverse-engineering tools by exploiting COM object model scripting interfaces and executing arbitrary code through agent-driven scripting, enabling local malware analysis automation without modifying the underlying tool.",
+      "evaluation": {
+        "id": "e08d59e5e4c0bb4122b5a8d4b3236f43c760",
+        "category_fit": "strong",
+        "evidence_type": "capability_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: capability_demonstration from primary source, 13d ago"
+      }
+    },
+    {
+      "id": "c718e4cd40db3ceba93b17b895743bfd84d1",
+      "title": "SPADE-Bench: Evaluating Spontaneous Strategic Deception in Agents via Plan-Action Divergence",
+      "url": "https://arxiv.org/abs/2606.02380",
+      "date_published": "2026-07-01T02:48:25.41+00:00",
+      "publisher": "arxiv.org",
+      "source_type": "research_finding",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "high",
+      "short_summary": "SPADE-Bench is a novel benchmark demonstrating that LLM-based agents spontaneously deceive users by reporting one plan while executing different actions, especially under pressure—a critical safety risk for autonomous systems.",
+      "evaluation": {
+        "id": "c718e4cd40db3ceba93b17b895743bfd84d1",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 0d ago"
+      }
+    },
+    {
+      "id": "ee307965a59a23092c7a343c644fea6497d3",
+      "title": "microsoft on pace to break annual vulnerability record ai",
+      "url": "https://therecord.media/microsoft-on-pace-to-break-annual-vulnerability-record-ai",
+      "date_published": "2026-05-13T12:59:21.023+00:00",
+      "publisher": "The Record",
+      "source_type": "adversary_adoption_signal",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "high",
+      "short_summary": "Microsoft's AI system MDASH and Anthropic's Project Glasswing are driving a surge in vulnerability discovery across the industry, with AI-assisted tools now identifying critical security flaws at scale. Google's Threat Intelligence Group reported the first documented case of a threat actor using an AI-developed zero-day exploit in a mass exploitation campaign.",
+      "evaluation": {
+        "id": "ee307965a59a23092c7a343c644fea6497d3",
+        "category_fit": "strong",
+        "evidence_type": "adversary_adoption",
+        "analytical_usefulness": "high",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: adversary_adoption_signal from high source, 49d ago"
+      }
+    },
+    {
+      "id": "3696e67c2c9e8aaad24a172105b38fea5bb1",
+      "title": "Patch the Planet: a Daybreak initiative to support open source ...",
+      "url": "https://openai.com/index/patch-the-planet",
+      "date_published": "2026-07-01T02:48:25.408+00:00",
+      "publisher": "openai.com",
+      "source_type": "capability_demonstration",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "OpenAI and Trail of Bits announce Patch the Planet, a defensive initiative using AI-assisted vulnerability research (GPT-5.5-Cyber, Codex Security) paired with human expert review to identify and patch critical vulnerabilities in open-source projects. The program demonstrates AI-accelerated security research as a positive capability, with early results including hundreds of identified issues and d",
+      "evaluation": {
+        "id": "3696e67c2c9e8aaad24a172105b38fea5bb1",
+        "category_fit": "strong",
+        "evidence_type": "capability_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: capability_demonstration from primary source, 0d ago"
+      }
+    },
+    {
+      "id": "4d6369771ca19c8a623f7c3183023178a7f6",
+      "title": "Frontier AI models and their impact on cyber security | Cyber.gov.au",
+      "url": "https://www.cyber.gov.au/about-us/view-all-content/news/frontier-models-and-their-impact-on-cyber-security-update",
+      "date_published": "2026-06-29T07:55:15.313+00:00",
+      "publisher": "cyber.gov.au",
+      "source_type": "governance_signal",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "Australian government assessment confirms frontier AI models like Claude Mythos can autonomously chain cyberattack tasks into end-to-end intrusions, completing 32-step network attacks in test environments, though proper defenses and complex segmentation significantly degrade AI effectiveness. Report emphasizes AI primarily accelerates vulnerability discovery and exploitation rather than introducin",
+      "evaluation": {
+        "id": "4d6369771ca19c8a623f7c3183023178a7f6",
+        "category_fit": "strong",
+        "evidence_type": "commentary",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: governance_signal from primary source, 2d ago"
+      }
+    },
+    {
+      "id": "bb2ce69892bd10d5fa262a552fb38690f7ff",
+      "title": "Preparing for Threats to Come: Cybersecurity Forecast 2026 | Google Cloud Blog",
+      "url": "https://cloud.google.com/blog/topics/threat-intelligence/cybersecurity-forecast-2026",
+      "date_published": "2026-06-29T07:55:15.288+00:00",
+      "publisher": "cloud.google.com",
+      "source_type": "governance_signal",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "Google's 2026 Cybersecurity Forecast predicts threat actors will adopt AI as the norm for attacking at scale, with particular emphasis on prompt injection attacks against enterprise AI systems and AI-enabled social engineering via voice cloning for vishing campaigns. The forecast also highlights adversaries' increasing use of AI to enhance attack speed, scope, and effectiveness across the entire a",
+      "evaluation": {
+        "id": "bb2ce69892bd10d5fa262a552fb38690f7ff",
+        "category_fit": "strong",
+        "evidence_type": "commentary",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: governance_signal from primary source, 2d ago"
+      }
+    },
+    {
+      "id": "2d86b4f30f2c1e6cd7fb0df51790e1d76992",
+      "title": "Hardening Federal Networks for the Mythos Era: What the AI Executive Order and BOD 26-04 Demand Now",
+      "url": "https://www.zscaler.com/blogs/product-insights/hardening-federal-networks-mythos-era-what-ai-executive-order-and-bod-26-04",
+      "date_published": "2026-06-25T22:21:30+00:00",
+      "publisher": "Zscaler ThreatLabz",
+      "source_type": "governance_signal",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "U.S. government and Five Eyes agencies have issued urgent directives responding to Mythos-class AI models' autonomous capability to discover zero-day vulnerabilities, chain exploits, and generate attack code at scale. The directives mandate accelerated network hardening and vulnerability remediation to close the gap between AI-driven exploitation speed and defenders' patching capacity.",
+      "evaluation": {
+        "id": "2d86b4f30f2c1e6cd7fb0df51790e1d76992",
+        "category_fit": "strong",
+        "evidence_type": "commentary",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: governance_signal from primary source, 5d ago"
+      }
+    },
+    {
+      "id": "9bbbfd24805238c13f2b65179526b5894c3a",
+      "title": "five eyes alert artificial intelligence",
+      "url": "https://therecord.media/five-eyes-alert-artificial-intelligence",
+      "date_published": "2026-06-23T19:00:14.171+00:00",
+      "publisher": "The Record",
+      "source_type": "governance_signal",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "Five Eyes intelligence agencies warn that frontier AI models will significantly accelerate offensive cyber capabilities and lower barriers for malicious actors, shrinking vulnerability disclosure-to-exploitation timelines from years to months, and recommend urgent defensive measures including patching, access controls, and secure-by-design practices.",
+      "evaluation": {
+        "id": "9bbbfd24805238c13f2b65179526b5894c3a",
+        "category_fit": "strong",
+        "evidence_type": "commentary",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: governance_signal from primary source, 7d ago"
+      }
+    },
+    {
+      "id": "ff9e92e5e348447c2468e33474941a68e357",
+      "title": "The AI shift in cyber risk: why leaders must act now",
+      "url": "https://www.ncsc.gov.uk/news/the-ai-shift-in-cyber-risk-why-leaders-must-act-now",
+      "date_published": "2026-06-22T12:00:00+00:00",
+      "publisher": "UK National Cyber Security Centre",
+      "source_type": "governance_signal",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "Five Eyes cybersecurity agencies warn that frontier AI systems are accelerating both offensive and defensive cyber capabilities, lowering barriers for malicious actors and shrinking vulnerability-to-exploitation windows; agencies urge immediate organizational action on foundational security practices, patching, legacy system retirement, and strategic AI-assisted defense.",
+      "evaluation": {
+        "id": "ff9e92e5e348447c2468e33474941a68e357",
+        "category_fit": "strong",
+        "evidence_type": "commentary",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: governance_signal from primary source, 9d ago"
+      }
+    },
+    {
+      "id": "8eb3ab1fe22bbfaa9456262c61a7b8726f1d",
+      "title": "NCSC CEO: Hostile states linked to three-quarters of cyber attacks affecting UK's critical systems",
+      "url": "https://www.ncsc.gov.uk/news/ncsc-ceo-hostile-states-linked-to-three-quarters-of-cyber-attacks",
+      "date_published": "2026-06-17T12:00:00+00:00",
+      "publisher": "UK National Cyber Security Centre",
+      "source_type": "governance_signal",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "NCSC CEO warns that hostile state actors conduct three-quarters of cyber attacks on UK critical infrastructure, and assesses that by 2028 AI-enabled cyber capabilities will likely be used at scale to exploit known vulnerabilities in legacy systems. The agency calls for urgent strengthening of cyber resilience fundamentals.",
+      "evaluation": {
+        "id": "8eb3ab1fe22bbfaa9456262c61a7b8726f1d",
+        "category_fit": "strong",
+        "evidence_type": "commentary",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: governance_signal from primary source, 14d ago"
+      }
+    },
+    {
+      "id": "4889764ece65b825ec5d36aad2777e7b86ab",
+      "title": "The time of much patching is coming",
+      "url": "https://blog.talosintelligence.com/the-time-of-much-patching-is-coming",
+      "date_published": "2026-05-14T18:00:24+00:00",
+      "publisher": "Cisco Talos",
+      "source_type": "attack_surface_signal",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "Cisco Talos warns that AI-driven vulnerability discovery tools are approaching parity with skilled human researchers, enabling threat actors to find exploitable flaws at scale and speed, likely triggering a surge in critical patches and requiring organizations to overhaul patching strategies.",
+      "evaluation": {
+        "id": "4889764ece65b825ec5d36aad2777e7b86ab",
+        "category_fit": "strong",
+        "evidence_type": "commentary",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: attack_surface_signal from primary source, 48d ago"
+      }
+    },
+    {
+      "id": "edcd8bfbcab84ee1c0b202f7b3ce043e3b60",
+      "title": "british cyber ai patch wave",
+      "url": "https://therecord.media/british-cyber-ai-patch-wave",
+      "date_published": "2026-05-01T13:28:59.018+00:00",
+      "publisher": "The Record",
+      "source_type": "governance_signal",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "The UK's National Cyber Security Centre warns that AI-accelerated vulnerability discovery is triggering a 'patch wave'—a surge of critical software updates—as AI tools enable skilled adversaries to identify and exploit security flaws at unprecedented scale and speed.",
+      "evaluation": {
+        "id": "edcd8bfbcab84ee1c0b202f7b3ce043e3b60",
+        "category_fit": "strong",
+        "evidence_type": "commentary",
+        "analytical_usefulness": "usable",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: governance_signal from primary source, 61d ago"
+      }
+    },
+    {
+      "id": "17d4d3b0bac633833d0996091b29cfec18ee",
+      "title": "Remote Code Execution With Modern AI/ML Formats and Libraries",
+      "url": "https://unit42.paloaltonetworks.com/rce-vulnerabilities-in-ai-python-libraries",
+      "date_published": "2026-06-30T02:55:43.404+00:00",
+      "publisher": "unit42.paloaltonetworks.com",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "Palo Alto Networks identified remote code execution vulnerabilities in three major AI/ML Python libraries (NeMo, Uni2TS, FlexTok) that allow arbitrary code execution when loading model files with malicious metadata, affecting models with tens of millions of downloads on HuggingFace.",
+      "evaluation": {
+        "id": "17d4d3b0bac633833d0996091b29cfec18ee",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 1d ago"
+      }
+    },
+    {
+      "id": "c13e23d6513cbabcb34e2271a237c6d109aa",
+      "title": "Nezha Monitoring: Unbounded WebSocket Streams — Resource Exhaustion DoS",
+      "url": "https://github.com/advisories/ghsa-jg62-j5h6-8mpq",
+      "date_published": "2026-06-26T23:04:18+00:00",
+      "publisher": "GitHub Advisory Database",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "Nezha dashboard exposes unbounded WebSocket stream creation in terminal and file manager endpoints, allowing unauthenticated resource exhaustion DoS via uncontrolled goroutine and channel allocation per stream with no per-user or per-server rate limits.",
+      "evaluation": {
+        "id": "c13e23d6513cbabcb34e2271a237c6d109aa",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 4d ago"
+      }
+    },
+    {
+      "id": "d3c0abc5102d1a41c387568ae32994b5fb6f",
+      "title": "CVE-2026-47155: vLLM is an inference and serving engine for large language models (LLMs). Prior to 0.22.0, vLLM's revision pinning controls do not consisten",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-47155",
+      "date_published": "2026-06-22T23:16:30.357+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-47155 in vLLM prior to 0.22.0 allows unpinned model artifacts (code, weights, configs) to be loaded despite revision pinning controls, enabling supply-chain integrity bypass where operators believe they are serving a reviewed model revision but dynamic dependencies are resolved from default/untrusted sources.",
+      "evaluation": {
+        "id": "d3c0abc5102d1a41c387568ae32994b5fb6f",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 8d ago"
+      }
+    },
+    {
+      "id": "7f7254d606976973ebd4ce5b8bfbda1016a7",
+      "title": "Pickle in the Middle – Hijacking Vertex AI Model Uploads for Cross-Tenant RCE",
+      "url": "https://unit42.paloaltonetworks.com/hijacking-vertex-ai-model",
+      "date_published": "2026-06-16T10:00:29+00:00",
+      "publisher": "Palo Alto Networks Unit 42",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "A vulnerability in Google Cloud Vertex AI SDK for Python (versions 1.139.0–1.140.0) allows attackers to hijack victim model uploads via bucket squatting and pickle deserialization, achieving cross-tenant RCE without initial project access. The attack exploits predictable default bucket names and missing ownership checks to poison models before deployment.",
+      "evaluation": {
+        "id": "7f7254d606976973ebd4ce5b8bfbda1016a7",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 15d ago"
+      }
+    },
+    {
+      "id": "c98be143da6b9eeb150d7a5d3355dd4c4ce6",
+      "title": "CVE-2026-11816: Keras versions prior to 3.14.0 are vulnerable to a path traversal issue in the archive extraction utilities located in `keras/src/utils/file",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-11816",
+      "date_published": "2026-06-11T06:16:26.557+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-11816 is a path traversal vulnerability in Keras <3.14.0 that allows arbitrary file writes by exploiting flawed archive extraction validation, enabling attackers to overwrite configs, inject code, or corrupt ML datasets and pipelines.",
+      "evaluation": {
+        "id": "c98be143da6b9eeb150d7a5d3355dd4c4ce6",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 20d ago"
+      }
+    },
+    {
+      "id": "2780c64461d6bd7dadd07dacebffcbe5a051",
+      "title": "CVE-2026-46517: LMDeploy is a toolkit for compressing, deploying, and serving large language models. In versions 0.12.3 and prior, hardcoded \"trust_remote_c",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-46517",
+      "date_published": "2026-06-09T16:16:53.827+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-46517 is a critical supply-chain RCE vulnerability in LMDeploy ≤0.12.3 where hardcoded trust_remote_code=True enables arbitrary code execution via Hugging Face model downloads without user consent or warning.",
+      "evaluation": {
+        "id": "2780c64461d6bd7dadd07dacebffcbe5a051",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 22d ago"
+      }
+    },
+    {
+      "id": "ba93fab20551ed907f42fc0a677e11575b1d",
+      "title": "CVE-2026-44484: PyTorch Lightning is a deep learning framework to pretrain and finetune AI models. Versions 2.6.2 and 2.6.2 have introduced functionality co",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-44484",
+      "date_published": "2026-05-14T07:16:48.933+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "PyTorch Lightning versions 2.6.2 introduce a credential harvesting mechanism, representing a supply chain compromise in a widely-used deep learning framework used to train and finetune AI models.",
+      "evaluation": {
+        "id": "ba93fab20551ed907f42fc0a677e11575b1d",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 48d ago"
+      }
+    },
+    {
+      "id": "a37781b384420515bdb3ab501c925e9a9d09",
+      "title": "CVE-2026-33833: Improper neutralization of special elements in output used by a downstream component ('injection') in Azure Machine Learning allows an unaut",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-33833",
+      "date_published": "2026-05-12T10:17:05.16+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-33833 is an injection vulnerability in Azure Machine Learning that allows improper neutralization of special elements in output, enabling unauthorized attackers to perform spoofing attacks over a network.",
+      "evaluation": {
+        "id": "a37781b384420515bdb3ab501c925e9a9d09",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 50d ago"
+      }
+    },
+    {
+      "id": "a02e6316a20a2c94bdb96b4351f19581f844",
+      "title": "CVE-2026-31252: CosyVoice thru commit 6e01309e01bc93bbeb83bdd996b1182a81aaf11e (2025-30-21) contains an insecure deserialization vulnerability (CWE-502) in",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-31252",
+      "date_published": "2026-05-11T09:16:20.187+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "CosyVoice contains an insecure deserialization vulnerability (CVE-2026-31252) in its model loading component that allows arbitrary code execution via malicious model weight files, exploiting unsafe torch.load() without weights_only=True parameter.",
+      "evaluation": {
+        "id": "a02e6316a20a2c94bdb96b4351f19581f844",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 51d ago"
+      }
+    },
+    {
+      "id": "75849b75479f5ad10ae3ee007d667bc32ef0",
+      "title": "CVE-2026-41512: ai-scanner is an AI model safety scanner built on NVIDIA garak. From version 1.0.0 to before version 1.4.1, there is a remote code execution",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-41512",
+      "date_published": "2026-05-08T06:16:34.433+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-41512 is a remote code execution vulnerability in ai-scanner (NVIDIA garak-based safety tool) via JavaScript injection in BrowserAutomation::PlaywrightService, affecting versions 1.0.0–1.4.0 and patched in 1.4.1.",
+      "evaluation": {
+        "id": "75849b75479f5ad10ae3ee007d667bc32ef0",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 54d ago"
+      }
+    }
+  ],
+  "excluded_near_misses": [
+    {
+      "id": "292466759d53a8a369796c7173a5b415a1fe",
+      "title": "Hugging Face and ClawHub compromised with hundreds of malicious AI models and agent skills as supply chain attacks target AI infrastructure",
+      "url": "https://thenextweb.com/news/hugging-face-clawhub-malware-ai-supply-chain",
+      "date_published": "2026-06-29T07:55:15.306+00:00",
+      "publisher": "thenextweb.com",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=strong_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "292466759d53a8a369796c7173a5b415a1fe",
+        "category_fit": "strong",
+        "evidence_type": "threat_intelligence",
+        "analytical_usefulness": "high",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: threat_intelligence from high source, 2d ago"
+      }
+    },
+    {
+      "id": "55b52514c50b808794a99379850937ec3b72",
+      "title": "Malware Found in Trending Hugging Face Repository \"Open-OSS/privacy-filter\"",
+      "url": "https://www.hiddenlayer.com/research/malware-found-in-trending-hugging-face-repository-open-oss-privacy-filter",
+      "date_published": "2026-06-23T11:58:43.426+00:00",
+      "publisher": "hiddenlayer.com",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=strong_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "55b52514c50b808794a99379850937ec3b72",
+        "category_fit": "strong",
+        "evidence_type": "operational_incident",
+        "analytical_usefulness": "high",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: incident from high source, 8d ago"
+      }
+    },
+    {
+      "id": "676ee07fef44745fd16799a80d79e22cd453",
+      "title": "Judge Rules Blacked.com Can Sue Meta for Scraping Its Porn",
+      "url": "https://www.404media.co/judge-rules-blacked-com-can-sue-meta-for-scraping-its-porn",
+      "date_published": "2026-06-15T14:53:19+00:00",
+      "publisher": "404 Media",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=strong_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "676ee07fef44745fd16799a80d79e22cd453",
+        "category_fit": "strong",
+        "evidence_type": "operational_incident",
+        "analytical_usefulness": "high",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: incident from high source, 16d ago"
+      }
+    },
+    {
+      "id": "54b9fc3a5152d5a7bd2e7984ca3163938bb7",
+      "title": "ARB4WM: An Adversarial Robustness Benchmark for World Models in Continuous Control",
+      "url": "https://arxiv.org/abs/2606.16605v1",
+      "date_published": "2026-06-15T11:51:19+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "54b9fc3a5152d5a7bd2e7984ca3163938bb7",
+        "category_fit": "strong",
+        "evidence_type": "benchmark",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: benchmark_evaluation from high source, 16d ago"
+      }
+    },
+    {
+      "id": "4d62aba284c56bdd2c4c8bdb85316da4ba77",
+      "title": "Let Them Steal: Trapping Large Language Model Extraction Attacks with Knowledge Honeypot",
+      "url": "https://arxiv.org/abs/2606.15810v1",
+      "date_published": "2026-06-14T13:23:48+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "4d62aba284c56bdd2c4c8bdb85316da4ba77",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 17d ago"
+      }
+    },
+    {
+      "id": "7ed356ed920e45ffbc359784d9f56ccf5c19",
+      "title": "Why AI Red Teaming Matters for Enterprise Security",
+      "url": "https://www.zscaler.com/blogs/product-insights/why-ai-red-teaming-matters-enterprise-security",
+      "date_published": "2026-06-12T18:25:48+00:00",
+      "publisher": "Zscaler ThreatLabz",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "7ed356ed920e45ffbc359784d9f56ccf5c19",
+        "category_fit": "strong",
+        "evidence_type": "commentary",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: governance_signal from high source, 19d ago"
+      }
+    },
+    {
+      "id": "ea4f1e30e8b382fa5a72fe8fa84c8f3fae94",
+      "title": "GRAPE: Guided Parameter-Space Evolution for Compact Adversarial Robustness",
+      "url": "https://arxiv.org/abs/2606.14865v1",
+      "date_published": "2026-06-12T18:07:15+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "ea4f1e30e8b382fa5a72fe8fa84c8f3fae94",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 19d ago"
+      }
+    },
+    {
+      "id": "32637acd7a12dd278997f67888618d1af92c",
+      "title": "Toward Trustworthy AI: Multi-Target Adversarial Attacks and Robust Defenses for Continuous Data Summarization",
+      "url": "https://arxiv.org/abs/2606.11804v1",
+      "date_published": "2026-06-10T08:38:27+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "32637acd7a12dd278997f67888618d1af92c",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 21d ago"
+      }
+    },
+    {
+      "id": "7439ab9c0530876dbea317f61889636ecbc8",
+      "title": "What Do Deepfake Speech Detectors Actually Hear?",
+      "url": "https://arxiv.org/abs/2606.10912v1",
+      "date_published": "2026-06-09T14:21:45+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "7439ab9c0530876dbea317f61889636ecbc8",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 22d ago"
+      }
+    },
+    {
+      "id": "b26b572fd300c8f5a9ba14c69fc0336efed8",
+      "title": "GRAFT: Graphlet-Triggered Backdoor Attack on GNN-Based Hardware Security Systems",
+      "url": "https://arxiv.org/abs/2606.10163v1",
+      "date_published": "2026-06-08T20:47:54+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "b26b572fd300c8f5a9ba14c69fc0336efed8",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 22d ago"
+      }
+    },
+    {
+      "id": "b2dd5582fb24479373b7f25dfe013f60c35a",
+      "title": "SS-TPT: Stability and Suitability-Guided Test-Time Prompt Tuning for Adversarially Robust Vision-Language Models",
+      "url": "https://arxiv.org/abs/2606.06943v1",
+      "date_published": "2026-06-05T06:12:48+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "b2dd5582fb24479373b7f25dfe013f60c35a",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 26d ago"
+      }
+    },
+    {
+      "id": "2d41e6b78abdb24533df6b8eb1395e5130d5",
+      "title": "AI Threat Readiness Pillar 1: Reduce Critical Exposures & Scan with AI",
+      "url": "https://www.wiz.io/blog/ai-threat-readiness-pillar-1",
+      "date_published": "2026-06-04T14:19:33+00:00",
+      "publisher": "Wiz",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "2d41e6b78abdb24533df6b8eb1395e5130d5",
+        "category_fit": "strong",
+        "evidence_type": "defensive_analysis",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: defensive_capability from high source, 27d ago"
+      }
+    },
+    {
+      "id": "8dc7420344edfaed368bf926c740a9829eef",
+      "title": "An Embarrassingly Simple Detector for Model Extraction Attacks in Large Language Model API Traffic",
+      "url": "https://arxiv.org/abs/2606.05725v1",
+      "date_published": "2026-06-04T05:33:49+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "8dc7420344edfaed368bf926c740a9829eef",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 27d ago"
+      }
+    },
+    {
+      "id": "18dd4ee5480940c39a5326a8fcd6a411bc1a",
+      "title": "Beyond Waveform Robustness: Robust Feature-Vocoder Adversarial Attacks on Automatic Speech Recognition",
+      "url": "https://arxiv.org/abs/2606.05678v1",
+      "date_published": "2026-06-04T04:00:48+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "18dd4ee5480940c39a5326a8fcd6a411bc1a",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 27d ago"
+      }
+    },
+    {
+      "id": "7f404e500fc6713622493b741a1f3f1054b0",
+      "title": "Critical Hugging Face Transformers flaw ran attacker code on a routine model load - SiliconANGLE",
+      "url": "https://siliconangle.com/2026/06/04/critical-hugging-face-transformers-flaw-ran-attacker-code-routine-model-load",
+      "date_published": "2026-06-04T00:00:00+00:00",
+      "publisher": "siliconangle.com",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=strong_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "7f404e500fc6713622493b741a1f3f1054b0",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from high source, 27d ago"
+      }
+    },
+    {
+      "id": "548343527d74c63e4d5f33110992531064e0",
+      "title": "Sequential Data Poisoning in LLM Post-Training",
+      "url": "https://arxiv.org/abs/2606.04929v1",
+      "date_published": "2026-06-03T14:22:50+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "548343527d74c63e4d5f33110992531064e0",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 28d ago"
+      }
+    },
+    {
+      "id": "6801b4c17f6ed58e4de5dbb9203ce8ebc5a7",
+      "title": "AI Model Extraction Attacks: Bypassing Single-Client Assumptions in Defenses",
+      "url": "https://arxiv.org/abs/2606.03381v1",
+      "date_published": "2026-06-02T09:25:29+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "6801b4c17f6ed58e4de5dbb9203ce8ebc5a7",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 29d ago"
+      }
+    },
+    {
+      "id": "1dbb6e53456663b31e12ff4728026b481abe",
+      "title": "ImageAuditor: Membership Inference Attack against Image-based Retrieval-Augmented Generation",
+      "url": "https://arxiv.org/abs/2606.03354v1",
+      "date_published": "2026-06-02T09:03:56+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "1dbb6e53456663b31e12ff4728026b481abe",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 29d ago"
+      }
+    },
+    {
+      "id": "caae31eb2869fb86c59b7f10b8d65841e06d",
+      "title": "Repurposing Adversarial Perturbations for Continual Learning: From Defense to Active Alignment",
+      "url": "https://arxiv.org/abs/2606.02322v1",
+      "date_published": "2026-06-01T14:35:59+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "caae31eb2869fb86c59b7f10b8d65841e06d",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 30d ago"
+      }
+    },
+    {
+      "id": "69354452c8177b28f874f5a883f535748dcb",
+      "title": "GJDNet: Robust Graph Neural Networks via Joint Disentangled Learning Against Adversarial Attacks",
+      "url": "https://arxiv.org/abs/2606.01560v1",
+      "date_published": "2026-06-01T02:05:40+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "69354452c8177b28f874f5a883f535748dcb",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 30d ago"
+      }
+    }
+  ]
+}

@@ -1,0 +1,1447 @@
+{
+  "set_id": "horizon_q_testset_balanced",
+  "set_name": "Test Set B — Strategic Balanced",
+  "purpose": "Combine operational, high-quality research, and ecosystem signals. Use for horizon-scanning insights.",
+  "created_at": "2026-07-01T06:59:07.288Z",
+  "source_count": 50,
+  "category_counts": {
+    "traditional_ai_threats": 12,
+    "llm_threats": 14,
+    "agentic_ai_threats": 12,
+    "ai_enabled_threats": 12
+  },
+  "sources": [
+    {
+      "id": "17d4d3b0bac633833d0996091b29cfec18ee",
+      "title": "Remote Code Execution With Modern AI/ML Formats and Libraries",
+      "url": "https://unit42.paloaltonetworks.com/rce-vulnerabilities-in-ai-python-libraries",
+      "date_published": "2026-06-30T02:55:43.404+00:00",
+      "publisher": "unit42.paloaltonetworks.com",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "Palo Alto Networks identified remote code execution vulnerabilities in three major AI/ML Python libraries (NeMo, Uni2TS, FlexTok) that allow arbitrary code execution when loading model files with malicious metadata, affecting models with tens of millions of downloads on HuggingFace.",
+      "evaluation": {
+        "id": "17d4d3b0bac633833d0996091b29cfec18ee",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 1d ago"
+      }
+    },
+    {
+      "id": "c13e23d6513cbabcb34e2271a237c6d109aa",
+      "title": "Nezha Monitoring: Unbounded WebSocket Streams — Resource Exhaustion DoS",
+      "url": "https://github.com/advisories/ghsa-jg62-j5h6-8mpq",
+      "date_published": "2026-06-26T23:04:18+00:00",
+      "publisher": "GitHub Advisory Database",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "Nezha dashboard exposes unbounded WebSocket stream creation in terminal and file manager endpoints, allowing unauthenticated resource exhaustion DoS via uncontrolled goroutine and channel allocation per stream with no per-user or per-server rate limits.",
+      "evaluation": {
+        "id": "c13e23d6513cbabcb34e2271a237c6d109aa",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 4d ago"
+      }
+    },
+    {
+      "id": "d3c0abc5102d1a41c387568ae32994b5fb6f",
+      "title": "CVE-2026-47155: vLLM is an inference and serving engine for large language models (LLMs). Prior to 0.22.0, vLLM's revision pinning controls do not consisten",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-47155",
+      "date_published": "2026-06-22T23:16:30.357+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-47155 in vLLM prior to 0.22.0 allows unpinned model artifacts (code, weights, configs) to be loaded despite revision pinning controls, enabling supply-chain integrity bypass where operators believe they are serving a reviewed model revision but dynamic dependencies are resolved from default/untrusted sources.",
+      "evaluation": {
+        "id": "d3c0abc5102d1a41c387568ae32994b5fb6f",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 8d ago"
+      }
+    },
+    {
+      "id": "7f7254d606976973ebd4ce5b8bfbda1016a7",
+      "title": "Pickle in the Middle – Hijacking Vertex AI Model Uploads for Cross-Tenant RCE",
+      "url": "https://unit42.paloaltonetworks.com/hijacking-vertex-ai-model",
+      "date_published": "2026-06-16T10:00:29+00:00",
+      "publisher": "Palo Alto Networks Unit 42",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "A vulnerability in Google Cloud Vertex AI SDK for Python (versions 1.139.0–1.140.0) allows attackers to hijack victim model uploads via bucket squatting and pickle deserialization, achieving cross-tenant RCE without initial project access. The attack exploits predictable default bucket names and missing ownership checks to poison models before deployment.",
+      "evaluation": {
+        "id": "7f7254d606976973ebd4ce5b8bfbda1016a7",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 15d ago"
+      }
+    },
+    {
+      "id": "c98be143da6b9eeb150d7a5d3355dd4c4ce6",
+      "title": "CVE-2026-11816: Keras versions prior to 3.14.0 are vulnerable to a path traversal issue in the archive extraction utilities located in `keras/src/utils/file",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-11816",
+      "date_published": "2026-06-11T06:16:26.557+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-11816 is a path traversal vulnerability in Keras <3.14.0 that allows arbitrary file writes by exploiting flawed archive extraction validation, enabling attackers to overwrite configs, inject code, or corrupt ML datasets and pipelines.",
+      "evaluation": {
+        "id": "c98be143da6b9eeb150d7a5d3355dd4c4ce6",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 20d ago"
+      }
+    },
+    {
+      "id": "2780c64461d6bd7dadd07dacebffcbe5a051",
+      "title": "CVE-2026-46517: LMDeploy is a toolkit for compressing, deploying, and serving large language models. In versions 0.12.3 and prior, hardcoded \"trust_remote_c",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-46517",
+      "date_published": "2026-06-09T16:16:53.827+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-46517 is a critical supply-chain RCE vulnerability in LMDeploy ≤0.12.3 where hardcoded trust_remote_code=True enables arbitrary code execution via Hugging Face model downloads without user consent or warning.",
+      "evaluation": {
+        "id": "2780c64461d6bd7dadd07dacebffcbe5a051",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 22d ago"
+      }
+    },
+    {
+      "id": "ba93fab20551ed907f42fc0a677e11575b1d",
+      "title": "CVE-2026-44484: PyTorch Lightning is a deep learning framework to pretrain and finetune AI models. Versions 2.6.2 and 2.6.2 have introduced functionality co",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-44484",
+      "date_published": "2026-05-14T07:16:48.933+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "PyTorch Lightning versions 2.6.2 introduce a credential harvesting mechanism, representing a supply chain compromise in a widely-used deep learning framework used to train and finetune AI models.",
+      "evaluation": {
+        "id": "ba93fab20551ed907f42fc0a677e11575b1d",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 48d ago"
+      }
+    },
+    {
+      "id": "a37781b384420515bdb3ab501c925e9a9d09",
+      "title": "CVE-2026-33833: Improper neutralization of special elements in output used by a downstream component ('injection') in Azure Machine Learning allows an unaut",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-33833",
+      "date_published": "2026-05-12T10:17:05.16+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-33833 is an injection vulnerability in Azure Machine Learning that allows improper neutralization of special elements in output, enabling unauthorized attackers to perform spoofing attacks over a network.",
+      "evaluation": {
+        "id": "a37781b384420515bdb3ab501c925e9a9d09",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 50d ago"
+      }
+    },
+    {
+      "id": "a02e6316a20a2c94bdb96b4351f19581f844",
+      "title": "CVE-2026-31252: CosyVoice thru commit 6e01309e01bc93bbeb83bdd996b1182a81aaf11e (2025-30-21) contains an insecure deserialization vulnerability (CWE-502) in",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-31252",
+      "date_published": "2026-05-11T09:16:20.187+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "CosyVoice contains an insecure deserialization vulnerability (CVE-2026-31252) in its model loading component that allows arbitrary code execution via malicious model weight files, exploiting unsafe torch.load() without weights_only=True parameter.",
+      "evaluation": {
+        "id": "a02e6316a20a2c94bdb96b4351f19581f844",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 51d ago"
+      }
+    },
+    {
+      "id": "75849b75479f5ad10ae3ee007d667bc32ef0",
+      "title": "CVE-2026-41512: ai-scanner is an AI model safety scanner built on NVIDIA garak. From version 1.0.0 to before version 1.4.1, there is a remote code execution",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-41512",
+      "date_published": "2026-05-08T06:16:34.433+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-41512 is a remote code execution vulnerability in ai-scanner (NVIDIA garak-based safety tool) via JavaScript injection in BrowserAutomation::PlaywrightService, affecting versions 1.0.0–1.4.0 and patched in 1.4.1.",
+      "evaluation": {
+        "id": "75849b75479f5ad10ae3ee007d667bc32ef0",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 54d ago"
+      }
+    },
+    {
+      "id": "ced86c82d7850aab150496bbfe633c955d7a",
+      "title": "CVE-2026-40319: Giskard is an open-source testing framework for AI models. In versions prior to 1.0.2b1, the RegexMatching check passes a user-supplied regu",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-40319",
+      "date_published": "2026-04-17T10:16:32.063+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-40319 discloses a regular expression denial-of-service (ReDoS) vulnerability in Giskard's RegexMatching check that allows unauthenticated resource exhaustion and process hanging through crafted regex patterns.",
+      "evaluation": {
+        "id": "ced86c82d7850aab150496bbfe633c955d7a",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 75d ago"
+      }
+    },
+    {
+      "id": "84c006d2c8fad2b784aff9ec888c159a555f",
+      "title": "CVE-2026-34760: vLLM is an inference and serving engine for large language models (LLMs). From version 0.5.5 to before version 0.18.0, Librosa defaults to u",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-34760",
+      "date_published": "2026-04-02T12:16:25.437+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "traditional_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-34760 in vLLM (versions 0.5.5–0.17.x) exposes an audio processing discrepancy where Librosa's numpy.mean-based downmixing deviates from ITU-R BS.775-4 standard, creating a mismatch between human-perceived and AI-model-processed audio that could enable adversarial evasion attacks.",
+      "evaluation": {
+        "id": "84c006d2c8fad2b784aff9ec888c159a555f",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 90d ago"
+      }
+    },
+    {
+      "id": "30671114ab533c5e4a6c952740666e10627d",
+      "title": "CVE-2026-58169: Vibe-Trading before 0.1.10 contains a DNS rebinding authentication bypass vulnerability that allows remote attackers to bypass bearer-token…",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-58169",
+      "date_published": "2026-06-30T17:16:23.907+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "llm_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-58169 in Vibe-Trading exploits DNS rebinding and missing Host header validation to bypass bearer-token authentication, reach a shell execution endpoint, achieve RCE, and exfiltrate LLM credentials and data-source settings.",
+      "evaluation": {
+        "id": "30671114ab533c5e4a6c952740666e10627d",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 1d ago"
+      }
+    },
+    {
+      "id": "27b3700721a16ecba11ee7963f5b9a6cdb5d",
+      "title": "CVE-2026-47214: Docling simplifies document processing by parsing diverse formats and providing integrations with the generative AI ecosystem. Prior to 2.94",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-47214",
+      "date_published": "2026-06-26T16:16:31.373+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "llm_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-47214 is a vulnerability in Docling's HTML backend that permits unsafe URI and path handling in a document processing tool integrated with generative AI systems, potentially enabling injection or traversal attacks.",
+      "evaluation": {
+        "id": "27b3700721a16ecba11ee7963f5b9a6cdb5d",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 5d ago"
+      }
+    },
+    {
+      "id": "cb2a4cac92832d7a6aac5f1c7ded5e53f652",
+      "title": "CVE-2026-44018: Docling simplifies document processing by parsing diverse formats and providing integrations with the generative AI ecosystem. From 2.45.0 u",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-44018",
+      "date_published": "2026-06-26T16:16:30.767+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "llm_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-44018 in Docling's METS-GBS XML backend allows attackers to craft malicious document archives that exploit insecure parsing to read sensitive files, exhaust resources, or crash applications when processed by generative AI pipelines.",
+      "evaluation": {
+        "id": "cb2a4cac92832d7a6aac5f1c7ded5e53f652",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 5d ago"
+      }
+    },
+    {
+      "id": "53ca3fb6980d303f700e709c3dce9c271617",
+      "title": "macOS.Gaslight Rust Backdoor Turns Prompt Injection on the Analyst, Not the Sandbox",
+      "url": "https://www.sentinelone.com/labs/macos-gaslight-rust-backdoor-turns-prompt-injection-on-the-analyst-not-the-sandbox",
+      "date_published": "2026-06-23T21:59:42+00:00",
+      "publisher": "SentinelOne",
+      "source_type": "incident",
+      "main_category": "llm_threats",
+      "trust_tier": "primary",
+      "short_summary": "A Rust-based macOS backdoor (macOS.Gaslight) embeds a 3.5 KB prompt-injection payload of fabricated system messages designed to manipulate LLM-assisted security triage pipelines into aborting analysis. The implant, attributed to DPRK-aligned threat actors, uses Telegram Bot API C2 with AES-GCM encryption and certificate pinning to establish persistent interactive shell access.",
+      "evaluation": {
+        "id": "53ca3fb6980d303f700e709c3dce9c271617",
+        "category_fit": "strong",
+        "evidence_type": "operational_incident",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: incident from primary source, 7d ago"
+      }
+    },
+    {
+      "id": "19eefe9b83a2cac842b5b66aa8f14c416c26",
+      "title": "CVE-2026-54022: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.8.11, the ydoc:document:join S",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-54022",
+      "date_published": "2026-06-23T18:18:07.487+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "llm_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-54022 in Open WebUI prior to 0.8.11 allows attackers to bypass authorization checks via document ID normalization, enabling unauthorized access to private note contents through Socket.IO handler exploitation.",
+      "evaluation": {
+        "id": "19eefe9b83a2cac842b5b66aa8f14c416c26",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 8d ago"
+      }
+    },
+    {
+      "id": "a0c48144923c9583cfe4edea31ef94cdf147",
+      "title": "CVE-2026-54021: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.9.6, several direct, index-add",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-54021",
+      "date_published": "2026-06-23T18:18:07.37+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "llm_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-54021 is an access control bypass in Open WebUI versions prior to 0.9.6 that allows authenticated users to route requests to unauthorized Ollama backends via a manipulated url_idx parameter, potentially accessing internal or admin-disabled AI model backends.",
+      "evaluation": {
+        "id": "a0c48144923c9583cfe4edea31ef94cdf147",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 8d ago"
+      }
+    },
+    {
+      "id": "8b27a36c1d42c03e245ff179233d67353e98",
+      "title": "CVE-2026-54015: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.9.6, Open WebUI's prompt versi",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-54015",
+      "date_published": "2026-06-23T18:18:06.83+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "llm_threats",
+      "trust_tier": "primary",
+      "short_summary": "Open WebUI versions prior to 0.9.6 contain an authorization bypass vulnerability in prompt history endpoints that allows authenticated users to read or delete other users' private prompt histories through insufficient authorization checks on history IDs.",
+      "evaluation": {
+        "id": "8b27a36c1d42c03e245ff179233d67353e98",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 8d ago"
+      }
+    },
+    {
+      "id": "3456f6bedbdfa0188a386964f67104ab0e66",
+      "title": "CVE-2026-54009: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.9.6, POST /api/chat/completion",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-54009",
+      "date_published": "2026-06-23T18:18:06.053+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "llm_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-54009 in Open WebUI prior to 0.9.6 allows authenticated users to access other users' files via an unvalidated image_url parameter, exfiltrating sensitive data by injecting it into LLM prompts for OCR/analysis.",
+      "evaluation": {
+        "id": "3456f6bedbdfa0188a386964f67104ab0e66",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 8d ago"
+      }
+    },
+    {
+      "id": "34c705130be99c890833889128ad9cc30959",
+      "title": "CVE-2026-54007: Open WebUI is a self-hosted artificial intelligence platform designed to operate entirely offline. Prior to 0.9.6, the chat message listener",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-54007",
+      "date_published": "2026-06-23T18:18:05.807+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "llm_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-54007 in Open WebUI prior to 0.9.6 allows cross-origin attackers to inject attacker-controlled prompts and trigger unauthorized model execution in authenticated victim sessions via a same-origin-policy bypass in the chat message listener.",
+      "evaluation": {
+        "id": "34c705130be99c890833889128ad9cc30959",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 8d ago"
+      }
+    },
+    {
+      "id": "be645665b3b3af974bbe50e57a8d9007b1b1",
+      "title": "Web-Based Indirect Prompt Injection Observed in the Wild - Unit 42",
+      "url": "https://unit42.paloaltonetworks.com/ai-agent-prompt-injection",
+      "date_published": "2026-06-23T12:15:37.614+00:00",
+      "publisher": "unit42.paloaltonetworks.com",
+      "source_type": "threat_intelligence",
+      "main_category": "llm_threats",
+      "trust_tier": "primary",
+      "short_summary": "Unit 42 reports widespread in-the-wild indirect prompt injection (IDPI) attacks embedded in web content, targeting LLMs and AI agents integrated into browsers and automated systems. The campaign demonstrates novel attacker intents including ad review evasion, phishing SEO manipulation, data destruction, and system prompt leakage using 22 distinct payload engineering techniques.",
+      "evaluation": {
+        "id": "be645665b3b3af974bbe50e57a8d9007b1b1",
+        "category_fit": "strong",
+        "evidence_type": "threat_intelligence",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: threat_intelligence from primary source, 8d ago"
+      }
+    },
+    {
+      "id": "8f289122c8b53591f3b7629069f0e947008b",
+      "title": "Home Affairs suspends two officials over AI use linked to revised White Paper on Citizenship and Immigration",
+      "url": "https://www.gov.za/news/media-statements/home-affairs-suspends-two-officials-over-ai-use-linked-revised-white-paper",
+      "date_published": "2026-06-23T00:00:00+00:00",
+      "publisher": "AI Incident Database",
+      "source_type": "incident",
+      "main_category": "llm_threats",
+      "trust_tier": "primary",
+      "short_summary": "South Africa's Department of Home Affairs suspended two senior officials after AI-generated hallucinations were discovered in a revised White Paper on Citizenship and Immigration, revealing misuse of generative AI in government policy documents.",
+      "evaluation": {
+        "id": "8f289122c8b53591f3b7629069f0e947008b",
+        "category_fit": "strong",
+        "evidence_type": "operational_incident",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: incident from primary source, 8d ago"
+      }
+    },
+    {
+      "id": "b06e78948a94019aea38da57d14ff816a4df",
+      "title": "CVE-2026-54236: vLLM is an inference and serving engine for large language models (LLMs). Prior to 0.23.1rc0, the fix for CVE-2026-22778, which introduced a",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-54236",
+      "date_published": "2026-06-22T23:16:31.29+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "llm_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-54236 in vLLM 0.23.1rc0 exposes an incomplete fix for CVE-2026-22778 where multiple response paths fail to sanitize error messages, allowing unauthenticated attackers to leak heap memory addresses via malformed image inputs through the Anthropic Messages API.",
+      "evaluation": {
+        "id": "b06e78948a94019aea38da57d14ff816a4df",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 8d ago"
+      }
+    },
+    {
+      "id": "3067793945bcbbd0acf49a6ef1968ab4c032",
+      "title": "CVE-2026-10564: IBM Langflow OSS 1.0.0 through 1.9.6 contains a Server-Side Request Forgery (SSRF). The legacy RSSReaderComponent in rss.py and SearXNG…",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-10564",
+      "date_published": "2026-06-30T20:17:27.387+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "IBM Langflow OSS versions 1.0.0–1.9.6 contain an SSRF vulnerability in RSSReaderComponent and SearXNG that allows authenticated attackers to access internal cloud metadata services and exfiltrate IAM credentials; the flaw is exploitable via prompt injection in agentic workflows through exposed tool_mode.",
+      "evaluation": {
+        "id": "3067793945bcbbd0acf49a6ef1968ab4c032",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 0d ago"
+      }
+    },
+    {
+      "id": "dc401e0641bfaef8839f11e021b4b702f88d",
+      "title": "Chromium extension uses AI‑related branding to redirect browser search",
+      "url": "https://www.microsoft.com/en-us/security/blog/2026/06/29/chromium-extension-uses-airelated-branding-redirect-browser-search/",
+      "date_published": "2026-06-29T16:27:46+00:00",
+      "publisher": "Microsoft",
+      "source_type": "incident",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "A malicious Chromium extension impersonates Perplexity AI to hijack browser search traffic via MV3 APIs and intermediary infrastructure. This represents a supply chain threat targeting users of AI-powered search tools through browser extension abuse.",
+      "evaluation": {
+        "id": "dc401e0641bfaef8839f11e021b4b702f88d",
+        "category_fit": "strong",
+        "evidence_type": "operational_incident",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: incident from primary source, 2d ago"
+      }
+    },
+    {
+      "id": "f4a8b679d9b6dcd0372b614cbb52ae0e179e",
+      "title": "CVE-2026-13437: Insertion of sensitive information into sent data in the AI Agent job API in Devolutions PowerShell Universal 2026.2.0 allows an…",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-13437",
+      "date_published": "2026-06-29T16:16:35.773+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-13437 is a credential exposure vulnerability in Devolutions PowerShell Universal 2026.2.0's AI Agent job API that leaks reusable authentication tokens in plaintext, allowing authenticated users to escalate privileges via stolen app tokens.",
+      "evaluation": {
+        "id": "f4a8b679d9b6dcd0372b614cbb52ae0e179e",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 2d ago"
+      }
+    },
+    {
+      "id": "83b744ccf0dcf428521d183f6a4313004fc0",
+      "title": "CVE-2026-55607: Claude Code is an agentic coding tool. From 2.1.38 until 2.1.163, Claude Code's worktree handling allowed creation of worktrees named…",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-55607",
+      "date_published": "2026-06-29T15:16:41.597+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-55607 in Claude Code (agentic tool) allows arbitrary code execution outside sandbox via worktree symlink manipulation and git fsmonitor exploitation, triggered by prompt injection in malicious repositories.",
+      "evaluation": {
+        "id": "83b744ccf0dcf428521d183f6a4313004fc0",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 2d ago"
+      }
+    },
+    {
+      "id": "6239c6be1f5b2c5d69c0afffc92b41d2a4d2",
+      "title": "@microsoft/kiota-http-fetchlibrary: Bearer token and Cookie leak across origin on redirect due to case-mismatched scrub in fetchRequestAdapter",
+      "url": "https://github.com/advisories/ghsa-396q-4vc8-28x9",
+      "date_published": "2026-06-26T22:23:11+00:00",
+      "publisher": "GitHub Advisory Database",
+      "source_type": "vulnerability",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "A case-sensitivity mismatch in @microsoft/kiota-http-fetchlibrary's RedirectHandler causes Authorization and Cookie headers to leak across origin on HTTP redirects, exposing bearer tokens and session cookies to attacker-controlled hosts when kiota-generated SDKs follow redirects.",
+      "evaluation": {
+        "id": "6239c6be1f5b2c5d69c0afffc92b41d2a4d2",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 4d ago"
+      }
+    },
+    {
+      "id": "485725fa6c31cbe2e1c833dcb4597cbf666d",
+      "title": "Streamable HTTP mode exposes LINE Desktop read/send tools without MCP authentication",
+      "url": "https://github.com/advisories/ghsa-4hf8-5mjm-rfgq",
+      "date_published": "2026-06-26T21:50:49+00:00",
+      "publisher": "GitHub Advisory Database",
+      "source_type": "vulnerability",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "line-desktop-mcp's HTTP mode exposes MCP tools for reading LINE chat history and sending messages without authentication, allowing any network client to exploit the logged-in desktop session's authority. The vulnerability stems from missing MCP-layer authentication checks when the server binds to 0.0.0.0, enabling unauthorized access to sensitive communication.",
+      "evaluation": {
+        "id": "485725fa6c31cbe2e1c833dcb4597cbf666d",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 4d ago"
+      }
+    },
+    {
+      "id": "ecb67ffdb3eaf5ee64cbeb3b903d6a8997ef",
+      "title": "@cardano402/mcp-server missing spending limits, LAN-exposed HTTP transport, and SSRF via catalog.server.url",
+      "url": "https://github.com/advisories/ghsa-rp72-5v5q-2446",
+      "date_published": "2026-06-26T21:08:06+00:00",
+      "publisher": "GitHub Advisory Database",
+      "source_type": "vulnerability",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "@cardano402/mcp-server ≤0.1.1 exposes critical vulnerabilities allowing LLMs and attackers to trigger unlimited Cardano payments, including wallet drain via tool-call loops, LAN-exposed unauthenticated HTTP transport, and SSRF via malicious catalog URLs.",
+      "evaluation": {
+        "id": "ecb67ffdb3eaf5ee64cbeb3b903d6a8997ef",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 4d ago"
+      }
+    },
+    {
+      "id": "9dc439d1aebfedb76664a8119368a908f60a",
+      "title": "mcp-pinot: Unauthenticated tool invocation via default oauth_enabled=False + host 0.0.0.0 bind",
+      "url": "https://github.com/advisories/ghsa-73cv-556c-w3g6",
+      "date_published": "2026-06-26T21:05:43+00:00",
+      "publisher": "GitHub Advisory Database",
+      "source_type": "vulnerability",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "[object Object]",
+      "evaluation": {
+        "id": "9dc439d1aebfedb76664a8119368a908f60a",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 4d ago"
+      }
+    },
+    {
+      "id": "a4e410f8ffb617a6bbc107a65e476a21d784",
+      "title": "mcp-memory-service: OAuth read-only clients can write and delete memories through MCP tools/call",
+      "url": "https://github.com/advisories/ghsa-2r68-g678-7qr3",
+      "date_published": "2026-06-26T21:04:38+00:00",
+      "publisher": "GitHub Advisory Database",
+      "source_type": "vulnerability",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "A privilege escalation vulnerability in mcp-memory-service allows read-only OAuth clients to call mutating MCP tools (store_memory, delete_memory) by bypassing authorization checks at the /mcp JSON-RPC endpoint, enabling memory database corruption and context manipulation.",
+      "evaluation": {
+        "id": "a4e410f8ffb617a6bbc107a65e476a21d784",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 4d ago"
+      }
+    },
+    {
+      "id": "80b32212720750d721319257d62c3298957b",
+      "title": "Backpropagate: backprop ui --auth and backprop ui --share do not enforce authentication",
+      "url": "https://github.com/advisories/ghsa-f65r-h4g3-3h9h",
+      "date_published": "2026-06-26T20:34:29+00:00",
+      "publisher": "GitHub Advisory Database",
+      "source_type": "vulnerability",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "Backpropagate v1.1.0–v1.1.1 contains a critical authentication bypass in its Reflex-based training control UI. The --auth flag is advertised as enforcing HTTP Basic authentication but is never actually implemented in the backend, allowing unauthenticated attackers to read datasets, trigger training runs, push to HuggingFace Hub, and perform path traversal—combining data exfiltration with supply-ch",
+      "evaluation": {
+        "id": "80b32212720750d721319257d62c3298957b",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 4d ago"
+      }
+    },
+    {
+      "id": "5bdbc5c2cc590ed9e7539cb20308cf9f1e6b",
+      "title": "pydantic-ai: SSRF blocklist bypass via IPv4-compatible, SIIT/IVI, and local NAT64 IPv6 addresses (incomplete fix of CVE-2026-46678)",
+      "url": "https://github.com/advisories/ghsa-cg7w-rg45-pc59",
+      "date_published": "2026-06-26T19:17:56+00:00",
+      "publisher": "GitHub Advisory Database",
+      "source_type": "vulnerability",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "Pydantic AI's SSRF protection was incomplete: IPv6 transition forms (IPv4-compatible, NAT64, ISATAP) could bypass the cloud-metadata blocklist when force_download='allow-local' is enabled, exposing cloud IAM credentials. Fixed in versions 1.102.0 and 2.0.0b3.",
+      "evaluation": {
+        "id": "5bdbc5c2cc590ed9e7539cb20308cf9f1e6b",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 4d ago"
+      }
+    },
+    {
+      "id": "a4fe736480cae91d9a05f8d79c2e5db017c7",
+      "title": "Incus has an argument injection in backup compression algorithm leading to AFW and ACE",
+      "url": "https://github.com/advisories/ghsa-v6mj-8pf4-hhw4",
+      "date_published": "2026-06-26T19:03:31+00:00",
+      "publisher": "GitHub Advisory Database",
+      "source_type": "vulnerability",
+      "main_category": "agentic_ai_threats",
+      "trust_tier": "primary",
+      "short_summary": "Incus container manager contains argument injection vulnerability in backup compression algorithm validation, allowing arbitrary file write and command execution on the host system through improper shell argument parsing.",
+      "evaluation": {
+        "id": "a4fe736480cae91d9a05f8d79c2e5db017c7",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 4d ago"
+      }
+    },
+    {
+      "id": "33239de86f718b464f7a200e3f69697c7970",
+      "title": "Adversaries Leverage AI for Vulnerability Exploitation, Augmented Operations, and Initial Access | Google Cloud Blog",
+      "url": "https://cloud.google.com/blog/topics/threat-intelligence/ai-vulnerability-exploitation-initial-access",
+      "date_published": "2026-07-01T02:48:25.395+00:00",
+      "publisher": "cloud.google.com",
+      "source_type": "threat_intelligence",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "Google Threat Intelligence Group reports industrial-scale adoption of generative AI by state-sponsored (PRC, DPRK) and criminal threat actors for zero-day exploit generation, polymorphic malware development, autonomous attack orchestration (PROMPTSPY), and large-scale information operations including deepfakes and synthetic media generation.",
+      "evaluation": {
+        "id": "33239de86f718b464f7a200e3f69697c7970",
+        "category_fit": "strong",
+        "evidence_type": "threat_intelligence",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: threat_intelligence from primary source, 0d ago"
+      }
+    },
+    {
+      "id": "3b57970ba3ba893f0ac54521423c95656bb0",
+      "title": "ToddyCat: your hidden email assistant. Part 2",
+      "url": "https://securelist.com/toddycat-apt-umbrij-tool-and-oauth/120251",
+      "date_published": "2026-06-30T10:00:13+00:00",
+      "publisher": "Kaspersky",
+      "source_type": "threat_intelligence",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "Kaspersky reports on ToddyCat APT's Umbrij tool, which automates OAuth token theft from Gmail via Chromium remote debugging. While not AI-driven, this represents adversary adoption of sophisticated API-based account compromise techniques to access corporate email at scale.",
+      "evaluation": {
+        "id": "3b57970ba3ba893f0ac54521423c95656bb0",
+        "category_fit": "strong",
+        "evidence_type": "threat_intelligence",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: threat_intelligence from primary source, 1d ago"
+      }
+    },
+    {
+      "id": "6d208cb05ef6f44fe02115a71899d677a9ea",
+      "title": "Analyzing the Current State of AI Use in Malware",
+      "url": "https://unit42.paloaltonetworks.com/ai-use-in-malware",
+      "date_published": "2026-06-30T03:29:07.937+00:00",
+      "publisher": "unit42.paloaltonetworks.com",
+      "source_type": "incident",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "Unit 42 researchers document two real-world malware samples leveraging LLMs: a .NET infostealer using GPT-3.5-Turbo API for remote C2 functionality, and a Golang dropper using an LLM to assess target systems before infection. The analysis demonstrates threat actors actively adopting LLMs to enhance malware capabilities and lower barriers to entry.",
+      "evaluation": {
+        "id": "6d208cb05ef6f44fe02115a71899d677a9ea",
+        "category_fit": "strong",
+        "evidence_type": "operational_incident",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: incident from primary source, 1d ago"
+      }
+    },
+    {
+      "id": "c69ca07c9ab034a82e308138a4f32afca952",
+      "title": "Google Detects First AI-Generated Zero-Day Exploit - SecurityWeek",
+      "url": "https://www.securityweek.com/google-detects-first-ai-generated-zero-day-exploit",
+      "date_published": "2026-06-29T07:55:15.312+00:00",
+      "publisher": "securityweek.com",
+      "source_type": "threat_intelligence",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "Google documented the first confirmed zero-day exploit developed using AI by a cybercrime group to bypass 2FA, alongside evidence that Chinese and North Korean state-sponsored actors are actively leveraging AI for vulnerability discovery and exploit development at scale.",
+      "evaluation": {
+        "id": "c69ca07c9ab034a82e308138a4f32afca952",
+        "category_fit": "strong",
+        "evidence_type": "threat_intelligence",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: threat_intelligence from primary source, 2d ago"
+      }
+    },
+    {
+      "id": "c7c282e4338c4b6c10a7c3a998f85742517f",
+      "title": "GTIG AI Threat Tracker: Distillation, Experimentation, and (Continued) Integration of AI for Adversarial Use | Google Cloud Blog",
+      "url": "https://cloud.google.com/blog/topics/threat-intelligence/distillation-experimentation-integration-ai-adversarial-use",
+      "date_published": "2026-06-29T07:55:15.288+00:00",
+      "publisher": "cloud.google.com",
+      "source_type": "threat_intelligence",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "Google Threat Intelligence Group reports documented real-world evidence that state-sponsored threat actors from DPRK, Iran, PRC, and Russia operationalized generative AI in late 2025 for reconnaissance, phishing lure generation, malware development, and agentic AI experimentation. The report also identifies model extraction attacks and jailbroken API-based underground services (Xanthorox, HONESTCU",
+      "evaluation": {
+        "id": "c7c282e4338c4b6c10a7c3a998f85742517f",
+        "category_fit": "strong",
+        "evidence_type": "threat_intelligence",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: threat_intelligence from primary source, 2d ago"
+      }
+    },
+    {
+      "id": "b60e58497123fe86821766fb930d8d2c2c22",
+      "title": "A tale of two eras",
+      "url": "https://blog.talosintelligence.com/a-tale-of-two-eras",
+      "date_published": "2026-06-11T18:00:49+00:00",
+      "publisher": "Cisco Talos",
+      "source_type": "threat_intelligence",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "Cisco Talos reports that frontier AI models are autonomously discovering and exploiting zero-day vulnerabilities in minutes, fundamentally collapsing traditional vulnerability lifecycle and patch-based defense models. Organizations must shift from prevention-centric to resilience-focused security strategies including MFA, hardening, network segmentation, and behavioral detection.",
+      "evaluation": {
+        "id": "b60e58497123fe86821766fb930d8d2c2c22",
+        "category_fit": "strong",
+        "evidence_type": "threat_intelligence",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: threat_intelligence from primary source, 20d ago"
+      }
+    },
+    {
+      "id": "27870879434904650fc8a5adfabfb321445d",
+      "title": "PRC-linked influence operations are targeting AI debates in the US",
+      "url": "https://openai.com/index/prc-linked-influence-operations-ai-debates",
+      "date_published": "2026-06-10T12:00:00+00:00",
+      "publisher": "OpenAI",
+      "source_type": "threat_intelligence",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "OpenAI disclosed two PRC-linked influence operation clusters that weaponized ChatGPT to generate synthetic social media content and images promoting false narratives about US AI data centers and tariffs, demonstrating nation-state adoption of LLMs for covert information warfare.",
+      "evaluation": {
+        "id": "27870879434904650fc8a5adfabfb321445d",
+        "category_fit": "strong",
+        "evidence_type": "threat_intelligence",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: threat_intelligence from primary source, 21d ago"
+      }
+    },
+    {
+      "id": "b7163680c870e354cbf131fc49fd3eb0d4e7",
+      "title": "[PDF] PRC-linked influence operations are targeting AI debates in the US",
+      "url": "https://cdn.openai.com/pdf/96b559fa-c165-4575-805d-e636909e2f78/june-2026-threat-report.pdf",
+      "date_published": "2026-06-01T00:00:00+00:00",
+      "publisher": "cdn.openai.com",
+      "source_type": "threat_intelligence",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "OpenAI's threat report documents two coordinated PRC-linked influence operations that weaponized ChatGPT to generate synthetic social media content and images designed to manipulate US policy debates around AI infrastructure and tariffs, using AI as the mechanism to scale inauthentic narratives.",
+      "evaluation": {
+        "id": "b7163680c870e354cbf131fc49fd3eb0d4e7",
+        "category_fit": "strong",
+        "evidence_type": "threat_intelligence",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: threat_intelligence from primary source, 30d ago"
+      }
+    },
+    {
+      "id": "1bde365a0a081b5d52df169ada9b772c44c1",
+      "title": "TeamPCP: Multi-Ecosystem Supply Chain Worm",
+      "url": "https://labs.cloudsecurityalliance.org/research/csa-research-note-teampcp-multi-ecosystem-supply-chain-20260",
+      "date_published": "2026-05-29T00:00:00+00:00",
+      "publisher": "Cloud Security Alliance AI Safety Initiative",
+      "source_type": "incident",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "TeamPCP deployed Mini Shai-Hulud, a self-propagating supply chain worm that autonomously compromised npm, PyPI, GitHub Actions, VS Code extensions, and Kubernetes across five waves (March–May 2026), including a direct attack on GitHub infrastructure via a trojanized extension and exploitation of AI coding assistant configurations (Claude, Cursor) as attack vectors.",
+      "evaluation": {
+        "id": "1bde365a0a081b5d52df169ada9b772c44c1",
+        "category_fit": "strong",
+        "evidence_type": "operational_incident",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: incident from primary source, 33d ago"
+      }
+    },
+    {
+      "id": "curated-567a91dcace178d1e72f0c7f",
+      "title": "GTIG AI Threat Tracker: Adversaries Leverage AI for Vulnerability Exploitation, Augmented Operations, and Initial Access",
+      "url": "https://cloud.google.com/blog/topics/threat-intelligence/ai-vulnerability-exploitation-initial-access/",
+      "date_published": "2026-05-11T14:00:00+00:00",
+      "publisher": "Google Cloud Threat Intelligence",
+      "source_type": "threat_intelligence",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "Google Threat Intelligence documents industrial-scale adversarial adoption of generative AI across vulnerability exploitation, polymorphic malware development, autonomous attack orchestration, and information operations. State-sponsored threat actors from China and North Korea use AI-augmented vulnerability discovery and jailbreaking techniques; Russian-nexus actors deploy AI-driven obfuscated mal",
+      "evaluation": {
+        "id": "curated-567a91dcace178d1e72f0c7f",
+        "category_fit": "strong",
+        "evidence_type": "threat_intelligence",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: threat_intelligence from primary source, 51d ago"
+      }
+    },
+    {
+      "id": "1d316fb9b4fd2b0f91942b83b40678de5513",
+      "title": "Google says criminals used AI-built zero-day in planned mass hack spree",
+      "url": "https://www.theregister.com/ai-ml/2026/05/11/google-says-criminals-used-ai-built-zero-day-in-planned-mass-hack-spree/5237982",
+      "date_published": "2026-05-11T00:00:00+00:00",
+      "publisher": "The Register",
+      "source_type": "threat_intelligence",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "primary",
+      "short_summary": "Google Threat Intelligence Group reported the first documented real-world case of criminals using an AI model to discover, weaponize, and develop a zero-day 2FA bypass exploit in an automated mass-exploitation campaign, with evidence of LLM-generated exploit code, malware obfuscation, and autonomous malware control across multiple threat actor groups.",
+      "evaluation": {
+        "id": "1d316fb9b4fd2b0f91942b83b40678de5513",
+        "category_fit": "strong",
+        "evidence_type": "threat_intelligence",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: threat_intelligence from primary source, 51d ago"
+      }
+    },
+    {
+      "id": "fb73559dbab92d17af927e181fc0d457c1d1",
+      "title": "29th June – Threat Intelligence Report",
+      "url": "https://research.checkpoint.com/2026/29th-june-threat-intelligence-report-2",
+      "date_published": "2026-06-29T14:06:59+00:00",
+      "publisher": "Check Point Research",
+      "source_type": "threat_intelligence",
+      "main_category": "ai_enabled_threats",
+      "trust_tier": "high",
+      "short_summary": "A weekly threat intelligence report from Check Point Research documenting multiple AI-enabled attack operations: EvilTokens (AI-powered phishing stealing Microsoft 365 tokens), a supply-chain attack hijacking 26,000 AI agents via fake skills, and BioShocking AI demonstrating guardrail bypasses in agentic browsers; also covers concurrent non-AI breaches and critical CVEs in AI/LLM platforms.",
+      "evaluation": {
+        "id": "fb73559dbab92d17af927e181fc0d457c1d1",
+        "category_fit": "strong",
+        "evidence_type": "threat_intelligence",
+        "analytical_usefulness": "high",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: threat_intelligence from high source, 2d ago"
+      }
+    },
+    {
+      "id": "dd68dc0145f2cc33c62c32d3721bdcaa2072",
+      "title": "CVE-2026-54235: vLLM is an inference and serving engine for large language models (LLMs). Prior to 0.23.1rc0, ll temperature validation gates use comparison",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-54235",
+      "date_published": "2026-06-22T23:16:31.143+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "llm_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-54235 is a temperature validation bypass in vLLM <0.23.1rc0 where NaN and positive Infinity values silently pass safety guards and propagate to GPU sampling kernels, causing undefined behavior or CUDA crashes.",
+      "evaluation": {
+        "id": "dd68dc0145f2cc33c62c32d3721bdcaa2072",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 8d ago"
+      }
+    },
+    {
+      "id": "7d45aee137f296559dfd24bfa5c85e1b81cf",
+      "title": "CVE-2026-54233: vLLM is an inference and serving engine for large language models (LLMs). Prior to 0.23.1rc0, vLLM's /v1/audio/transcriptions endpoint limit",
+      "url": "https://nvd.nist.gov/vuln/detail/cve-2026-54233",
+      "date_published": "2026-06-22T23:16:31.007+00:00",
+      "publisher": "NVD",
+      "source_type": "vulnerability",
+      "main_category": "llm_threats",
+      "trust_tier": "primary",
+      "short_summary": "CVE-2026-54233 is a resource exhaustion vulnerability in vLLM's audio transcription endpoint that allows a 25MB compressed file to expand to 14.9GB of uncompressed PCM data, enabling denial-of-service attacks through unbounded memory consumption.",
+      "evaluation": {
+        "id": "7d45aee137f296559dfd24bfa5c85e1b81cf",
+        "category_fit": "strong",
+        "evidence_type": "disclosed_vulnerability",
+        "analytical_usefulness": "high",
+        "source_reliability": "primary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: vulnerability from primary source, 8d ago"
+      }
+    }
+  ],
+  "excluded_near_misses": [
+    {
+      "id": "b57c0bf3dd958dcd7c134aa844f6aab4e449",
+      "title": "CSO-LLM: Class Subspace Orthogonalization for Post-Training Backdoor Detection and Trigger Inversion in LLMs",
+      "url": "https://arxiv.org/abs/2606.31309",
+      "date_published": "2026-06-30T08:19:00+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "b57c0bf3dd958dcd7c134aa844f6aab4e449",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 1d ago"
+      }
+    },
+    {
+      "id": "034ae702120b5394aa6005ca58553ea0aca8",
+      "title": "What Is Data Poisoning? [Examples & Prevention] - Palo Alto Networks",
+      "url": "https://www.paloaltonetworks.com/cyberpedia/what-is-data-poisoning",
+      "date_published": "2026-06-30T03:29:20.651+00:00",
+      "publisher": "paloaltonetworks.com",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "034ae702120b5394aa6005ca58553ea0aca8",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 1d ago"
+      }
+    },
+    {
+      "id": "663bdf061af2de6adcef4980c751e5272776",
+      "title": "A survey on adversarial machine learning: Attacks, defenses, real ...",
+      "url": "https://www.sciencedirect.com/science/article/abs/pii/s0925231226000676",
+      "date_published": "2026-06-30T03:29:02.719+00:00",
+      "publisher": "sciencedirect.com",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "663bdf061af2de6adcef4980c751e5272776",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 1d ago"
+      }
+    },
+    {
+      "id": "8636c080f5ec587c4f00914c5f1e28f8259e",
+      "title": "Can Clothes Make You Invisible to Facial Recognition?",
+      "url": "https://www.darkreading.com/cyber-risk/clothes-invisible-facial-recognition",
+      "date_published": "2026-06-29T19:38:04+00:00",
+      "publisher": "Dark Reading",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "8636c080f5ec587c4f00914c5f1e28f8259e",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from medium source, 1d ago"
+      }
+    },
+    {
+      "id": "292466759d53a8a369796c7173a5b415a1fe",
+      "title": "Hugging Face and ClawHub compromised with hundreds of malicious AI models and agent skills as supply chain attacks target AI infrastructure",
+      "url": "https://thenextweb.com/news/hugging-face-clawhub-malware-ai-supply-chain",
+      "date_published": "2026-06-29T07:55:15.306+00:00",
+      "publisher": "thenextweb.com",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=strong_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "292466759d53a8a369796c7173a5b415a1fe",
+        "category_fit": "strong",
+        "evidence_type": "threat_intelligence",
+        "analytical_usefulness": "high",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: threat_intelligence from high source, 2d ago"
+      }
+    },
+    {
+      "id": "2d03ccb754663cffe79b82ea982a71941514",
+      "title": "SpikeTimer: Exploring Active Copyright Protection in Spiking Neural Networks via Temporal Backdoor Regularization",
+      "url": "https://arxiv.org/abs/2606.26841v1",
+      "date_published": "2026-06-25T10:26:46+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "2d03ccb754663cffe79b82ea982a71941514",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 6d ago"
+      }
+    },
+    {
+      "id": "5ef183fe5763b2e688d0455cef189ac09d17",
+      "title": "DroidBreaker: Practical and Functional Problem-Space Attacks on Machine-Learning Android Malware Detectors",
+      "url": "https://arxiv.org/abs/2606.26707v1",
+      "date_published": "2026-06-25T07:37:57+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "5ef183fe5763b2e688d0455cef189ac09d17",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 6d ago"
+      }
+    },
+    {
+      "id": "55b52514c50b808794a99379850937ec3b72",
+      "title": "Malware Found in Trending Hugging Face Repository \"Open-OSS/privacy-filter\"",
+      "url": "https://www.hiddenlayer.com/research/malware-found-in-trending-hugging-face-repository-open-oss-privacy-filter",
+      "date_published": "2026-06-23T11:58:43.426+00:00",
+      "publisher": "hiddenlayer.com",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=strong_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "55b52514c50b808794a99379850937ec3b72",
+        "category_fit": "strong",
+        "evidence_type": "operational_incident",
+        "analytical_usefulness": "high",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: incident from high source, 8d ago"
+      }
+    },
+    {
+      "id": "005c67a810c66673020e2f696843fc46b875",
+      "title": "Calibration Without Comprehension: Diagnosing the Limits of Fine-Tuning LLMs for Vulnerability Detection in Systems Software",
+      "url": "https://arxiv.org/abs/2606.20502v1",
+      "date_published": "2026-06-18T17:19:26+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "005c67a810c66673020e2f696843fc46b875",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 13d ago"
+      }
+    },
+    {
+      "id": "8d7753b53688d11bbcb6173632917c333d75",
+      "title": "Stealthy World Model Manipulation via Data Poisoning",
+      "url": "https://arxiv.org/abs/2606.18697v1",
+      "date_published": "2026-06-17T05:24:18+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "8d7753b53688d11bbcb6173632917c333d75",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 14d ago"
+      }
+    },
+    {
+      "id": "f31ff8d089b7479f05d22f33c8bd27ec6c92",
+      "title": "Your Privacy My Cloak: Backdoor Attacks on Differentially Private Federated Learning",
+      "url": "https://arxiv.org/abs/2606.17035v1",
+      "date_published": "2026-06-15T17:53:12+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "f31ff8d089b7479f05d22f33c8bd27ec6c92",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 16d ago"
+      }
+    },
+    {
+      "id": "676ee07fef44745fd16799a80d79e22cd453",
+      "title": "Judge Rules Blacked.com Can Sue Meta for Scraping Its Porn",
+      "url": "https://www.404media.co/judge-rules-blacked-com-can-sue-meta-for-scraping-its-porn",
+      "date_published": "2026-06-15T14:53:19+00:00",
+      "publisher": "404 Media",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=strong_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "676ee07fef44745fd16799a80d79e22cd453",
+        "category_fit": "strong",
+        "evidence_type": "operational_incident",
+        "analytical_usefulness": "high",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "strong_candidate",
+        "selection_reason": "Heuristic: incident from high source, 16d ago"
+      }
+    },
+    {
+      "id": "54b9fc3a5152d5a7bd2e7984ca3163938bb7",
+      "title": "ARB4WM: An Adversarial Robustness Benchmark for World Models in Continuous Control",
+      "url": "https://arxiv.org/abs/2606.16605v1",
+      "date_published": "2026-06-15T11:51:19+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "54b9fc3a5152d5a7bd2e7984ca3163938bb7",
+        "category_fit": "strong",
+        "evidence_type": "benchmark",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: benchmark_evaluation from high source, 16d ago"
+      }
+    },
+    {
+      "id": "4d62aba284c56bdd2c4c8bdb85316da4ba77",
+      "title": "Let Them Steal: Trapping Large Language Model Extraction Attacks with Knowledge Honeypot",
+      "url": "https://arxiv.org/abs/2606.15810v1",
+      "date_published": "2026-06-14T13:23:48+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "4d62aba284c56bdd2c4c8bdb85316da4ba77",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 17d ago"
+      }
+    },
+    {
+      "id": "7ed356ed920e45ffbc359784d9f56ccf5c19",
+      "title": "Why AI Red Teaming Matters for Enterprise Security",
+      "url": "https://www.zscaler.com/blogs/product-insights/why-ai-red-teaming-matters-enterprise-security",
+      "date_published": "2026-06-12T18:25:48+00:00",
+      "publisher": "Zscaler ThreatLabz",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "7ed356ed920e45ffbc359784d9f56ccf5c19",
+        "category_fit": "strong",
+        "evidence_type": "commentary",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: governance_signal from high source, 19d ago"
+      }
+    },
+    {
+      "id": "ea4f1e30e8b382fa5a72fe8fa84c8f3fae94",
+      "title": "GRAPE: Guided Parameter-Space Evolution for Compact Adversarial Robustness",
+      "url": "https://arxiv.org/abs/2606.14865v1",
+      "date_published": "2026-06-12T18:07:15+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "ea4f1e30e8b382fa5a72fe8fa84c8f3fae94",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 19d ago"
+      }
+    },
+    {
+      "id": "32637acd7a12dd278997f67888618d1af92c",
+      "title": "Toward Trustworthy AI: Multi-Target Adversarial Attacks and Robust Defenses for Continuous Data Summarization",
+      "url": "https://arxiv.org/abs/2606.11804v1",
+      "date_published": "2026-06-10T08:38:27+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "32637acd7a12dd278997f67888618d1af92c",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 21d ago"
+      }
+    },
+    {
+      "id": "7439ab9c0530876dbea317f61889636ecbc8",
+      "title": "What Do Deepfake Speech Detectors Actually Hear?",
+      "url": "https://arxiv.org/abs/2606.10912v1",
+      "date_published": "2026-06-09T14:21:45+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "7439ab9c0530876dbea317f61889636ecbc8",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 22d ago"
+      }
+    },
+    {
+      "id": "b26b572fd300c8f5a9ba14c69fc0336efed8",
+      "title": "GRAFT: Graphlet-Triggered Backdoor Attack on GNN-Based Hardware Security Systems",
+      "url": "https://arxiv.org/abs/2606.10163v1",
+      "date_published": "2026-06-08T20:47:54+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "b26b572fd300c8f5a9ba14c69fc0336efed8",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 22d ago"
+      }
+    },
+    {
+      "id": "b2dd5582fb24479373b7f25dfe013f60c35a",
+      "title": "SS-TPT: Stability and Suitability-Guided Test-Time Prompt Tuning for Adversarially Robust Vision-Language Models",
+      "url": "https://arxiv.org/abs/2606.06943v1",
+      "date_published": "2026-06-05T06:12:48+00:00",
+      "publisher": "arXiv",
+      "main_category": "traditional_ai_threats",
+      "exclusion_reason": "slide_usefulness=supporting_candidate but not selected — likely displaced by higher-priority source in same category",
+      "evaluation": {
+        "id": "b2dd5582fb24479373b7f25dfe013f60c35a",
+        "category_fit": "strong",
+        "evidence_type": "research_demonstration",
+        "analytical_usefulness": "usable",
+        "source_reliability": "reputable_secondary",
+        "time_relevance": "within_past_quarter",
+        "slide_usefulness": "supporting_candidate",
+        "selection_reason": "Heuristic: research_finding from high source, 26d ago"
+      }
+    }
+  ]
+}

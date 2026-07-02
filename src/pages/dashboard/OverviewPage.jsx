@@ -288,70 +288,6 @@ function CategoryCard({ cat, trendValues }) {
   );
 }
 
-// ── Historical comparison: Assessment Changes / Emerging Signals ────────────────
-
-// Skimmable: one row per change — category chip, terse from→to shift, short reason.
-// Emerging Signals: weak→emerging themes with analysis + explorable sources.
-function EmergingSignalCard({ s }) {
-  const [open, setOpen] = useState(false);
-  const sources = s.sources || [];
-  // watch may be an array of points (new) or a single string (legacy data).
-  const watchPoints = Array.isArray(s.watch) ? s.watch.filter(Boolean) : (s.watch ? [s.watch] : []);
-  // Every signal gets elaboration: fall back to a deterministic, source-grounded
-  // line when the generated analysis is missing.
-  const analysisText = s.analysis || (
-    `Early signal — appeared in ${s.curr ?? "more"} source${s.curr === 1 ? "" : "s"} this period` +
-    `${s.prev != null ? `, up from ${s.prev}` : ""}. Evidence is still thin; watch for corroboration ` +
-    `before treating it as a confirmed trend.`
-  );
-  return (
-    <div className="hz-es-card">
-      <div className="hz-es-head">
-        <span className="hz-es-name">{s.signal}</span>
-        {s.reason && <span className="hz-es-reason">{s.reason}</span>}
-      </div>
-      <div className="hz-es-analysis">{analysisText}</div>
-      {watchPoints.length > 0 && (
-        <div className="hz-es-watch">
-          <span className="hz-es-watch-label">Watch</span>
-          <ul className="hz-es-watch-list">
-            {watchPoints.map((w, i) => <li key={i}>{w}</li>)}
-          </ul>
-        </div>
-      )}
-      {sources.length > 0 && (
-        <>
-          <button className="hz-es-toggle" onClick={() => setOpen(o => !o)}>
-            {open ? "Hide sources ▲" : `Explore ${sources.length} source${sources.length !== 1 ? "s" : ""} ▼`}
-          </button>
-          {open && (
-            <ul className="hz-es-sources">
-              {sources.map((src, i) => (
-                <li key={i}>
-                  {src.url ? (
-                    <a href={src.url} target="_blank" rel="noopener noreferrer">{src.title || src.url}</a>
-                  ) : (<span>{src.title}</span>)}
-                  {src.publisher && <span className="hz-es-src-meta"> · {src.publisher}</span>}
-                  {src.date && <span className="hz-es-src-meta"> · {src.date}</span>}
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function EmergingSignals({ items }) {
-  if (!items?.length) return null;
-  return (
-    <div className="hz-es-list">
-      {items.slice(0, 5).map((s, i) => <EmergingSignalCard key={i} s={s} />)}
-    </div>
-  );
-}
-
 // ── Top incidents ─────────────────────────────────────────────────────────────
 
 function TopIncidents({ incidents }) {
@@ -626,28 +562,6 @@ export function OverviewPage() {
           </div>
         </>
       )}
-
-      {/* Historical comparison — supports analysis, not the main product */}
-      {data?.comparison && data.comparison.emerging_signals?.length ? (
-        <>
-          <div className="hz-overview-section-title">
-            This period vs last period
-            {(data.window_label || data.comparison.compared_to_label) && (
-              <span className="hz-overview-section-note">
-                {data.window_label || `${data.date_from} – ${data.date_to}`}
-                {data.comparison.compared_to_label ? ` vs ${data.comparison.compared_to_label}` : ""}
-              </span>
-            )}
-          </div>
-
-          {data.comparison.emerging_signals?.length > 0 && (
-            <>
-              <div className="hz-overview-subtitle">Emerging signals</div>
-              <EmergingSignals items={data.comparison.emerging_signals} />
-            </>
-          )}
-        </>
-      ) : null}
 
       {/* Trend chart */}
       {data?.trend?.week_labels?.length > 1 && (

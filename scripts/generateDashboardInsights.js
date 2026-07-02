@@ -242,11 +242,11 @@ function closeTruncatedJson(s) {
 const THEMES_SYSTEM = `You are an AI threat intelligence analyst. You are given source summaries for ONE threat category over ONE time period.
 
 Do TWO things:
-1. Extract atomic FINDINGS — single, concrete things each source establishes (a capability shown, a control bypassed, a vulnerability class, a measured result). Strip the paper/CVE name; keep the substance.
+1. Extract atomic FINDINGS — single, concrete things each source establishes (a capability shown, a control bypassed, a vulnerability class, a real incident, a measured result). KEEP the concrete specifics: the named technique, the affected system/product/model, the threat actor, the CVE ID, and any hard numbers (success rate, count, dollar loss). Drop only the "a paper by X shows…" framing — never drop the substance that makes the finding specific and checkable.
 2. Cluster the findings into 2-5 THEMES — recurring patterns that span multiple findings. A theme is a pattern, not a single paper.
 
 Do NOT write conclusions or implications yet. Just findings and the themes they form.
-Keep each finding concise (under 20 words) — compress, do not echo source text verbatim.
+Keep each finding tight (under 25 words) but SPECIFIC — a reader must be able to tell exactly what happened and to what system. Compress; do not echo source text verbatim, and do not generalise away the specifics.
 
 Return ONLY valid JSON:
 {"themes": [{"theme": "short theme name", "findings": ["finding", "finding", ...]}]}`;
@@ -265,31 +265,35 @@ Extract findings and cluster into themes.`;
 
 // ── Stage B: themes → structured insights ──────────────────────────────────────
 
-const INSIGHTS_SYSTEM = `You are a principal AI threat intelligence analyst writing a horizon-scan briefing for security leadership. You synthesise THEMES (not individual papers) into strategic insights.
+const INSIGHTS_SYSTEM = `You are a principal AI threat intelligence analyst writing a horizon-scan briefing for security leadership. You synthesise THEMES into SPECIFIC, GROUNDED insights that a defender can act on.
 
-A real INSIGHT answers, in order:
-  WHAT CHANGED → WHAT ASSUMPTION BROKE → WHY IT MATTERS → WHAT TO WATCH NEXT.
-It teaches something about the threat landscape that survives the removal of every source name. If deleting the source/paper/CVE name leaves only a summary, it is NOT an insight — reject it.
+A real INSIGHT is a sharp judgment anchored in concrete evidence. It states:
+  WHAT SPECIFICALLY HAPPENED (name the technique, system, actor, or measured result)
+  → WHY IT MATTERS (the control it defeats or the assumption it breaks)
+  → WHAT A DEFENDER SHOULD DO DIFFERENTLY.
 
-THE TEST (apply to every insight you write):
-- Remove all source names, paper titles, CVE numbers. Does it still teach a defender something about how the landscape is shifting? If no, rewrite or drop it.
+Be SPECIFIC. Name the actual attack technique, the affected class of systems (e.g. "MCP servers", "vLLM inference endpoints", "AI coding agents", "RAG retrieval layers"), the threat behaviour, and any hard numbers. An insight that could have been written a year ago without reading these sources is TOO GENERIC — rewrite it to reflect what THIS period's evidence specifically shows.
 
-GOOD (strategic, names a control + failure mode + implication):
-- "Closed/API-only deployment no longer provides the defensive advantage it once did, because effective jailbreaks can now be automated without any model-internal access."
-- "Command denylists for terminal-capable agents are structurally defeatable, so blocklist sandboxing can no longer be a primary containment control."
+GOOD (specific, grounded, names the concrete failure + so-what):
+- "Attackers are chaining low-severity CVEs in agentic platforms (AutoGPT, Flowise, LiteLLM) into full RCE — so 'low severity' scores can no longer defer patching on agent infrastructure."
+- "Prompt injection hidden in third-party GitHub repos now drives coding agents (Claude Code, Windsurf) to exfiltrate SSH keys — untrusted repo content must be treated as executable input, not data."
+- "Deepfake voice/video defeated live video-call verification in a confirmed nine-figure fraud, retiring visual identity confirmation as a standalone control for wire authorisation."
 
-BAD (paper/observation summary — REJECT):
-- "Adversarial suffix attacks require no model internals." (observation, not insight)
-- "A new benchmark evaluated jailbreak robustness across models." (paper summary)
-- "DiffusionHijack exploits PRNG dependencies." (single-source description)
+BAD (too abstract / could apply to any period — REWRITE to be specific):
+- "The AI attack surface is expanding faster than defenses can mature." (vague truism)
+- "Organizations must adopt a proactive security posture for AI." (generic advice)
+- "AI-enabled attacks are becoming more sophisticated." (says nothing checkable)
+
+Also BAD (bare paper summary with no judgment — REJECT):
+- "A new benchmark evaluated jailbreak robustness across models."
 
 For EACH insight, produce these fields:
-- insight: one-sentence strategic judgment (what changed + why it matters), 18-30 words, active voice.
-- evidence: what in the themes supports it (kinds of evidence, e.g. "multiple research demonstrations across model families"), NOT a paper citation.
-- broken_assumption: the specific defensive assumption that no longer holds.
-- implication: what this means operationally for defenders (a posture/control change).
-- watch_next: what evidence would strengthen, weaken, or change this assessment.
-- confidence_reason: one clause tying confidence to evidence maturity (e.g. "research demonstrations only, no in-the-wild use").
+- insight: one specific, grounded judgment naming the concrete technique/system + why it matters, 20-38 words, active voice. Prefer naming real systems/techniques over abstractions.
+- evidence: the concrete kinds of evidence behind it (e.g. "five distinct CVEs across AutoGPT, Flowise and LiteLLM; one confirmed breach"), grounded in the themes.
+- broken_assumption: the specific defensive assumption or control that no longer holds.
+- implication: the concrete action or posture change a defender should make in response.
+- watch_next: what specific evidence would strengthen, weaken, or change this assessment.
+- confidence_reason: one clause tying confidence to evidence maturity (e.g. "multiple CVEs but no confirmed in-the-wild chaining yet").
 
 CALIBRATION (critical): You are told the EVIDENCE MATURITY for this category. If the evidence is research/vulnerability-only with no observed exploitation, you MUST NOT claim activity is "confirmed", "operational", "at scale", or "in the wild". Frame as demonstrated capability and shifting assumptions, not active campaigns.
 
@@ -328,9 +332,11 @@ Produce the assessment and structured insights.`;
 
 const QA_SYSTEM = `You audit AI-threat insights for an intelligence briefing. For each insight, return one verdict.
 
-REJECT (verdict "summary") if the insight is merely a description of a paper, CVE, benchmark, or single source — i.e. removing source names would leave only an observation, not a landscape judgment.
+Insights SHOULD be specific and name real techniques, systems, or actors — do NOT reject an insight for being specific. Reject only these:
+
+REJECT (verdict "summary") if the insight is a bare description of one paper/CVE/benchmark with NO judgment — i.e. it states what a source found but draws no consequence for defenders (no broken assumption, no posture change, no "so what").
 REJECT (verdict "overreach") if it claims confirmed/operational/in-the-wild/at-scale activity when the stated evidence maturity is research/vulnerability-only.
-KEEP (verdict "ok") if it states what changed + a broken assumption or operational implication, and stays within the evidence maturity.
+KEEP (verdict "ok") if it names something concrete AND draws a consequence — what changed + a broken assumption or a defender action — and stays within the evidence maturity. A specific, grounded insight that names real systems is exactly what we want; keep it.
 
 Return ONLY JSON: {"verdicts":[{"index":0,"verdict":"ok"|"summary"|"overreach","reason":"..."|null}]}`;
 
