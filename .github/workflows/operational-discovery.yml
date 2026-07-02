@@ -45,7 +45,7 @@ jobs:
         # --skip-llm: discovery runs on deterministic gates only. The triage
         # provider rotation (Gemini/OpenAI/Ollama) is unreliable in CI; relevance
         # and source-typing are done by the Anthropic-backed understand job.
-        run: node scripts/ingestOperational.js --days ${{ github.event.inputs.days || '7' }} --queries-per-mission ${{ github.event.inputs.queries_per_mission || '2' }} --mission-batch 4 --skip-llm
+        run: node scripts/ingestOperational.js --days ${{ github.event.inputs.days || '7' }} --queries-per-mission ${{ github.event.inputs.queries_per_mission || '3' }} --mission-batch 8 --skip-llm
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
