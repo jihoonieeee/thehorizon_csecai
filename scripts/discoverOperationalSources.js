@@ -40,7 +40,7 @@ import { runDiscoverySearch } from "../lib/pipeline/discovery/discoverySearchRou
 import { candidatesToSources } from "../lib/pipeline/discovery/candidateToSource.js";
 import { normalizeSource } from "../lib/pipeline/ingest/normalizeSource.js";
 import { validateAndTypeSource } from "../lib/pipeline/validation/validateAndTypeSource.js";
-import { fetchPageText } from "../lib/pipeline/discovery/fetchCandidateText.js";
+import { fetchPageText, contentQualityOk } from "../lib/pipeline/discovery/fetchCandidateText.js";
 import { understandSource } from "../lib/pipeline/understandSource.js";
 import { DOMAINS } from "../lib/pipeline/taxonomy.js";
 
@@ -128,11 +128,18 @@ async function processOne(src) {
   try {
     // web_search returns short snippets — fetch the real article body before QA
     // so the text floor + Layer-3 relevance call judge the full source, not a teaser.
-    if ((src.full_text || "").length < 600) {
+    // Re-fetch when the text is short OR fails the prose gate (Tavily sometimes
+    // returns a page's nav/"Featured/Recent" chrome, which is long but not prose).
+    if ((src.full_text || "").length < 600 || !contentQualityOk(src.full_text)) {
       const fetched = await fetchPageText(src.url).catch(() => "");
-      if (fetched && fetched.length > (src.full_text || "").length) src.full_text = fetched;
+      if (fetched && contentQualityOk(fetched) &&
+          (fetched.length > (src.full_text || "").length || !contentQualityOk(src.full_text))) {
+        src.full_text = fetched;
+      }
     }
-    if ((src.full_text || "").length < 200) { tally.too_short++; return; }
+    // Demote sources whose body is too short OR is boilerplate we could not improve,
+    // so nav chrome is never passed to the relevance LLM as if it were the article.
+    if ((src.full_text || "").length < 200 || !contentQualityOk(src.full_text)) { tally.too_short++; return; }
     const id = makeId(src.url);
     const row = normalizeSource({
       id,

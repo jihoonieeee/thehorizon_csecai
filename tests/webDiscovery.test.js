@@ -481,15 +481,25 @@ await test("Tavily candidate carries full page_text used as full_text", () => {
   });
 });
 
-await test("hasUsableText: page_text or real quote passes; empty fails", () => {
-  assert.equal(hasUsableText({ page_text: "x".repeat(250) }), true);
+const PROSE = "Researchers disclosed a prompt injection attack against an AI coding agent. " +
+  "The technique poisons a tool description so the model exfiltrates repository secrets. " +
+  "We observed three variants in the wild, each achieving code execution on the host. " +
+  "The vulnerability was reported and patched within a week.";
+const NAV_JUNK = "Featured + + + + Recent + + + + Video + + [![Watch](https://x/a) [![More](https://x/b) | | Categories | | Subscribe | | Menu";
+
+await test("hasUsableText: real prose or quote passes; nav-junk and empty fail", () => {
+  assert.equal(hasUsableText({ page_text: PROSE }), true);
   assert.equal(hasUsableText({ verbatim_quote: "A concrete sentence about a real prompt injection attack here." }), true);
   assert.equal(hasUsableText({ verbatim_quote: "", summary: "short", page_text: "" }), false);
+  // Long-but-non-prose navigation chrome is NOT usable (content-quality gate) even
+  // though it clears the length floor — this is the fix for landmark sources being
+  // discarded on a nav-only misread.
+  assert.equal(hasUsableText({ page_text: NAV_JUNK + " " + NAV_JUNK }), false);
 });
 
 await test("enrichCandidatesWithText fetches thin candidates and demotes unfetchable ones", async () => {
   const cands = [
-    { opened_url: "https://a.com/has", page_text: "y".repeat(300) },          // present
+    { opened_url: "https://a.com/has", page_text: PROSE },                    // present (real prose)
     { opened_url: "https://b.com/serp", verbatim_quote: "", summary: "" },    // fetched
     { opened_url: "https://c.com/dead", verbatim_quote: "", summary: "" },    // thin
   ];

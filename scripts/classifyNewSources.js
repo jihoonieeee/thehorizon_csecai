@@ -43,7 +43,7 @@ if (!data?.length) { console.log("No uncategorised PASS sources found. Done."); 
 
 console.log(`  ${data.length} sources to classify\n`);
 
-const { relevant, discarded, counts } = await understandAllSources(data, {
+const { relevant, adjacent = [], discarded, counts } = await understandAllSources(data, {
   supabase: sb,
   concurrency: 5,
   onProgress: (done, total) => process.stdout.write(`    ${done}/${total}\r`),
@@ -82,8 +82,9 @@ if (defensive.length) {
   }
 }
 
-console.log(`\n  Classified:  ${relevant.length} relevant / ${discarded.length} discarded`);
+console.log(`\n  Classified:  ${relevant.length} offensive / ${adjacent.length} adjacent-kept / ${discarded.length} discarded`);
 console.log(`  Split:       ${offensive.length} offensive / ${defensive.length} defensive`);
+if (adjacent.length) console.log(`  Adjacent (kept as reference context, review status):\n${adjacent.map(a => `    • ${(a.title||"").slice(0,60)}`).join("\n")}`);
 if (defensive.length) console.log(`  Defensive QA: ${defQa.counts.qa_pass}/${defQa.counts.total} pass`);
 console.log(`  By category: ${JSON.stringify(counts.by_category)}`);
 console.log(`\n  Next: run  node scripts/extractEvidenceBatch.js  to extract evidence for these.`);
