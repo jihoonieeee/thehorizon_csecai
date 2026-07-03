@@ -11,6 +11,7 @@ import { computeEligibilityFlags } from "../lib/pipeline/ingest/eligibilityFlags
 import { isSafeUrl, isPlausibleSourceUrl } from "../lib/pipeline/validation/urlSafety.js";
 import { checkSourceValidity } from "../lib/pipeline/ingest/sourceValidity.js";
 import { splitDateRange } from "../lib/pipeline/ingest/connectors/nvdConnector.js";
+import { inferCandidateDate } from "../lib/pipeline/discovery/candidateToSource.js";
 
 let passed = 0;
 let failed = 0;
@@ -31,13 +32,17 @@ function test(name, fn) {
 
 console.log("\nnormalizeSource");
 
-test("date_confidence defaults to 'exact' when date_published is set", () => {
+test("date_confidence defaults to 'estimated' (not 'exact') when a date is set but confidence is not declared", () => {
+  // Fail-safe: a connector must EXPLICITLY assert "exact" to have its date
+  // trusted for period-report bucketing. An undeclared date is only "estimated"
+  // so a connector passing an unverified date (e.g. sitemap <lastmod>) can no
+  // longer silently launder it into "exact" and leak wrong dates into reports.
   const source = normalizeSource({
     title: "Test",
     url: "https://example.com/article",
     date_published: "2026-01-15T10:00:00Z",
   });
-  assert.equal(source.date_confidence, "exact");
+  assert.equal(source.date_confidence, "estimated");
 });
 
 test("date_confidence defaults to 'none' when date_published is missing", () => {
@@ -47,6 +52,25 @@ test("date_confidence defaults to 'none' when date_published is missing", () => 
   });
   assert.equal(source.date_confidence, "none");
   assert.equal(source.date_published, null);
+});
+
+test("inferCandidateDate prefers URL-path date over a date appearing in body text", () => {
+  // A date mentioned in the body (e.g. a referenced incident) must not override
+  // the article's own canonical YYYY/MM/DD URL-path date.
+  const d = inferCandidateDate({
+    opened_url: "https://dfrlab.org/2025/06/24/grok-struggles-with-fact-checking",
+    title: "Grok struggles with fact checking",
+    page_text: "This week we saw an attack first reported on 2025-07-21 elsewhere.",
+  });
+  assert.equal(d, "2025-06-24");
+});
+
+test("inferCandidateDate does not prefer last_updated over a real publish/URL date", () => {
+  const d = inferCandidateDate({
+    opened_url: "https://blog.example.com/2026/03/05/some-post",
+    last_updated: "2026-06-30",
+  });
+  assert.equal(d, "2026-03-05");
 });
 
 test("date_confidence respects explicitly passed value", () => {
