@@ -7,7 +7,7 @@ This call does ONE cognitive task: **read the source and decide if it is about a
 
 It produces:
 1. A 2-3 sentence filler-free summary of the source's main message
-2. An AI-threat focus verdict (central | passing | none)
+2. An AI-threat focus verdict (central | adjacent | passing | none)
 3. A candidate threat domain (only when focus = central)
 
 It does NOT produce source_type or source_credibility_signal.
@@ -25,14 +25,21 @@ You are given a source's title, publisher, and a text excerpt. Do THREE things a
 Write a clear 2-3 sentence summary of the source's MAIN MESSAGE. Report the most important finding or argument only. No filler, no preamble ("This article discusses..."), no marketing language, no hedging. State what the source actually reports or argues.
 
 2) AI-THREAT FOCUS
-Decide how central an AI/ML security threat is to this source. Choose exactly one:
-- "central"  — the source is genuinely about an AI/ML threat, vulnerability, attack, abuse, or AI-enabled offensive capability. This is the subject, not an aside.
-- "passing"  — the source is about something else and only MENTIONS AI/an AI keyword in passing. The AI angle is incidental.
-- "none"     — the source has no real connection to an AI/ML security threat at all.
+Decide the source's relationship to the AI-threat landscape. This platform tracks CONCRETE OFFENSIVE AI threats but also keeps landmark REFERENCE context. Choose exactly one:
+- "central"  — a genuine OFFENSIVE finding: a specific AI/ML threat, vulnerability, attack, abuse, incident, or AI-enabled offensive capability. This is the subject, not an aside. KEPT and mapped to an offensive domain.
+- "adjacent" — genuinely, centrally about AI CYBER-security but NOT itself an offensive finding — landmark REFERENCE context a threat briefing would still cite. KEPT as context (not an offensive domain). Use "adjacent" (NOT "passing"/"none") for:
+    • authoritative frameworks / standards / taxonomies (OWASP LLM/Agentic Top 10, NIST AI 100-2, MITRE ATLAS, Google SAIF, NSA/CISA guidance)
+    • dual-use autonomous offensive CAPABILITY milestones (DARPA AIxCC, Google Big Sleep, an LLM autonomously finding zero-days) even when framed as find-AND-fix
+    • a standalone defensive method / detection / hardening framework against AI threats
+    • a landmark survey / SoK / systematization of the AI threat landscape
+    • a frontier-model release or policy event with material AI-security implications
+  The test: "Is this real AI-cyber-security a threat analyst should have on file, even though it names no single new attack?" If yes → "adjacent", NOT "passing"/"none".
+- "passing"  — the source is about something else and only MENTIONS AI/an AI keyword in passing. The AI angle is incidental. DISCARDED.
+- "none"     — the source has no real connection to an AI/ML security threat at all. DISCARDED.
 
-Relevant AI-threat topics include: attacks on ML models (data poisoning, evasion, model extraction, backdoors, adversarial examples); LLM threats (prompt injection, jailbreaks, RAG poisoning, data leakage, guardrail bypass); agentic AI threats (MCP/tool abuse, autonomous agent misuse, coding-agent vulnerabilities); and AI-enabled threats (deepfakes, AI phishing, AI malware, voice cloning, disinformation).
+Offensive ("central") AI-threat topics include: attacks on ML models (data poisoning, evasion, model extraction, backdoors, adversarial examples); LLM threats (prompt injection, jailbreaks, RAG poisoning, data leakage, guardrail bypass); agentic AI threats (MCP/tool abuse, autonomous agent misuse, coding-agent vulnerabilities); and AI-enabled threats (deepfakes, AI phishing, AI malware, voice cloning, disinformation).
 
-A source that merely uses the word "AI" or names a model while being about an unrelated breach, a funding round, or a non-AI vulnerability is "passing", NOT "central".
+A source that merely uses the word "AI" or names a model while being about an unrelated breach, a funding round, or a non-AI vulnerability is "passing", NOT "central" or "adjacent". A generic "top N AI security trends" editorial roundup with no specific finding is "passing", not "adjacent".
 
 3) CANDIDATE DOMAIN
 If (and only if) ai_threat_focus is "central", name the single offensive AI-threat domain this source best fits — this is a HINT that lets a later stage narrow its tag set. Choose one:
@@ -41,7 +48,7 @@ If (and only if) ai_threat_focus is "central", name the single offensive AI-thre
 - "agentic_ai_threats" — AI agents/tool use (MCP abuse, tool/memory poisoning, autonomous-agent misuse, coding-agent vulnerabilities)
 - "ai_enabled_threats" — AI used as the attacker's tool (deepfakes, AI phishing, AI malware, voice cloning, disinformation)
 - "unclear_or_adjacent" — central to AI security but none of the four clearly fits
-If ai_threat_focus is "passing" or "none", set candidate_domain to "unclear_or_adjacent".
+If ai_threat_focus is "adjacent", "passing", or "none", set candidate_domain to "unclear_or_adjacent".
 
 RULES:
 1. Return strict JSON only — no markdown, no commentary.
@@ -52,7 +59,7 @@ RULES:
 OUTPUT FORMAT:
 {
   "summary": "<2-3 sentence filler-free overview of the main message>",
-  "ai_threat_focus": "central" | "passing" | "none",
+  "ai_threat_focus": "central" | "adjacent" | "passing" | "none",
   "is_ai_threat": true | false,
   "candidate_domain": "traditional_ai_threats" | "llm_threats" | "agentic_ai_threats" | "ai_enabled_threats" | "unclear_or_adjacent",
   "confidence": "high" | "medium" | "low",
@@ -75,7 +82,7 @@ Text excerpt:
 ## Notes
 
 - Cheap model (Haiku / Flash-Lite). Runs once per source that clears the deterministic AI-signal pre-gate.
-- "is_ai_threat" should be true only when ai_threat_focus is "central".
+- "is_ai_threat" should be true only when ai_threat_focus is "central" (an offensive finding). It is false for "adjacent" (kept as reference context), "passing", and "none".
 - source_type: handled by deterministic sourceTyping.js (by source_type field from ingestion) with dataTyping.js LLM fallback only when truly unknown.
 - source_credibility_signal: derived deterministically by deriveCredibilitySignal() from publisher_class + source_type.
 - Text excerpt is up to 6000 chars — it is the primary signal.

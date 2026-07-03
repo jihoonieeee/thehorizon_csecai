@@ -36,14 +36,20 @@ function mkSource(over = {}) {
   };
 }
 
-// LLM stub: returns whatever the per-task scripts dictate.
-function mkLlm({ relevance, qa } = {}) {
+// LLM stub: returns whatever the per-task scripts dictate. The content-quality
+// gate (source_quality_gate) fails CLOSED to thin_content when its LLM is
+// unavailable, so model an available gate returning `quality` (default substantive)
+// — otherwise every central/adjacent source would be forced to review.
+function mkLlm({ relevance, qa, quality = { content_quality: "substantive", reason: "stub" } } = {}) {
   return async (sys, user, opts) => {
     if (opts.task === "source_relevance") {
       return { result: relevance, llm_metadata: { llm_used: true } };
     }
     if (opts.task === "source_relevance_qa") {
       return { result: qa, llm_metadata: { llm_used: true } };
+    }
+    if (opts.task === "source_quality_gate") {
+      return { result: quality, llm_metadata: { llm_used: true } };
     }
     return { result: null, llm_metadata: { llm_used: false } };
   };
@@ -111,6 +117,41 @@ await test("passing (incidental) mention is rejected and domain cleared", async 
   assert.equal(r.candidate_domain, "unclear_or_adjacent");
 });
 
+await test("adjacent (landmark reference) source is KEPT as context, not rejected", async () => {
+  // DARPA AIxCC-style dual-use capability milestone: centrally about AI cyber-security
+  // but not itself an offensive finding. Must be kept (pass) as unclear_or_adjacent
+  // context, off the offensive counts — not rejected, not stuck in review.
+  const relevance = {
+    summary: "DARPA's AI Cyber Challenge fielded autonomous systems that find and patch vulnerabilities in real codebases, a dual-use capability milestone.",
+    ai_threat_focus: "adjacent", is_ai_threat: false, candidate_domain: "unclear_or_adjacent",
+    source_type: "capability_demonstration", confidence: "high",
+  };
+  const qa = { verdict_correct: true, summary_grounded: true, corrected_ai_threat_focus: "adjacent", corrected_is_ai_threat: false, corrected_source_type: "capability_demonstration", issues: "" };
+  const src = mkSource({ trust_tier: "high", title: "DARPA AIxCC final results",
+    full_text: "Autonomous cyber reasoning systems built on an LLM agent found and patched vulnerabilities across real open-source codebases in the AI Cyber Challenge finals. ".repeat(6) });
+  const r = await validateAndTypeSource(src, { llmFn: mkLlm({ relevance, qa }), skipUrlCheck: true });
+  assert.equal(r.validation_status, "pass", "adjacent context is kept, not rejected or reviewed");
+  assert.equal(r.ai_threat_focus, "adjacent");
+  assert.equal(r.relevance_tier, "adjacent");
+  assert.equal(r.is_ai_threat ?? false, false, "adjacent is not an offensive finding");
+  assert.equal(r.candidate_domain, "unclear_or_adjacent");
+  assert.equal(r.downstream_route, "layer4");
+  assert.ok((r.route_reason_codes || []).includes("adjacent_context_keep"));
+});
+
+await test("QA can correct central → adjacent and the source is still kept", async () => {
+  const relevance = { ...CENTRAL };                // call #1 over-claims an offensive finding
+  const qa = {                                     // QA: it's really a framework/reference
+    verdict_correct: false, summary_grounded: true,
+    corrected_ai_threat_focus: "adjacent", corrected_is_ai_threat: false,
+    corrected_source_type: "governance_signal", issues: "Standards taxonomy, not a new attack.",
+  };
+  const r = await validateAndTypeSource(mkSource({ trust_tier: "high" }), { llmFn: mkLlm({ relevance, qa }), skipUrlCheck: true });
+  assert.equal(r.ai_threat_focus, "adjacent");
+  assert.equal(r.validation_status, "pass");
+  assert.equal(r.candidate_domain, "unclear_or_adjacent", "domain cleared for adjacent");
+});
+
 await test("QA corrects a wrong verdict (central → passing) and flips to reject", async () => {
   const relevance = { ...CENTRAL };              // call #1 says central
   const qa = {                                    // QA disagrees: it's a passing mention
@@ -166,8 +207,9 @@ await test("LLM-unavailable (llm_used:false) falls back deterministically", asyn
 // ── Batch + helpers ────────────────────────────────────────────────────────────
 console.log("\nbatch + mapping helpers");
 
-await test("deriveRelevanceFromFocus maps central→core, passing/none→off_topic", () => {
+await test("deriveRelevanceFromFocus maps central→core, adjacent→adjacent, passing/none→off_topic", () => {
   assert.equal(deriveRelevanceFromFocus("central").relevance_tier, "core");
+  assert.equal(deriveRelevanceFromFocus("adjacent").relevance_tier, "adjacent");
   assert.equal(deriveRelevanceFromFocus("passing").relevance_tier, "off_topic");
   assert.equal(deriveRelevanceFromFocus("none").relevance_tier, "off_topic");
 });
