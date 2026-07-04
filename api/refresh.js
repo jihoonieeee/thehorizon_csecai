@@ -73,13 +73,10 @@ export default async function handler(req, res) {
 
     runId = await startIngestionRun();
 
-    const result = await collectRawSources(customWindow, {
-      webDiscovery: true,
-      // Cap per-mission query budget so the total search+triage fits within the
-      // cron function's 300s window. 16 missions × 3 queries ≈ 48 sequential
-      // calls; subsequent same-day runs hit the mission cache and are instant.
-      discoveryMaxQueriesPerMission: 3,
-    });
+    // Web discovery (Layer 1B/1C) is NOT run here — Vercel Hobby caps functions
+    // at 10s; discovery takes 3–8 min. Run it outside Vercel instead:
+    //   node scripts/ingestOperational.js --days 1
+    const result = await collectRawSources(customWindow);
 
     const snapshot = {
       generated_at: new Date().toISOString(),
@@ -103,9 +100,6 @@ export default async function handler(req, res) {
       validation_stats: result.validation_stats,
 
       pipeline_counts: result.pipeline_counts,
-
-      web_discovery_accepted_count: result.web_discovery_accepted_count,
-      web_discovery_audit_count:    result.web_discovery_audit_count,
 
       sources: result.sources,
       archive: result.archive,
