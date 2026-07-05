@@ -161,6 +161,15 @@ test("supply chain: traditional model artifact → TAI10", () => {
   expectMap({ primary_exploit_mechanism: "supply_chain_compromise", affected_layer: "model" },
     { domain: "traditional_ai_threats", primary: "TAI10_ai_supply_chain_compromise", keep: true });
 });
+test("supply chain: LLM-serving-infra (target_is_llm) → LLM03, not TAI10", () => {
+  // e.g. a compromised LiteLLM/vLLM package — application layer but LLM-specific
+  expectMap({ primary_exploit_mechanism: "supply_chain_compromise", affected_layer: "application", target_is_llm: true },
+    { domain: "llm_threats", primary: "LLM03_llm_supply_chain", keep: true });
+});
+test("supply chain: general-ML infra (target_is_llm false) stays TAI10", () => {
+  expectMap({ primary_exploit_mechanism: "supply_chain_compromise", affected_layer: "application", target_is_llm: false },
+    { domain: "traditional_ai_threats", primary: "TAI10_ai_supply_chain_compromise", keep: true });
+});
 test("supply chain: agent ecosystem → ASI04", () => {
   expectMap({ primary_exploit_mechanism: "supply_chain_compromise", affected_layer: "agent" },
     { domain: "agentic_ai_threats", primary: "ASI04_agentic_supply_chain", keep: true });

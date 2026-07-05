@@ -583,6 +583,7 @@ export function OverviewPage() {
             <span className="hz-insight-stat-value">{data.summary?.total ?? "—"}</span>
             <span className="hz-insight-stat-label">Sources</span>
           </div>
+          <span className="hz-insight-stat-eq">=</span>
           {Object.entries(CAT_COLOR).map(([key, color]) => (
             <div key={key} className="hz-insight-stat">
               <span className="hz-insight-stat-value" style={{ color }}>
@@ -591,6 +592,16 @@ export function OverviewPage() {
               <span className="hz-insight-stat-label">{CAT_SHORT[key] || CAT_LABEL[key]}</span>
             </div>
           ))}
+          {/* Everything outside the 4 offensive categories: adjacent context
+              (defenses, frameworks, generic CVEs) — so the row sums to Sources. */}
+          {data.summary?.other != null && (
+            <div className="hz-insight-stat" title="Adjacent context outside the 4 offensive categories: defenses, frameworks, generic CVEs">
+              <span className="hz-insight-stat-value" style={{ color: "#94a3b8" }}>
+                {data.summary.other}
+              </span>
+              <span className="hz-insight-stat-label">Other</span>
+            </div>
+          )}
         </div>
       )}
 

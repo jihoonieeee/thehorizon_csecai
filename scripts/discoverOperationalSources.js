@@ -148,6 +148,11 @@ async function processOne(src) {
       publisher:      src.publisher || "Unknown",
       author:         src.author || src.publisher || "",
       date_published: src.date_published,
+      // Carry the honest date confidence from candidateToSource (exact/estimated/
+      // low) instead of dropping it — otherwise the DB column default ("exact")
+      // silently launders inferred/collection-time dates into authoritative ones.
+      date_confidence:        src.date_confidence,
+      date_published_actual:  src.date_published_actual,
       source_type:    src.source_type && src.source_type !== "unknown" ? src.source_type : "incident",
       full_text:      src.full_text,
       trust_tier:     src.trust_tier && src.trust_tier !== "unknown" ? src.trust_tier : "medium",
@@ -185,6 +190,10 @@ async function processOne(src) {
         publisher:          row.publisher,
         author:             row.publisher,
         date_published:     row.date_published,
+        // Persist the computed confidence so inferred/collection-time dates are NOT
+        // laundered to the DB default ("exact") and stay visible to the date audit.
+        date_confidence:    row.date_confidence,
+        date_published_actual: row.date_published_actual,
         source_type:        (v2ok && u.source_type) || v.source_type || row.source_type,
         full_text:          row.full_text,
         summary:            row.full_text?.slice(0, 500) || "",
