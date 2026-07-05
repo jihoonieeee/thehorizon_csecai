@@ -6,7 +6,12 @@
  *   category   — main_category filter
  *   trust_tier — comma-separated trust tiers
  *   search     — text search on title + summary
- *   limit      — max rows (default 200, max 500)
+ *   limit      — max rows to return (default: all matching, up to HARD_CAP)
+ *
+ * Supabase/PostgREST returns at most 1000 rows per request, so the full result
+ * set is assembled by paging through with .range() until exhausted. The corpus
+ * is a few thousand rows — small enough to hand the whole (filtered) set to the
+ * client, which does the category/tag/tier/search faceting locally.
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -47,34 +52,51 @@ export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "GET only" });
 
   try {
+    const HARD_CAP = 5000;   // safety ceiling on total rows assembled
+    const PAGE     = 1000;   // PostgREST per-request row limit
+
     const p       = req.query || {};
-    const period  = (p.period || "last-90d").trim();
+    const period  = (p.period || "all-time").trim();
     const cat     = p.category || "";
     const search  = p.search || "";
     const tiers   = p.trust_tier ? p.trust_tier.split(",").map(s => s.trim()).filter(Boolean) : [];
-    const limit   = Math.min(parseInt(p.limit || "200", 10), 500);
+    const cap     = p.limit ? Math.min(Math.max(parseInt(p.limit, 10) || 0, 0), HARD_CAP) : HARD_CAP;
 
     const { start, end, label } = periodWindow(period);
 
-    let q = supabase
-      .from("sources")
-      .select("id,title,url,publisher,author,date_published,main_category,trust_tier,tags,source_type,short_summary,summary,analyst_brief,validation_status,ai_specificity_score,intelligence")
-      .not("validation_status", "eq", "reject")
-      .order("date_published", { ascending: false })
-      .limit(limit);
+    // Build a fresh filtered query for each page (the builder is single-use).
+    const buildQuery = (from, to) => {
+      let q = supabase
+        .from("sources")
+        .select("id,title,url,publisher,author,date_published,main_category,trust_tier,tags,source_type,short_summary,summary,analyst_brief,validation_status,ai_specificity_score,intelligence")
+        .not("validation_status", "eq", "reject")
+        // Stable ordering (date desc, id asc tiebreak) so .range() paging never
+        // skips or double-counts rows that share a publish date.
+        .order("date_published", { ascending: false, nullsFirst: false })
+        .order("id", { ascending: true })
+        .range(from, to);
 
-    if (start) q = q.gte("date_published", start);
-    if (end)   q = q.lt("date_published", end);
-    if (cat)   q = q.eq("main_category", cat);
-    if (tiers.length) q = q.in("trust_tier", tiers);
+      if (start) q = q.gte("date_published", start);
+      if (end)   q = q.lt("date_published", end);
+      if (cat)   q = q.eq("main_category", cat);
+      if (tiers.length) q = q.in("trust_tier", tiers);
+      if (search) {
+        const safe = search.replace(/[%_\\]/g, "\\$&");
+        q = q.or(`title.ilike.%${safe}%,publisher.ilike.%${safe}%,short_summary.ilike.%${safe}%`);
+      }
+      return q;
+    };
 
-    if (search) {
-      const safe = search.replace(/[%_\\]/g, "\\$&");
-      q = q.or(`title.ilike.%${safe}%,publisher.ilike.%${safe}%,short_summary.ilike.%${safe}%`);
+    // Page through until the corpus is exhausted or the cap is reached.
+    const data = [];
+    for (let from = 0; from < cap; from += PAGE) {
+      const to = Math.min(from + PAGE - 1, cap - 1);
+      const { data: chunk, error } = await buildQuery(from, to);
+      if (error) throw new Error(error.message);
+      if (!chunk || chunk.length === 0) break;
+      data.push(...chunk);
+      if (chunk.length < PAGE) break;   // last (partial) page
     }
-
-    const { data, error } = await q;
-    if (error) throw new Error(error.message);
 
     return res.status(200).json({
       period,

@@ -133,7 +133,7 @@ function SourceDetail({ s }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function SourcesPage() {
-  const [period,      setPeriod]      = useState("last-90d");
+  const [period,      setPeriod]      = useState("all-time");
   const [activeTab,   setActiveTab]   = useState("all");
   const [activeTags,  setActiveTags]  = useState([]);
   const [search,      setSearch]      = useState("");
@@ -153,7 +153,9 @@ export function SourcesPage() {
     setActiveTags([]);
     setPage(1);
 
-    const params = new URLSearchParams({ period, limit: "500" });
+    // No limit param → the API returns the full filtered corpus (paged past the
+    // PostgREST 1000-row cap). All faceting below is done client-side.
+    const params = new URLSearchParams({ period });
     fetch(`/api/sources?${params}`)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(json => {
@@ -189,7 +191,10 @@ export function SourcesPage() {
       if (activeTab !== "all" && s.main_category !== activeTab) return false;
       if (tierFilter && s.importance?.tier !== tierFilter) return false;
       if (activeTags.length > 0 && !activeTags.every(t => s.tags?.includes(t))) return false;
-      if (q && !s.title?.toLowerCase().includes(q) && !s.publisher?.toLowerCase().includes(q)) return false;
+      if (q) {
+        const hay = `${s.title || ""} ${s.publisher || ""} ${s.short_summary || s.summary || ""} ${(s.tags || []).join(" ")}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
       return true;
     });
     if (sortBy === "importance") {
