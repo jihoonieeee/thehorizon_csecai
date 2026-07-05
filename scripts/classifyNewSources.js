@@ -25,16 +25,26 @@ const args  = process.argv.slice(2);
 const getArg = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i+1] ? args[i+1] : d; };
 const LIMIT  = parseInt(getArg("--limit", "200"), 10);
 const SINCE_H = getArg("--since-hours", null);
+// --reclassify-unclear: also pick up unclear_or_adjacent pass/review sources that may be miscategorized
+const RECLASSIFY_UNCLEAR = args.includes("--reclassify-unclear");
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-console.log("Loading PASS sources with no v2 category...");
+const label = RECLASSIFY_UNCLEAR
+  ? "PASS sources with no v2 category OR unclear_or_adjacent"
+  : "PASS sources with no v2 category";
+console.log(`Loading ${label}...`);
 let q = sb.from("sources")
-  .select("id,title,url,publisher,source_type,trust_tier,full_text,clean_text,summary,main_category,validation_status,date_published")
-  .is("main_category", null)
+  .select("id,title,url,publisher,source_type,trust_tier,full_text,clean_text,summary,main_category,validation_status,candidate_domain,ai_threat_focus,date_published")
   .neq("validation_status", "reject")
   .order("created_at", { ascending: false })
   .limit(LIMIT);
+
+if (RECLASSIFY_UNCLEAR) {
+  q = q.or("main_category.is.null,and(main_category.eq.unclear_or_adjacent,validation_status.eq.pass),and(main_category.eq.unclear_or_adjacent,validation_status.eq.review)");
+} else {
+  q = q.is("main_category", null);
+}
 if (SINCE_H) q = q.gte("created_at", new Date(Date.now() - parseFloat(SINCE_H) * 3600 * 1000).toISOString());
 
 const { data, error } = await q;

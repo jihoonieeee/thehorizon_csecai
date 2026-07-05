@@ -10,6 +10,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { computeImportance } from "../lib/pipeline/importance.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -57,7 +58,7 @@ export default async function handler(req, res) {
 
     let q = supabase
       .from("sources")
-      .select("id,title,url,publisher,author,date_published,main_category,trust_tier,tags,short_summary,summary,analyst_brief,validation_status,ai_specificity_score")
+      .select("id,title,url,publisher,author,date_published,main_category,trust_tier,tags,source_type,short_summary,summary,analyst_brief,validation_status,ai_specificity_score,intelligence")
       .not("validation_status", "eq", "reject")
       .order("date_published", { ascending: false })
       .limit(limit);
@@ -83,10 +84,26 @@ export default async function handler(req, res) {
         end:   end   ? end.slice(0, 10)   : null,
       },
       count: data?.length || 0,
-      sources: (data || []).map(s => ({
-        ...s,
-        short_summary: s.short_summary || s.analyst_brief || s.summary || null,
-      })),
+      sources: (data || []).map(s => {
+        // Vetting fields — everything an analyst needs to judge a source WITHOUT
+        // opening it: full brief, importance tier, and WHY it got its taxonomy.
+        const imp  = computeImportance(s);                 // deterministic, live
+        const mech = s.intelligence?.mechanism_classification || null;
+        const { intelligence, ...rest } = s;               // drop the heavy jsonb blob
+        return {
+          ...rest,
+          short_summary: s.short_summary || s.analyst_brief || s.summary || null,
+          analyst_brief: s.analyst_brief || null,
+          importance:    { tier: imp.tier, reality: imp.reality, posture: imp.posture },
+          is_defensive:  s.intelligence?.is_defensive === true,
+          mechanism: mech ? {
+            exploit:     mech.primary_exploit_mechanism || null,
+            consequence: mech.primary_consequence || null,
+            rationale:   mech.rationale || null,
+            conflict:    mech.conflict === true,           // LLM/deterministic tag disagreement — worth an analyst's eye
+          } : null,
+        };
+      }),
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
