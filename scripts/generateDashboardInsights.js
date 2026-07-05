@@ -41,6 +41,8 @@ import {
 } from "../lib/dashboard/evidenceMaturity.js";
 import { persistCallCost, setCurrentRunId } from "../lib/llm/usagePersistence.js";
 import { computeImportance } from "../lib/pipeline/importance.js";
+import { sourceSignalScore, isNoiseSource, bySignalThenRecency, partitionBySignal } from "../lib/pipeline/sourceSignal.js";
+import { significanceRank } from "../lib/pipeline/researchSignificance.js";
 
 const args     = process.argv.slice(2);
 const getArg   = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i+1] ? args[i+1] : d; };
@@ -473,8 +475,15 @@ async function loadWindowEvidence(sourceIds) {
 // Build the Stage-A input for one category: grounded evidence facts spread
 // round-robin across sources (breadth — every source contributes before any
 // source contributes a second fact), then per-source summaries as fallback for
-// sources with no evidence. No fuzzy importance ranking — within a single source
-// facts are ordered by the discrete quote_grounded + specificity flags only.
+// sources with no evidence.
+//
+// SIGNAL-PRIORITISED (noise resistance): the round-robin rotates over sources
+// ordered by combined signal (importance reality + research significance + trust)
+// STRONGEST-FIRST, and pure-noise sources are held back — they only contribute if
+// the signal sources don't fill the cap. So a realized incident or a landmark
+// paper leads the findings pool and a low-signal source can't crowd it out. Within
+// a single source, facts are still ordered by the discrete quote_grounded +
+// specificity flags only (no fuzzy per-fact scoring).
 function composeCategoryFindings(catRows, evItems = [], cap = 40) {
   const bySource = new Map();
   for (const e of evItems) {
@@ -489,21 +498,34 @@ function composeCategoryFindings(catRows, evItems = [], cap = 40) {
       (SPEC_RANK[b.specificity] || 0) - (SPEC_RANK[a.specificity] || 0));
   }
 
+  // Order the source queues by signal (strongest first), noise sources last, so
+  // the round-robin admits high-signal sources before it ever reaches noise.
+  const rowById = new Map(catRows.map(r => [r.id, r]));
+  const { signal: signalIds, noise: noiseIds } = partitionBySignal(
+    [...bySource.keys()].map(id => rowById.get(id)).filter(Boolean)
+  );
+  const orderedQueues = [...signalIds, ...noiseIds]
+    .map(r => bySource.get(r.id))
+    .filter(q => q && q.length);
+
   const findings = [];
-  const queues = [...bySource.values()];
   let i = 0, guard = 0;
-  const guardMax = cap * (queues.length + 1) + 20;
-  while (findings.length < cap && queues.some(q => q.length) && guard++ < guardMax) {
-    const q = queues[i++ % queues.length];
+  const guardMax = cap * (orderedQueues.length + 1) + 20;
+  while (findings.length < cap && orderedQueues.some(q => q.length) && guard++ < guardMax) {
+    const q = orderedQueues[i++ % orderedQueues.length];
     if (q.length) findings.push(q.shift().fact.trim());
   }
   const fromEvidence = findings.length;
   const covered = new Set(bySource.keys());
 
+  // Summary fallback for sources with no evidence — signal-ordered too, and pure
+  // noise excluded unless the pool is still thin (so we never starve a sparse
+  // category, but noise never leads).
   if (findings.length < cap) {
-    for (const r of catRows) {
+    const { signal, noise } = partitionBySignal(catRows.filter(r => !covered.has(r.id)));
+    const fallbackOrder = findings.length + signal.length >= 8 ? signal : [...signal, ...noise];
+    for (const r of fallbackOrder) {
       if (findings.length >= cap) break;
-      if (covered.has(r.id)) continue;
       const t = summaryText(r);
       if (t.length > 20) { findings.push(t); covered.add(r.id); }
     }
@@ -514,6 +536,8 @@ function composeCategoryFindings(catRows, evItems = [], cap = 40) {
     fromEvidence,
     fromSummary: findings.length - fromEvidence,
     evidenceSources: bySource.size,
+    signalSources: signalIds.length,
+    noiseSuppressed: noiseIds.length,
   };
 }
 
@@ -824,11 +848,14 @@ export async function attributeSources(insights, catSources, windowLabel, catLab
   if (!insights.length || !catSources?.length) return withEmpty;
   if (!process.env.ANTHROPIC_API_KEY) return withEmpty;
 
-  // Candidate pool: sources with real summaries, richest evidence + most recent
-  // first, capped to keep the prompt bounded.
+  // Candidate pool: sources with real summaries, ranked by combined signal
+  // (importance reality + research significance + trust), maturity, then recency —
+  // so the attributable citations are drawn from the strongest sources (a landmark
+  // paper or realized incident) rather than whatever is merely most recent.
   const ranked = [...catSources]
     .filter(s => s.url && summaryText(s).length > 20)
     .sort((a, b) =>
+      sourceSignalScore(b) - sourceSignalScore(a) ||
       (SRC_TYPE_RANK[b.source_type] || 0) - (SRC_TYPE_RANK[a.source_type] || 0) ||
       (b.date_published || "").localeCompare(a.date_published || ""))
     .slice(0, 40);
@@ -910,13 +937,16 @@ Return { "top": [ { "n", "why" } ] } with at most ${n} entries, most important f
 
 export async function selectTopSources(windowRows, windowLabel, n = 10) {
   if (!process.env.ANTHROPIC_API_KEY) return null;
-  // Deterministic candidate pool: real offensive signal (realized/proven) with a
-  // usable summary, importance-ranked, capped so the prompt stays bounded.
+  // Deterministic candidate pool: strong offensive signal with a usable summary,
+  // ranked by combined signal. Admits realized/proven incidents AND landmark/notable
+  // research (a first-of-kind paper is a legitimate top source even though its
+  // reality is only "research") — the significance overlay is what lets it in.
   const REAL = { realized: 3, proven: 2 };
   const candidates = windowRows
     .map(s => ({ ...s, _imp: computeImportance(s), _tier: computeImportance(s).tier }))
-    .filter(s => s.url && REAL[s._imp.reality] && s._imp.posture === "offensive" && summaryText(s).length > 20)
-    .sort((a, b) => (REAL[b._imp.reality] - REAL[a._imp.reality]) || (b.date_published || "").localeCompare(a.date_published || ""))
+    .filter(s => s.url && s._imp.posture === "offensive" && summaryText(s).length > 20 &&
+      (REAL[s._imp.reality] || significanceRank(s) >= 2))   // realized/proven OR landmark/notable research
+    .sort((a, b) => sourceSignalScore(b) - sourceSignalScore(a) || (b.date_published || "").localeCompare(a.date_published || ""))
     .slice(0, 40);
   if (candidates.length < 3) return null;
 
@@ -946,6 +976,7 @@ export async function selectTopSources(windowRows, windowLabel, n = 10) {
       trust_tier: s.trust_tier || null,
       importance: s._imp.tier,
       reality:    s._imp.reality,
+      significance: s.intelligence?.significance?.level || null,   // landmark|notable|… (research only)
       summary:    summaryText(s).slice(0, 240) || null,
       why:        typeof p.why === "string" ? p.why.trim().slice(0, 220) : null,
     });
@@ -1086,7 +1117,7 @@ async function main() {
 
     // Compose findings: evidence facts (round-robin across sources) + summary fallback.
     const catRows = currRows.filter(r => r.main_category === cat.key);
-    const { findings, fromEvidence, fromSummary, evidenceSources } =
+    const { findings, fromEvidence, fromSummary, evidenceSources, noiseSuppressed } =
       composeCategoryFindings(catRows, evidenceByCat[cat.key], 40);
 
     if (!FORCE && existingCats.has(cat.key)) {
@@ -1108,7 +1139,7 @@ async function main() {
       skipped++; continue;
     }
 
-    console.log(`  ${cat.label.padEnd(28)} ${totalCount} sources · ${findings.length} findings (${fromEvidence} facts/${evidenceSources} src + ${fromSummary} summaries) · ${maturityShortLine(maturity)} · conf=${confidence.level}`);
+    console.log(`  ${cat.label.padEnd(28)} ${totalCount} sources · ${findings.length} findings (${fromEvidence} facts/${evidenceSources} src + ${fromSummary} summaries · signal-first, ${noiseSuppressed} noise held back) · ${maturityShortLine(maturity)} · conf=${confidence.level}`);
     if (DRY_RUN) { skipped++; continue; }
 
     let result;
