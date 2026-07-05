@@ -771,6 +771,34 @@ a:hover { text-decoration: underline; }
   line-height: 1.35;
 }
 
+/* Rank number for the ordered top-sources list */
+.hz-incident-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  margin-right: 7px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--text-tertiary);
+  font-size: 0.66rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+/* Editor's one-line justification — the "why this is a top source" */
+.hz-incident-why {
+  font-size: 0.79rem;
+  color: var(--text-primary);
+  line-height: 1.45;
+  margin: 3px 0 4px;
+  padding-left: 9px;
+  border-left: 2px solid var(--accent, #3583C9);
+}
+
 .hz-incident-title a {
   color: var(--text-primary);
   text-decoration: none;
@@ -2126,6 +2154,149 @@ a:hover { text-decoration: underline; }
 .hz-sources-table tr:last-child td { border-bottom: none; }
 
 .hz-sources-table tr:hover td { background: #fafafa; }
+
+/* ── Importance badge ──────────────────────────────────────────────────────── */
+
+.hz-imp-badge {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* ── Importance tier filter row ────────────────────────────────────────────── */
+
+.hz-tier-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 12px;
+  flex-wrap: wrap;
+}
+
+.hz-tier-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.hz-tier-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border: 1px solid;
+  border-radius: 20px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.hz-tier-chip-count {
+  font-size: 0.66rem;
+  font-weight: 700;
+  opacity: 0.75;
+}
+
+.hz-sort-group { flex-shrink: 0; }
+
+/* ── Vetting table: clickable rows + expanded detail ───────────────────────── */
+
+.hz-sources-table-vet .hz-src-row { cursor: pointer; }
+.hz-sources-table-vet .hz-src-row.open td { background: #f6f8fb; }
+.hz-sources-table-vet .hz-src-detail-row td { background: #f6f8fb; padding: 0 16px 16px 40px; border-bottom: 1px solid var(--border); }
+.hz-sources-table-vet .hz-src-detail-row:hover td { background: #f6f8fb; }
+
+.hz-src-caret {
+  color: var(--text-tertiary);
+  font-size: 0.7rem;
+  text-align: center;
+  user-select: none;
+}
+
+.hz-src-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 10px;
+}
+
+.hz-src-detail-summary {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--text-primary);
+  max-width: 900px;
+}
+
+.hz-src-detail-grid {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+
+.hz-src-detail-field { display: flex; flex-direction: column; gap: 4px; }
+
+.hz-src-detail-k {
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+}
+
+.hz-src-detail-v {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+}
+
+.hz-src-detail-sub { font-size: 0.76rem; color: var(--text-secondary); }
+
+.hz-src-detail-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+
+.hz-src-detail-tag {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.hz-src-detail-tag.domain { background: #eef2ff; color: #3730a3; border-color: #c7d2fe; font-weight: 600; }
+
+.hz-src-detail-rationale {
+  display: block;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  max-width: 900px;
+}
+
+.hz-src-detail-mech {
+  display: inline-block;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 0.72rem;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  padding: 1px 6px;
+  border-radius: 5px;
+  margin-right: 8px;
+}
+
+.hz-src-conflict {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #b45309;
+  background: #fef3c7;
+  padding: 1px 7px;
+  border-radius: 5px;
+  margin-right: 8px;
+}
 
 .hz-cat-dot {
   display: inline-block;

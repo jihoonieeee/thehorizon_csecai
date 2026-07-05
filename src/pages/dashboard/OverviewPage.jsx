@@ -39,6 +39,23 @@ const CAT_SHORT = {
   ai_enabled_threats:     "AI-Enabled",
 };
 
+// Importance tier — how consequential a source is (from the API, deterministic).
+const TIER_META = {
+  realized:  { label: "In the wild",  color: "#b91c1c", bg: "#fee2e2" },
+  proven:    { label: "Demonstrated", color: "#c2410c", bg: "#ffedd5" },
+  research:  { label: "Research",     color: "#1d4ed8", bg: "#dbeafe" },
+};
+function ImportanceBadge({ tier }) {
+  const m = TIER_META[tier];
+  if (!m) return null;
+  return (
+    <span className="hz-imp-badge" title={`Importance: ${m.label}`}
+      style={{ color: m.color, background: m.bg, fontSize: "0.6rem" }}>
+      {m.label}
+    </span>
+  );
+}
+
 const WINDOWS = [
   { id: "week",    label: "Last Week"    },
   { id: "month",   label: "Last Month"   },
@@ -322,17 +339,21 @@ function TopIncidents({ incidents }) {
             <div className="hz-incident-dot" style={{ background: color }} />
             <div className="hz-incident-body">
               <div className="hz-incident-title">
+                <span className="hz-incident-rank">{i + 1}</span>
                 {inc.url ? (
                   <a href={inc.url} target="_blank" rel="noopener noreferrer">{inc.title}</a>
                 ) : inc.title}
               </div>
+              {/* Editor's justification — why this is a top source this period */}
+              {inc.why && <div className="hz-incident-why">{inc.why}</div>}
               <div className="hz-incident-meta">
+                <ImportanceBadge tier={inc.importance} />
                 <span className="hz-incident-publisher">{inc.publisher}</span>
                 <span className="hz-incident-date">{inc.date}</span>
                 <span className="hz-incident-cat" style={{ color }}>{CAT_LABEL[inc.category] || inc.category}</span>
                 <span className={`hz-trust-badge ${trust.cls}`}>{trust.label}</span>
               </div>
-              {inc.summary && <div className="hz-incident-summary">{inc.summary}</div>}
+              {inc.summary && !inc.why && <div className="hz-incident-summary">{inc.summary}</div>}
             </div>
           </div>
         );
@@ -614,7 +635,11 @@ export function OverviewPage() {
         <>
           <div className="hz-overview-section-title">
             Top sources
-            <span className="hz-overview-section-note">primary, high, and curated trust tiers · newest first</span>
+            <span className="hz-overview-section-note">
+              {data.top_sources_justified
+                ? "editor-selected & ranked from this period's analysis — most consequential first"
+                : "ranked by importance — in-the-wild incidents first, then demonstrated, then research"}
+            </span>
           </div>
           <TopIncidents incidents={data.top_incidents} />
         </>

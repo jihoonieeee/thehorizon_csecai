@@ -40,6 +40,7 @@ import {
   maturityShortLine,
 } from "../lib/dashboard/evidenceMaturity.js";
 import { persistCallCost, setCurrentRunId } from "../lib/llm/usagePersistence.js";
+import { computeImportance } from "../lib/pipeline/importance.js";
 
 const args     = process.argv.slice(2);
 const getArg   = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i+1] ? args[i+1] : d; };
@@ -385,7 +386,7 @@ Audit each. Return a verdict for every index.`;
 
 // ── Source loading ─────────────────────────────────────────────────────────────
 
-const SRC_SELECT = "id,main_category,short_summary,analyst_brief,intelligence,tags,source_type,title,url,publisher,date_published";
+const SRC_SELECT = "id,main_category,short_summary,analyst_brief,intelligence,tags,source_type,trust_tier,title,url,publisher,date_published";
 
 // Some pipeline-enriched sources leave the top-level short_summary/analyst_brief
 // columns empty and stash the prose under intelligence.source_summary. Fall back
@@ -874,6 +875,85 @@ export async function attributeSources(insights, catSources, windowLabel, catLab
   });
 }
 
+// ── Top sources: deterministic filter → LLM semantic rank + justify ────────────
+// The insight pipeline already reads the window's sources; here the same context
+// yields the "top sources" for the period. A deterministic importance filter bounds
+// the candidate pool (real offensive signal only), then one LLM call RANKS them and
+// writes a one-sentence justification per pick. The LLM's judgment also collapses
+// duplicate reports of the same event for free (it won't list an event twice) — which
+// is why no similarity threshold is needed. Falls back to null (→ deterministic order
+// in api/dashboard) when the key is missing or the call fails.
+
+const TOP_SOURCES_SYSTEM = `You are the editor of an AI-threat-intelligence briefing. From a list of candidate sources for a reporting period, select the ones a decision-maker MOST needs to see, ranked most-important first.
+
+Judge by CONSEQUENCE, not recency or publisher prestige:
+- Real-world incidents and in-the-wild attacks outrank demonstrations; demonstrations outrank research.
+- Novel capabilities, first-of-kind events, and large-scale/high-impact incidents outrank routine or incremental items.
+- When several candidates cover the SAME event, pick the single best one — never list the same event twice.
+
+For each selected source write ONE concise sentence (≤ 22 words) on why it matters THIS period — the specific development or stakes, not a generic summary.
+
+Return JSON only: { "top": [ { "n": <source number>, "why": "<one sentence>" } ] }, most important first.`;
+
+function buildTopSourcesPrompt(windowLabel, candidates, n) {
+  const lines = candidates.map((s, i) =>
+    `${i + 1}. [${s._tier}] (${s.source_type || "?"}) ${titleOf(s.title).slice(0, 110)} — ${summaryText(s).slice(0, 150)} [${s.publisher || "?"}]`
+  ).join("\n");
+  return `Period: ${windowLabel}
+
+Select the TOP ${n} most consequential sources (ranked). Candidates:
+
+${lines}
+
+Return { "top": [ { "n", "why" } ] } with at most ${n} entries, most important first.`;
+}
+
+export async function selectTopSources(windowRows, windowLabel, n = 10) {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  // Deterministic candidate pool: real offensive signal (realized/proven) with a
+  // usable summary, importance-ranked, capped so the prompt stays bounded.
+  const REAL = { realized: 3, proven: 2 };
+  const candidates = windowRows
+    .map(s => ({ ...s, _imp: computeImportance(s), _tier: computeImportance(s).tier }))
+    .filter(s => s.url && REAL[s._imp.reality] && s._imp.posture === "offensive" && summaryText(s).length > 20)
+    .sort((a, b) => (REAL[b._imp.reality] - REAL[a._imp.reality]) || (b.date_published || "").localeCompare(a.date_published || ""))
+    .slice(0, 40);
+  if (candidates.length < 3) return null;
+
+  let picks = [];
+  try {
+    const out = await callAnthropic({
+      system: TOP_SOURCES_SYSTEM, task: "dashboard_top_sources",
+      user: buildTopSourcesPrompt(windowLabel, candidates, n),
+      maxTokens: 900,
+    });
+    picks = Array.isArray(out.top) ? out.top : [];
+  } catch { return null; }
+
+  const seen = new Set(), top = [];
+  for (const p of picks) {
+    const i = Number(p.n);
+    if (!Number.isInteger(i) || i < 1 || i > candidates.length) continue;
+    const s = candidates[i - 1];
+    if (!s || seen.has(s.url)) continue;
+    seen.add(s.url);
+    top.push({
+      title:      titleOf(s.title),
+      url:        s.url,
+      publisher:  s.publisher || null,
+      date:       s.date_published?.slice(0, 10) || null,
+      category:   s.main_category,
+      trust_tier: s.trust_tier || null,
+      importance: s._imp.tier,
+      reality:    s._imp.reality,
+      summary:    summaryText(s).slice(0, 240) || null,
+      why:        typeof p.why === "string" ? p.why.trim().slice(0, 220) : null,
+    });
+    if (top.length >= n) break;
+  }
+  return top.length ? top : null;
+}
+
 // ── Per-category generation ────────────────────────────────────────────────────
 
 async function generateCategory(cat, windowLabel, findings, maturitySrcs) {
@@ -1103,6 +1183,11 @@ async function main() {
     }
     const assessmentChanges = await computeAssessmentChanges(currAssess, prevAssess, maturityDeltas);
 
+    // Editor-selected, justified top sources for the period (LLM semantic rank over
+    // the deterministic importance pool). Null → api/dashboard uses the deterministic order.
+    const topSources = await selectTopSources(currRows, period.label, 10);
+    console.log(`  Top sources: ${topSources ? `${topSources.length} selected + justified` : "none (fallback to deterministic order)"}`);
+
     const meta = {
       schema: "meta-v1",
       compared_to: prevPeriod.key,
@@ -1115,6 +1200,7 @@ async function main() {
       },
       assessment_changes: assessmentChanges,
       emerging_signals:   emergingSignals,
+      top_sources:        topSources,   // [{ title,url,publisher,date,category,importance,why }] | null
     };
 
     const { error: metaErr } = await supabase.from("dashboard_insights").upsert({

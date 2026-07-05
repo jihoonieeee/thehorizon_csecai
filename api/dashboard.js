@@ -24,6 +24,25 @@ import { createClient } from "@supabase/supabase-js";
 import { getCompletedPeriodWindow } from "../lib/time/reportingWindow.js";
 import { computeEvidenceMaturity, deriveConfidence } from "../lib/dashboard/evidenceMaturity.js";
 import { truncateAtWord } from "../lib/utils/truncate.js";
+import { computeImportance } from "../lib/pipeline/importance.js";
+
+// Importance-first ranking for "top sources". Substance before recency:
+// realized (in the wild) > proven (demonstrated) > research, then trust tier,
+// then newest. Deterministic — computed live, no persisted dependency.
+const REALITY_ORDER = { realized: 4, proven: 3, research: 2, advisory: 1 };
+const TRUST_ORDER   = { primary: 4, high: 3, curated: 3, medium: 2, low: 1, unknown: 0 };
+function importanceRank(s) {
+  const imp = computeImportance(s);
+  return {
+    ...s,
+    _imp: imp,
+    _rank: (REALITY_ORDER[imp.reality] || 0) * 100 + (TRUST_ORDER[s.trust_tier] || 0) * 10,
+  };
+}
+function byImportanceThenRecency(a, b) {
+  if (b._rank !== a._rank) return b._rank - a._rank;
+  return (b.date_published || "").localeCompare(a.date_published || "");
+}
 
 // Some stored titles are CVE descriptions hard-cut mid-word at ingest (e.g.
 // "CVE-…: multiple functions in langchain_core.pro"). Clean those for display:
@@ -243,11 +262,12 @@ export default async function handler(req, res) {
 
     const categories = CATEGORIES.map(c => {
       const srcs = catMap[c.key];
-      const top  = srcs.slice(0, 5).map(s => ({
+      const top  = srcs.map(importanceRank).sort(byImportanceThenRecency).slice(0, 5).map(s => ({
         title:     cleanTitle(s.title),
         url:       s.url,
         publisher: s.publisher,
         date:      s.date_published?.slice(0, 10),
+        importance: s._imp.tier,
         // Full summary — the stored short_summary/analyst_brief is already a tight
         // 1-2 sentence brief; show it whole rather than re-truncating.
         summary:   (s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "").trim() || null,
@@ -338,20 +358,33 @@ export default async function handler(req, res) {
       }
     }
 
-    // ── 4. Top incidents (most recent high-value sources) ─────────────────────
-    const topIncidents = all
-      .filter(s => ["primary","high","curated"].includes(s.trust_tier))
-      .slice(0, 12)
-      .map(s => ({
-        title:     cleanTitle(s.title),
-        url:       s.url,
-        publisher: s.publisher,
-        date:      s.date_published?.slice(0, 10),
-        category:  s.main_category,
-        trust_tier: s.trust_tier,
-        // Full summary — show the whole stored brief, not a re-truncated slice.
-        summary:   (s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "").trim() || null,
-      }));
+    // ── 4. Top sources ─────────────────────────────────────────────────────────
+    // Preferred: the LLM-editor selection generated with the period's insights —
+    // ranked AND justified (one sentence on why each matters), same context that
+    // produced the analysis. Fallback (no insights yet / no key): deterministic
+    // importance rank (realized > proven > research, then trust, then recency),
+    // which already beats the old "high-trust + newest-first" heuristic.
+    const topSourcesJustified = Array.isArray(periodMeta?.top_sources) && periodMeta.top_sources.length > 0;
+    const topIncidents = topSourcesJustified
+      ? periodMeta.top_sources.map(s => ({
+          title: cleanTitle(s.title), url: s.url, publisher: s.publisher, date: s.date,
+          category: s.category, trust_tier: s.trust_tier || "unknown",
+          importance: s.importance, reality: s.reality,
+          why: s.why || null,          // ← the editor's justification
+          summary: s.summary || null,
+        }))
+      : all
+          .map(importanceRank)
+          .filter(s => s._imp.posture === "offensive" && REALITY_ORDER[s._imp.reality])
+          .sort(byImportanceThenRecency)
+          .slice(0, 12)
+          .map(s => ({
+            title: cleanTitle(s.title), url: s.url, publisher: s.publisher,
+            date: s.date_published?.slice(0, 10), category: s.main_category,
+            trust_tier: s.trust_tier, importance: s._imp.tier, reality: s._imp.reality,
+            why: null,
+            summary: (s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "").trim() || null,
+          }));
 
     // ── 5. Tag matrix (40 tags × 4 categories) + per-tag source lists ─────────
     // The count (tagCounts[tag][cat]) and the drilldown list (tagSources[tag]
@@ -415,6 +448,7 @@ export default async function handler(req, res) {
         by_category: byCategory,
       },
       top_incidents: topIncidents,
+      top_sources_justified: topSourcesJustified,   // true → LLM-editor-ranked with justifications
       tag_matrix: {
         tags:          activeTags,
         by_category:   tagCounts,   // ATTACK counts (is_defensive excluded)
