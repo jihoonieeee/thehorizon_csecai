@@ -44,6 +44,31 @@ await test("scored_at attaches when provided", () => {
   assert.equal(v.scored_at, "2026-07-06T00:00:00Z");
 });
 
+// novelty↔level consistency enforcement (the v2 fix)
+console.log("\n── novelty↔level consistency ──");
+await test("landmark + incremental_improvement is repaired to new_technique (never self-contradictory)", () => {
+  const v = validateSignificance({ level: "landmark", novelty: "incremental_improvement", reason: "new capability at scale" });
+  assert.equal(v.level, "landmark");
+  assert.equal(v.novelty, "new_technique");
+});
+await test("surface-opener landmark keeps opens_new_attack_surface + opens_new_surface flag", () => {
+  const v = validateSignificance({ level: "landmark", novelty: "opens_new_attack_surface", opens_new_surface: true, reason: "x" });
+  assert.equal(v.novelty, "opens_new_attack_surface");
+  assert.equal(v.opens_new_surface, true);
+});
+await test("new-capability landmark (new_technique) does NOT claim opens_new_surface", () => {
+  const v = validateSignificance({ level: "landmark", novelty: "new_technique", opens_new_surface: true, reason: "autonomous exploit-gen" });
+  assert.equal(v.opens_new_surface, false, "new-capability landmark is not a surface-opener");
+});
+await test("notable coerces to new_technique", () => {
+  assert.equal(validateSignificance({ level: "notable", novelty: "survey_or_reproduction", reason: "x" }).novelty, "new_technique");
+});
+await test("routine can never be a surface-opener (opens_new_attack_surface downgraded)", () => {
+  const v = validateSignificance({ level: "routine", novelty: "opens_new_attack_surface", opens_new_surface: true, reason: "x" });
+  assert.equal(v.novelty, "incremental_improvement");
+  assert.equal(v.opens_new_surface, false);
+});
+
 // ── significanceRank ──────────────────────────────────────────────────────────
 console.log("\n── significanceRank ──");
 await test("reads intelligence.significance.level", () => {
