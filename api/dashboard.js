@@ -441,6 +441,10 @@ export default async function handler(req, res) {
         total,
         high_trust: highTrust,
         by_category: Object.fromEntries(CATEGORIES.map(c => [c.key, catMap[c.key].length])),
+        // Everything not in the 4 offensive categories: unclear_or_adjacent context
+        // (defenses, frameworks, generic CVEs) + any untagged. Surfaced so the stat
+        // row reconciles to `total` — the 4 category cards alone never sum to it.
+        other: total - CATEGORIES.reduce((n, c) => n + catMap[c.key].length, 0),
       },
       categories,
       trend: {

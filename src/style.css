@@ -356,6 +356,17 @@ a:hover { text-decoration: underline; }
 
 .hz-insight-stat:last-child { border-right: none; }
 
+/* "=" separator between the Sources total and its breakdown */
+.hz-insight-stat-eq {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 1.1rem;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  border-right: 1px solid var(--border);
+}
+
 .hz-insight-stat-value {
   font-size: 1.6rem;
   font-weight: 700;
