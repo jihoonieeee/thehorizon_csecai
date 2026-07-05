@@ -48,6 +48,15 @@ const TIER_META = {
 };
 const TIER_ORDER = ["realized", "proven", "research", "reference", "noise"];
 
+// Advisory significance overlay (research sources only) — breaks ties WITHIN an
+// importance tier so a landmark paper outranks a routine one.
+const SIGNIFICANCE_RANK = { landmark: 3, notable: 2, routine: 1, incremental: 0 };
+const sigRank = s => SIGNIFICANCE_RANK[s.significance?.level] ?? 0;
+const SIG_META = {
+  landmark: { short: "Landmark", color: "#7c3aed", bg: "#ede9fe" },
+  notable:  { short: "Notable",  color: "#2563eb", bg: "#dbeafe" },
+};
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function TrustDot({ tier }) {
@@ -202,6 +211,8 @@ export function SourcesPage() {
         const ra = TIER_META[a.importance?.tier]?.rank || 0;
         const rb = TIER_META[b.importance?.tier]?.rank || 0;
         if (rb !== ra) return rb - ra;
+        const sa = sigRank(a), sb = sigRank(b);      // landmark research rises within its tier
+        if (sb !== sa) return sb - sa;
         return (b.date_published || "").localeCompare(a.date_published || "");
       });
     }
@@ -446,7 +457,15 @@ export function SourcesPage() {
                           </div>
                         </div>
                       </td>
-                      <td><ImportanceBadge tier={s.importance?.tier} small /></td>
+                      <td>
+                        <ImportanceBadge tier={s.importance?.tier} small />
+                        {SIG_META[s.significance?.level] && (
+                          <span className="hz-imp-badge" title={`Research significance: ${s.significance.level}${s.significance.reason ? " — " + s.significance.reason : ""}`}
+                            style={{ color: SIG_META[s.significance.level].color, background: SIG_META[s.significance.level].bg, fontSize: "0.6rem", marginLeft: 4 }}>
+                            {SIG_META[s.significance.level].short}
+                          </span>
+                        )}
+                      </td>
                       <td className="hz-src-publisher">{s.publisher || "—"}</td>
                       {activeTab === "all" && (
                         <td>

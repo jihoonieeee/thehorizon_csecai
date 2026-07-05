@@ -117,6 +117,11 @@ export default async function handler(req, res) {
           short_summary: s.short_summary || s.analyst_brief || s.summary || null,
           analyst_brief: s.analyst_brief || null,
           importance:    { tier: imp.tier, reality: imp.reality, posture: imp.posture },
+          // Advisory significance overlay for research sources — ranks WITHIN a
+          // tier (landmark > routine) without changing the deterministic tier.
+          significance:  s.intelligence?.significance
+            ? { level: s.intelligence.significance.level, novelty: s.intelligence.significance.novelty, reason: s.intelligence.significance.reason || null }
+            : null,
           is_defensive:  s.intelligence?.is_defensive === true,
           mechanism: mech ? {
             exploit:     mech.primary_exploit_mechanism || null,
