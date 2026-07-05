@@ -190,6 +190,15 @@ test("classic-ML poisoning at fine_tuning layer (no llm flag) stays TAI01", () =
   expectMap({ primary_exploit_mechanism: "data_poisoning", affected_layer: "fine_tuning" },
     { domain: "traditional_ai_threats", primary: "TAI01_data_poisoning", keep: true });
 });
+test("resource exhaustion on LLM-serving infra (target_is_llm) → LLM10, not TAI09", () => {
+  // e.g. a vLLM inference DoS via a crafted multimodal request
+  expectMap({ primary_exploit_mechanism: "resource_exhaustion", affected_layer: "inference_infrastructure", target_is_llm: true },
+    { domain: "llm_threats", primary: "LLM10_unbounded_consumption", keep: true });
+});
+test("resource exhaustion on general-ML serving (no llm flag) stays TAI09", () => {
+  expectMap({ primary_exploit_mechanism: "resource_exhaustion", affected_layer: "inference_infrastructure" },
+    { domain: "traditional_ai_threats", primary: "TAI09_model_denial_of_service", keep: true });
+});
 
 // ── Benchmark / defense handling ────────────────────────────────────────────────
 console.log("\n── benchmark / defense ──");
