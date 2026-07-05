@@ -72,6 +72,21 @@ test("defensive source without defensive tag fails defensive_coherence", () => {
   assert.equal(findCheck(r, "defensive_coherence").status, "fail");
 });
 
+test("defensive tag without is_defensive flag fails defensive_flag_sync", () => {
+  const r = qaUnderstandLayer([goodSource({ is_defensive: false, primary_tags: ["LLM01_prompt_injection", "defensive"] })], []);
+  assert.equal(findCheck(r, "defensive_flag_sync").status, "fail");
+});
+
+test("defensive_capability type without is_defensive flag fails defensive_flag_sync", () => {
+  const r = qaUnderstandLayer([goodSource({ is_defensive: false, source_type: "defensive_capability" })], []);
+  assert.equal(findCheck(r, "defensive_flag_sync").status, "fail");
+});
+
+test("flag and tag in sync passes defensive_flag_sync", () => {
+  const r = qaUnderstandLayer([goodSource({ is_defensive: true, primary_tags: ["LLM01_prompt_injection", "defensive"], defensive_techniques: ["guardrails_and_filters"] })], []);
+  assert.equal(findCheck(r, "defensive_flag_sync").status, "pass");
+});
+
 test("coherent defensive source passes defensive_coherence", () => {
   const r = qaUnderstandLayer([goodSource({ is_defensive: true, primary_tags: ["LLM01_prompt_injection", "defensive"], defensive_techniques: ["guardrails_and_filters"] })], []);
   assert.equal(findCheck(r, "defensive_coherence").status, "pass");

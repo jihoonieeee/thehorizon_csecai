@@ -50,3 +50,6 @@ lib/config/taxonomy-provenance.md
 debug/
 corpus_qa_report.json
 debug/operational_share.jsonl
+
+# local scratch files (batches, caches, id lists)
+scripts/_*
