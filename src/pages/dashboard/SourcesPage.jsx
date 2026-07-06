@@ -10,6 +10,7 @@ const CAT_COLOR = {
   llm_threats:            "#9C62A7",
   agentic_ai_threats:     "#19BC9D",
   ai_enabled_threats:     "#FFAA22",
+  unclear_or_adjacent:    "#94a3b8",   // "Other" — adjacent/reference sources
 };
 
 const CAT_LABEL = {
@@ -25,6 +26,7 @@ const CAT_LABEL_FULL = {
   llm_threats:            "LLM Threats",
   agentic_ai_threats:     "Agentic AI Threats",
   ai_enabled_threats:     "AI-Enabled Threats",
+  unclear_or_adjacent:    "Other / Adjacent",
 };
 
 const ALL_CATS = Object.keys(CAT_COLOR);
