@@ -195,17 +195,7 @@ function MaturityBar({ maturity }) {
 }
 
 // ── Insight item — terse by default, expandable on click ──────────────────────
-
-
-// Split a "so what" paragraph into digestible points. Prefer explicit sentence
-// boundaries; keep each point substantive (drop tiny fragments).
-function toPoints(text) {
-  if (!text) return [];
-  return String(text)
-    .split(/(?<=[.;])\s+(?=[A-Z0-9"'(])/)
-    .map(s => s.trim().replace(/[.;]\s*$/, ""))
-    .filter(s => s.length > 12);
-}
+// Click an insight to reveal its evidence + the ranked sources it was attributed to.
 
 function InsightItem({ p }) {
   const [open, setOpen] = useState(false);
@@ -213,8 +203,8 @@ function InsightItem({ p }) {
   const headlineRef = useRef(null);
 
   const sources = Array.isArray(p.sources) ? p.sources.filter(s => s && s.url) : [];
-  const points  = toPoints(p.implication);
-  const hasDetail = points.length > 0 || sources.length > 0;
+  const evidence = (p.evidence || "").trim();
+  const hasDetail = evidence.length > 0 || sources.length > 0;
   // The headline is clamped to 3 lines at rest. If the text overflows that clamp,
   // the item must be expandable even without detail fields — otherwise the full
   // insight is unreadable (cut off with "…" and no way to open it).
@@ -235,17 +225,15 @@ function InsightItem({ p }) {
       <div className="hz-insight-headline" ref={headlineRef}>{p.insight}</div>
       {open && hasDetail && (
         <div className="hz-insight-detail-inner">
-          {points.length > 0 && (
+          {evidence && (
             <div className="hz-insight-line">
-              <span className="hz-insight-tag">So what</span>
-              <ul className="hz-insight-points">
-                {points.map((pt, i) => <li key={i}>{pt}</li>)}
-              </ul>
+              <span className="hz-insight-tag">Evidence</span>
+              <span className="hz-insight-evidence-text">{evidence}</span>
             </div>
           )}
           {sources.length > 0 && (
             <div className="hz-insight-line hz-insight-evidence">
-              <span className="hz-insight-tag">Evidence</span>
+              <span className="hz-insight-tag">Sources</span>
               <ul className="hz-insight-sources">
                 {sources.map((s, i) => (
                   <li key={i}>
@@ -257,9 +245,9 @@ function InsightItem({ p }) {
                     >
                       {s.title || s.url}
                     </a>
-                    {(s.publisher || s.date) && (
+                    {(s.publisher || s.date || s.importance || s.significance) && (
                       <span className="hz-insight-source-meta">
-                        {" · "}{[s.publisher, s.date].filter(Boolean).join(" · ")}
+                        {" · "}{[s.publisher, s.date, s.significance || s.importance].filter(Boolean).join(" · ")}
                       </span>
                     )}
                   </li>
