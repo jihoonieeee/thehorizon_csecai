@@ -48,7 +48,48 @@ function periodWindow(period) {
   };
 }
 
+// Mutation auth: admin actions (edit date / delete) require the CRON_SECRET as a
+// Bearer token — same gate as the other mutation endpoints. When CRON_SECRET is
+// unset (local dev) the gate is open, matching the rest of the app.
+function authorized(req) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return true;
+  return (req.headers.authorization || "") === `Bearer ${secret}`;
+}
+
 export default async function handler(req, res) {
+  // ── Mutations: PATCH (edit publish date) / DELETE (remove source) ────────────
+  if (req.method === "PATCH" || req.method === "DELETE") {
+    if (!authorized(req)) return res.status(401).json({ error: "Unauthorized — set the admin secret" });
+    try {
+      const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+      const id = String((req.query?.id ?? body.id) || "").trim();
+      if (!id) return res.status(400).json({ error: "id required" });
+
+      if (req.method === "DELETE") {
+        // Remove the source's evidence rows first, then the source. Digest child
+        // sources cascade via the parent_source_id FK.
+        await supabase.from("evidence").delete().eq("source_id", id);
+        const { error } = await supabase.from("sources").delete().eq("id", id);
+        if (error) throw new Error(error.message);
+        return res.status(200).json({ ok: true, deleted: id });
+      }
+
+      // PATCH — update the publish date. Accept YYYY-MM-DD; store as an exact ISO date.
+      const date = String(body.date_published || "").trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: "date_published must be YYYY-MM-DD" });
+      }
+      const iso = `${date}T00:00:00+00:00`;
+      const { error } = await supabase.from("sources")
+        .update({ date_published: iso, date_confidence: "exact" }).eq("id", id);
+      if (error) throw new Error(error.message);
+      return res.status(200).json({ ok: true, id, date_published: iso, date_confidence: "exact" });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   if (req.method !== "GET") return res.status(405).json({ error: "GET only" });
 
   try {
