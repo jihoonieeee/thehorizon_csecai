@@ -22,6 +22,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// Flips false if the `starred` column (migration 013) isn't applied yet, so the
+// list endpoint degrades gracefully instead of 400-ing on an unknown column.
+let starredColAvailable = true;
+
 function periodWindow(period) {
   const now = new Date();
   if (period === "all-time") {
@@ -75,16 +79,23 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, deleted: id });
       }
 
-      // PATCH — update the publish date. Accept YYYY-MM-DD; store as an exact ISO date.
-      const date = String(body.date_published || "").trim();
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-        return res.status(400).json({ error: "date_published must be YYYY-MM-DD" });
+      // PATCH — star toggle and/or publish-date edit (either field may be present).
+      const patch = {};
+      if (typeof body.starred === "boolean") patch.starred = body.starred;
+      if (body.date_published !== undefined) {
+        const date = String(body.date_published || "").trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          return res.status(400).json({ error: "date_published must be YYYY-MM-DD" });
+        }
+        patch.date_published = `${date}T00:00:00+00:00`;
+        patch.date_confidence = "exact";
       }
-      const iso = `${date}T00:00:00+00:00`;
-      const { error } = await supabase.from("sources")
-        .update({ date_published: iso, date_confidence: "exact" }).eq("id", id);
+      if (Object.keys(patch).length === 0) {
+        return res.status(400).json({ error: "nothing to update (expected starred and/or date_published)" });
+      }
+      const { error } = await supabase.from("sources").update(patch).eq("id", id);
       if (error) throw new Error(error.message);
-      return res.status(200).json({ ok: true, id, date_published: iso, date_confidence: "exact" });
+      return res.status(200).json({ ok: true, id, ...patch });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -106,10 +117,14 @@ export default async function handler(req, res) {
     const { start, end, label } = periodWindow(period);
 
     // Build a fresh filtered query for each page (the builder is single-use).
+    // `starred` is included only when the column exists (migration 013) — the flag
+    // flips off automatically on the first "column does not exist" error so the
+    // page keeps working before the migration is applied.
+    const SELECT_BASE = "id,title,url,publisher,author,date_published,main_category,trust_tier,tags,source_type,short_summary,summary,analyst_brief,validation_status,ai_specificity_score,intelligence";
     const buildQuery = (from, to) => {
       let q = supabase
         .from("sources")
-        .select("id,title,url,publisher,author,date_published,main_category,trust_tier,tags,source_type,short_summary,summary,analyst_brief,validation_status,ai_specificity_score,intelligence")
+        .select(starredColAvailable ? `${SELECT_BASE},starred` : SELECT_BASE)
         .not("validation_status", "eq", "reject")
         // Stable ordering (date desc, id asc tiebreak) so .range() paging never
         // skips or double-counts rows that share a publish date.
@@ -132,7 +147,12 @@ export default async function handler(req, res) {
     const data = [];
     for (let from = 0; from < cap; from += PAGE) {
       const to = Math.min(from + PAGE - 1, cap - 1);
-      const { data: chunk, error } = await buildQuery(from, to);
+      let { data: chunk, error } = await buildQuery(from, to);
+      if (error && starredColAvailable && /starred/i.test(error.message) && /column|does not exist|schema cache/i.test(error.message)) {
+        // Column not migrated yet — drop it and retry this page without starred.
+        starredColAvailable = false;
+        ({ data: chunk, error } = await buildQuery(from, to));
+      }
       if (error) throw new Error(error.message);
       if (!chunk || chunk.length === 0) break;
       data.push(...chunk);
@@ -164,6 +184,7 @@ export default async function handler(req, res) {
             ? { level: s.intelligence.significance.level, novelty: s.intelligence.significance.novelty, reason: s.intelligence.significance.reason || null }
             : null,
           is_defensive:  s.intelligence?.is_defensive === true,
+          starred:       s.starred === true,
           mechanism: mech ? {
             exploit:     mech.primary_exploit_mechanism || null,
             consequence: mech.primary_consequence || null,
