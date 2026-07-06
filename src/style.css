@@ -2288,6 +2288,34 @@ a:hover { text-decoration: underline; }
   max-width: 900px;
 }
 
+/* ── Sources admin: secret bar + per-source edit/delete controls ────────────── */
+.hz-sources-admin-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 6px 0 10px; padding: 8px 10px;
+  background: var(--surface-2, #f8fafc); border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+}
+.hz-admin-secret {
+  flex: 0 1 340px; padding: 5px 9px; font-size: 0.8rem;
+  border: 1px solid var(--border, #cbd5e1); border-radius: 6px;
+}
+.hz-admin-hint { font-size: 0.75rem; color: var(--text-tertiary, #94a3b8); }
+.hz-admin-msg { font-size: 0.78rem; font-weight: 600; }
+.hz-admin-msg.ok  { color: #16a34a; }
+.hz-admin-msg.err { color: var(--danger, #dc2626); }
+
+.hz-src-admin { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border, #e2e8f0); }
+.hz-src-admin-row { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.hz-src-admin-date { display: flex; flex-direction: column; gap: 3px; font-size: 0.72rem; color: var(--text-tertiary, #94a3b8); }
+.hz-src-admin-date input { padding: 4px 8px; font-size: 0.8rem; border: 1px solid var(--border, #cbd5e1); border-radius: 6px; }
+.hz-src-admin-save, .hz-src-admin-delete {
+  padding: 5px 12px; font-size: 0.78rem; font-weight: 600; border-radius: 6px; cursor: pointer;
+  border: 1px solid transparent;
+}
+.hz-src-admin-save   { background: #2563eb; color: #fff; }
+.hz-src-admin-delete { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+.hz-src-admin-save:disabled, .hz-src-admin-delete:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .hz-src-detail-mech {
   display: inline-block;
   font-family: var(--mono, ui-monospace, monospace);

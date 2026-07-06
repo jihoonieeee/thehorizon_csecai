@@ -59,6 +59,13 @@ const SIG_META = {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
+// Admin secret — reuses the same localStorage key as the Generate-Slides page, so
+// the CRON_SECRET is entered once and shared across admin actions. Sent as a Bearer
+// token on the PATCH/DELETE mutation calls (see api/sources.js).
+const SECRET_KEY = "hz_api_secret";
+const loadSecret = () => { try { return localStorage.getItem(SECRET_KEY) || ""; } catch { return ""; } };
+const saveSecret = (v) => { try { localStorage.setItem(SECRET_KEY, v); } catch { /* ignore */ } };
+
 function TrustDot({ tier }) {
   const colors = {
     primary: "#16a34a", high: "#2563eb", medium: "#9ca3af",
@@ -87,11 +94,14 @@ function ImportanceBadge({ tier, small }) {
 }
 
 // Expanded detail — everything an analyst needs to vet the source without opening it.
-function SourceDetail({ s }) {
+// Also hosts the admin controls: edit the publish date and delete the source.
+function SourceDetail({ s, onUpdateDate, onDelete, busy }) {
   const imp  = s.importance || {};
   const mech = s.mechanism || null;
   const full = s.analyst_brief || s.short_summary || s.summary;
   const domainTag = t => /^(TAI|LLM|ASI|AE)\d/.test(t);
+  const [dateVal, setDateVal] = useState((s.date_published || "").slice(0, 10));
+  const dirty = dateVal && dateVal !== (s.date_published || "").slice(0, 10);
   return (
     <div className="hz-src-detail">
       {full && <p className="hz-src-detail-summary">{full}</p>}
@@ -135,6 +145,26 @@ function SourceDetail({ s }) {
           </span>
         </div>
       )}
+
+      {/* Admin controls — edit the publish date + delete the source (persist to DB). */}
+      <div className="hz-src-admin" onClick={e => e.stopPropagation()}>
+        <span className="hz-src-detail-k">Edit</span>
+        <div className="hz-src-admin-row">
+          <label className="hz-src-admin-date">
+            Publish date
+            <input type="date" value={dateVal} disabled={busy}
+              onChange={e => setDateVal(e.target.value)} />
+          </label>
+          <button className="hz-src-admin-save" disabled={!dirty || busy}
+            onClick={() => onUpdateDate(s, dateVal)}>
+            {busy ? "Saving…" : "Save date"}
+          </button>
+          <button className="hz-src-admin-delete" disabled={busy}
+            onClick={() => onDelete(s)}>
+            Delete source
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -154,6 +184,9 @@ export function SourcesPage() {
   const [expandedId,  setExpandedId]  = useState(null);   // row open for vetting
   const [tierFilter,  setTierFilter]  = useState(null);   // filter to one importance tier
   const [sortBy,      setSortBy]      = useState("importance"); // "importance" | "date"
+  const [secret,      setSecret]      = useState(loadSecret());   // CRON_SECRET for admin mutations
+  const [busyId,      setBusyId]      = useState(null);   // id of the source mid-mutation
+  const [adminMsg,    setAdminMsg]    = useState(null);   // { ok, text } feedback
 
   // Fetch sources whenever period changes (fetch all categories, filter client-side)
   const loadSources = useCallback(() => {
@@ -177,6 +210,43 @@ export function SourcesPage() {
   }, [period]);
 
   useEffect(() => { loadSources(); }, [loadSources]);
+
+  // ── Admin mutations (persist to DB via api/sources.js PATCH/DELETE) ──────────
+  const authHeaders = () => ({
+    "Content-Type": "application/json",
+    ...(secret ? { Authorization: `Bearer ${secret}` } : {}),
+  });
+
+  const updateDate = useCallback((s, date) => {
+    if (!date) return;
+    setBusyId(s.id); setAdminMsg(null);
+    fetch("/api/sources", {
+      method: "PATCH", headers: authHeaders(),
+      body: JSON.stringify({ id: s.id, date_published: date }),
+    })
+      .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`); return j; })
+      .then(j => {
+        // Reflect in local state immediately (already persisted in DB).
+        setSources(prev => prev.map(x => x.id === s.id ? { ...x, date_published: j.date_published } : x));
+        setAdminMsg({ ok: true, text: `Date updated → ${date}` });
+      })
+      .catch(e => setAdminMsg({ ok: false, text: `Date update failed: ${e.message}` }))
+      .finally(() => setBusyId(null));
+  }, [secret]);
+
+  const deleteSource = useCallback((s) => {
+    if (!window.confirm(`Delete this source permanently?\n\n${s.title || s.url}\n\nThis removes it (and its evidence) from the database.`)) return;
+    setBusyId(s.id); setAdminMsg(null);
+    fetch(`/api/sources?id=${encodeURIComponent(s.id)}`, { method: "DELETE", headers: authHeaders() })
+      .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`); return j; })
+      .then(() => {
+        setSources(prev => prev.filter(x => x.id !== s.id));
+        setExpandedId(null);
+        setAdminMsg({ ok: true, text: "Source deleted" });
+      })
+      .catch(e => setAdminMsg({ ok: false, text: `Delete failed: ${e.message}` }))
+      .finally(() => setBusyId(null));
+  }, [secret]);
 
   // Reset tags/tier/expansion when tab changes
   useEffect(() => { setActiveTags([]); setTierFilter(null); setExpandedId(null); setPage(1); }, [activeTab]);
@@ -386,6 +456,21 @@ export function SourcesPage() {
         </span>
       </div>
 
+      {/* Admin bar — the secret unlocks the per-source edit/delete controls (expand a row). */}
+      <div className="hz-sources-admin-bar">
+        <input
+          className="hz-admin-secret"
+          type="password"
+          placeholder="Admin secret (CRON_SECRET) — to edit dates / delete"
+          value={secret}
+          onChange={e => { setSecret(e.target.value); saveSecret(e.target.value); }}
+        />
+        <span className="hz-admin-hint">Expand a source to edit its date or delete it.</span>
+        {adminMsg && (
+          <span className={`hz-admin-msg ${adminMsg.ok ? "ok" : "err"}`}>{adminMsg.text}</span>
+        )}
+      </div>
+
       {/* Error */}
       {error && !loading && (
         <div className="hz-empty" style={{ color: "var(--danger)" }}>
@@ -503,7 +588,10 @@ export function SourcesPage() {
                     </tr>
                     {open && (
                       <tr className="hz-src-detail-row">
-                        <td colSpan={colSpan}><SourceDetail s={s} /></td>
+                        <td colSpan={colSpan}>
+                          <SourceDetail s={s} busy={busyId === s.id}
+                            onUpdateDate={updateDate} onDelete={deleteSource} />
+                        </td>
                       </tr>
                     )}
                   </Fragment>
