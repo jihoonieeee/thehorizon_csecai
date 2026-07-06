@@ -22,6 +22,7 @@ import { understandSource } from "../lib/pipeline/understand/understandSource.js
 import { scrubImpliedQuantitatives } from "../lib/pipeline/analysis/statisticalClaimQa.js";
 import { fanOutDigest } from "../lib/pipeline/ingest/digestFanout.js";
 import { callLLM } from "../lib/llm/callLLM.js";
+import { fetchPageText } from "../lib/pipeline/discovery/fetchCandidateText.js";
 
 const args        = process.argv.slice(2);
 const DRY_RUN     = args.includes("--dry-run");
@@ -161,7 +162,13 @@ async function main() {
         for (const e of digestParents) {
           let out;
           try {
-            out = await fanOutDigest(e.src, { llmFn: (s, u, o) => callLLM(s, u, { ...o, json: true }), scoredAt });
+            out = await fanOutDigest(e.src, {
+              llmFn: (s, u, o) => callLLM(s, u, { ...o, json: true }),
+              // Reports are truncated to ~15k at ingest — fetch the FULL document
+              // (uncapped) so the LLM can surface every finding, then chunk it.
+              fetchFullText: (url) => fetchPageText(url, { timeoutMs: 25000, maxChars: 150000 }),
+              scoredAt,
+            });
           } catch (err) { continue; }   // fan-out never blocks the main understand run
           if (!out.is_digest || !out.children.length) continue;
           const childRows = out.children.map(({ _norm, ...row }) => row);

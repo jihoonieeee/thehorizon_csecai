@@ -117,6 +117,32 @@ await test("fanOutDigest defers to the LLM when it says the source is single-top
   assert.match(r.reason, /_but_llm_single$/);
 });
 
+// ── long-report chunking + full-text fetch ────────────────────────────────────
+console.log("\n── chunked extraction ──");
+await test("a long report is chunked; findings merge + dedupe across chunks", async () => {
+  const bigReport = { id: "rep", title: "HiddenLayer AI Threat Landscape 2026", url: "https://x/threat-landscape/2026", full_text: "x".repeat(95000) };
+  let calls = 0;
+  // Each chunk returns 2 items; item "shared" repeats across chunks (must dedupe to 1).
+  const llm = async () => { calls++; return { is_digest: true, items: [
+    { item_title: `finding ${calls}`, item_summary: "s", primary_exploit_mechanism: "data_poisoning", primary_consequence: "false_information" },
+    { item_title: "shared finding", item_summary: "s", primary_exploit_mechanism: "prompt_injection", primary_consequence: "tool_execution" },
+  ] }; };
+  const r = await extractDigestItems(bigReport, { llmFn: llm });
+  assert.ok(r.chunks >= 2, `expected multiple chunks, got ${r.chunks}`);
+  assert.ok(calls >= 2, "llm called once per chunk");
+  const titles = r.items.map(it => it.item_title);
+  assert.equal(titles.filter(t => t === "shared finding").length, 1, "duplicate finding deduped across chunks");
+  assert.ok(r.items.length > 2, "distinct findings from multiple chunks retained");
+});
+await test("fetchFullText is used when stored text is short", async () => {
+  const shortRep = { id: "r2", title: "GTIG AI Threat Tracker", url: "https://x/threat-tracker", full_text: "tiny" };
+  let fetched = false;
+  const fetchFullText = async () => { fetched = true; return "FULL REPORT ".repeat(500); };
+  const llm = async () => ({ is_digest: true, items: [{ item_title: "f", item_summary: "s", primary_exploit_mechanism: "prompt_injection", primary_consequence: "tool_execution" }] });
+  await extractDigestItems(shortRep, { llmFn: llm, fetchFullText });
+  assert.equal(fetched, true, "should fetch full text when stored text is short");
+});
+
 // ── summary ──────────────────────────────────────────────────────────────────
 setTimeout(() => {
   console.log(`\n${passed} passed, ${failed} failed`);
