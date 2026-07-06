@@ -98,7 +98,10 @@ async function main() {
   // "success" with everything checkpointed, rather than being force-cancelled at
   // the workflow's hard timeout (which loses the in-flight batch and marks failure).
   const mi = args.indexOf("--max-minutes");
-  const DEADLINE_MS = (parseInt((mi >= 0 && args[mi + 1]) || "22", 10) || 22) * 60000;
+  // 18m default: the deadline is checked BETWEEN batches, and a single in-flight
+  // sitemap batch can add ~5m, so 18 keeps the real finish comfortably under the
+  // 30m CI hard-cancel (run #2 at 22m overran to 25.4m — too close).
+  const DEADLINE_MS = (parseInt((mi >= 0 && args[mi + 1]) || "18", 10) || 18) * 60000;
   const startedAt = Date.now();
 
   const bySourceId = new Map();   // cumulative dedup across batches
