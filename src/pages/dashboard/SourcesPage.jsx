@@ -50,6 +50,15 @@ const TIER_META = {
 };
 const TIER_ORDER = ["realized", "proven", "research", "reference", "noise"];
 
+// Categorical importance label (critical/important/supporting/archive) from the API.
+const LABEL_META = {
+  critical:   { short: "Critical",   color: "#b91c1c", bg: "#fee2e2" },
+  important:  { short: "Important",  color: "#c2410c", bg: "#ffedd5" },
+  supporting: { short: "Supporting", color: "#475569", bg: "#e2e8f0" },
+  archive:    { short: "Archive",    color: "#94a3b8", bg: "#f1f5f9" },
+};
+const LABEL_ORDER = ["critical", "important", "supporting", "archive"];
+
 // Advisory significance overlay (research sources only) — breaks ties WITHIN an
 // importance tier so a landmark paper outranks a routine one.
 const SIGNIFICANCE_RANK = { landmark: 3, notable: 2, routine: 1, incremental: 0 };
@@ -186,6 +195,7 @@ export function SourcesPage() {
   const [expandedId,  setExpandedId]  = useState(null);   // row open for vetting
   const [tierFilter,  setTierFilter]  = useState(null);   // filter to one importance tier
   const [starredOnly, setStarredOnly] = useState(false);  // filter to starred sources
+  const [labelFilter, setLabelFilter] = useState(null);   // filter to one importance label
   const [sortBy,      setSortBy]      = useState("importance"); // "importance" | "date"
   const [secret,      setSecret]      = useState(loadSecret());   // CRON_SECRET for admin mutations
   const [busyId,      setBusyId]      = useState(null);   // id of the source mid-mutation
@@ -290,6 +300,7 @@ export function SourcesPage() {
       if (activeTab !== "all" && s.main_category !== activeTab) return false;
       if (tierFilter && s.importance?.tier !== tierFilter) return false;
       if (starredOnly && !s.starred) return false;
+      if (labelFilter && s.label !== labelFilter) return false;
       if (activeTags.length > 0 && !activeTags.every(t => s.tags?.includes(t))) return false;
       if (q) {
         const hay = `${s.title || ""} ${s.publisher || ""} ${s.short_summary || s.summary || ""} ${(s.tags || []).join(" ")}`.toLowerCase();
@@ -308,7 +319,7 @@ export function SourcesPage() {
       });
     }
     return rows; // already date-desc from the API when sortBy === "date"
-  }, [sources, activeTab, activeTags, search, tierFilter, sortBy, starredOnly]);
+  }, [sources, activeTab, activeTags, search, tierFilter, sortBy, starredOnly, labelFilter]);
 
   // Importance-tier counts for the tier filter chips (respecting the active tab).
   const tierCounts = useMemo(() => {
@@ -429,6 +440,28 @@ export function SourcesPage() {
       )}
 
       {/* Importance tier filter chips */}
+      {/* Categorical label filter — critical / important / supporting / archive */}
+      <div className="hz-tier-filter-row">
+        <span className="hz-tag-filter-label">Label</span>
+        <div className="hz-tier-chips">
+          {LABEL_ORDER.map(lb => {
+            const m = LABEL_META[lb];
+            const n = sources.filter(s => (activeTab === "all" || s.main_category === activeTab) && s.label === lb).length;
+            if (!n) return null;
+            const on = labelFilter === lb;
+            return (
+              <button key={lb}
+                className={`hz-tier-chip${on ? " active" : ""}`}
+                style={on ? { background: m.color, borderColor: m.color, color: "#fff" } : { color: m.color, borderColor: `${m.color}55` }}
+                onClick={() => { setLabelFilter(on ? null : lb); setPage(1); setExpandedId(null); }}>
+                {m.short}<span className="hz-tier-chip-count">{n}</span>
+              </button>
+            );
+          })}
+          {labelFilter && <button className="hz-tag-clear" onClick={() => { setLabelFilter(null); setPage(1); }}>Clear</button>}
+        </div>
+      </div>
+
       <div className="hz-tier-filter-row">
         <span className="hz-tag-filter-label">Importance</span>
         <div className="hz-tier-chips">
@@ -582,13 +615,27 @@ export function SourcesPage() {
                         </div>
                       </td>
                       <td>
-                        <ImportanceBadge tier={s.importance?.tier} small />
-                        {SIG_META[s.significance?.level] && (
-                          <span className="hz-imp-badge" title={`Research significance: ${s.significance.level}${s.significance.reason ? " — " + s.significance.reason : ""}`}
-                            style={{ color: SIG_META[s.significance.level].color, background: SIG_META[s.significance.level].bg, fontSize: "0.6rem", marginLeft: 4 }}>
-                            {SIG_META[s.significance.level].short}
+                        {LABEL_META[s.label] && (
+                          <span className="hz-imp-badge" title={`Label: ${s.label}`}
+                            style={{ color: LABEL_META[s.label].color, background: LABEL_META[s.label].bg, fontSize: "0.6rem", fontWeight: 700 }}>
+                            {LABEL_META[s.label].short}
                           </span>
                         )}
+                        {s.is_report && (
+                          <span className="hz-imp-badge" title={`Landscape report${s.finding_count ? ` — ${s.finding_count} findings extracted` : ""}`}
+                            style={{ color: "#7c3aed", background: "#ede9fe", fontSize: "0.6rem", marginLeft: 4 }}>
+                            📄{s.finding_count ? ` ${s.finding_count}` : ""}
+                          </span>
+                        )}
+                        <div style={{ marginTop: 2 }}>
+                          <ImportanceBadge tier={s.importance?.tier} small />
+                          {SIG_META[s.significance?.level] && (
+                            <span className="hz-imp-badge" title={`Research significance: ${s.significance.level}${s.significance.reason ? " — " + s.significance.reason : ""}`}
+                              style={{ color: SIG_META[s.significance.level].color, background: SIG_META[s.significance.level].bg, fontSize: "0.6rem", marginLeft: 4 }}>
+                              {SIG_META[s.significance.level].short}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="hz-src-publisher">{s.publisher || "—"}</td>
                       {activeTab === "all" && (

@@ -16,6 +16,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { computeImportance } from "../lib/pipeline/scoring/importance.js";
+import { labelOf } from "../lib/pipeline/scoring/sourceLabel.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -120,7 +121,7 @@ export default async function handler(req, res) {
     // `starred` is included only when the column exists (migration 013) — the flag
     // flips off automatically on the first "column does not exist" error so the
     // page keeps working before the migration is applied.
-    const SELECT_BASE = "id,title,url,publisher,author,date_published,main_category,trust_tier,tags,source_type,short_summary,summary,analyst_brief,validation_status,ai_specificity_score,intelligence";
+    const SELECT_BASE = "id,title,url,publisher,author,date_published,main_category,trust_tier,tags,source_type,short_summary,summary,analyst_brief,validation_status,ai_specificity_score,intelligence,is_digest,parent_source_id";
     const buildQuery = (from, to) => {
       let q = supabase
         .from("sources")
@@ -178,6 +179,9 @@ export default async function handler(req, res) {
           short_summary: s.short_summary || s.analyst_brief || s.summary || null,
           analyst_brief: s.analyst_brief || null,
           importance:    { tier: imp.tier, reality: imp.reality, posture: imp.posture },
+          label:         labelOf(s),          // critical | important | supporting | archive
+          is_report:     s.is_digest === true, // a fanned-out landscape report (container)
+          finding_count: s.intelligence?.digest_item_count || null,
           // Advisory significance overlay for research sources — ranks WITHIN a
           // tier (landmark > routine) without changing the deterministic tier.
           significance:  s.intelligence?.significance
