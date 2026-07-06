@@ -400,7 +400,7 @@ Audit each. Return a verdict for every index.`;
 
 // ── Source loading ─────────────────────────────────────────────────────────────
 
-const SRC_SELECT = "id,main_category,short_summary,analyst_brief,intelligence,tags,source_type,trust_tier,title,url,publisher,date_published";
+const SRC_SELECT = "id,main_category,short_summary,analyst_brief,intelligence,tags,source_type,trust_tier,title,url,publisher,date_published,parent_source_id,is_digest";
 
 // Some pipeline-enriched sources leave the top-level short_summary/analyst_brief
 // columns empty and stash the prose under intelligence.source_summary. Fall back
@@ -526,12 +526,24 @@ function composeCategoryFindings(catRows, evItems = [], cap = 40) {
   // plain disclosures are background context; noise is excluded entirely upstream.
   const isLead = (row) => row && (["realized", "proven"].includes(computeImportance(row).reality) || significanceRank(row) >= 3);
 
+  // Overcounting guard: a landscape report's many findings are ONE report's
+  // evidence, not many independent corroborations. Cap findings per effective
+  // parent (a child's parent_source_id, else its own id) so a single report can
+  // seed a theme but never dominate or inflate corroboration.
+  const MAX_PER_PARENT = 3;
+  const parentOf = (row) => row?.parent_source_id || row?.id;
+  const perParent = new Map();
+
   const entries = [];   // { text, lead }
   let i = 0, guard = 0;
   const guardMax = cap * (orderedQueues.length + 1) + 20;
   while (entries.length < cap && orderedQueues.some(x => x.q.length) && guard++ < guardMax) {
     const x = orderedQueues[i++ % orderedQueues.length];
-    if (x.q.length) entries.push({ text: x.q.shift().fact.trim(), lead: isLead(x.row) });
+    if (!x.q.length) continue;
+    const p = parentOf(x.row);
+    if ((perParent.get(p) || 0) >= MAX_PER_PARENT) { x.q.length = 0; continue; }   // parent capped — drop the queue
+    perParent.set(p, (perParent.get(p) || 0) + 1);
+    entries.push({ text: x.q.shift().fact.trim(), lead: isLead(x.row) });
   }
   const fromEvidence = entries.length;
   const covered = new Set(bySource.keys());
