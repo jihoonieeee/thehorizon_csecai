@@ -79,13 +79,27 @@ async function main() {
   // all completed batches' sources in the DB (the old all-or-nothing persist lost
   // everything on timeout). Sources upsert by id, so cumulative re-persist is cheap
   // and idempotent.
+  // Discovery batches run FIRST — web discovery is the point of this job ("dynamic
+  // search") and it's cheap per batch. The sitemap crawl runs LAST: it fetches many
+  // publishers' articles serially with a 2s inter-article delay, so it can consume
+  // 10-30+ min on its own. Running it last means discovery always completes, and the
+  // soft deadline below stops the sitemap phase gracefully (checkpointed) before the
+  // CI hard-cancel — instead of the sitemap starving discovery and the whole job
+  // getting killed at the timeout.
   const batches = [
-    { label: "sitemaps", opts: { extraConnectors: [sitemapConnector], webDiscovery: false } },
     ...missionGroups.map((g, i) => ({
       label: `discovery ${i + 1}/${missionGroups.length}`,
       opts: { webDiscovery: true, discoveryMissions: g, discoveryMaxQueriesPerMission: QUERIES_PER_MISSION },
     })),
+    { label: "sitemaps", opts: { extraConnectors: [sitemapConnector], webDiscovery: false } },
   ];
+
+  // Soft wall-clock budget (default 22 min) so the job stops itself and exits
+  // "success" with everything checkpointed, rather than being force-cancelled at
+  // the workflow's hard timeout (which loses the in-flight batch and marks failure).
+  const mi = args.indexOf("--max-minutes");
+  const DEADLINE_MS = (parseInt((mi >= 0 && args[mi + 1]) || "22", 10) || 22) * 60000;
+  const startedAt = Date.now();
 
   const bySourceId = new Map();   // cumulative dedup across batches
   let lastWindow = window, lastStats = null;
@@ -94,6 +108,12 @@ async function main() {
   let storedId = null;
 
   for (const batch of batches) {
+    // Soft deadline: stop before the CI hard-cancel. Everything from prior batches
+    // is already checkpointed, so exiting here is a clean "success".
+    if (Date.now() - startedAt > DEADLINE_MS) {
+      console.log(`  ⏱ soft deadline (${(DEADLINE_MS / 60000).toFixed(0)}m) reached — skipping "${batch.label}" and remaining batches (checkpointed).`);
+      break;
+    }
     const t0 = Date.now();
     try {
       const result = await collectRawSources(window, {
