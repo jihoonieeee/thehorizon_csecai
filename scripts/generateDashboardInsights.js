@@ -40,7 +40,9 @@ import {
   maturityShortLine,
 } from "../lib/dashboard/evidenceMaturity.js";
 import { persistCallCost, setCurrentRunId } from "../lib/llm/usagePersistence.js";
-import { computeImportance } from "../lib/pipeline/importance.js";
+import { computeImportance } from "../lib/pipeline/scoring/importance.js";
+import { sourceSignalScore, isNoiseSource, bySignalThenRecency, partitionBySignal } from "../lib/pipeline/scoring/sourceSignal.js";
+import { significanceRank } from "../lib/pipeline/scoring/researchSignificance.js";
 
 const args     = process.argv.slice(2);
 const getArg   = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i+1] ? args[i+1] : d; };
@@ -256,19 +258,29 @@ Do TWO things:
 Do NOT write conclusions or implications yet. Just findings and the themes they form.
 Keep each finding tight (under 25 words) but SPECIFIC — a reader must be able to tell exactly what happened and to what system. Compress; do not echo source text verbatim, and do not generalise away the specifics.
 
+LEAD WITH THE STRONGEST SIGNAL: the findings are split into PRIORITY (realized real-world incidents and landmark/notable research — the most consequential this period) and BACKGROUND (lower-signal context). Anchor your themes in the PRIORITY findings; use BACKGROUND findings only as supporting corroboration, never as the headline of a theme. A theme with no PRIORITY finding behind it should be minor or omitted.
+
 Return ONLY valid JSON:
 {"themes": [{"theme": "short theme name", "findings": ["finding", "finding", ...]}]}`;
 
-function buildThemesPrompt(catLabel, windowLabel, findings) {
-  // findings are already capped upstream (composeCategoryFindings); show all.
-  const lines = findings.map((s, i) => `${i + 1}. ${s}`).join("\n");
+function buildThemesPrompt(catLabel, windowLabel, findings, leadFlags = []) {
+  // Present findings in two labelled groups so the model can anchor themes in the
+  // strongest signal. Both are capped upstream (composeCategoryFindings).
+  const lead = findings.filter((_, i) => leadFlags[i]);
+  const bg   = findings.filter((_, i) => !leadFlags[i]);
+  const priorityBlock = lead.length
+    ? `PRIORITY findings (realized incidents / landmark research — anchor themes here):\n${lead.map((s, i) => `  ${i + 1}. ${s}`).join("\n")}\n\n`
+    : "";
+  const bgBlock = bg.length
+    ? `BACKGROUND findings (lower-signal context — supporting only):\n${bg.map((s, i) => `  ${i + 1}. ${s}`).join("\n")}`
+    : "";
   return `Category: ${catLabel}
 Period: ${windowLabel}
-Source findings (${findings.length} grounded facts / summaries spanning the period's sources):
+Source findings (${findings.length} grounded facts / summaries; ${lead.length} priority, ${bg.length} background):
 
-${lines}
+${priorityBlock}${bgBlock}
 
-Extract findings and cluster into themes.`;
+Extract findings and cluster into themes, led by the PRIORITY findings.`;
 }
 
 // ── Stage B: themes → structured insights ──────────────────────────────────────
@@ -312,6 +324,8 @@ Examples calibrated to maturity:
   - research-heavy:  "LLM jailbreak capability is maturing in research faster than guardrail designs can absorb."
   - operational:     "AI-enabled deepfake fraud has crossed from demonstration into confirmed financial-loss incidents."
 Pick the verb that the stated maturity supports — an overreaching assessment will be rejected downstream.
+
+LEAD WITH THE STRONGEST SIGNAL: order your insights by consequence — realized real-world incidents and landmark research first, demonstrated capability next; low-signal/incremental findings are background context, not headline insights. Your first insight should be the single most consequential development of the period. Do not give a routine finding the same prominence as a confirmed incident or a field-first result.
 
 Write 2-4 insights for rich periods; 1-2 for thin ones. Never pad.
 
@@ -473,8 +487,15 @@ async function loadWindowEvidence(sourceIds) {
 // Build the Stage-A input for one category: grounded evidence facts spread
 // round-robin across sources (breadth — every source contributes before any
 // source contributes a second fact), then per-source summaries as fallback for
-// sources with no evidence. No fuzzy importance ranking — within a single source
-// facts are ordered by the discrete quote_grounded + specificity flags only.
+// sources with no evidence.
+//
+// SIGNAL-PRIORITISED (noise resistance): the round-robin rotates over sources
+// ordered by combined signal (importance reality + research significance + trust)
+// STRONGEST-FIRST, and pure-noise sources are held back — they only contribute if
+// the signal sources don't fill the cap. So a realized incident or a landmark
+// paper leads the findings pool and a low-signal source can't crowd it out. Within
+// a single source, facts are still ordered by the discrete quote_grounded +
+// specificity flags only (no fuzzy per-fact scoring).
 function composeCategoryFindings(catRows, evItems = [], cap = 40) {
   const bySource = new Map();
   for (const e of evItems) {
@@ -489,31 +510,54 @@ function composeCategoryFindings(catRows, evItems = [], cap = 40) {
       (SPEC_RANK[b.specificity] || 0) - (SPEC_RANK[a.specificity] || 0));
   }
 
-  const findings = [];
-  const queues = [...bySource.values()];
+  // Order the source queues by signal (strongest first), noise sources last, so
+  // the round-robin admits high-signal sources before it ever reaches noise.
+  const rowById = new Map(catRows.map(r => [r.id, r]));
+  const { signal: signalIds, noise: noiseIds } = partitionBySignal(
+    [...bySource.keys()].map(id => rowById.get(id)).filter(Boolean)
+  );   // signalIds/noiseIds are source ROWS (partitionBySignal returns rows)
+  const orderedQueues = [...signalIds, ...noiseIds]           // each is a source ROW
+    .map(row => ({ row, q: bySource.get(row.id) }))
+    .filter(x => x.q && x.q.length);
+
+  // A finding "leads" when its source is the genuine headline material this period:
+  // a realized real-world incident, a proven/demonstrated exploit, or LANDMARK
+  // research (a field-first / new-surface result). Notable/routine research and
+  // plain disclosures are background context; noise is excluded entirely upstream.
+  const isLead = (row) => row && (["realized", "proven"].includes(computeImportance(row).reality) || significanceRank(row) >= 3);
+
+  const entries = [];   // { text, lead }
   let i = 0, guard = 0;
-  const guardMax = cap * (queues.length + 1) + 20;
-  while (findings.length < cap && queues.some(q => q.length) && guard++ < guardMax) {
-    const q = queues[i++ % queues.length];
-    if (q.length) findings.push(q.shift().fact.trim());
+  const guardMax = cap * (orderedQueues.length + 1) + 20;
+  while (entries.length < cap && orderedQueues.some(x => x.q.length) && guard++ < guardMax) {
+    const x = orderedQueues[i++ % orderedQueues.length];
+    if (x.q.length) entries.push({ text: x.q.shift().fact.trim(), lead: isLead(x.row) });
   }
-  const fromEvidence = findings.length;
+  const fromEvidence = entries.length;
   const covered = new Set(bySource.keys());
 
-  if (findings.length < cap) {
-    for (const r of catRows) {
-      if (findings.length >= cap) break;
-      if (covered.has(r.id)) continue;
+  // Summary fallback for sources with no evidence — signal-ordered too, and pure
+  // noise excluded unless the pool is still thin (so we never starve a sparse
+  // category, but noise never leads).
+  if (entries.length < cap) {
+    const { signal, noise } = partitionBySignal(catRows.filter(r => !covered.has(r.id)));
+    const fallbackOrder = entries.length + signal.length >= 8 ? signal : [...signal, ...noise];
+    for (const r of fallbackOrder) {
+      if (entries.length >= cap) break;
       const t = summaryText(r);
-      if (t.length > 20) { findings.push(t); covered.add(r.id); }
+      if (t.length > 20) { entries.push({ text: t, lead: isLead(r) }); covered.add(r.id); }
     }
   }
 
   return {
-    findings,
+    findings:    entries.map(e => e.text),
+    leadFlags:   entries.map(e => e.lead),
+    leadCount:   entries.filter(e => e.lead).length,
     fromEvidence,
-    fromSummary: findings.length - fromEvidence,
+    fromSummary: entries.length - fromEvidence,
     evidenceSources: bySource.size,
+    signalSources: signalIds.length,
+    noiseSuppressed: noiseIds.length,
   };
 }
 
@@ -824,11 +868,14 @@ export async function attributeSources(insights, catSources, windowLabel, catLab
   if (!insights.length || !catSources?.length) return withEmpty;
   if (!process.env.ANTHROPIC_API_KEY) return withEmpty;
 
-  // Candidate pool: sources with real summaries, richest evidence + most recent
-  // first, capped to keep the prompt bounded.
+  // Candidate pool: sources with real summaries, ranked by combined signal
+  // (importance reality + research significance + trust), maturity, then recency —
+  // so the attributable citations are drawn from the strongest sources (a landmark
+  // paper or realized incident) rather than whatever is merely most recent.
   const ranked = [...catSources]
     .filter(s => s.url && summaryText(s).length > 20)
     .sort((a, b) =>
+      sourceSignalScore(b) - sourceSignalScore(a) ||
       (SRC_TYPE_RANK[b.source_type] || 0) - (SRC_TYPE_RANK[a.source_type] || 0) ||
       (b.date_published || "").localeCompare(a.date_published || ""))
     .slice(0, 40);
@@ -869,6 +916,10 @@ export async function attributeSources(insights, catSources, windowLabel, catLab
         publisher:   s.publisher || null,
         date:        s.date_published?.slice(0, 10) || null,
         source_type: s.source_type || null,
+        // Contribution signal so the UI can show WHY this source was cited: its
+        // importance tier and (for research) how significant it is.
+        importance:   computeImportance(s).tier,
+        significance: s.intelligence?.significance?.level || null,
       });
     }
     return { ...p, sources: srcs };
@@ -910,13 +961,16 @@ Return { "top": [ { "n", "why" } ] } with at most ${n} entries, most important f
 
 export async function selectTopSources(windowRows, windowLabel, n = 10) {
   if (!process.env.ANTHROPIC_API_KEY) return null;
-  // Deterministic candidate pool: real offensive signal (realized/proven) with a
-  // usable summary, importance-ranked, capped so the prompt stays bounded.
+  // Deterministic candidate pool: strong offensive signal with a usable summary,
+  // ranked by combined signal. Admits realized/proven incidents AND landmark/notable
+  // research (a first-of-kind paper is a legitimate top source even though its
+  // reality is only "research") — the significance overlay is what lets it in.
   const REAL = { realized: 3, proven: 2 };
   const candidates = windowRows
     .map(s => ({ ...s, _imp: computeImportance(s), _tier: computeImportance(s).tier }))
-    .filter(s => s.url && REAL[s._imp.reality] && s._imp.posture === "offensive" && summaryText(s).length > 20)
-    .sort((a, b) => (REAL[b._imp.reality] - REAL[a._imp.reality]) || (b.date_published || "").localeCompare(a.date_published || ""))
+    .filter(s => s.url && s._imp.posture === "offensive" && summaryText(s).length > 20 &&
+      (REAL[s._imp.reality] || significanceRank(s) >= 2))   // realized/proven OR landmark/notable research
+    .sort((a, b) => sourceSignalScore(b) - sourceSignalScore(a) || (b.date_published || "").localeCompare(a.date_published || ""))
     .slice(0, 40);
   if (candidates.length < 3) return null;
 
@@ -946,6 +1000,7 @@ export async function selectTopSources(windowRows, windowLabel, n = 10) {
       trust_tier: s.trust_tier || null,
       importance: s._imp.tier,
       reality:    s._imp.reality,
+      significance: s.intelligence?.significance?.level || null,   // landmark|notable|… (research only)
       summary:    summaryText(s).slice(0, 240) || null,
       why:        typeof p.why === "string" ? p.why.trim().slice(0, 220) : null,
     });
@@ -956,7 +1011,7 @@ export async function selectTopSources(windowRows, windowLabel, n = 10) {
 
 // ── Per-category generation ────────────────────────────────────────────────────
 
-async function generateCategory(cat, windowLabel, findings, maturitySrcs) {
+async function generateCategory(cat, windowLabel, findings, maturitySrcs, leadFlags = []) {
   const maturity   = computeEvidenceMaturity(maturitySrcs);
   const confidence = deriveConfidence(maturity);
   const totalCount = maturitySrcs.length; // canonical = all validated sources (matches the card)
@@ -966,7 +1021,7 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs) {
   // the JSON mid-array.
   const themesOut = await callAnthropic({
     system: THEMES_SYSTEM, task: "dashboard_themes",
-    user: buildThemesPrompt(cat.label, windowLabel, findings),
+    user: buildThemesPrompt(cat.label, windowLabel, findings, leadFlags),
     maxTokens: 3000,
   });
   const themes = Array.isArray(themesOut.themes) ? themesOut.themes : [];
@@ -1086,7 +1141,7 @@ async function main() {
 
     // Compose findings: evidence facts (round-robin across sources) + summary fallback.
     const catRows = currRows.filter(r => r.main_category === cat.key);
-    const { findings, fromEvidence, fromSummary, evidenceSources } =
+    const { findings, leadFlags, leadCount, fromEvidence, fromSummary, evidenceSources, noiseSuppressed } =
       composeCategoryFindings(catRows, evidenceByCat[cat.key], 40);
 
     if (!FORCE && existingCats.has(cat.key)) {
@@ -1108,12 +1163,12 @@ async function main() {
       skipped++; continue;
     }
 
-    console.log(`  ${cat.label.padEnd(28)} ${totalCount} sources · ${findings.length} findings (${fromEvidence} facts/${evidenceSources} src + ${fromSummary} summaries) · ${maturityShortLine(maturity)} · conf=${confidence.level}`);
+    console.log(`  ${cat.label.padEnd(28)} ${totalCount} sources · ${findings.length} findings (${leadCount} priority, ${fromEvidence} facts/${evidenceSources} src + ${fromSummary} summaries · ${noiseSuppressed} noise held back) · ${maturityShortLine(maturity)} · conf=${confidence.level}`);
     if (DRY_RUN) { skipped++; continue; }
 
     let result;
     try {
-      result = await generateCategory(cat, period.label, findings, mSrcs);
+      result = await generateCategory(cat, period.label, findings, mSrcs, leadFlags);
     } catch (err) {
       console.log(`     FAIL: ${err.message.slice(0, 70)}`);
       continue;

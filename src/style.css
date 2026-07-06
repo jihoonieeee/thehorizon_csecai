@@ -574,6 +574,7 @@ a:hover { text-decoration: underline; }
   align-items: start;
 }
 .hz-insight-evidence { color: var(--text-tertiary); }
+.hz-insight-evidence-text { color: var(--text-secondary); font-size: 0.82rem; line-height: 1.45; }
 .hz-insight-tag {
   font-size: 0.58rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.04em; color: var(--cat-color);

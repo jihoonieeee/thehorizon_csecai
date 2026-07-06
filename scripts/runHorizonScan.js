@@ -232,7 +232,7 @@ async function main() {
   // ── Classify-only mode: run L4, persist back to Supabase, skip L5-L7 ────────
   if (CLASSIFY_ONLY) {
     // Fix 1: correct function name (was understandSources, export is understandAllSources)
-    const { understandAllSources } = await import("../lib/pipeline/understandSource.js");
+    const { understandAllSources } = await import("../lib/pipeline/understand/understandSource.js");
     console.log(`  [L4] Classifying ${sources.length} sources...`);
 
     const { relevant, discarded } = await understandAllSources(sources, {
@@ -380,7 +380,7 @@ async function main() {
     // Optional: render the deck to a PowerPoint file
     if (PPTX) {
       try {
-        const { renderDeckPptx } = await import("../lib/pipeline/renderDeckPptx.js");
+        const { renderDeckPptx } = await import("../lib/pipeline/slides/renderDeckPptx.js");
         pptxPath = path.join(outDir, `horizon-scan-${result.run_id.slice(-10)}.pptx`);
         const { slide_count } = await renderDeckPptx(result.deck, pptxPath, {
           title: `AI Cyber Threat Horizon Scan — ${result.corpus_summary?.date_range || result.run_date.slice(0, 10)}`,

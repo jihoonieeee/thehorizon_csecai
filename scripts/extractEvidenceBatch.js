@@ -14,7 +14,7 @@
 
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
-import { extractAllEvidence } from "../lib/pipeline/extractEvidence.js";
+import { extractAllEvidence } from "../lib/pipeline/analysis/extractEvidence.js";
 import { getEvidenceHashes, contentHashOf } from "../lib/storage/evidenceStore.js";
 
 const args   = process.argv.slice(2);

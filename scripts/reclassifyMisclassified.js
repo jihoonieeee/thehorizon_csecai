@@ -19,8 +19,8 @@
 
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
-import { understandAllSources } from "../lib/pipeline/understandSource.js";
-import { splitByDefensive, classifyDefensiveSources } from "../lib/pipeline/classifyDefensive.js";
+import { understandAllSources } from "../lib/pipeline/understand/understandSource.js";
+import { splitByDefensive, classifyDefensiveSources } from "../lib/pipeline/understand/classifyDefensive.js";
 
 const args       = process.argv.slice(2);
 const DRY_RUN    = args.includes("--dry-run");

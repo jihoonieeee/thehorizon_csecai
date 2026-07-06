@@ -1,6 +1,6 @@
 import { collectRawSources }      from "../lib/pipeline/ingest/collectRawSources.js";
-import { understandAllSources }   from "../lib/pipeline/understandSource.js";
-import { qaClassificationLLM }    from "../lib/pipeline/qaClassification.js";
+import { understandAllSources }   from "../lib/pipeline/understand/understandSource.js";
+import { qaClassificationLLM }    from "../lib/pipeline/understand/qaClassification.js";
 import { saveSnapshotToDatabase } from "../lib/storage/snapshotDatabase.js";
 import { createClient }           from "@supabase/supabase-js";
 import {

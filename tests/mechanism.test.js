@@ -5,8 +5,8 @@
  * Run: node --test tests/mechanism.test.js
  */
 import assert from "node:assert/strict";
-import { mapToTaxonomy, resolveDomain } from "../lib/pipeline/mechanism.js";
-import { isValidTag } from "../lib/pipeline/taxonomy.js";
+import { mapToTaxonomy, resolveDomain } from "../lib/pipeline/understand/mechanism.js";
+import { isValidTag } from "../lib/pipeline/understand/taxonomy.js";
 
 let passed = 0, failed = 0;
 function test(name, fn) {

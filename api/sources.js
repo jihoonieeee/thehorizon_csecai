@@ -15,7 +15,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
-import { computeImportance } from "../lib/pipeline/importance.js";
+import { computeImportance } from "../lib/pipeline/scoring/importance.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
