@@ -185,6 +185,7 @@ export function SourcesPage() {
   const [totalCount,  setTotalCount]  = useState(0);
   const [expandedId,  setExpandedId]  = useState(null);   // row open for vetting
   const [tierFilter,  setTierFilter]  = useState(null);   // filter to one importance tier
+  const [starredOnly, setStarredOnly] = useState(false);  // filter to starred sources
   const [sortBy,      setSortBy]      = useState("importance"); // "importance" | "date"
   const [secret,      setSecret]      = useState(loadSecret());   // CRON_SECRET for admin mutations
   const [busyId,      setBusyId]      = useState(null);   // id of the source mid-mutation
@@ -250,6 +251,23 @@ export function SourcesPage() {
       .finally(() => setBusyId(null));
   }, [secret]);
 
+  // Star toggle — persists starred to the DB; optimistic local update. No admin
+  // secret required to READ starred, but the mutation is gated like the others.
+  const toggleStar = useCallback((s, e) => {
+    if (e) e.stopPropagation();
+    const next = !s.starred;
+    setSources(prev => prev.map(x => x.id === s.id ? { ...x, starred: next } : x));   // optimistic
+    fetch("/api/sources", {
+      method: "PATCH", headers: authHeaders(),
+      body: JSON.stringify({ id: s.id, starred: next }),
+    })
+      .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`); })
+      .catch(err => {
+        setSources(prev => prev.map(x => x.id === s.id ? { ...x, starred: s.starred } : x));   // revert
+        setAdminMsg({ ok: false, text: `Star failed: ${err.message}` });
+      });
+  }, [secret]);
+
   // Reset tags/tier/expansion when tab changes
   useEffect(() => { setActiveTags([]); setTierFilter(null); setExpandedId(null); setPage(1); }, [activeTab]);
 
@@ -271,6 +289,7 @@ export function SourcesPage() {
     const rows = sources.filter(s => {
       if (activeTab !== "all" && s.main_category !== activeTab) return false;
       if (tierFilter && s.importance?.tier !== tierFilter) return false;
+      if (starredOnly && !s.starred) return false;
       if (activeTags.length > 0 && !activeTags.every(t => s.tags?.includes(t))) return false;
       if (q) {
         const hay = `${s.title || ""} ${s.publisher || ""} ${s.short_summary || s.summary || ""} ${(s.tags || []).join(" ")}`.toLowerCase();
@@ -289,7 +308,7 @@ export function SourcesPage() {
       });
     }
     return rows; // already date-desc from the API when sortBy === "date"
-  }, [sources, activeTab, activeTags, search, tierFilter, sortBy]);
+  }, [sources, activeTab, activeTags, search, tierFilter, sortBy, starredOnly]);
 
   // Importance-tier counts for the tier filter chips (respecting the active tab).
   const tierCounts = useMemo(() => {
@@ -432,6 +451,14 @@ export function SourcesPage() {
           {tierFilter && (
             <button className="hz-tag-clear" onClick={() => { setTierFilter(null); setPage(1); }}>Clear</button>
           )}
+          {/* Starred filter — show only sources you've starred. */}
+          <button
+            className={`hz-tier-chip hz-star-chip${starredOnly ? " active" : ""}`}
+            onClick={() => { setStarredOnly(v => !v); setPage(1); setExpandedId(null); }}
+            title="Show only starred sources"
+          >
+            ★ Starred{(() => { const n = sources.filter(s => s.starred).length; return n ? <span className="hz-tier-chip-count">{n}</span> : null; })()}
+          </button>
         </div>
       </div>
 
@@ -504,6 +531,7 @@ export function SourcesPage() {
             <thead>
               <tr>
                 <th style={{ width: 24 }}></th>
+                <th style={{ width: 24 }}></th>
                 <th>Title</th>
                 <th>Importance</th>
                 <th>Publisher</th>
@@ -516,7 +544,7 @@ export function SourcesPage() {
               {paged.map(s => {
                 const id = s.id || s.url;
                 const open = expandedId === id;
-                const colSpan = activeTab === "all" ? 7 : 6;
+                const colSpan = activeTab === "all" ? 8 : 7;   // +1 for the star column
                 return (
                   <Fragment key={id}>
                     <tr
@@ -524,6 +552,15 @@ export function SourcesPage() {
                       onClick={() => setExpandedId(open ? null : id)}
                     >
                       <td className="hz-src-caret">{open ? "▾" : "▸"}</td>
+                      <td className="hz-src-star-cell">
+                        <button
+                          className={`hz-star-btn${s.starred ? " on" : ""}`}
+                          title={s.starred ? "Starred — click to unstar" : "Star this source"}
+                          onClick={(e) => toggleStar(s, e)}
+                        >
+                          {s.starred ? "★" : "☆"}
+                        </button>
+                      </td>
                       <td>
                         <div className="hz-src-title-cell">
                           <TrustDot tier={s.trust_tier} />

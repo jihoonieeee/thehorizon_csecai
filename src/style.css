@@ -2316,6 +2316,16 @@ a:hover { text-decoration: underline; }
 .hz-src-admin-delete { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
 .hz-src-admin-save:disabled, .hz-src-admin-delete:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* ── Star sources ────────────────────────────────────────────────────────── */
+.hz-src-star-cell { width: 24px; text-align: center; }
+.hz-star-btn {
+  background: none; border: none; cursor: pointer; padding: 0 2px;
+  font-size: 1rem; line-height: 1; color: var(--text-tertiary, #cbd5e1);
+}
+.hz-star-btn:hover, .hz-star-btn.on { color: #f59e0b; }
+.hz-star-chip { color: #b45309; border-color: #f59e0b55; }
+.hz-star-chip.active { background: #f59e0b; border-color: #f59e0b; color: #fff; }
+
 .hz-src-detail-mech {
   display: inline-block;
   font-family: var(--mono, ui-monospace, monospace);
