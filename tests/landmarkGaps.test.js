@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import {
   detectLandmarkGaps, detectAllLandmarkGaps, buildSearchDirectives, directiveForTopic,
-} from "../lib/pipeline/landmarkGaps.js";
+} from "../lib/pipeline/scoring/landmarkGaps.js";
 
 let passed = 0, failed = 0;
 function test(name, fn) {

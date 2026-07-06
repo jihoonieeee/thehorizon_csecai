@@ -4,7 +4,7 @@
  * Run: node --test tests/classifyEvidenceRole.test.js
  */
 import assert from "node:assert/strict";
-import { classifyLlm02, classifyLlm01 } from "../lib/pipeline/classifyEvidenceRole.js";
+import { classifyLlm02, classifyLlm01 } from "../lib/pipeline/understand/classifyEvidenceRole.js";
 
 let passed = 0, failed = 0;
 function test(name, fn) {

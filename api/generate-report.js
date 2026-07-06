@@ -26,7 +26,7 @@
 import { createClient }      from "@supabase/supabase-js";
 import { loadLatestDeck, listDecks, getDeck } from "../lib/storage/deckStore.js";
 import { runPipelineFromDB } from "../lib/pipeline/runPipeline.js";
-import { renderDeckPptxToBuffer } from "../lib/pipeline/renderDeckPptx.js";
+import { renderDeckPptxToBuffer } from "../lib/pipeline/slides/renderDeckPptx.js";
 
 const WINDOW_DAYS = {
   month:     30,

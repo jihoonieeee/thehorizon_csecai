@@ -16,7 +16,7 @@
  */
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
-import { REALITY_BY_TYPE, computeImportance, RULES_VERSION } from "../lib/pipeline/importance.js";
+import { REALITY_BY_TYPE, computeImportance, RULES_VERSION } from "../lib/pipeline/scoring/importance.js";
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const WRITE = process.argv.includes("--write");

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   computeImportance, RULES_VERSION,
   strongestReality, confidenceCeilingForEvidence,
-} from "../lib/pipeline/importance.js";
+} from "../lib/pipeline/scoring/importance.js";
 
 const tier = (s) => computeImportance(s).tier;
 

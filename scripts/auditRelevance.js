@@ -20,7 +20,7 @@
 
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
-import { understandSource } from "../lib/pipeline/understandSource.js";
+import { understandSource } from "../lib/pipeline/understand/understandSource.js";
 import { callLLM } from "../lib/llm/callLLM.js";
 import { flushCostBuffer } from "../lib/llm/usagePersistence.js";
 

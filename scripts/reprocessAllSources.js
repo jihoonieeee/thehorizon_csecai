@@ -23,7 +23,7 @@
 
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
-import { understandSource } from "../lib/pipeline/understandSource.js";
+import { understandSource } from "../lib/pipeline/understand/understandSource.js";
 
 // ── Args ──────────────────────────────────────────────────────────────────────
 const argv = Object.fromEntries(

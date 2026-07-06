@@ -40,9 +40,9 @@ import {
   maturityShortLine,
 } from "../lib/dashboard/evidenceMaturity.js";
 import { persistCallCost, setCurrentRunId } from "../lib/llm/usagePersistence.js";
-import { computeImportance } from "../lib/pipeline/importance.js";
-import { sourceSignalScore, isNoiseSource, bySignalThenRecency, partitionBySignal } from "../lib/pipeline/sourceSignal.js";
-import { significanceRank } from "../lib/pipeline/researchSignificance.js";
+import { computeImportance } from "../lib/pipeline/scoring/importance.js";
+import { sourceSignalScore, isNoiseSource, bySignalThenRecency, partitionBySignal } from "../lib/pipeline/scoring/sourceSignal.js";
+import { significanceRank } from "../lib/pipeline/scoring/researchSignificance.js";
 
 const args     = process.argv.slice(2);
 const getArg   = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i+1] ? args[i+1] : d; };

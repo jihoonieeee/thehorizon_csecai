@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { isGenericNoiseCve } from "../lib/pipeline/ingest/genericCveGate.js";
-import { realityOf } from "../lib/pipeline/importance.js";
+import { realityOf } from "../lib/pipeline/scoring/importance.js";
 
 let passed = 0, failed = 0;
 function test(name, fn) {

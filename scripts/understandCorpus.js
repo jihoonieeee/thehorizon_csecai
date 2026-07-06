@@ -18,7 +18,7 @@
 
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
-import { understandSource } from "../lib/pipeline/understandSource.js";
+import { understandSource } from "../lib/pipeline/understand/understandSource.js";
 import { scrubImpliedQuantitatives } from "../lib/pipeline/analysis/statisticalClaimQa.js";
 
 const args        = process.argv.slice(2);

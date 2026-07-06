@@ -1,193 +1,79 @@
 # The Horizon
 
-An automated AI threat intelligence and horizon scanning platform. It ingests sources from RSS feeds, academic databases, and threat intelligence APIs, classifies and scores them, and generates two final products:
+AI threat intelligence & horizon-scanning platform. Ingests sources (RSS,
+academic DBs, threat-intel APIs), classifies and scores them for relevance to the
+AI threat landscape, and generates dashboards + structured slide decks for
+analysts.
 
-1. **Period page data** — event-first dashboard updates for daily, weekly, monthly, and quarterly views
-2. **Monthly horizon scan report** — a strategic intelligence document driven by events, trends, and shift analysis
+Audience: cybersecurity professionals, policy analysts, and decision-makers
+tracking AI-enabled threats, LLM vulnerabilities, agentic-AI risks, and
+adversarial ML.
 
----
+## Tech stack
 
-## Architecture
+- **Frontend** — React 19 + Vite, static SPA (`src/`)
+- **Backend** — Vercel serverless functions (`api/`, Node ESM)
+- **DB** — Supabase (Postgres) via service-role key
+- **Storage** — Vercel Blob (snapshot archives)
+- **LLM** — Anthropic (Opus/Sonnet/Haiku) primary; OpenAI/Gemini fallback, routed by task
+- **Schedule** — Vercel cron: `/api/refresh` daily 22:00 UTC (06:00 SGT)
 
-```
-Raw sources (RSS, arXiv, NVD, curated imports)
-        │
-        ▼
-Ingestion → Cleaning → Dedup → Validation → Tagging
-        │
-        ▼
-Snapshot persistence (Supabase + Vercel Blob)
-        │
-        ▼
-Classification (LLM tags + AI specificity score) → Category derivation
-        │
-        ▼
-Scoring (priority_score, report_score per source)
-        │
-        ▼ ── Intelligence Layer ──────────────────────────────────────────
-        │
-        ▼
-Event clustering (CVE IDs → product+date → title similarity)
-        │
-        ▼
-Event synthesis (LLM) → Event scoring
-        │
-        ▼
-Trend clustering → Trend synthesis (LLM) → Trend scoring
-        │
-        ▼
-Strategic synthesis:
-  detectStrategicShifts      (LLM — one call per period)
-  detectCrossCategoryConvergence  (deterministic pattern match)
-  generateDefenderImplications    (deterministic aggregation)
-  generateWatchIndicators         (deterministic aggregation)
-  buildMaturityTrajectoryMatrix   (deterministic aggregation)
-        │
-        ├──▶ Product A: Period page data (daily / weekly / monthly / quarterly)
-        │
-        └──▶ Product B: Monthly horizon scan report (Markdown)
-```
+## Repository map
 
-**Key principle:** Sources are evidence. Events are what happened. Trends are what is changing. Strategic shifts are what the monthly horizon scan is about. The executive summary is not a ranked source list — it is driven by LLM-detected strategic shifts.
+| Path | What it is |
+|------|-----------|
+| `api/` | Serverless endpoints — one file = one route (`sources`, `dashboard`, `agent` chatbot, `refresh`, `generate-report`, …). |
+| `lib/` | All business logic, imported by `api/` and `scripts/`. |
+| `lib/pipeline/` | **The 9-layer pipeline** — see `lib/pipeline/README.md`. Organised by layer: `ingest → clean → validation → understand → analysis → slides`, plus `discovery` (open-web) and `scoring` (ranking signals). |
+| `lib/llm/` | LLM provider abstraction: task profiles, router (task→model), cost logging, providers. |
+| `lib/config/` | Controlled vocabularies — source types, categories, tags, taxonomy registry. |
+| `lib/storage/` | Supabase client, snapshot persistence, Vercel Blob, deck store. |
+| `lib/agent/` | Chatbot tools (`agentTools.js`) — corpus/evidence/trend retrieval for `/api/agent`. |
+| `lib/dashboard/` | Dashboard-specific helpers (evidence maturity). |
+| `lib/schemas/` | Source-object shape definitions + validation helpers. |
+| `lib/prompts/` | Shared prompt templates. |
+| `lib/time/` | SGT-anchored reporting-window calculations. |
+| `lib/utils/` | Deduplication + small shared helpers. |
+| `lib/cache/` | In-process caches. |
+| `scripts/` | Local Node scripts for ops that exceed Vercel's 10s timeout (backfills, resorts, audits, dashboard-insight generation, significance scoring). |
+| `src/` | React frontend — `pages/dashboard/` (Overview, Sources, Logs, Ask-Agent), components, styles. |
+| `docs/` | `TAXONOMY.md` (canonical v10 taxonomy) + `migrations/` (SQL schema history). |
 
----
-
-## Tech Stack
-
-- **Frontend:** React 19 + Vite (static SPA)
-- **Backend:** Vercel serverless functions in `/api` (Node.js ESM)
-- **Database:** Supabase (PostgreSQL) with service role key
-- **File storage:** Vercel Blob (snapshot and intelligence archives)
-- **LLM enrichment:** OpenAI `gpt-4o-mini` (primary) → Groq → Gemini Flash → Gemini 2.5 (fallback chain)
-- **Deployment:** Vercel Hobby plan (12 serverless function limit — already at 12)
-- **Scheduling:** Vercel cron — `/api/refresh` runs daily at 22:00 UTC (06:00 SGT)
-
----
-
-## Directory Structure
+## The pipeline (9 layers)
 
 ```
-/api          — Vercel serverless function handlers (12 files, at the plan limit)
-/lib
-  /sources    — ingestion: connectors, registry, normalisation, filtering
-  /cleaning   — extractStructuredContent, cleanPlaintext, cleanSources
-  /classification — tagging, categorisation, AI specificity scoring
-  /claims     — LLM enrichment: enrichSource.js (provider rotation)
-  /scoring    — priority and report scoring per source
-  /events     — clusterSourcesIntoEvents, synthesiseEvent, scoreEvent
-  /trends     — clusterEventsIntoTrends, synthesiseTrend, scoreTrend
-  /strategy   — detectStrategicShifts, detectCrossCategoryConvergence,
-                generateDefenderImplications, generateWatchIndicators,
-                buildMaturityTrajectoryMatrix
-  /pages      — generatePeriodPageData
-  /reports    — buildMonthlyHorizonScanData, generateMonthlyHorizonScan
-               (source-level reports: generateReport, buildChartData, etc.)
-  /storage    — Supabase client, snapshot persistence, Vercel Blob, storeIntelligenceBase
-  /validation — sourceValidity, urlSafety
-  /utils      — dedupe
-/scripts      — local Node.js scripts (longer operations, no Vercel timeout)
-/src          — React frontend (ReportPage, SourcePage, ArchivePage, components)
-/tests        — cleaning.test.js, scoring.test.js, ingestion.test.js, events.test.js
-/docs
-  /migrations — SQL migration files (run in order)
-  NN-*.md     — per-layer logic documentation (01-ingestion through 09-intelligence)
+L1 ingest      → collect raw sources from connectors
+L2 clean       → normalize text, extract code/IOCs
+L3 validation  → AI-threat relevance + summary + typing + validity gate
+L4 understand  → mechanism-first classification → taxonomy tag + domain
+   scoring     → importance tier + research significance + combined signal (cross-cutting)
+L5–6 analysis  → evidence → patterns → synthesis → insights / developments / outlook
+L7–8 slides    → plan → build → render PPTX (+ diagrams)
+L9 qa          → citation validation, cross-slide consistency, export
 ```
 
----
+See `lib/pipeline/README.md` and each subfolder's README for file-level detail.
 
-## Running the Pipeline
-
-### Daily ingestion (automated)
-```
-Vercel cron → POST /api/refresh
-```
-
-### Post-ingestion classification and scoring (run 2–3× until stable)
-```sh
-curl -X POST https://<your-app>/api/classify-sources?limit=1000
-curl -X POST https://<your-app>/api/score-sources?limit=1000
-```
-
-### Intelligence base (run locally — exceeds Vercel timeout)
-```sh
-node scripts/buildIntelligenceBase.js \
-  --period monthly \
-  --start 2026-05-01 --end 2026-05-31 \
-  --limit 2000
-
-# Flags:
-#   --skip-llm   deterministic fallbacks only (no API calls)
-#   --dry-run    build but do not write to Supabase or Blob
-```
-
-### LLM enrichment backfill
-```sh
-node scripts/enrichSources.js [limit] [delay_ms]
-# Default delay: 7000ms (Gemini free tier). Use 500ms with OpenAI.
-```
-
-### Source backfill
-```sh
-node scripts/backfillSources.js [start] [end] [connectors]
-```
-
----
-
-## Database Migrations
-
-Apply in order:
-
-```sh
-# 1. Core ingestion tables
-psql -f docs/migrations/ingestion-v2.sql
-
-# 2. Archiving tables (source_snapshots, new columns on sources)
-psql -f docs/migrations/archiving-v2.sql
-
-# 3. Intelligence layer tables (events, trends, strategic_shifts, convergence_points)
-psql -f docs/migrations/intelligence-v1.sql
-```
-
----
-
-## Tests
-
-```sh
-node tests/cleaning.test.js    # cleaning, archiving, trust logic
-node tests/scoring.test.js     # source scoring
-node tests/ingestion.test.js   # ingestion pipeline
-node tests/events.test.js      # intelligence layer: events → trends → report
-```
-
----
-
-## Documentation
-
-| File | Covers |
-|------|--------|
-| `docs/architecture.md` | Full pipeline plan (stages 1–16) + logic layer index |
-| `docs/pipeline.md` | Ingestion pipeline detail (stages 1–10) |
-| `docs/api.md` | All API endpoint documentation |
-| `docs/01-ingestion.md` | Connectors, normalisation, deduplication, eligibility flags |
-| `docs/02-cleaning.md` | Non-destructive cleaning architecture |
-| `docs/03-validation.md` | Source type filter, validity scoring, URL safety |
-| `docs/04-trust.md` | Trust tiers, curated sources, credibility scoring |
-| `docs/05-archiving.md` | Immutable archive design, source_snapshots |
-| `docs/06-taxonomy.md` | LLM tag assignment, AI specificity score, tag vocabulary |
-| `docs/07-classification.md` | Tag→category derivation, relevance tier, purge *(stub)* |
-| `docs/08-scoring.md` | Priority score, report score, v6 LLM extraction *(stub)* |
-| `docs/09-intelligence.md` | Events, trends, strategic synthesis, horizon scan *(stub)* |
-
----
-
-## Environment Variables
+## Local development
 
 ```
-SUPABASE_URL                  Supabase project URL
-SUPABASE_SERVICE_ROLE_KEY     Service role key (bypasses row-level security)
-BLOB_READ_WRITE_TOKEN         Vercel Blob token
-CRON_SECRET                   Bearer token for admin/mutation endpoints
-OPENAI_API_KEY                Primary LLM (gpt-4o-mini)
-GEMINI_API_KEY                Fallback LLM (gemini-2.5-flash; free tier: 20 req/day)
-GROQ_API_KEY                  Fallback LLM (llama-3.3-70b-versatile)
+npx vercel dev            # full local env (frontend + API) on :3000  ← use this
+npm run dev               # frontend only, :5173
+npm run build             # production build
+node tests/<name>.test.js # run a test file
 ```
+
+Key scripts (run locally):
+
+- `scripts/backfillSources.js [start] [end] [connectors]` — historical ingestion
+- `scripts/generateDashboardInsights.js --window week|month|quarter` — dashboard insights
+- `scripts/scoreResearchSignificance.js --live` — research-significance backfill
+- `scripts/reprocessDigests.js` — fan multi-topic digests into child sources
+- `scripts/resortReview.js` — mechanism-first corpus resort
+
+## Environment variables
+
+See `CLAUDE.md` for the full list. Core: `SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY`, `BLOB_READ_WRITE_TOKEN`, `CRON_SECRET`,
+`ANTHROPIC_API_KEY` (+ `OPENAI_API_KEY` / `GEMINI_API_KEY` fallback),
+`TAVILY_API_KEY` / `SERPAPI_API_KEY` + `WEB_DISCOVERY_ENABLED=1` for discovery.

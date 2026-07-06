@@ -21,7 +21,7 @@
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { routedLLM } from "../lib/llm/llmRouter.js";
-import { assessSignificance, SIGNIFICANCE_ELIGIBLE_TYPES } from "../lib/pipeline/researchSignificance.js";
+import { assessSignificance, SIGNIFICANCE_ELIGIBLE_TYPES } from "../lib/pipeline/scoring/researchSignificance.js";
 
 const args = process.argv.slice(2);
 const LIVE  = args.includes("--live");

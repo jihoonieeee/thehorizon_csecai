@@ -28,7 +28,7 @@
 import "dotenv/config";
 import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { normalise } from "../lib/pipeline/understandSource.js";
+import { normalise } from "../lib/pipeline/understand/understandSource.js";
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const SELECT = "id,title,url,publisher,date_published,full_text,clean_text,summary,short_summary,tags,source_type,trust_tier,main_category,intelligence";

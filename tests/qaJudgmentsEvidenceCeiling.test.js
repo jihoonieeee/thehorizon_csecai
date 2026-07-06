@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { qaJudgments } from "../lib/pipeline/qaJudgments.js";
+import { qaJudgments } from "../lib/pipeline/analysis/qaJudgments.js";
 
 // A well-formed analytical judgment (change + cause + implication) so it passes the
 // quality gate and we can observe the confidence ceiling in isolation.

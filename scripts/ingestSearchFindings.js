@@ -14,7 +14,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createHash }   from "crypto";
 import { extractPdfText } from "../lib/pipeline/ingest/connectors/pdfConnector.js";
 import { fetchPageText, extractDateFromHtml } from "../lib/pipeline/discovery/fetchCandidateText.js";
-import { understandAllSources } from "../lib/pipeline/understandSource.js";
+import { understandAllSources } from "../lib/pipeline/understand/understandSource.js";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);

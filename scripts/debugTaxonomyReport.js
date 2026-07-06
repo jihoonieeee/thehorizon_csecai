@@ -16,7 +16,7 @@
  */
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
-import { LANDMARK_TOPICS, detectAllLandmarkGaps, buildSearchDirectives } from "../lib/pipeline/landmarkGaps.js";
+import { LANDMARK_TOPICS, detectAllLandmarkGaps, buildSearchDirectives } from "../lib/pipeline/scoring/landmarkGaps.js";
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const argv = process.argv.slice(2);

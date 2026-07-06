@@ -35,18 +35,17 @@ WEB_DISCOVERY_PROVIDER — optional: force tavily | serpapi | anthropic
 
 /api — Vercel serverless function handlers (one file = one endpoint)
 /lib — all business logic, imported by API handlers and scripts
-  /lib/pipeline — the 9-layer pipeline, one subdirectory per layer group:
-    /lib/pipeline/ingest    — Layer 1: source collection, normalization, filtering, connectors
-    /lib/pipeline/clean     — Layer 2: text cleaning, structured content extraction
-    /lib/pipeline/validation — Layer 3 (validation layer): LLM-led AI-threat relevance, summary, source typing, validity gate
-      sublayers 3.1–3.5 (validity, relevance+summary+typing via Haiku, trust, gate); deterministic pre-gate + fallback
-    /lib/pipeline/classify  — classifyCategory.js only: Layer 6 main-category pick (deterministic)
-    /lib/pipeline/understand — Layer 4: LLM source understanding (stub)
-    /lib/pipeline/feed       — Layer 5a: feed evidence branch (stub)
-    /lib/pipeline/analytics  — Layer 5b: analytics branch (stub)
-    /lib/pipeline/synthesis  — Layer 6: strategic synthesis (stub)
-    /lib/pipeline/slides     — Layers 7–8: slide planning and generation (stub)
-    /lib/pipeline/qa         — Layer 9: QA and export (stub)
+  /lib/pipeline — the 9-layer pipeline, organised by layer + function. Each
+    subfolder has its own README.md; lib/pipeline/README.md is the overview.
+    /lib/pipeline/ingest     — Layer 1: source collection, normalization, filtering, connectors, digest fan-out, generic-CVE gate
+    /lib/pipeline/clean      — Layer 2: text cleaning, structured content extraction
+    /lib/pipeline/validation — Layer 3: LLM-led AI-threat relevance, summary, source typing, trust, final validity gate
+    /lib/pipeline/discovery  — Layers 1B/1C: open-web source discovery + anti-hallucination triage (opt-in)
+    /lib/pipeline/understand — Layer 4: mechanism-first classification (mechanism.js, understandSource.js, taxonomy.js, classify*)
+    /lib/pipeline/scoring    — cross-cutting source-ranking signals: importance.js, researchSignificance.js, sourceSignal.js, landmarkGaps.js
+    /lib/pipeline/analysis   — Layers 5–6: evidence extraction, pattern/theme clustering, synthesis, insights/developments/outlook, analytical QA
+    /lib/pipeline/slides     — Layers 7–8: slide planning, deck build, PPTX render, diagrams, slide QA
+    /lib/pipeline/*.js       — root orchestration: runPipeline.js, layerQa.js, dashboard.js
   /lib/config   — controlled vocabularies: sourceTypes, categories, tags
   /lib/llm      — LLM provider abstraction (callLLM.js, OpenAI/Gemini rotation)
   /lib/prompts  — prompt templates used by pipeline layers

@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import {
   isSignificanceEligible, significanceRank, validateSignificance,
   assessSignificance, makeRankedComparator, SIGNIFICANCE_RANK,
-} from "../lib/pipeline/researchSignificance.js";
+} from "../lib/pipeline/scoring/researchSignificance.js";
 
 let passed = 0, failed = 0;
 function test(name, fn) {

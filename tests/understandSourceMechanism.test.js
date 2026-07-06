@@ -6,7 +6,7 @@
  * Run: node --test tests/understandSourceMechanism.test.js
  */
 import assert from "node:assert/strict";
-import { normalise } from "../lib/pipeline/understandSource.js";
+import { normalise } from "../lib/pipeline/understand/understandSource.js";
 
 let passed = 0, failed = 0;
 function test(name, fn) {

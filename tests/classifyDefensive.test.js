@@ -4,8 +4,8 @@
  */
 
 import assert from "node:assert/strict";
-import { splitByDefensive, classifyDefensiveSources } from "../lib/pipeline/classifyDefensive.js";
-import { DEFENSIVE_TAG, DEFENSIVE_FOCUS_AREAS, DOMAINS } from "../lib/pipeline/taxonomy.js";
+import { splitByDefensive, classifyDefensiveSources } from "../lib/pipeline/understand/classifyDefensive.js";
+import { DEFENSIVE_TAG, DEFENSIVE_FOCUS_AREAS, DOMAINS } from "../lib/pipeline/understand/taxonomy.js";
 
 let passed = 0;
 let failed = 0;
@@ -57,7 +57,7 @@ test("DEFENSIVE_FOCUS_AREAS contains expected entries", () => {
 
 // ── taxonomy: false reasoning sub-technique ───────────────────────────────────
 
-import { SUB_TECHNIQUES } from "../lib/pipeline/taxonomy.js";
+import { SUB_TECHNIQUES } from "../lib/pipeline/understand/taxonomy.js";
 
 console.log("\n── Taxonomy: false_reasoning_chain sub-technique ──");
 

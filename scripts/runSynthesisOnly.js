@@ -98,12 +98,12 @@ async function main() {
   console.log(`  Loaded ${sources.length} enriched sources from DB (+${elapsed1}s)\n`);
 
   // ── L5: Extract evidence ───────────────────────────────────────────────────
-  const { extractAllEvidence } = await import("../lib/pipeline/extractEvidence.js");
-  const { buildCorpusSummary, buildEvidenceGraph } = await import("../lib/pipeline/corpusSummary.js");
-  const { synthesizeAllCategories, synthesizeCrossCategory } = await import("../lib/pipeline/synthesizeCategory.js");
-  const { buildPresentation } = await import("../lib/pipeline/buildPresentation.js");
+  const { extractAllEvidence } = await import("../lib/pipeline/analysis/extractEvidence.js");
+  const { buildCorpusSummary, buildEvidenceGraph } = await import("../lib/pipeline/analysis/corpusSummary.js");
+  const { synthesizeAllCategories, synthesizeCrossCategory } = await import("../lib/pipeline/analysis/synthesizeCategory.js");
+  const { buildPresentation } = await import("../lib/pipeline/slides/buildPresentation.js");
   const { buildDashboardState } = await import("../lib/pipeline/dashboard.js");
-  const { DOMAINS } = await import("../lib/pipeline/taxonomy.js");
+  const { DOMAINS } = await import("../lib/pipeline/understand/taxonomy.js");
 
   const ACTIVE_CATEGORIES = DOMAINS.filter(d => d !== "unclear_or_adjacent");
 

@@ -26,7 +26,7 @@
 import "dotenv/config";
 import fs from "fs";
 import { createClient } from "@supabase/supabase-js";
-import { buildCorpusComposition, formatCompositionReport, bucketForSourceType } from "../lib/pipeline/corpusComposition.js";
+import { buildCorpusComposition, formatCompositionReport, bucketForSourceType } from "../lib/pipeline/analysis/corpusComposition.js";
 
 const args   = process.argv.slice(2);
 const getArg  = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i + 1] ? args[i + 1] : d; };

@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import {
   sourceSignalScore, isNoiseSource, bySignalThenRecency, partitionBySignal,
-} from "../lib/pipeline/sourceSignal.js";
+} from "../lib/pipeline/scoring/sourceSignal.js";
 
 let passed = 0, failed = 0;
 function test(name, fn) {

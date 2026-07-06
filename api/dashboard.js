@@ -24,7 +24,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getCompletedPeriodWindow } from "../lib/time/reportingWindow.js";
 import { computeEvidenceMaturity, deriveConfidence } from "../lib/dashboard/evidenceMaturity.js";
 import { truncateAtWord } from "../lib/utils/truncate.js";
-import { computeImportance } from "../lib/pipeline/importance.js";
+import { computeImportance } from "../lib/pipeline/scoring/importance.js";
 
 // Importance-first ranking for "top sources". Substance before recency:
 // realized (in the wild) > proven (demonstrated) > research, then trust tier,
