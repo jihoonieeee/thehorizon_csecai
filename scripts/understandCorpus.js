@@ -20,9 +20,12 @@ import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { understandSource } from "../lib/pipeline/understand/understandSource.js";
 import { scrubImpliedQuantitatives } from "../lib/pipeline/analysis/statisticalClaimQa.js";
+import { fanOutDigest } from "../lib/pipeline/ingest/digestFanout.js";
+import { callLLM } from "../lib/llm/callLLM.js";
 
 const args        = process.argv.slice(2);
 const DRY_RUN     = args.includes("--dry-run");
+const NO_FANOUT   = args.includes("--no-fanout");   // skip landscape-report splitting
 const limitIdx    = args.indexOf("--limit");
 const batchIdx    = args.indexOf("--batch");
 const concIdx     = args.indexOf("--concurrency");
@@ -58,7 +61,7 @@ async function main() {
   // dashboard. Only hard 'reject' is excluded.
   let query = sb
     .from("sources")
-    .select("id,title,url,publisher,date_published,main_category,trust_tier,source_type,full_text,summary,tags,validation_status")
+    .select("id,title,url,publisher,date_published,main_category,trust_tier,source_type,full_text,summary,tags,validation_status,parent_source_id,is_digest,intelligence")
     .in("validation_status", ["pass", "review"])
     .is("claim_extraction_status", null)
     .order("date_published", { ascending: false });
@@ -142,6 +145,31 @@ async function main() {
         await sb.from("sources")
           .update({ validation_status: "reject", claim_extraction_status: "irrelevant" })
           .in("id", irrelevantIds);
+      }
+
+      // ── Landscape-report fan-out ─────────────────────────────────────────────
+      // A report (threat landscape / tracker / round-up / IR report) is a knowledge
+      // base of many findings, not one source. Split kept, not-already-child sources
+      // detected as reports into per-finding child sources (each independently
+      // classified), and flag the parent is_digest so it's a CONTAINER — counted
+      // once, never as N independent corroborating sources.
+      if (!NO_FANOUT) {
+        const digestParents = results.filter(e =>
+          e.ok && e.understood.relevant !== false &&
+          !e.src.parent_source_id && e.src.is_digest !== true);
+        const scoredAt = new Date().toISOString();
+        for (const e of digestParents) {
+          let out;
+          try {
+            out = await fanOutDigest(e.src, { llmFn: (s, u, o) => callLLM(s, u, { ...o, json: true }), scoredAt });
+          } catch (err) { continue; }   // fan-out never blocks the main understand run
+          if (!out.is_digest || !out.children.length) continue;
+          const childRows = out.children.map(({ _norm, ...row }) => row);
+          const { error: ce } = await sb.from("sources").upsert(childRows, { onConflict: "id", ignoreDuplicates: false });
+          if (ce) { console.log(`\n  [fanout] child write failed for ${e.src.id.slice(0,8)}: ${ce.message.slice(0,50)}`); continue; }
+          await sb.from("sources").update({ is_digest: true, intelligence: { ...(e.src.intelligence || {}), is_digest: true, digest_item_count: childRows.length } }).eq("id", e.src.id);
+          console.log(`\n  [fanout] ${e.src.title?.slice(0,45)} → ${childRows.length} findings across ${new Set(childRows.map(c=>c.main_category)).size} categories`);
+        }
       }
     } else {
       // Dry run: just preview
