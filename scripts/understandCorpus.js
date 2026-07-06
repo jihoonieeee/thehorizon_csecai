@@ -163,10 +163,13 @@ async function main() {
           let out;
           try {
             out = await fanOutDigest(e.src, {
-              llmFn: (s, u, o) => callLLM(s, u, { ...o, json: true }),
+              // Route to Haiku + cached system prompt (report_extraction task) — the
+              // extraction is bulk JSON over many chunks × many reports, so cost matters.
+              llmFn: (s, u, o) => callLLM(s, u, { ...o, task: "report_extraction", json: true }),
               // Reports are truncated to ~15k at ingest — fetch the FULL document
               // (uncapped) so the LLM can surface every finding, then chunk it.
               fetchFullText: (url) => fetchPageText(url, { timeoutMs: 25000, maxChars: 150000 }),
+              maxChunks: 6,          // cap cost: at most 6 chunks (~240k chars) per report
               scoredAt,
             });
           } catch (err) { continue; }   // fan-out never blocks the main understand run
