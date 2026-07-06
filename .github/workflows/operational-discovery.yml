@@ -31,8 +31,9 @@ jobs:
     name: Operational discovery
     runs-on: ubuntu-latest
     # Soft bound: incremental persist means whatever batches finish are saved;
-    # a cut-off only loses the in-flight batch.
-    timeout-minutes: 25
+    # a cut-off only loses the in-flight batch. 30m gives headroom over the
+    # ~8-12m a correctly-sized run takes, so fetch-latency spikes don't cancel it.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -45,7 +46,11 @@ jobs:
         # --skip-llm: discovery runs on deterministic gates only. The triage
         # provider rotation (Gemini/OpenAI/Ollama) is unreliable in CI; relevance
         # and source-typing are done by the Anthropic-backed understand job.
-        run: node scripts/ingestOperational.js --days ${{ github.event.inputs.days || '7' }} --queries-per-mission ${{ github.event.inputs.queries_per_mission || '3' }} --mission-batch 8 --skip-llm
+        # Small-batch design (matches the header comment): 1 query/mission, 2
+        # missions/batch → many small checkpointed batches that each finish fast.
+        # The command had drifted to 3 queries × 8-mission batches (~12x the work),
+        # which blew the timeout from July 5 on and got every run cancelled.
+        run: node scripts/ingestOperational.js --days ${{ github.event.inputs.days || '7' }} --queries-per-mission ${{ github.event.inputs.queries_per_mission || '1' }} --mission-batch 2 --skip-llm
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
