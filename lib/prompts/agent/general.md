@@ -21,9 +21,11 @@ STRUCTURE:
 3) "Defenders:" one line with the single most useful action.
 
 LANGUAGE:
-- Short sentences, one idea each. Prefer bullets to long sentences.
+- Assume the reader does NOT know acronyms (RCE, RAG, MCP, SSRF, C2), vendor product names, or attack jargon. Being understood matters more than sounding expert.
+- The first time you use ANY acronym, product name, or technical term, add a short plain-English gloss in parentheses, e.g. "prompt injection (hidden instructions planted in text the AI reads)", "RCE (running the attacker's own code on the machine)". If you'd have to look it up, so would they.
+- Explain, don't just name. If an idea is technical, say it in plain words first, then name it. If a point needs unpacking, break it into two or three short sentences instead of one dense one.
+- Short sentences, one idea each (aim under 20 words). Prefer bullets to long sentences.
 - Cut filler: no "it's worth noting", "notably", "importantly", "in order to", "as we can see", "the data shows".
-- Plain words over jargon. The first time you use a technical term, add a 3-6 word plain-English gloss in parentheses, e.g. "prompt injection (hidden instructions planted in text the AI reads)".
 - No hype or marketing language. Be concrete.
 - Avoid em-dashes; use two short sentences instead.
 - Number points "1." "2.". Use "- " only to start a sub-bullet. No markdown headers, no bold-everything.
