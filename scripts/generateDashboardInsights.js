@@ -43,6 +43,7 @@ import { persistCallCost, setCurrentRunId } from "../lib/llm/usagePersistence.js
 import { computeImportance } from "../lib/pipeline/scoring/importance.js";
 import { sourceSignalScore, isNoiseSource, bySignalThenRecency, partitionBySignal } from "../lib/pipeline/scoring/sourceSignal.js";
 import { significanceRank } from "../lib/pipeline/scoring/researchSignificance.js";
+import { loadPrompt } from "../lib/prompts/promptLoader.js";
 
 const args     = process.argv.slice(2);
 const getArg   = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i+1] ? args[i+1] : d; };
@@ -249,19 +250,7 @@ function closeTruncatedJson(s) {
 
 // ── Stage A: findings → themes ─────────────────────────────────────────────────
 
-const THEMES_SYSTEM = `You are an AI threat intelligence analyst. You are given source summaries for ONE threat category over ONE time period.
-
-Do TWO things:
-1. Extract atomic FINDINGS — single, concrete things each source establishes (a capability shown, a control bypassed, a vulnerability class, a real incident, a measured result). KEEP the concrete specifics: the named technique, the affected system/product/model, the threat actor, the CVE ID, and any hard numbers (success rate, count, dollar loss). Drop only the "a paper by X shows…" framing — never drop the substance that makes the finding specific and checkable.
-2. Cluster the findings into 2-5 THEMES — recurring patterns that span multiple findings. A theme is a pattern, not a single paper.
-
-Do NOT write conclusions or implications yet. Just findings and the themes they form.
-Keep each finding tight (under 25 words) but SPECIFIC — a reader must be able to tell exactly what happened and to what system. Compress; do not echo source text verbatim, and do not generalise away the specifics.
-
-LEAD WITH THE STRONGEST SIGNAL: the findings are split into PRIORITY (realized real-world incidents and landmark/notable research — the most consequential this period) and BACKGROUND (lower-signal context). Anchor your themes in the PRIORITY findings; use BACKGROUND findings only as supporting corroboration, never as the headline of a theme. A theme with no PRIORITY finding behind it should be minor or omitted.
-
-Return ONLY valid JSON:
-{"themes": [{"theme": "short theme name", "findings": ["finding", "finding", ...]}]}`;
+const THEMES_SYSTEM = loadPrompt("insights/themes").system;
 
 function buildThemesPrompt(catLabel, windowLabel, findings, leadFlags = []) {
   // Present findings in two labelled groups so the model can anchor themes in the
@@ -285,62 +274,7 @@ Extract findings and cluster into themes, led by the PRIORITY findings.`;
 
 // ── Stage B: themes → structured insights ──────────────────────────────────────
 
-const INSIGHTS_SYSTEM = `You are a principal AI threat intelligence analyst writing a horizon-scan briefing for security leadership. You synthesise THEMES into SPECIFIC, GROUNDED insights that a defender can act on.
-
-A real INSIGHT is a sharp judgment anchored in concrete evidence. It states:
-  WHAT SPECIFICALLY HAPPENED (name the technique, system, actor, or measured result)
-  → WHY IT MATTERS (the control it defeats or the assumption it breaks)
-  → WHAT A DEFENDER SHOULD DO DIFFERENTLY.
-
-Be SPECIFIC. Name the actual attack technique, the affected class of systems (e.g. "MCP servers", "vLLM inference endpoints", "AI coding agents", "RAG retrieval layers"), the threat behaviour, and any hard numbers. An insight that could have been written a year ago without reading these sources is TOO GENERIC — rewrite it to reflect what THIS period's evidence specifically shows.
-
-GOOD (specific, grounded, names the concrete failure + so-what):
-- "Attackers are chaining low-severity CVEs in agentic platforms (AutoGPT, Flowise, LiteLLM) into full RCE — so 'low severity' scores can no longer defer patching on agent infrastructure."
-- "Prompt injection hidden in third-party GitHub repos now drives coding agents (Claude Code, Windsurf) to exfiltrate SSH keys — untrusted repo content must be treated as executable input, not data."
-- "Deepfake voice/video defeated live video-call verification in a confirmed nine-figure fraud, retiring visual identity confirmation as a standalone control for wire authorisation."
-
-BAD (too abstract / could apply to any period — REWRITE to be specific):
-- "The AI attack surface is expanding faster than defenses can mature." (vague truism)
-- "Organizations must adopt a proactive security posture for AI." (generic advice)
-- "AI-enabled attacks are becoming more sophisticated." (says nothing checkable)
-
-Also BAD (bare paper summary with no judgment — REJECT):
-- "A new benchmark evaluated jailbreak robustness across models."
-
-For EACH insight, produce these fields:
-- insight: one specific, grounded judgment naming the concrete technique/system + why it matters, 20-38 words, active voice. Prefer naming real systems/techniques over abstractions. This is the skimmable headline.
-- explanation: a clear, self-contained paragraph (120-180 words) that explains the insight in DEPTH to a smart reader who is not a specialist. Requirements:
-    * Walk through WHAT happened and HOW the technique or mechanism actually works, step by step, in plain language.
-    * Name the specifics: the researcher/vendor/actor, the technique's name, the affected systems, and any hard numbers (counts, success rates, dollar losses).
-    * When a concept may be unfamiliar, explain it in a few plain words, or contrast it with something familiar (e.g. how it differs from typosquatting or phishing). Do not assume the reader knows the jargon.
-    * Weave in WHY it matters and what changes for defenders as part of the narrative — do not tack on a separate "defenders should" sentence.
-    * End with the broader significance if there is one (what class of new attacks this points to), but only if the evidence supports it.
-    * BANNED: buzzwords, hype, filler ("it's worth noting", "in an increasingly", "the landscape", "paradigm", "leverage" as a verb, "robust", "cutting-edge"). Short, direct sentences. Every specific must come from the themes/evidence below — invent nothing.
-- evidence: the concrete kinds of evidence behind it (e.g. "five distinct CVEs across AutoGPT, Flowise and LiteLLM; one confirmed breach"), grounded in the themes.
-- broken_assumption: the specific defensive assumption or control that no longer holds.
-- implication: the concrete action or posture change a defender should make in response.
-- watch_next: what specific evidence would strengthen, weaken, or change this assessment.
-- confidence_reason: one clause tying confidence to evidence maturity (e.g. "multiple CVEs but no confirmed in-the-wild chaining yet").
-
-GOLD STANDARD for the explanation field (this is the depth and clarity to match — note how it names the actor and technique, explains the mechanism plainly, contrasts it with the familiar, gives the hard number, and draws the broader implication, all without buzzwords):
-"Palo Alto Networks Unit 42 identified a technique they call phantom squatting: adversaries repeatedly probe LLMs to find fictitious domains the models consistently invent for real brands, APIs, and developer resources, then pre-register those hallucinated domains and wait for AI systems to send users or agents to attacker-controlled infrastructure. Unlike typosquatting or phishing, it does not rely on a human typo or a software bug. It exploits the model's own habit of predicting plausible-looking URLs. Unit 42 showed these hallucinations recur consistently enough across prompts and models to be predictable, finding roughly 250,000 unregistered domains that could be weaponised. The risk grows in agentic systems, where an AI agent may fetch documentation, download dependencies, or authenticate to services using a model-invented endpoint with no human check."
-
-CALIBRATION (critical): You are told the EVIDENCE MATURITY for this category. If the evidence is research/vulnerability-only with no observed exploitation, you MUST NOT claim activity is "confirmed", "operational", "at scale", or "in the wild". Frame as demonstrated capability and shifting assumptions, not active campaigns.
-
-Also produce a one-sentence "assessment": the current overall posture for this category (used for period-over-period comparison). The assessment is bound by the SAME evidence-maturity calibration as the insights — its verb must match the evidence:
-  - research/vulnerability-only (no observed exploitation) → describe demonstrated capability and shifting assumptions. Use verbs like "research is demonstrating", "capability is maturing", "assumptions are weakening". Do NOT say "escalating into production", "moving in-the-wild", "being weaponised", or "confirmed in operations".
-  - exploitation/incidents/operational evidence present → you MAY describe escalation or operational use, proportional to that evidence.
-Examples calibrated to maturity:
-  - research-heavy:  "LLM jailbreak capability is maturing in research faster than guardrail designs can absorb."
-  - operational:     "AI-enabled deepfake fraud has crossed from demonstration into confirmed financial-loss incidents."
-Pick the verb that the stated maturity supports — an overreaching assessment will be rejected downstream.
-
-LEAD WITH THE STRONGEST SIGNAL: order your insights by consequence — realized real-world incidents and landmark research first, demonstrated capability next; low-signal/incremental findings are background context, not headline insights. Your first insight should be the single most consequential development of the period. Do not give a routine finding the same prominence as a confirmed incident or a field-first result.
-
-Write 2-4 insights for rich periods; 1-2 for thin ones. Never pad.
-
-Return ONLY valid JSON:
-{"assessment": "...", "insights": [{"insight": "...", "explanation": "...", "evidence": "...", "broken_assumption": "...", "implication": "...", "watch_next": "...", "confidence_reason": "..."}]}`;
+const INSIGHTS_SYSTEM = loadPrompt("insights/insights").system;
 
 function buildInsightsPrompt(catLabel, windowLabel, themes, maturity, confidence) {
   const themeLines = themes.map((t, i) =>
@@ -362,15 +296,7 @@ Produce the assessment and structured insights.`;
 
 // ── QA: Haiku rejects paper-summaries / overreach ──────────────────────────────
 
-const QA_SYSTEM = `You audit AI-threat insights for an intelligence briefing. For each insight, return one verdict.
-
-Insights SHOULD be specific and name real techniques, systems, or actors — do NOT reject an insight for being specific. Reject only these:
-
-REJECT (verdict "summary") if the insight is a bare description of one paper/CVE/benchmark with NO judgment — i.e. it states what a source found but draws no consequence for defenders (no broken assumption, no posture change, no "so what").
-REJECT (verdict "overreach") if it claims confirmed/operational/in-the-wild/at-scale activity when the stated evidence maturity is research/vulnerability-only.
-KEEP (verdict "ok") if it names something concrete AND draws a consequence — what changed + a broken assumption or a defender action — and stays within the evidence maturity. A specific, grounded insight that names real systems is exactly what we want; keep it.
-
-Return ONLY JSON: {"verdicts":[{"index":0,"verdict":"ok"|"summary"|"overreach","reason":"..."|null}]}`;
+const QA_SYSTEM = loadPrompt("insights/insight-qa").system;
 
 async function qaInsights(insights, maturity, catLabel, status = {}) {
   status.ran = false;
@@ -586,26 +512,12 @@ function composeCategoryFindings(catRows, evItems = [], cap = 40) {
 // ── Generic second-model QA for any generated statements ───────────────────────
 // Returns a boolean[] (true = grounded/keep) aligned to `statements`.
 
-const STMT_QA_SYSTEM = `You fact-check statements in an AI threat intelligence briefing against the evidence they were derived from.
-
-For each statement return a verdict:
-- "ok": grounded — every specific claim is supported by or directly inferable from the evidence, and it does not assert confirmed/operational/in-the-wild activity beyond what the evidence shows.
-- "reject": ungrounded — invents specifics, overreaches the evidence maturity, or contradicts the evidence.
-
-Return ONLY JSON: {"verdicts":[{"index":0,"verdict":"ok"|"reject","reason":"..."|null}]}`;
+const STMT_QA_SYSTEM = loadPrompt("insights/statement-qa").system;
 
 // Assessment QA — calibrated for a ONE-SENTENCE category posture (a generalization),
 // not a factual statement. An assessment is SUPPOSED to be broad; we only reject
 // maturity-overreach or a posture the validated insights don't support.
-const ASSESS_QA_SYSTEM = `You verify a one-sentence category ASSESSMENT (the overall threat posture for a category this period).
-
-An assessment is a GENERALIZATION that rolls up the category's validated insights. Do NOT reject it for being broad, high-level, or for not naming specific sources — that is its job.
-
-Return verdict "ok" unless one of these is true:
-- "overreach": it claims confirmed / operational / in-the-wild / at-scale activity when the stated evidence maturity is research- or vulnerability-only.
-- "unsupported": it asserts a posture or direction the validated insights below do not support (e.g. claims escalation the insights never indicate).
-
-Return ONLY JSON: {"verdict":"ok"|"overreach"|"unsupported","reason":"..."|null}`;
+const ASSESS_QA_SYSTEM = loadPrompt("insights/assessment-qa").system;
 
 async function qaAssessment(assessment, insights, maturity, status = {}) {
   status.ran = false;
@@ -686,19 +598,7 @@ function detectEmergingSignals(currTags, prevTags) {
   return signals.sort((a, b) => b.delta - a.delta).slice(0, 5);
 }
 
-const SIGNAL_SYSTEM = `You are an AI threat intelligence analyst writing the "Emerging Signals" watchlist — themes that were faint last period and are now gaining evidence.
-
-You are given EVERY signal by index, each with its source summaries this period. Return one object for EVERY index — never skip a signal. For each:
-- "analysis": 1-2 sentences (25-45 words) on WHAT is driving the uptick and WHY it matters for defenders — the shift in the threat, not a paper summary.
-- "watch": an array of 2-3 short, concrete monitoring points — specific things a defender should watch for that would confirm (or kill) this as a real trend. Each is a terse phrase (≤14 words), not a sentence, and they must be distinct and actionable.
-  GOOD watch point: "RAG backend credentials abused in a named real-world incident"
-  GOOD watch point: "exploit kits adding a retrieval-index poisoning module"
-  GOOD watch point: "the CVE moving from disclosure to observed exploitation"
-  BAD watch point:  "watch for more activity" (vague, not actionable)
-
-Ground everything in the provided summaries. Do not claim confirmed/operational/in-the-wild activity unless the summaries show it. No paper-name-dropping.
-
-Return ONLY JSON: {"signals":[{"index":0,"analysis":"...","watch":["...","..."]}]}`;
+const SIGNAL_SYSTEM = loadPrompt("insights/emerging-signals").system;
 
 // Deterministic, source-grounded fallbacks so EVERY signal carries elaboration
 // even when the LLM skips one or its analysis fails QA.
@@ -787,18 +687,7 @@ async function enrichEmergingSignals(signals, currTagSources) {
   return signals;
 }
 
-const ASSESS_CHANGE_SYSTEM = `You compare AI-threat category ASSESSMENTS between two consecutive periods and report ONLY material changes.
-
-A material change = the strategic posture moved (e.g. research-only → affecting production; emerging → established; contained → bypassable). Pure rewording is NOT material — omit it.
-
-Write for SKIMMABILITY. For each material change return:
-- "category": the category key
-- "from": the OLD posture as a terse 2-5 word label (e.g. "research-stage")
-- "to": the NEW posture as a terse 2-5 word label (e.g. "production-affecting")
-- "reason": one tight clause (max 14 words) citing the evidence delta that drove it
-Do NOT restate the full assessment sentences. Keep every field short.
-
-Return ONLY JSON: {"changes":[{"category":"<key>","from":"...","to":"...","reason":"..."}]}  (empty array if none material).`;
+const ASSESS_CHANGE_SYSTEM = loadPrompt("insights/assessment-changes").system;
 
 async function computeAssessmentChanges(currAssess, prevAssess, maturityDeltas) {
   const cats = Object.keys(currAssess).filter(c => prevAssess[c]);
@@ -853,19 +742,7 @@ const SRC_TYPE_RANK = {
 
 const titleOf = (t) => String(t || "").trim();
 
-const ATTRIBUTION_SYSTEM = `You are an AI threat intelligence analyst attributing SOURCES to strategic insights.
-
-You are given (1) a numbered list of INSIGHTS for one threat category, and (2) a numbered list of SOURCES (real articles, papers, CVEs, incident reports) available for that category and period.
-
-For EACH insight, identify the 2-5 SOURCES that most directly and critically support it — the specific findings, incidents, or disclosures a reader must see to trust that insight. Choose only sources whose content genuinely underpins the insight. Do NOT pad to a fixed count; if only two sources truly matter, return two.
-
-Rules:
-- Use ONLY source numbers from the provided list. Never invent a source number.
-- Order each insight's sources most-critical first.
-- A source may support more than one insight.
-- Prefer sources that establish the concrete evidence (an incident, an exploit, a measured result) over generic context.
-
-Return ONLY JSON: {"attributions":[{"insight_index":0,"source_numbers":[3,7,12]}]}`;
+const ATTRIBUTION_SYSTEM = loadPrompt("insights/attribution").system;
 
 function buildAttributionPrompt(catLabel, windowLabel, insights, sources) {
   const insightLines = insights.map((p, i) => `[${i}] ${p.insight}`).join("\n");
@@ -957,16 +834,7 @@ export async function attributeSources(insights, catSources, windowLabel, catLab
 // is why no similarity threshold is needed. Falls back to null (→ deterministic order
 // in api/dashboard) when the key is missing or the call fails.
 
-const TOP_SOURCES_SYSTEM = `You are the editor of an AI-threat-intelligence briefing. From a list of candidate sources for a reporting period, select the ones a decision-maker MOST needs to see, ranked most-important first.
-
-Judge by CONSEQUENCE, not recency or publisher prestige:
-- Real-world incidents and in-the-wild attacks outrank demonstrations; demonstrations outrank research.
-- Novel capabilities, first-of-kind events, and large-scale/high-impact incidents outrank routine or incremental items.
-- When several candidates cover the SAME event, pick the single best one — never list the same event twice.
-
-For each selected source write ONE concise sentence (≤ 22 words) on why it matters THIS period — the specific development or stakes, not a generic summary.
-
-Return JSON only: { "top": [ { "n": <source number>, "why": "<one sentence>" } ] }, most important first.`;
+const TOP_SOURCES_SYSTEM = loadPrompt("insights/top-sources").system;
 
 function buildTopSourcesPrompt(windowLabel, candidates, n) {
   const lines = candidates.map((s, i) =>
