@@ -143,10 +143,20 @@ the single best fit (use these exact values):
   unknown                    — cannot determine
 
 EXTRACTION FIELDS (always populate these when relevant=true):
-  short_summary — REQUIRED. A 1–2 sentence (≤400 char) summary stating the core finding: what the threat/technique is and why it matters. Never leave empty.
-  key_entities  — Named entities: products, tools, models, packages, CVE IDs, organisations, threat actors, people (e.g. "AutoGPT", "CVE-2026-33234", "Anthropic").
-  key_terms     — Salient technical concepts, methods, and attack/defence techniques — NOT proper nouns (e.g. "prompt injection", "SSRF", "DLL sideloading", "tool-call loop", "wallet drain").
-  key_numbers   — Quantitative facts ONLY, each as {value, context}. Include counts, percentages, sizes, prices, durations, and dates that carry meaning (e.g. {"value":"200000","context":"downloads before removal"}). Do NOT put version strings, currency codes, model names, hashes, or identifiers here — those belong in key_entities or key_terms.
+  short_summary  — REQUIRED. 1–2 sentences (≤400 chars) of pure fact: what specifically was attacked, how, and what happened. Name the exact product/system/actor. No filler ("this paper explores", "researchers found", "the article discusses"). Start with the subject directly. Example good: "CVE-2026-59807 in Composio SDK lets attackers use prompt injection to traverse file paths and exfiltrate SSH keys and credentials." Example bad: "This vulnerability report discusses a path validation issue that has security implications."
+  analyst_brief  — 2–3 sentences (≤600 chars) of analyst perspective: threat significance, who is concretely at risk (which systems, users, or orgs), and the one highest-priority defensive action. Written for a security analyst skimming a daily briefing — sharp, no filler. Must differ from short_summary; short_summary says WHAT happened, analyst_brief says SO WHAT and WHAT TO DO.
+  event_date     — If this source documents an incident, CVE, campaign, or breach: the date the event FIRST occurred or was first exploited (YYYY-MM-DD), NOT the article publish date. Leave null if unknown or if source_type is research_finding/benchmark_evaluation/defensive_capability.
+  event_date_confidence — "exact" (specific date stated), "approximate" (month/year only, use first of month), or "unknown". Only set when event_date is non-null.
+  source_coverage_type — How this source relates in time to the events it describes:
+    "new_finding"        — reports on something first occurring close to its publish date (fresh CVE, active campaign, breach just disclosed)
+    "historical_analysis" — a retrospective, roundup, or synthesis whose events predate the publish date by more than ~2 weeks (monthly threat report, post-mortem, "State of X" writeup, annual review)
+    "mixed"              — breaks one or more new findings AND also contextualises prior incidents from earlier periods
+    Rule: if the source is a research paper (source_type=research_finding/benchmark_evaluation), set "historical_analysis" — papers describe work done before publication.
+  covered_period_start — For "historical_analysis" or "mixed" only: the approximate earliest date of events covered (YYYY-MM-DD). Use the first of the month if only month/year is clear. Leave null for "new_finding".
+  covered_period_end   — For "historical_analysis" or "mixed" only: the approximate latest date of events covered (YYYY-MM-DD). Leave null for "new_finding".
+  key_entities   — Named entities: products, tools, models, packages, CVE IDs, organisations, threat actors, people (e.g. "AutoGPT", "CVE-2026-33234", "Anthropic").
+  key_terms      — Salient technical concepts, methods, and attack/defence techniques — NOT proper nouns (e.g. "prompt injection", "SSRF", "DLL sideloading", "tool-call loop", "wallet drain").
+  key_numbers    — Quantitative facts ONLY, each as {value, context}. Include counts, percentages, sizes, prices, durations, and dates that carry meaning (e.g. {"value":"200000","context":"downloads before removal"}). Do NOT put version strings, currency codes, model names, hashes, or identifiers here — those belong in key_entities or key_terms.
 
 Return ONLY valid JSON matching the schema. No markdown.
 ```

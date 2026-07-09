@@ -103,6 +103,11 @@ async function main() {
           ? scrubImpliedQuantitatives(rawSummary, sourceText)
           : { text: rawSummary };
 
+        const rawAnalystBrief = u.analyst_brief || null;
+        const { text: cleanAnalystBrief } = rawAnalystBrief
+          ? scrubImpliedQuantitatives(rawAnalystBrief, sourceText)
+          : { text: rawAnalystBrief };
+
         return {
           id:                      src.id,
           // Promote understood-relevant 'review' sources to 'pass' so they reach
@@ -114,12 +119,18 @@ async function main() {
           source_type:             u.source_type  || src.source_type || "unknown",
           trust_tier:              u.trust_tier   || src.trust_tier  || "unknown",
           short_summary:           cleanSummary,
-          analyst_brief:           cleanSummary,
+          analyst_brief:           cleanAnalystBrief || cleanSummary,
           intelligence: {
             key_entities: u.key_entities || [],
             key_terms:    u.key_terms    || [],
             main_claims:  u.main_claims  || [],
             key_numbers:  u.key_numbers  || [],
+            ...(u.event_date ? { event_date: u.event_date, event_date_confidence: u.event_date_confidence } : {}),
+            ...(u.source_coverage_type ? {
+              source_coverage_type: u.source_coverage_type,
+              ...(u.covered_period_start ? { covered_period_start: u.covered_period_start } : {}),
+              ...(u.covered_period_end   ? { covered_period_end:   u.covered_period_end   } : {}),
+            } : {}),
           },
           claim_extraction_status: "success",
         };

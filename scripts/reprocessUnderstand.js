@@ -130,6 +130,8 @@ async function main() {
       const sourceText = src.full_text || src.clean_text || src.summary || "";
       const raw = u.short_summary || null;
       const { text: cleanSummary } = raw ? scrubImpliedQuantitatives(raw, sourceText) : { text: raw };
+      const rawBrief = u.analyst_brief || null;
+      const { text: cleanAnalystBrief } = rawBrief ? scrubImpliedQuantitatives(rawBrief, sourceText) : { text: rawBrief };
 
       updates.push({
         id: src.id,
@@ -138,13 +140,19 @@ async function main() {
         tags: u.primary_tags || [],
         trust_tier: u.trust_tier || src.trust_tier || "unknown",
         short_summary: cleanSummary,
-        analyst_brief: cleanSummary,
+        analyst_brief: cleanAnalystBrief || cleanSummary,
         intelligence: {
           key_entities: u.key_entities || [],
           key_terms: u.key_terms || [],
           main_claims: u.main_claims || [],
           key_numbers: u.key_numbers || [],
           evidence_quality: quality,
+          ...(u.event_date ? { event_date: u.event_date, event_date_confidence: u.event_date_confidence } : {}),
+          ...(u.source_coverage_type ? {
+            source_coverage_type: u.source_coverage_type,
+            ...(u.covered_period_start ? { covered_period_start: u.covered_period_start } : {}),
+            ...(u.covered_period_end   ? { covered_period_end:   u.covered_period_end   } : {}),
+          } : {}),
         },
         claim_extraction_status: "success",
       });

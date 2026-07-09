@@ -224,7 +224,7 @@ function VectorDetail({ detail, sourceIndex, onDrilldown }) {
       {detail.what_happened?.length > 0 && (
         <div style={{ marginBottom: "14px" }}>
           <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>
-            What happened this period
+            This period
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             {detail.what_happened.map((item, i) => (

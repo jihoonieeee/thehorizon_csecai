@@ -230,7 +230,7 @@ function InsightItem({ p }) {
         <div className="hz-insight-detail-inner">
           {explanation && (
             <div className="hz-insight-line hz-insight-explanation">
-              <span className="hz-insight-tag">What happened</span>
+              <span className="hz-insight-tag">Details</span>
               <span className="hz-insight-explanation-text">{explanation}</span>
             </div>
           )}
@@ -569,7 +569,7 @@ export function OverviewPage() {
             <span className="hz-insight-stat-value">{data.summary?.total ?? "—"}</span>
             <span className="hz-insight-stat-label">Sources</span>
           </div>
-          <span className="hz-insight-stat-eq">=</span>
+          <span className="hz-insight-stat-eq">·</span>
           {Object.entries(CAT_COLOR).map(([key, color]) => (
             <div key={key} className="hz-insight-stat">
               <span className="hz-insight-stat-value" style={{ color }}>
