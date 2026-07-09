@@ -1,27 +1,50 @@
 /**
- * POST /api/agent — AI threat intelligence chatbot with tool use.
+ * POST /api/agent — AI threat intelligence chatbot (retrieval-first).
  *
- * Claude drives its own retrieval via 5 tools:
- *   search_corpus    — Supabase sources (live data, always current)
- *   get_judgments    — L6 analytical judgments from latest pipeline blob
- *   get_evidence     — Evidence items with facts, quotes, source URLs
- *   trend_analysis   — Weekly volume + spike detection from Supabase
- *   search_taxonomy  — Tag/category distribution across the corpus
+ * Flow (one cheap plan + targeted retrieval + one synthesis + one verify):
+ *   1. planQuery (Haiku)      — expand the question into canonical search terms +
+ *                               taxonomy tags + entities, interpret the timeframe,
+ *                               decide scope + whether trend/judgment data is needed.
+ *   2. retrieveRelevant        — search the corpus with the EXPANDED plan (so a
+ *                               paraphrased question still matches) and return a
+ *                               quality verdict: good / thin / none.
+ *   3. branch:
+ *        out of scope  → brief decline, no LLM, no sources.
+ *        verdict none  → say so plainly, then a clearly-labelled GENERAL answer
+ *                        (Sonnet background knowledge, no citations).
+ *        good / thin   → GROUNDED synthesis (Sonnet) over ONLY the retrieved
+ *                        sources; every claim cites [src-N].
+ *   4. QA: deterministic (allowlist, CVE grounding, dead-link + relevance drop) AND
+ *      a Haiku verifier that flags claims/stats not supported by the cited sources.
  *
- * Flow: tool loop (max 4 rounds) → parse response → QA check → return
- * All factual claims cite source publisher + URL; internal ev_xxx IDs are scrubbed before response.
+ * Cost: ~2 Haiku calls (~$0.003) + 1 Sonnet synthesis over a trimmed context,
+ * instead of the old always-on 4-tool blob. Sonnet input is much smaller.
  */
 
-import { executeTool } from "../lib/agent/agentTools.js";
+import { executeTool, retrieveRelevant } from "../lib/agent/agentTools.js";
+import { planQuery } from "../lib/agent/queryPlanner.js";
+import { verifyAnswer } from "../lib/agent/verifyAnswer.js";
 import { ANTHROPIC_MODELS } from "../lib/llm/taskProfiles.js";
 import { logAgentCostToDB } from "../lib/llm/usagePersistence.js";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 
-// Streaming variant: POSTs with stream:true, invokes onText(delta) for each
-// text delta, and returns accumulated token usage. Used for the single synthesis
-// pass so the answer renders progressively in the UI.
+// USD per 1M tokens.
+const PRICING = {
+  sonnet: { input: 3.00, output: 15.00 },
+  haiku:  { input: 1.00, output:  5.00 },
+};
+
+const CATEGORY_LABELS = {
+  traditional_ai_threats: "Traditional AI Threats",
+  llm_threats:            "LLM Threats",
+  agentic_ai_threats:     "Agentic AI Threats",
+  ai_enabled_threats:     "AI-Enabled Threats",
+};
+
+// ── Anthropic transport ─────────────────────────────────────────────────────────
+
 async function anthropicStream(body, onText, timeoutMs = 90000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -49,7 +72,7 @@ async function anthropicStream(body, onText, timeoutMs = 90000) {
       if (done) break;
       buf += decoder.decode(value, { stream: true });
       const lines = buf.split("\n");
-      buf = lines.pop();   // keep the trailing partial line
+      buf = lines.pop();
       for (const line of lines) {
         if (!line.startsWith("data:")) continue;
         const data = line.slice(5).trim();
@@ -96,367 +119,159 @@ async function anthropicRequest(body, timeoutMs = 90000) {
   }
 }
 
+// ── System prompts ──────────────────────────────────────────────────────────────
 
-// ── Temporal intent parser ─────────────────────────────────────────────────────
+// Shared language/style rules — applied to grounded and general answers alike.
+const LANGUAGE_RULES = `LANGUAGE:
+- Short sentences, one idea each. Prefer bullets to long sentences.
+- Cut filler: no "it's worth noting", "notably", "importantly", "in order to", "as we can see", "the data shows".
+- Plain words over jargon. The first time you use a technical term, add a 3-6 word plain-English gloss in parentheses, e.g. "prompt injection (hidden instructions planted in text the AI reads)".
+- No hype or marketing language. Be concrete.
+- Avoid em-dashes; use two short sentences instead.
+- Number points "1." "2.". Use "- " only to start a sub-bullet. No markdown headers, no bold-everything.`;
 
-/**
- * Parse temporal phrases from a user query.
- * Returns { date_from, date_to, scope_label, all_time }
- *
- * date_from / date_to are YYYY-MM-DD strings or null.
- * date_to=null means "up to today".
- * all_time=true means no date restriction at all.
- */
-function parseTemporalIntent(query) {
-  const q = (query || "").toLowerCase();
-  const now = new Date();
+// The analytical mandate — this is what separates an analyst answer from a summary.
+const ANALYST_RULES = `YOU ARE AN ANALYST, NOT A SUMMARISER. The user wants your assessment, not a list of what each source said.
+- Take a position. Interpret the evidence; do not just report it.
+- Make each numbered point a JUDGEMENT (what is happening and why it matters). The supporting evidence goes in its sub-bullets.
+- Synthesise across sources: when independent sources agree, say so; when they conflict, or a claim rests on ONE source, flag it.
+- Weight by significance: the most consequential point first. Separate what is confirmed and operational from what is early or research-stage.
+- Be skeptical of dramatic numbers: if a striking figure is thinly or single-sourced, label it indicative/unverified rather than stating it as fact.
+- Draw the second-order implication, not just the finding. Do not hedge without a view, and do not merely enumerate sources.`;
 
-  const MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
-  const MONTHS_SHORT = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+// Grounded answer structure (analyst layer + skimmable points).
+const ANALYST_FORMAT = `STRUCTURE:
+1) "Assessment:" 2-3 short sentences with your overall read — the real signal, how confident you are, and anything overhyped or thin. This is the most important part.
+2) 3 to 5 numbered points. Each opens with a short judgement (under 15 words). Under it, "- " sub-bullets carry the evidence, each with a [src-N] on the exact bullet it supports. Most significant point first. Keep bullets in the same block as their point.
+3) "So what:" one line — the implication, the trajectory, or what changes for the reader.
+4) "Defenders:" one line — the single most useful action.`;
 
-  function lastDayOfMonth(year, monthIdx) {
-    return new Date(year, monthIdx + 1, 0).getDate();
-  }
+// General (no-corpus) answer structure — lighter, no assessment-of-sources.
+const GENERAL_FORMAT = `STRUCTURE:
+1) One short sentence giving your bottom-line answer.
+2) 3 to 5 numbered points, each a short claim with "- " sub-bullets for the detail or breakdown.
+3) "Defenders:" one line with the single most useful action.`;
 
-  // Explicit "all time" / "entire corpus" / "ever"
-  if (/\ball[- ]time\b|\bentire (?:database|corpus|history)\b|\bever\b|\bsince (?:the )?beginning\b|\ball (?:available |)(?:data|sources|records)\b|\bhistorical(?:ly)?\b/.test(q)) {
-    return { date_from: null, date_to: null, scope_label: "all available data", all_time: true };
-  }
-
-  // "past N days/weeks/months/years" or "last N …"
-  const rel = q.match(/\b(?:past|last)\s+(\d+)\s+(day|week|month|year)s?\b/);
-  if (rel) {
-    const n = parseInt(rel[1], 10);
-    const unit = rel[2];
-    const ms = unit === "day"   ? 86400000 * n
-              : unit === "week"  ? 86400000 * 7 * n
-              : unit === "month" ? 86400000 * 30 * n
-              : 86400000 * 365 * n;
-    const d = new Date(Date.now() - ms).toISOString().slice(0, 10);
-    return { date_from: d, date_to: null, scope_label: `last ${n} ${unit}${n !== 1 ? "s" : ""}`, all_time: false };
-  }
-
-  // "in the past/last N …" (variant)
-  const inPast = q.match(/\bin (?:the )?(?:past|last)\s+(\d+)\s+(day|week|month|year)s?\b/);
-  if (inPast) {
-    const n = parseInt(inPast[1], 10);
-    const unit = inPast[2];
-    const ms = unit === "day"   ? 86400000 * n
-              : unit === "week"  ? 86400000 * 7 * n
-              : unit === "month" ? 86400000 * 30 * n
-              : 86400000 * 365 * n;
-    const d = new Date(Date.now() - ms).toISOString().slice(0, 10);
-    return { date_from: d, date_to: null, scope_label: `last ${n} ${unit}${n !== 1 ? "s" : ""}`, all_time: false };
-  }
-
-  // "this week"
-  if (/\bthis week\b/.test(q)) {
-    const d = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
-    return { date_from: d, date_to: null, scope_label: "this week", all_time: false };
-  }
-
-  // "this month"
-  if (/\bthis month\b/.test(q)) {
-    const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-    return { date_from: from, date_to: null, scope_label: "this month", all_time: false };
-  }
-
-  // Specific month (with optional year): "in May", "for May", "May 2026", "of May", "month of May"
-  // "in May 2026", "during May", "from May 2026"
-  const MONTH_PAT = `(${MONTHS.join("|")}|${MONTHS_SHORT.join("|")})`;
-  const specificMonth = q.match(
-    new RegExp(`\\b(?:in|for|of|during|from|month of|throughout)?\\s*${MONTH_PAT}(?:\\s+(\\d{4}))?\\b`)
-  );
-  if (specificMonth) {
-    const rawMonth = specificMonth[1];
-    const monthIdx = MONTHS.includes(rawMonth) ? MONTHS.indexOf(rawMonth) : MONTHS_SHORT.indexOf(rawMonth);
-    if (monthIdx !== -1) {
-      // Infer year: if the month is in the future this year, assume last year
-      let year = specificMonth[2] ? parseInt(specificMonth[2], 10) : now.getFullYear();
-      if (!specificMonth[2] && monthIdx > now.getMonth()) year--;
-      const mm = String(monthIdx + 1).padStart(2, "0");
-      const lastDay = lastDayOfMonth(year, monthIdx);
-      const from = `${year}-${mm}-01`;
-      const to   = `${year}-${mm}-${String(lastDay).padStart(2, "0")}`;
-      const label = `${rawMonth.charAt(0).toUpperCase() + rawMonth.slice(1)} ${year}`;
-      // Only treat as a closed month window if user isn't asking "since Month"
-      // (handled below) — check the word before the month name
-      const isSince = /\bsince\b/.test(q.slice(0, q.indexOf(rawMonth)));
-      if (!isSince) {
-        return { date_from: from, date_to: to, scope_label: label, all_time: false };
-      }
-    }
-  }
-
-  // "since Month [Year]"
-  const sinceMonth = q.match(
-    new RegExp(`\\bsince\\s+${MONTH_PAT}(?:\\s+(\\d{4}))?\\b`)
-  );
-  if (sinceMonth) {
-    const rawMonth = sinceMonth[1];
-    const monthIdx = MONTHS.includes(rawMonth) ? MONTHS.indexOf(rawMonth) : MONTHS_SHORT.indexOf(rawMonth);
-    if (monthIdx !== -1) {
-      const year = sinceMonth[2] ? parseInt(sinceMonth[2], 10) : now.getFullYear();
-      const mm = String(monthIdx + 1).padStart(2, "0");
-      return { date_from: `${year}-${mm}-01`, date_to: null, scope_label: `since ${rawMonth} ${year}`, all_time: false };
-    }
-  }
-
-  // Default: last 90 days
-  const d90 = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
-  return { date_from: d90, date_to: null, scope_label: "last 90 days (default)", all_time: false };
-}
-
-// ── Category intent parser ──────────────────────────────────────────────────────
-
-const CATEGORY_LABELS_FOR_PROMPT = {
-  traditional_ai_threats: "Traditional AI Threats",
-  llm_threats:            "LLM Threats",
-  agentic_ai_threats:     "Agentic AI Threats",
-  ai_enabled_threats:     "AI-Enabled Threats",
-};
-
-// Category NAME matchers ("Traditional AI Threats", "LLM Threats", …).
-const CATEGORY_NAME_MATCHERS = {
-  traditional_ai_threats: [/\btraditional ai\b/],
-  llm_threats:            [/\bllm threats?\b/],
-  agentic_ai_threats:     [/\bagentic ai\b/],
-  ai_enabled_threats:     [/\bai[- ]enabled\b/],
-};
-
-// Technique → category matchers. These map a named ATTACK TECHNIQUE to the
-// category the taxonomy files it under (per CLAUDE.md), so a question like
-// "data poisoning and model backdoors" (which never says "Traditional AI") can
-// still be scoped. Phrases are specific to avoid collisions — e.g. "RAG
-// poisoning" is an LLM phrase, not caught by the Traditional "data poisoning".
-const TECHNIQUE_MATCHERS = {
-  traditional_ai_threats: [
-    /\bdata poisoning\b/, /\btraining[- ]data poisoning\b/, /\bmodel backdoor/,
-    /\bbackdoored? model/, /\badversarial example/, /\badversarial perturbation/,
-    /\bmodel extraction\b/, /\bmodel inversion\b/, /\bmembership inference\b/,
-    /\bmodel evasion\b/,
-  ],
-  llm_threats: [
-    /\bprompt injection\b/, /\bjailbreak/, /\brag poisoning\b/,
-    /\bretrieval[- ]poisoning\b/, /\bguardrail bypass\b/, /\bsystem[- ]prompt leak/,
-  ],
-  agentic_ai_threats: [
-    /\bmcp\b/, /\btool poisoning\b/, /\btool[- ]call injection\b/,
-    /\bagent hijack/, /\bautonomous agent abuse\b/,
-  ],
-  ai_enabled_threats: [
-    /\bdeepfake/, /\bvoice clon/, /\bai[- ]?(?:generated |enabled )?phish/,
-    /\bai[- ]?malware\b/, /\bvoice fraud\b/,
-  ],
-};
-
-const matchedCategories = (q, matchers) =>
-  Object.entries(matchers).filter(([, res]) => res.some(re => re.test(q))).map(([k]) => k);
-
-/**
- * Decide whether to scope the answer to a single threat category.
- *
- * Collect every category implicated by the question — via its NAME ("top
- * developments in LLM Threats") or a named ATTACK TECHNIQUE the taxonomy files
- * under one category ("data poisoning and model backdoors" → Traditional AI) —
- * then scope ONLY when the union is exactly one category. Anything implicating
- * two or more (a cross-cutting question, or a technique applied to another
- * category's context like "data poisoning in agentic AI systems") stays unscoped
- * so the answer can legitimately span categories. Returns the key, or null.
- */
-function detectCategoryInQuery(query) {
-  const q = (query || "").toLowerCase();
-  const implicated = new Set([
-    ...matchedCategories(q, CATEGORY_NAME_MATCHERS),
-    ...matchedCategories(q, TECHNIQUE_MATCHERS),
-  ]);
-  return implicated.size === 1 ? [...implicated][0] : null;
-}
-
-// ── System prompt builder ─────────────────────────────────────────────────────
-
-function buildSystem(temporal, focusCategory = null) {
-  const today = new Date().toISOString().slice(0, 10);
-  const scopeNote = temporal.all_time
-    ? `The user is asking about all available data — do not add any date_from filter unless the question implies a specific window.`
-    : `Default data window: ${temporal.scope_label} (${temporal.date_from}${temporal.date_to ? ` to ${temporal.date_to}` : " onwards"}). Use date_from="${temporal.date_from}"${temporal.date_to ? ` and date_to="${temporal.date_to}"` : ""} in search_corpus. Both bounds are required when the user asks about a specific month or period — omitting date_to would include newer sources. Only omit date_to when using open-ended ranges like "since May" or "last 3 months".`;
-
-  const categoryNote = focusCategory
-    ? `\nCATEGORY FOCUS: the user asked specifically about ${CATEGORY_LABELS_FOR_PROMPT[focusCategory]}. Keep your answer within that category. The pre-fetched sources may still include tangential items from other categories (Traditional AI, LLM, Agentic AI, AI-Enabled) because keyword matching is loose — cite only sources that belong to ${CATEGORY_LABELS_FOR_PROMPT[focusCategory]}. If a cross-cutting point from another category is essential, name the other category explicitly rather than blending it in.`
-    : "";
-
-  return `You are a knowledgeable AI threat intelligence analyst. You speak directly and clearly, like a smart colleague briefing a security team.
-
-Today: ${today}
-${scopeNote}
-${categoryNote}
-
-WHEN TO USE TOOLS vs ANSWER DIRECTLY:
-If the user's question is a follow-up or clarification on what was just discussed (e.g. "what does that mean?", "can you elaborate?", "why is that significant?"), answer directly without calling any tools.
-
-INITIAL RETRIEVAL IS ALREADY DONE FOR YOU. Before this turn the system ran the corpus search, evidence lookup, and analytical judgments for the user's question and gave you the results above — that IS your retrieval. Those sources and their [src-N] refs are how citation links reach the user.
-
-You have everything you need: corpus sources, grounded evidence, analytical judgments, weekly trend data, and (when the question names a CVE) its live NVD severity are all provided above. Synthesise your answer NOW from that material and cite the [src-N] refs. Do not ask for more data — there are no tools to call; just write the answer.
-
-HOW TO WRITE YOUR ANSWER:
-Use this structure every time:
-
-First, one or two sentences directly answering the question — your conclusion up front.
-
-Then numbered key points (3 to 5). Each point is one clear sentence stating a specific finding, followed by the evidence. Example:
-1. Indirect prompt injection via RAG documents is now confirmed in operational deployments. Three separate incidents were documented this period, each involving externally-sourced document content bypassing system prompts.
-2. Tool-call injection in agentic systems reached consistent proof-of-concept stage across four independent research groups, indicating active development.
-
-Then one sentence on what defenders should do. Then one sentence on what the data cannot tell us (only if relevant).
-
-Do not use dashes or asterisks. Do not write markdown headers. Number your points with "1." "2." etc. Write each point as a full sentence, not a fragment. Keep it conversational and direct — like briefing a smart colleague.
-
-When you cite a specific source in a sentence, add a citation marker immediately after that sentence in the format [src-N], where N is the ref number shown in the search results (e.g. ref: "src-1"). For example: "Indirect prompt injection via RAG documents is confirmed in operational deployments. [src-3]" or "CISA documented three incidents this period involving tool-call hijacking. [src-1][src-4]"
-
-These markers become inline clickable links in the UI — they are the primary way users navigate to sources. Use them precisely: only cite a source with [src-N] if that source actually supports the sentence. You may cite multiple sources for one sentence. Do not write out raw URLs.
-
-CRITICAL citation format: a marker is EXACTLY [src-N] where N is a number — nothing else inside the brackets. Never write words inside the brackets. Wrong: [src-3, via evidence], [src-4 in evidence], [src-6 context], [src-evidence]. Right: [src-3][src-4]. If you have no ref number for a source, do not invent a marker — just describe it in prose. Anything other than [src-N] will not render as a link and will look broken to the user.
-
-If evidence is thin (fewer than 3 sources), say so plainly. If you cannot answer from the corpus, say what's missing. Do not invent sources or statistics. No hype language.
-
-SCOPE: You are an AI threat-intelligence assistant for this corpus only (AI/ML security, LLM/agentic threats, AI-enabled attacks, related vulnerabilities and incidents). The pre-fetched results use loose keyword matching, so they may return tangential sources even when the question is NOT about AI security. If the question is clearly outside this scope — general chit-chat, weather, unrelated topics, or nonsensical input — do NOT force an answer or cite any sources. Instead reply in one or two sentences that you focus on AI threat intelligence and invite an in-scope question, set SCOPE: out_of_scope, and add NO [src-N] markers. For genuine in-scope questions, set SCOPE: in_scope.
-
-NEVER expose internal evidence tracking IDs (ev_xxx, ev-xxx).
-
-End with these lines exactly:
+const META_BLOCK = `End with these lines exactly:
 SCOPE: in_scope|out_of_scope
 CONFIDENCE: high|moderate|low
 CONFIDENCE_REASON: one sentence
 CAVEAT: one specific limitation, or null
 FOLLOWUP: a concrete follow-up question
 FOLLOWUP: a second follow-up question`;
+
+function buildGroundedSystem(scopeLabel, focusCategory, thin) {
+  const today = new Date().toISOString().slice(0, 10);
+  const catNote = focusCategory
+    ? `\nThe question is about ${CATEGORY_LABELS[focusCategory]}; keep the answer within that category.`
+    : "";
+  const thinNote = thin
+    ? `\nCoverage is THIN — only a small number of relevant sources were found. Say so plainly and keep confidence at most moderate.`
+    : "";
+  return `You are a senior AI threat-intelligence analyst briefing a security team. Give your assessment, not a summary.
+
+Today: ${today}. Data window: ${scopeLabel}.${catNote}${thinNote}
+
+The RELEVANT SOURCES are in the user message, each tagged [src-N]. That is your evidence base — there are no tools to call. Reason over it and answer now.
+
+CITATIONS: put [src-N] right after the sentence or bullet it supports, where N is the source's ref number. A marker is EXACTLY [src-N] — a number only. Cite a source only if it actually supports the claim; you may cite several. Never write a raw URL. If a claim is not supported by any provided source, do not assert it.
+
+Do not invent sources, CVEs, numbers, or incidents. If the sources genuinely do not answer the question, say what is missing rather than guessing.
+
+${ANALYST_RULES}
+
+${ANALYST_FORMAT}
+
+${LANGUAGE_RULES}
+
+${META_BLOCK}`;
 }
 
-// ── Response parser ───────────────────────────────────────────────────────────
+function buildGeneralSystem(query) {
+  const today = new Date().toISOString().slice(0, 10);
+  return `You are a knowledgeable AI threat intelligence analyst. Today: ${today}.
+
+IMPORTANT: The corpus has NO sources relevant to this question. You are giving a GENERAL, best-effort answer from your background knowledge, NOT grounded in the corpus. Do not cite any [src-N] and do not invent sources, CVEs, statistics, or incidents. Keep specific quantitative claims to a minimum and hedge appropriately.
+
+Still take a clear position and reason it through — a general answer is not an excuse to be vague.
+
+${GENERAL_FORMAT}
+
+${LANGUAGE_RULES}
+
+${META_BLOCK}`;
+}
+
+// ── Response parsing (unchanged contract) ────────────────────────────────────────
 
 function parseResponse(text) {
   const lines = text.split("\n");
   const answerLines = [];
   const meta = { confidence: "low", confidence_reason: "", caveat: null, followups: [], out_of_scope: false };
-
   for (const line of lines) {
-    if (line.startsWith("SCOPE:")) {
-      meta.out_of_scope = /out_of_scope/i.test(line);
-    } else if (line.startsWith("CONFIDENCE_REASON:")) {
-      meta.confidence_reason = line.replace("CONFIDENCE_REASON:", "").trim();
-    } else if (line.startsWith("CONFIDENCE:")) {
+    if (line.startsWith("SCOPE:")) meta.out_of_scope = /out_of_scope/i.test(line);
+    else if (line.startsWith("CONFIDENCE_REASON:")) meta.confidence_reason = line.replace("CONFIDENCE_REASON:", "").trim();
+    else if (line.startsWith("CONFIDENCE:")) {
       const val = line.replace("CONFIDENCE:", "").trim().toLowerCase();
       if (["high","moderate","low"].includes(val)) meta.confidence = val;
     } else if (line.startsWith("CAVEAT:")) {
       const val = line.replace("CAVEAT:", "").trim();
       meta.caveat = val === "null" ? null : val;
-    } else if (line.startsWith("FOLLOWUP:")) {
-      meta.followups.push(line.replace("FOLLOWUP:", "").trim());
-    } else {
-      answerLines.push(line);
-    }
+    } else if (line.startsWith("FOLLOWUP:")) meta.followups.push(line.replace("FOLLOWUP:", "").trim());
+    else answerLines.push(line);
   }
-
   return { answer: answerLines.join("\n").trim(), ...meta };
 }
 
-// ── Citation extractor ────────────────────────────────────────────────────────
-
-/**
- * Harvest every URL from the raw answer text into the citation pool BEFORE
- * stripping. Returns { text, harvested } where harvested is an array of
- * { publisher, url } objects extracted from inline patterns.
- *
- * This fixes the case where the model writes bare `https://...` or
- * `(Publisher, URL)` inline — the URLs must be captured before removal or
- * they disappear entirely.
- */
-/**
- * Normalise citation markers so only clean [src-N] reaches the user and the
- * citation extractor. The model sometimes writes explanatory prose INSIDE the
- * bracket — "[src-3, via ]", "[src-4 in evidence]", "[src-6 context; ...]",
- * "[src-evidence: , ]". The frontend (and extractCitations) only resolve a bare
- * [src-N], so these otherwise render as visible junk AND drop the citation.
- *
- *   [src-N <anything>]  → [src-N]   (recover the number; keeps the citation)
- *   [src- <no number>]  → removed   (nothing to point at)
- */
 export function normalizeCitationMarkers(text = "") {
   return String(text)
-    // Recover any marker whose first token after "src-" is a number.
     .replace(/\[\s*src-\s*(\d+)[^\]]*\]/gi, "[src-$1]")
-    // Strip a leftover src marker that has no usable number, plus one leading
-    // space, so no orphan gap is left (guard preserves the just-recovered
-    // [src-N] because a digit follows "src-").
     .replace(/ ?\[\s*src-(?!\s*\d)[^\]]*\]/gi, "")
-    // Tidy artefacts left behind (doubled spaces, space-before-punctuation).
     .replace(/ {2,}/g, " ")
     .replace(/\s+([.,;:])/g, "$1")
     .replace(/\[\s*\]/g, "");
 }
 
-function harvestAndCleanAnswer(rawText, evidenceIndex) {
+/**
+ * Remove [src-N] markers that would render as a bare, non-clickable number —
+ * i.e. those whose source has no usable URL (dropped by QA as a dead link /
+ * marketing blog / off-topic, or never had one). Keeps the answer body in sync
+ * with the "Sources" list: every surviving marker is a real clickable link.
+ * `refs` should be the post-QA source list (removed URLs already nulled).
+ */
+export function stripUnlinkedMarkers(text = "", refs = []) {
+  return String(text)
+    .replace(/ ?\[src-(\d+)\]/g, (full, num) => {
+      const s = Array.isArray(refs) ? refs[parseInt(num, 10) - 1] : null;
+      return s && s.url ? full : "";
+    })
+    .replace(/ {2,}/g, " ")
+    .replace(/\s+([.,;:])/g, "$1")
+    .trim();
+}
+
+function harvestAndCleanAnswer(rawText) {
   const harvested = [];
-
   let text = rawText;
-
-  // 1. Remove ev_xxx IDs (replace with publisher name if known)
-  text = text.replace(/\bev[_-][a-zA-Z0-9_-]+/g, (rawId) => {
-    const ev = evidenceIndex[rawId];
-    if (!ev) return "";
-    return ev.publisher ? `(${ev.publisher})` : "";
-  });
-
-  // 2. Harvest + strip (Publisher, https://...) inline patterns
+  text = text.replace(/\bev[_-][a-zA-Z0-9_-]+/g, "");
   text = text.replace(/\(([^,)]{1,80}),\s*(https?:\/\/[^\s)]+)\)/g, (_, publisher, url) => {
     const cleanUrl = url.replace(/[.,;:!?]+$/, "");
     harvested.push({ publisher: publisher.trim(), url: cleanUrl });
     return `(${publisher.trim()})`;
   });
-
-  // 3. Harvest + strip bare https:// URLs (e.g. "URL: https://...")
   text = text.replace(/https?:\/\/[^\s),>]+/g, (url) => {
     const cleanUrl = url.replace(/[.,;:!?]+$/, "");
     if (cleanUrl.length > 10) harvested.push({ publisher: "", url: cleanUrl });
     return "";
   });
-
-  // 4. Remove "URL:" labels left behind after stripping
   text = text.replace(/\bURL:\s*/gi, "");
-
-  // 5. Clean up artifacts
-  text = text
-    .replace(/\(\s*\)/g, "")
-    .replace(/  +/g, " ")
-    .replace(/ \./g, ".")
-    .trim();
-
+  text = text.replace(/\(\s*\)/g, "").replace(/  +/g, " ").replace(/ \./g, ".").trim();
   return { text, harvested };
 }
 
-function extractCitations(text, evidenceIndex, sourceRefs) {
+function extractCitations(text, sourceRefs) {
   const citations = [];
   const seen = new Set();
-
-  // Resolve any ev_xxx / ev-xxx IDs that appear in the text (model may still use them despite prompt)
-  for (const m of text.matchAll(/\bev[_-][a-zA-Z0-9_-]+/g)) {
-    const id = m[0];
-    if (seen.has(id)) continue;
-    seen.add(id);
-    const ev = evidenceIndex[id];
-    if (ev) {
-      citations.push({
-        ref:            `(${ev.publisher || "Source"})`,
-        source_title:   ev.source_title,
-        url:            ev.source_url,
-        publisher:      ev.publisher,
-        evidence_type:  ev.evidence_type,
-        trust_tier:     ev.trust_tier,
-      });
-    }
-  }
-
-  // [src-N] source citations
   for (const m of text.matchAll(/\[src-(\d+)\]/g)) {
     const ref = m[0];
     const idx = parseInt(m[1]) - 1;
@@ -468,29 +283,10 @@ function extractCitations(text, evidenceIndex, sourceRefs) {
       : { ref, source_title: "Unknown source", url: null, publisher: null }
     );
   }
-
-  // (Publisher, URL) inline citations written by the model per the new prompt
-  for (const m of text.matchAll(/\(([^,)]+),\s*(https?:\/\/[^\s)]+)\)/g)) {
-    const key = m[2];
-    if (seen.has(key)) continue;
-    seen.add(key);
-    citations.push({ ref: m[0], source_title: "", url: m[2], publisher: m[1].trim(), trust_tier: null });
-  }
-
   return citations;
 }
 
-// ── QA engine: repair what's safe, block what isn't ──────────────────────────
-//
-// QA runs over BOTH the answer text and its citations, and each issue carries a
-// severity that determines the action:
-//   • "repaired"  — auto-fixed in place (hype softened, leaked IDs stripped,
-//                    dead/irrelevant citations dropped). The answer still ships.
-//   • "blocking"  — the answer cannot be trusted (fabricated CVE, or substantive
-//                    claims with no citation surviving validation). The answer is
-//                    replaced with a safe message and all citations are cleared.
-//
-// Everything here is deterministic — no extra LLM calls, so it adds no latency.
+// ── Deterministic QA (unchanged) ────────────────────────────────────────────────
 
 const QA_STOPWORDS = new Set([
   "the","and","for","are","with","that","this","from","into","what","how","why",
@@ -501,175 +297,105 @@ const QA_STOPWORDS = new Set([
   "threat","threats","attack","attacks","source","sources","security","model",
   "models","system","systems","data","using","used","use","risk","risks",
 ]);
-
 function qaContentTokens(s) {
   const words = String(s || "").toLowerCase().match(/[a-z0-9]{4,}/g) || [];
   return new Set(words.filter(w => !QA_STOPWORDS.has(w)));
 }
-
-// Deterministic hype → neutral rewrites (repairable).
 const HYPE_REPLACEMENTS = [
-  [/\bunprecedented\b/gi,      "notable"],
-  [/\bgame[- ]changing\b/gi,   "significant"],
-  [/\brapidly evolving\b/gi,   "evolving"],
-  [/\bcritical threat\b/gi,    "serious risk"],
+  [/\bunprecedented\b/gi, "notable"],
+  [/\bgame[- ]changing\b/gi, "significant"],
+  [/\brapidly evolving\b/gi, "evolving"],
+  [/\bcritical threat\b/gi, "serious risk"],
 ];
-
-// Curated denylist of vendor product-marketing / SEO "statistics" blogs. These
-// are company-owned promotional pages (listicles, "trends 2026", stat round-ups)
-// rather than security journalism or primary research, so they're dropped from
-// citations even though the corpus tiers them "medium" — the same tier as real
-// news outlets (The Record, BleepingComputer), which is why a blunt trust-tier
-// filter can't be used. Match is on the registrable domain (subdomains included).
-// Extend this list as new marketing blogs surface in citations.
 const MARKETING_BLOG_DOMAINS = new Set([
-  "adaptivesecurity.com",
-  "cybelangel.com",
-  "flutteris.com",
-  "techtimes.com",
+  "adaptivesecurity.com", "cybelangel.com", "flutteris.com", "techtimes.com",
 ]);
-
 export function isMarketingBlog(url) {
   let host;
   try { host = new URL(url).hostname.toLowerCase().replace(/^www\./, ""); }
   catch { return false; }
-  for (const d of MARKETING_BLOG_DOMAINS) {
-    if (host === d || host.endsWith("." + d)) return true;
-  }
+  for (const d of MARKETING_BLOG_DOMAINS) if (host === d || host.endsWith("." + d)) return true;
   return false;
 }
 
-/**
- * Citation QA. Drops (a) confirmed-dead links and (b) cited sources with zero
- * content overlap with the answer (irrelevant). Returns the surviving citations,
- * the set of normalized URLs removed (so inline [src-N] refs can be de-linked to
- * match), and issue records.
- */
 function qaCitations(answer, citations, sourceContentByUrl, deadUrls, normalizeUrl) {
   const aTokens = qaContentTokens(answer);
   const kept = [];
   const removedUrls = new Set();
   const issues = [];
   let droppedDead = 0, droppedIrrelevant = 0, droppedMarketing = 0;
-
   for (const c of citations) {
     const key = c.url ? normalizeUrl(c.url) : null;
-
-    // (a) dead link — confirmed 404/410/DNS-failure upstream.
     if (key && deadUrls.has(key)) { removedUrls.add(key); droppedDead++; continue; }
-
-    // (b) vendor/marketing blog — promotional company content, not a real source.
     if (c.url && isMarketingBlog(c.url)) { if (key) removedUrls.add(key); droppedMarketing++; continue; }
-
-    // (c) relevance — compare the source's retrieved text against the answer.
-    // Keep when there's any shared meaningful token, or when we have no content
-    // to judge (never drop on missing data — that would risk a false positive).
     const content = (key && sourceContentByUrl[key]) || "";
     const judgeText = `${content} ${c.source_title || ""} ${c.publisher || ""}`.trim();
     const sTokens = qaContentTokens(judgeText);
     const hasOverlap = aTokens.size === 0 || sTokens.size === 0 || [...sTokens].some(t => aTokens.has(t));
     if (!hasOverlap) { if (key) removedUrls.add(key); droppedIrrelevant++; continue; }
-
     kept.push(c);
   }
-
   if (droppedDead)       issues.push({ code: "dead_citation",       severity: "repaired", detail: `Removed ${droppedDead} broken source link${droppedDead > 1 ? "s" : ""}.` });
   if (droppedMarketing)  issues.push({ code: "marketing_citation",  severity: "repaired", detail: `Removed ${droppedMarketing} vendor/marketing blog source${droppedMarketing > 1 ? "s" : ""}.` });
   if (droppedIrrelevant) issues.push({ code: "irrelevant_citation", severity: "repaired", detail: `Removed ${droppedIrrelevant} source${droppedIrrelevant > 1 ? "s" : ""} unrelated to the answer.` });
-
   return { citations: kept, removedUrls, issues };
 }
 
-/**
- * Content QA. Repairs the answer text in place (strips leaked internal IDs,
- * softens hype) and returns blocking issues for anything unfixable (ungrounded
- * CVEs, or substantive claims left with no citation). `citationCount` is the
- * post-citation-QA count so the "unsupported" check reflects surviving sources.
- */
-function qaContent(answer, citationCount, groundingText) {
+function qaContent(answer, citationCount, groundingText, { requireCitations }) {
   const issues = [];
   let text = answer;
-
-  // REPAIR: strip any internal evidence IDs that survived scrubbing.
   if (/\bev[_-][a-zA-Z0-9_-]{4,}/.test(text)) {
-    text = text.replace(/\bev[_-][a-zA-Z0-9_-]{4,}\b/g, "")
-               .replace(/\(\s*\)/g, "").replace(/ {2,}/g, " ").replace(/ \./g, ".").trim();
+    text = text.replace(/\bev[_-][a-zA-Z0-9_-]{4,}\b/g, "").replace(/\(\s*\)/g, "").replace(/ {2,}/g, " ").replace(/ \./g, ".").trim();
     issues.push({ code: "leaked_evidence_id", severity: "repaired", detail: "Removed internal evidence IDs from the answer." });
   }
-
-  // REPAIR: soften hype phrasing to neutral language.
   for (const [re, repl] of HYPE_REPLACEMENTS) {
     if (re.test(text)) { text = text.replace(re, repl); issues.push({ code: "hype_language", severity: "repaired", detail: `Softened hype phrasing to "${repl}".` }); }
   }
-
-  // BLOCK: a CVE stated in the answer that appears in NO retrieved source is a
-  // fabrication — never surface it.
   if (groundingText) {
     const cves = [...new Set((text.match(/CVE-\d{4}-\d{4,7}/gi) || []).map(s => s.toUpperCase()))];
     const ungrounded = cves.filter(c => !groundingText.includes(c.toLowerCase()));
     if (ungrounded.length) issues.push({ code: "ungrounded_cve", severity: "blocking", detail: `Referenced CVE(s) not found in any retrieved source: ${ungrounded.join(", ")}.` });
   }
-
-  // BLOCK: substantive, claim-bearing answer with no citation left standing.
-  const wordCount = text.split(/\s+/).filter(Boolean).length;
-  const hasStat   = /\b\d+\.?\d*%|\bCVE-\d{4}|\b\d{1,3}\s*(?:sources|incidents|attacks|cases)\b/i.test(text);
-  if (citationCount === 0 && (wordCount > 80 || hasStat)) {
-    issues.push({ code: "unsupported_no_citations", severity: "blocking", detail: "The answer makes substantive claims but no cited source survived validation." });
+  // Only require citations in the GROUNDED path — the general fallback is
+  // deliberately uncited and must not be blocked for lacking sources.
+  if (requireCitations) {
+    const wordCount = text.split(/\s+/).filter(Boolean).length;
+    const hasStat   = /\b\d+\.?\d*%|\bCVE-\d{4}|\b\d{1,3}\s*(?:sources|incidents|attacks|cases)\b/i.test(text);
+    if (citationCount === 0 && (wordCount > 80 || hasStat)) {
+      issues.push({ code: "unsupported_no_citations", severity: "blocking", detail: "The answer makes substantive claims but no cited source survived validation." });
+    }
   }
-
   return { text, issues };
 }
 
-// ── Citation link liveness ──────────────────────────────────────────────────────
+// ── Link liveness (unchanged) ────────────────────────────────────────────────────
 
-/**
- * Returns true only when a URL is DEFINITIVELY dead — a 404/410 response or a
- * DNS/host-not-found failure. Ambiguous outcomes (403/405/429/5xx, timeouts,
- * bot-blocking) are treated as live and kept, because many valid pages reject
- * HEAD requests or block automated user agents. Conservative by design: we would
- * rather keep a questionable link than drop a good source.
- */
 export async function urlIsBroken(url) {
   if (!url || !/^https?:\/\//i.test(url)) return false;
   const UA = "Mozilla/5.0 (compatible; TheHorizon-LinkCheck/1.0)";
-
   const probe = async (method, timeoutMs) => {
-    // Range keeps the GET body tiny — we only need the status line.
     const headers = { "User-Agent": UA };
     if (method === "GET") headers.Range = "bytes=0-0";
     const res = await fetch(url, { method, redirect: "follow", signal: AbortSignal.timeout(timeoutMs), headers });
     return res.status;
   };
-
   try {
-    // Fast HEAD first. A definite 404/410 is conclusive.
     const headStatus = await probe("HEAD", 5000).catch(err => {
       if (err.name === "TimeoutError" || err.name === "AbortError") return "ambiguous";
-      throw err; // network-level failure → handled below
+      throw err;
     });
     if (headStatus === 404 || headStatus === 410) return true;
-
-    // HEAD is often blocked (403/405), unsupported, or slow. When it wasn't a
-    // clean 2xx/3xx, confirm with a ranged GET (what a browser would do) before
-    // deciding — this is what caught real 404s that answer HEAD inconsistently.
     if (headStatus === "ambiguous" || typeof headStatus !== "number" || headStatus >= 400) {
       const getStatus = await probe("GET", 8000);
       return getStatus === 404 || getStatus === 410;
     }
-    return false; // HEAD returned 2xx/3xx → live
+    return false;
   } catch (err) {
-    if (err.name === "TimeoutError" || err.name === "AbortError") return false; // slow ≠ broken
+    if (err.name === "TimeoutError" || err.name === "AbortError") return false;
     const msg = String(err.message || err).toLowerCase();
-    // Host does not resolve / connection refused → the page genuinely isn't there.
     return /enotfound|econnrefused|getaddrinfo|dns|name not resolved/.test(msg);
   }
 }
-
-// Given a list of URLs, return a Set of the normalized ones that are definitively
-// dead. Runs the checks in parallel and dedupes first, so each distinct URL is
-// probed once. The referenced set is small (only what the answer cites), so this
-// adds at most one ~4s round to the 'done' event — after the answer text has
-// already streamed to the user.
 async function findDeadUrls(urls, normalizeUrl) {
   const distinct = [...new Set(urls.filter(Boolean))];
   if (!distinct.length) return new Set();
@@ -679,304 +405,323 @@ async function findDeadUrls(urls, normalizeUrl) {
   return dead;
 }
 
-// ── Handler ────────────────────────────────────────────────────────────────────
+// ── Grounding context builder ────────────────────────────────────────────────────
+
+// Attach a grounded quote to the source it came from (URL match), so evidence
+// stays tied to a [src-N] rather than floating as a standalone citation.
+function buildContextMessage(query, plan, sources, evidence, judgments, trends, cveResults) {
+  const norm = (u) => (u || "").replace(/[.,;:!?/]+$/, "").toLowerCase().replace(/^https?:\/\//, "");
+  const quoteByUrl = {};
+  for (const ev of (evidence || [])) {
+    if (ev.quote_grounded && ev.source_url && ev.quote) {
+      const k = norm(ev.source_url);
+      if (!quoteByUrl[k]) quoteByUrl[k] = ev.quote.slice(0, 220);
+    }
+  }
+  const srcBlock = sources.map(s => {
+    const q = quoteByUrl[norm(s.url)];
+    return `[${s.ref}] ${s.publisher || "?"} — ${s.date || "n.d."} — ${CATEGORY_LABELS[s.category] || s.category || ""} (${s.trust_tier || "unknown"} trust)\n  ${s.title}\n  ${s.summary || ""}${q ? `\n  quote: "${q}"` : ""}`;
+  }).join("\n\n");
+
+  const parts = [
+    `Question: ${query}`,
+    `Data window: ${plan.temporal.scope_label}${plan.temporal.date_from ? ` (${plan.temporal.date_from} to ${plan.temporal.date_to || "today"})` : ""}`,
+    ``,
+    `RELEVANT SOURCES (cite as [src-N]):`,
+    srcBlock,
+  ];
+
+  if (judgments?.length) {
+    parts.push(``, `ANALYTICAL JUDGMENTS from the latest pipeline run (context — not separately citable):`);
+    for (const j of judgments.slice(0, 6)) parts.push(`• ${j.judgment}${j.short_takeaway ? ` — ${j.short_takeaway}` : ""}`);
+  }
+  if (trends?.length) {
+    parts.push(``, `TREND DATA (weekly source volume):`);
+    for (const t of trends.slice(0, 4)) {
+      parts.push(`• ${t.label}: ${t.trend_direction}${t.spike_detected ? ", spike detected" : ""} (recent ${t.recent_avg_per_week}/wk vs baseline ${t.baseline_avg_per_week}/wk)${t.cluster_warning ? ` [${t.cluster_warning}]` : ""}`);
+    }
+  }
+  if (cveResults?.length) {
+    parts.push(``, `CVE SEVERITY (live from NVD):`);
+    for (const r of cveResults) {
+      if (r.found) parts.push(`• ${r.cve_id}: CVSS ${r.cvss_score ?? "?"} ${r.severity ?? ""} — ${(r.description || "").slice(0, 160)}`);
+      else parts.push(`• ${r.cve_id}: ${r.note || "not found in NVD"}`);
+    }
+  }
+
+  parts.push(``, `Write the answer now, citing [src-N]. Cite only sources that genuinely support each sentence.`);
+  return parts.join("\n");
+}
+
+// ── Handler ──────────────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "POST only" });
+  if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+
+  const { query, category, history, stream } = req.body || {};
+  if (!query?.trim()) return res.status(400).json({ error: "query is required" });
+
+  const streaming = stream === true;
+  const sse = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+  const usageTotals = { sonnet_in: 0, sonnet_out: 0, haiku_in: 0, haiku_out: 0 };
+  const addHaiku = (u) => { usageTotals.haiku_in += u?.input_tokens || 0; usageTotals.haiku_out += u?.output_tokens || 0; };
+
+  function costUsd() {
+    return (usageTotals.sonnet_in / 1e6) * PRICING.sonnet.input
+         + (usageTotals.sonnet_out / 1e6) * PRICING.sonnet.output
+         + (usageTotals.haiku_in / 1e6) * PRICING.haiku.input
+         + (usageTotals.haiku_out / 1e6) * PRICING.haiku.output;
+  }
+  function tokenUsage(mode) {
+    const total_in = usageTotals.sonnet_in + usageTotals.haiku_in;
+    const total_out = usageTotals.sonnet_out + usageTotals.haiku_out;
+    return {
+      input_tokens: total_in, output_tokens: total_out, total_tokens: total_in + total_out,
+      estimated_cost_usd: costUsd(), model: ANTHROPIC_MODELS.sonnet, rounds: 1, mode,
+    };
   }
 
-  const { query, category, history } = req.body || {};
-  if (!query?.trim()) {
-    return res.status(400).json({ error: "query is required" });
-  }
-
-  // Parse temporal intent to guide the model's default date scope
-  const temporal = parseTemporalIntent(query);
-
-  // Effective category focus: an explicit filter from the dashboard wins; else a
-  // category named in the question itself (free-text "top developments in LLM
-  // Threats"). Scopes the pre-fetch and the prompt so the answer stays in-category.
-  const effectiveCategory = category || detectCategoryInQuery(query);
-  const system   = buildSystem(temporal, effectiveCategory);
-
-  // If category filter set, inject it into the user question
-  const userText = category
-    ? `[Focus on: ${category}]\n\n${query.trim()}`
-    : query.trim();
-
-  // Build messages: prepend text-only conversation history (last 6 messages max)
+  // Conversation history (alternating, text-only, ends before current turn).
   const historyMessages = [];
   if (Array.isArray(history) && history.length) {
     for (const m of history.slice(-6)) {
-      if (m.role === "user" || m.role === "assistant") {
-        const content = typeof m.content === "string" ? m.content : null;
-        if (content) historyMessages.push({ role: m.role, content });
+      if ((m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content) {
+        historyMessages.push({ role: m.role, content: m.content });
       }
     }
-    // Enforce alternating user/assistant (Anthropic requirement)
-    const cleaned = [];
-    let lastRole = null;
-    for (const m of historyMessages) {
-      if (m.role !== lastRole) { cleaned.push(m); lastRole = m.role; }
-    }
-    // History must start with user and end before current user message
-    if (cleaned.length > 0 && cleaned[cleaned.length - 1].role === "user") {
-      cleaned.pop();
-    }
-    historyMessages.length = 0;
-    historyMessages.push(...cleaned);
-  }
-
-  const messages = [...historyMessages, { role: "user", content: userText }];
-  const evidenceIndex = {};
-  let sourceRefs = [];
-  let srcCounter = 0;        // global counter so refs stay unique across multiple search_corpus calls
-  const citationPool = [];   // all source URLs harvested from any tool call
-  const toolCallLog = [];
-  let totalInputTokens  = 0;
-  let totalOutputTokens = 0;
-
-  // Sonnet 4.6 pricing (USD per 1M tokens)
-  const AGENT_PRICING = { input: 3.00, output: 15.00 };
-
-  // ── Prompt caching ───────────────────────────────────────────────────────────
-  // The system prompt (~215 lines) and tool definitions are static and re-sent on
-  // every round. Mark them cache_control:ephemeral so Anthropic bills cached reads
-  // at ~10% — a large saving across rounds, with zero effect on output.
-  // System prompt is static → cache it (cheaper across questions in a session).
-  const cachedSystem = [{ type: "text", text: system, cache_control: { type: "ephemeral" } }];
-
-  // Accumulate refs/evidence/citations from a tool result. Closure so it can
-  // reassign sourceRefs/srcCounter; shared by the deterministic pre-fetch and the
-  // model-driven loop. Returns the (renumbered) result to hand back to the model.
-  function accumulate(name, result) {
-    if (name === "get_evidence" && result.evidence_items) {
-      for (const ev of result.evidence_items) {
-        evidenceIndex[ev.evidence_id] = ev;
-        if (ev.source_url) citationPool.push({ source_title: ev.source_title || "", url: ev.source_url, publisher: ev.publisher || "", trust_tier: ev.trust_tier || null });
-      }
-    }
-    if (name === "get_judgments" && result.judgments) {
-      for (const j of result.judgments) for (const eid of (j.evidence_ids || [])) {
-        if (!evidenceIndex[eid]) evidenceIndex[eid] = { evidence_id: eid, fact: "", source_url: null, publisher: "", source_title: "" };
-      }
-    }
-    if (name === "search_corpus" && result.sources) {
-      const offset = srcCounter;
-      const renumbered = result.sources.map((s, i) => ({ ...s, ref: `src-${offset + i + 1}` }));
-      srcCounter += renumbered.length;
-      result = { ...result, sources: renumbered };
-      sourceRefs = [...sourceRefs, ...renumbered];
-      for (const s of renumbered) if (s.url) citationPool.push({ source_title: s.title || "", url: s.url, publisher: s.publisher || "", trust_tier: s.trust_tier || null });
-    }
-    if (name === "search_taxonomy") {
-      const taxSources = result.sources || result.recent_sources;
-      if (Array.isArray(taxSources) && taxSources.length) {
-        const offset = srcCounter;
-        const renumbered = taxSources.map((s, i) => ({ ...s, ref: `src-${offset + i + 1}` }));
-        srcCounter += renumbered.length;
-        if (result.sources) result = { ...result, sources: renumbered };
-        else result = { ...result, recent_sources: renumbered };
-        sourceRefs = [...sourceRefs, ...renumbered];
-        for (const s of renumbered) if (s.url) citationPool.push({ source_title: s.title || "", url: s.url, publisher: s.publisher || "", trust_tier: s.trust_tier || null });
-      }
-    }
-    if (name === "lookup_cve" && result.results) {
-      for (const r of result.results) if (r.nvd_url) citationPool.push({ source_title: r.cve_id, url: r.nvd_url, publisher: "NVD", trust_tier: "primary" });
-    }
-    return result;
+    const cleaned = []; let last = null;
+    for (const m of historyMessages) if (m.role !== last) { cleaned.push(m); last = m.role; }
+    if (cleaned.length && cleaned[cleaned.length - 1].role === "user") cleaned.pop();
+    historyMessages.length = 0; historyMessages.push(...cleaned);
   }
 
   try {
-    // ── Deterministic pre-fetch (replaces the mandatory first tool round) ────────
-    // The corpus search + evidence + judgments the model would call on round 1 are
-    // run here in parallel and seeded as a completed tool turn, so the model can
-    // synthesise immediately (1 round) instead of spending a round deciding to
-    // retrieve. It can still issue targeted follow-up tool calls in later rounds.
-    const seedCalls = [
-      { id: "seed_corpus",    name: "search_corpus",  input: { query, ...(temporal.all_time ? {} : { date_from: temporal.date_from, ...(temporal.date_to ? { date_to: temporal.date_to } : {}) }), ...(effectiveCategory ? { categories: [effectiveCategory] } : {}) } },
-      { id: "seed_evidence",  name: "get_evidence",   input: { query, limit: 20, ...(effectiveCategory ? { categories: [effectiveCategory] } : {}) } },
-      { id: "seed_judgments", name: "get_judgments",  input: effectiveCategory ? { categories: [effectiveCategory] } : {} },
-      { id: "seed_trend",     name: "trend_analysis", input: effectiveCategory ? { categories: [effectiveCategory] } : {} },
-    ];
-    // If the question names specific CVEs, pre-fetch their live NVD severity too,
-    // so the synthesis needs no tool round at all (clean single streamed pass).
-    const cveIds = [...new Set((query.match(/CVE-\d{4}-\d{4,7}/gi) || []).map(s => s.toUpperCase()))].slice(0, 5);
-    if (cveIds.length) {
-      seedCalls.push({ id: "seed_cve", name: "lookup_cve", input: { cve_ids: cveIds } });
+    if (streaming) {
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
     }
-    const seedResults = await Promise.all(
-      seedCalls.map(c => executeTool(c.name, c.input).catch(err => ({ error: err.message })))
-    );
-    const seedToolResults = seedCalls.map((c, i) => {
-      toolCallLog.push({ tool: c.name, input: c.input, prefetch: true });
-      const out = accumulate(c.name, seedResults[i]);
-      return { type: "tool_result", tool_use_id: c.id, content: JSON.stringify(out) };
-    });
-    messages.push({ role: "assistant", content: seedCalls.map(c => ({ type: "tool_use", id: c.id, name: c.name, input: c.input })) });
-    messages.push({ role: "user", content: seedToolResults });
 
-    // ── Single synthesis pass ────────────────────────────────────────────────────
-    // All retrieval is pre-fetched, so there are no tool rounds — one synthesis
-    // call produces the answer. buildPayload turns its text into the response
-    // (citations, confidence, etc.) and is shared by the streamed and buffered paths.
+    // ── 1. Plan (Haiku) ──────────────────────────────────────────────────────────
+    const { plan, usage: planUsage } = await planQuery(query);
+    addHaiku(planUsage);
+    if (category && CATEGORY_LABELS[category]) plan.category = category;  // explicit dashboard filter wins
+
+    // ── 2. Out of scope → decline, no LLM, no sources ───────────────────────────
+    if (!plan.is_in_scope) {
+      const msg = "I focus on AI threat intelligence — LLM and agentic-AI threats, adversarial ML, AI-enabled attacks, and related vulnerabilities and incidents. Ask me something in that area and I'll dig into the corpus.";
+      const payload = {
+        answer: msg, citations: [], source_refs: [], confidence: "high",
+        confidence_reason: "Question is outside the AI-security scope of this corpus.",
+        caveat: null, suggested_followups: [], answer_mode: "out_of_scope",
+        retrieval_verdict: "n/a", qa_issues: [], qa_pass: true, qa_blocked: false,
+        temporal_scope: plan.temporal.scope_label, token_usage: tokenUsage("out_of_scope"),
+      };
+      logAgentCostToDB({ inputTokens: usageTotals.haiku_in, outputTokens: usageTotals.haiku_out, rounds: 0, costUsd: costUsd() }).catch(() => {});
+      if (streaming) { sse({ type: "delta", text: msg }); sse({ type: "done", ...payload }); res.end(); return; }
+      return res.status(200).json(payload);
+    }
+
+    // ── 3. Retrieve (targeted, expanded) + conditional side data ────────────────
+    const ret = await retrieveRelevant(plan, { limit: 12 });
+    const sourceRefs = ret.sources;   // already numbered src-1..N
+    const isGeneral = ret.verdict === "none";
+
+    let evidence = [], judgments = [], trends = [], cveResults = [];
+    if (!isGeneral) {
+      const cveIds = (plan.entities || []).filter(e => /^CVE-\d{4}-\d{4,}$/i.test(e)).map(e => e.toUpperCase()).slice(0, 5);
+      const jobs = [
+        executeTool("get_evidence", { query, categories: plan.category ? [plan.category] : undefined, tags: plan.taxonomy_tags?.length ? plan.taxonomy_tags : undefined, limit: 12 }).catch(() => null),
+        plan.needs_judgments ? executeTool("get_judgments", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
+        plan.needs_trends ? executeTool("trend_analysis", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
+        cveIds.length ? executeTool("lookup_cve", { cve_ids: cveIds }).catch(() => null) : Promise.resolve(null),
+      ];
+      const [ev, jd, tr, cve] = await Promise.all(jobs);
+      evidence   = ev?.evidence_items || [];
+      judgments  = jd?.judgments || [];
+      trends     = tr?.categories || [];
+      cveResults = cve?.results || [];
+    }
+
+    // ── 4. Synthesis (Sonnet, streamed) ─────────────────────────────────────────
+    const system = isGeneral
+      ? buildGeneralSystem(query)
+      : buildGroundedSystem(plan.temporal.scope_label, plan.category, ret.verdict === "thin");
+    const cachedSystem = [{ type: "text", text: system, cache_control: { type: "ephemeral" } }];
+
+    const userContent = isGeneral
+      ? query.trim()
+      : buildContextMessage(query, plan, sourceRefs, evidence, judgments, trends, cveResults);
+    const messages = [...historyMessages, { role: "user", content: userContent }];
+    const synthBody = { model: ANTHROPIC_MODELS.sonnet, max_tokens: 4096, system: cachedSystem, messages };
+
+    // A leading, un-streamed preamble for the general path so the user immediately
+    // sees WHY there are no citations before the general answer arrives.
+    const generalPreamble = isGeneral
+      ? "I don't have sources in the corpus that match this question, so I can't ground an answer in our data. Here's a general, best-effort answer from background knowledge — treat it as general context, not a corpus-verified finding.\n\n"
+      : "";
+
+    // General fallback: the corpus returned keyword-adjacent sources, but none
+    // actually addressed the question (every citation was dropped as off-topic).
+    // Re-synthesise ONE clearly-labelled general answer instead of showing a
+    // dead-end "can't answer" message. Costs one extra Sonnet call, only in this
+    // rare case. Returns a general-mode payload.
+    async function synthGeneralFallback() {
+      const gSys = [{ type: "text", text: buildGeneralSystem(query), cache_control: { type: "ephemeral" } }];
+      const gResp = await anthropicRequest({
+        model: ANTHROPIC_MODELS.sonnet, max_tokens: 2048, system: gSys,
+        messages: [...historyMessages, { role: "user", content: query.trim() }],
+      });
+      usageTotals.sonnet_in  += gResp.usage?.input_tokens  || 0;
+      usageTotals.sonnet_out += gResp.usage?.output_tokens || 0;
+      const gRaw = gResp.content.find(b => b.type === "text")?.text || "(No answer generated)";
+      const gp = parseResponse(gRaw);
+      gp.answer = harvestAndCleanAnswer(normalizeCitationMarkers(gp.answer)).text;
+      const preamble = "I found sources that share keywords but none that actually address this question, so I can't ground an answer in our corpus. Here's a general, best-effort answer from background knowledge — treat it as general context, not a corpus-verified finding.\n\n";
+      logAgentCostToDB({ inputTokens: usageTotals.sonnet_in + usageTotals.haiku_in, outputTokens: usageTotals.sonnet_out + usageTotals.haiku_out, rounds: 1, costUsd: costUsd() }).catch(() => {});
+      return {
+        answer: preamble + gp.answer, citations: [], source_refs: [],
+        confidence: "low", confidence_reason: "No corpus sources addressed this specific question; general answer.",
+        caveat: gp.caveat, suggested_followups: gp.followups, answer_mode: "general",
+        retrieval_verdict: "none_effective", relevant_source_count: 0, planner_method: plan.planner_method,
+        qa_issues: [], qa_pass: true, qa_blocked: false,
+        qa_report: { blocked: false, blocking: [], repaired: [], verifier: { ran: false, verdict: "n/a", unsupported: [] } },
+        evidence_items_used: 0, temporal_scope: plan.temporal.scope_label, token_usage: tokenUsage("general"),
+      };
+    }
+
+    // buildPayload: shared by streamed + buffered paths. Runs deterministic QA and
+    // the Haiku verifier, then assembles the response.
     async function buildPayload(rawText) {
       const parsed = parseResponse(rawText || "(No answer generated)");
-      // Repair malformed [src-N …] markers up front so the cleaned answer AND the
-      // citation extractor both see clean [src-N] (recovers the citation and stops
-      // the junk from rendering). Everything downstream reads parsed.answer.
       parsed.answer = normalizeCitationMarkers(parsed.answer);
       const normalizeUrl = (u) => u?.replace(/[.,;:!?/]+$/, "").toLowerCase().replace(/^https?:\/\//, "");
 
-      // Anti-hallucination allowlist: snapshot the URLs that actually came from
-      // retrieved tool results (citationPool is populated only by accumulate()).
-      // Any URL the model writes inline that is NOT in this set is fabricated and
-      // must never be surfaced as a citation.
-      const retrievedUrls = new Set(citationPool.map(c => normalizeUrl(c.url)).filter(Boolean));
+      const retrievedUrls = new Set([
+        ...sourceRefs.map(s => normalizeUrl(s.url)),
+        ...cveResults.filter(r => r.nvd_url).map(r => normalizeUrl(r.nvd_url)),
+      ].filter(Boolean));
 
-      const { text: cleanAnswer, harvested } = harvestAndCleanAnswer(parsed.answer, evidenceIndex);
-      // NOTE: do NOT add harvested inline URLs to the allowlist — they're from the
-      // model's prose and may be invented. Only real retrieved URLs are citable.
+      const { text: cleanAnswer } = harvestAndCleanAnswer(parsed.answer);
 
-      // The end-of-response "Sources" list must reflect ONLY what the answer
-      // actually cited (resolved [src-N] refs, ev_xxx IDs, and inline
-      // (Publisher, URL) mentions). We deliberately do NOT append the rest of the
-      // pre-fetch pool: that pool comes from loose keyword matching, so dumping it
-      // surfaced irrelevant, vendor/marketing, and unused sources under every
-      // answer. Inline [src-N] links still resolve against source_refs, so precise
-      // in-text citations are unaffected.
-      const citations = extractCitations(parsed.answer, evidenceIndex, sourceRefs)
-        .filter(c => !c.url || retrievedUrls.has(normalizeUrl(c.url)));   // drop fabricated URLs
+      // Citations = resolved [src-N] refs, filtered to real retrieved URLs.
+      let citations = extractCitations(parsed.answer, sourceRefs)
+        .filter(c => !c.url || retrievedUrls.has(normalizeUrl(c.url)));
       const seen = new Set();
       let dedupedCitations = citations.filter(c => {
         if (!c.url && (!c.source_title || c.source_title === "Unknown source")) return false;
         const key = normalizeUrl(c.url) || c.source_title;
         if (!key || seen.has(key)) return false;
-        seen.add(key);
-        return true;
+        seen.add(key); return true;
       });
 
-      // Off-topic guard: when the model judges the question out of scope, it
-      // answers briefly and cites nothing — so suppress the pre-fetched citations
-      // (loose keyword matching would otherwise attach tangential sources to a
-      // "this is out of scope" reply) and the followups.
-      if (parsed.out_of_scope) {
-        dedupedCitations = [];
-        sourceRefs = [];
-      }
+      if (parsed.out_of_scope) { dedupedCitations = []; }
 
-      // Per-source retrieved text, keyed by normalized URL — the basis for the
-      // citation-relevance check (does the cited source actually relate to the
-      // answer?). Built from source summaries, the pool, and evidence facts/quotes.
+      // Content for the citation-relevance check.
       const sourceContentByUrl = {};
       const addContent = (url, ...parts) => {
         const k = url ? normalizeUrl(url) : null; if (!k) return;
         sourceContentByUrl[k] = `${sourceContentByUrl[k] || ""} ${parts.filter(Boolean).join(" ")}`.slice(0, 1500);
       };
-      for (const s of sourceRefs)                  addContent(s.url, s.title, s.summary);
-      for (const c of citationPool)                addContent(c.url, c.source_title, c.publisher);
-      for (const ev of Object.values(evidenceIndex)) addContent(ev.source_url, ev.fact, ev.quote, ev.source_title);
+      for (const s of sourceRefs) addContent(s.url, s.title, s.summary);
+      for (const ev of evidence) addContent(ev.source_url, ev.fact, ev.quote, ev.source_title);
 
-      // Which source_refs the answer cites inline (via [src-N]) — only these can
-      // appear as in-text links, so only these need liveness checks alongside the
-      // bottom "Sources" list.
-      const citedRefIdx = new Set(
-        [...parsed.answer.matchAll(/\[src-(\d+)\]/g)].map(m => parseInt(m[1], 10) - 1)
-      );
-      const citedRefUrls = [...citedRefIdx]
-        .map(i => (Array.isArray(sourceRefs) ? sourceRefs[i]?.url : null))
-        .filter(Boolean);
+      const citedRefIdx = new Set([...parsed.answer.matchAll(/\[src-(\d+)\]/g)].map(m => parseInt(m[1], 10) - 1));
+      const citedRefUrls = [...citedRefIdx].map(i => sourceRefs[i]?.url).filter(Boolean);
+      const deadUrls = await findDeadUrls([...dedupedCitations.map(c => c.url), ...citedRefUrls], normalizeUrl);
 
-      // Probe every URL that could reach the user for liveness (confirmed-dead only).
-      const deadUrls = await findDeadUrls(
-        [...dedupedCitations.map(c => c.url), ...citedRefUrls],
-        normalizeUrl,
-      );
-
-      // ── CITATION QA: drop dead + irrelevant citations, then de-link matching
-      // inline [src-N] refs so the answer body and the "Sources" list stay in sync.
       const citationQa = qaCitations(cleanAnswer, dedupedCitations, sourceContentByUrl, deadUrls, normalizeUrl);
       dedupedCitations = citationQa.citations;
+      let localSourceRefs = sourceRefs;
       if (citationQa.removedUrls.size) {
-        sourceRefs = sourceRefs.map(s =>
-          s?.url && citationQa.removedUrls.has(normalizeUrl(s.url)) ? { ...s, url: null } : s
-        );
+        localSourceRefs = sourceRefs.map(s => s?.url && citationQa.removedUrls.has(normalizeUrl(s.url)) ? { ...s, url: null } : s);
       }
 
-      // Grounding text = everything actually retrieved (source titles/summaries +
-      // evidence facts/quotes). Used by content QA to fact-check that specific
-      // claims (CVE IDs) appear in the retrieved material.
+      // No on-topic source survived relevance QA → the retrieved sources shared
+      // keywords but didn't address the question. Gracefully hand off to a
+      // clearly-labelled general answer instead of a dead-end block. This also
+      // covers the synthesis model mislabelling an in-scope-but-unsourced question
+      // as out_of_scope (the planner already confirmed it IS in scope upstream).
+      const wc = cleanAnswer.split(/\s+/).filter(Boolean).length;
+      const substantive = wc > 60 || /\b\d/.test(cleanAnswer);
+      if (!isGeneral && dedupedCitations.length === 0 && substantive) {
+        return await synthGeneralFallback();
+      }
+
+      // Drop [src-N] markers whose source QA de-linked (dead/marketing/off-topic)
+      // so the prose shows no orphan non-clickable numbers — only real links remain.
+      const linkedAnswer = stripUnlinkedMarkers(cleanAnswer, localSourceRefs);
+
       const groundingText = [
-        ...citationPool.map(c => `${c.source_title || ""} ${c.publisher || ""}`),
         ...sourceRefs.map(s => `${s.title || ""} ${s.summary || ""}`),
-        ...Object.values(evidenceIndex).map(ev => `${ev.fact || ""} ${ev.quote || ""}`),
+        ...evidence.map(ev => `${ev.fact || ""} ${ev.quote || ""}`),
+        ...judgments.map(j => j.judgment || ""),
       ].join("\n").toLowerCase();
 
-      // ── CONTENT QA: repair the text, collect blocking issues (post-citation-QA
-      // count so "unsupported" reflects the sources that actually survived).
-      const contentQa = qaContent(cleanAnswer, dedupedCitations.length, groundingText);
+      const contentQa = qaContent(linkedAnswer, dedupedCitations.length, groundingText, { requireCitations: !isGeneral });
       let finalAnswer = contentQa.text;
 
-      // Combine all QA findings; a single blocking issue fails the whole response.
-      const qaFindings = [...citationQa.issues, ...contentQa.issues];
+      // ── Haiku verifier (grounded path only; general answers have no sources) ──
+      let verify = { verdict: "grounded", unsupported: [], ran: false };
+      const verifyIssues = [];
+      let confidence = parsed.confidence;
+      if (!isGeneral && !parsed.out_of_scope && finalAnswer && sourceRefs.length) {
+        verify = await verifyAnswer({ answer: finalAnswer, sources: localSourceRefs, evidence });
+        addHaiku(verify.usage);
+        if (verify.ran && verify.unsupported.length) {
+          verifyIssues.push({ code: "unsupported_claim", severity: "repaired",
+            detail: `Fact-check flagged ${verify.unsupported.length} claim(s) not clearly supported by the cited sources: ${verify.unsupported.map(s => `"${s}"`).join("; ")}.` });
+        }
+        if (verify.ran && verify.verdict === "weakly_grounded") {
+          confidence = "low";
+          verifyIssues.push({ code: "weak_grounding", severity: "repaired", detail: "Most specific claims could not be tied to a cited source; confidence lowered." });
+        }
+      }
+
+      const qaFindings = [...citationQa.issues, ...contentQa.issues, ...verifyIssues];
       const blockingFindings = qaFindings.filter(i => i.severity === "blocking");
       const blocked = blockingFindings.length > 0;
 
       if (blocked) {
-        // Replace the answer with a safe message and strip all citations/links —
-        // we will not stand behind an answer that failed a blocking check.
         finalAnswer = `I can't give a reliable answer to this from the current corpus. The automated quality check flagged: ${blockingFindings.map(i => i.detail).join(" ")} Try rephrasing or narrowing the question so the answer can be grounded in verified sources.`;
         dedupedCitations = [];
-        sourceRefs = [];
+        localSourceRefs = [];
       }
 
+      if (generalPreamble && !blocked) finalAnswer = generalPreamble + finalAnswer;
+
       const qaIssues = qaFindings.map(i => i.detail);
-      const estimatedCostUsd =
-        (totalInputTokens / 1_000_000) * AGENT_PRICING.input +
-        (totalOutputTokens / 1_000_000) * AGENT_PRICING.output;
-      logAgentCostToDB({ inputTokens: totalInputTokens, outputTokens: totalOutputTokens, rounds: 1, costUsd: estimatedCostUsd }).catch(() => {});
+      logAgentCostToDB({ inputTokens: usageTotals.sonnet_in + usageTotals.haiku_in, outputTokens: usageTotals.sonnet_out + usageTotals.haiku_out, rounds: 1, costUsd: costUsd() }).catch(() => {});
+
       return {
         answer:              finalAnswer,
         citations:           dedupedCitations,
-        source_refs:         sourceRefs,
-        confidence:          blocked ? "low" : parsed.confidence,
-        confidence_reason:   parsed.confidence_reason,
+        source_refs:         localSourceRefs,
+        confidence:          blocked ? "low" : (isGeneral ? "low" : confidence),
+        confidence_reason:   isGeneral ? "General answer — no corpus sources matched this question." : parsed.confidence_reason,
         caveat:              parsed.caveat,
         suggested_followups: parsed.followups,
-        tool_calls:          toolCallLog,
+        answer_mode:         isGeneral ? "general" : "grounded",
+        retrieval_verdict:   ret.verdict,
+        relevant_source_count: ret.relevant_count,
+        planner_method:      plan.planner_method,
         qa_issues:           qaIssues,
         qa_pass:             !blocked,
         qa_blocked:          blocked,
-        qa_report:           { blocked, blocking: blockingFindings, repaired: qaFindings.filter(i => i.severity === "repaired") },
-        evidence_items_used: Object.keys(evidenceIndex).length,
-        temporal_scope:      temporal.scope_label,
-        token_usage: {
-          input_tokens:       totalInputTokens,
-          output_tokens:      totalOutputTokens,
-          total_tokens:       totalInputTokens + totalOutputTokens,
-          estimated_cost_usd: estimatedCostUsd,
-          model:              ANTHROPIC_MODELS.sonnet,
-          rounds:             1,
-        },
+        qa_report:           { blocked, blocking: blockingFindings, repaired: qaFindings.filter(i => i.severity === "repaired"), verifier: { ran: verify.ran, verdict: verify.verdict, unsupported: verify.unsupported } },
+        evidence_items_used: evidence.length,
+        temporal_scope:      plan.temporal.scope_label,
+        token_usage:         tokenUsage(isGeneral ? "general" : "grounded"),
       };
     }
 
-    const synthBody = { model: ANTHROPIC_MODELS.sonnet, max_tokens: 4096, system: cachedSystem, messages };
-
-    // ── Streamed path (Server-Sent Events) ──────────────────────────────────────
-    if (req.body?.stream === true) {
-      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-      res.setHeader("Cache-Control", "no-cache, no-transform");
-      res.setHeader("Connection", "keep-alive");
-      const sse = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
-
-      // Only the answer body streams; the trailing CONFIDENCE/CAVEAT/FOLLOWUP
-      // metadata block is withheld until it's parsed and sent in the 'done' event.
+    // ── Streamed path ────────────────────────────────────────────────────────────
+    if (streaming) {
       const visible = (raw) => {
         const m = raw.match(/(^|\n)(SCOPE:|CONFIDENCE:|CONFIDENCE_REASON:|CAVEAT:|FOLLOWUP:)/);
         return m ? raw.slice(0, m.index) : raw;
       };
+      if (generalPreamble) sse({ type: "delta", text: generalPreamble });
       let fullText = "", emitted = 0;
       try {
         const usage = await anthropicStream(synthBody, (delta) => {
@@ -984,9 +729,13 @@ export default async function handler(req, res) {
           const vis = visible(fullText);
           if (vis.length > emitted) { sse({ type: "delta", text: vis.slice(emitted) }); emitted = vis.length; }
         });
-        totalInputTokens  += usage.input_tokens  || 0;
-        totalOutputTokens += usage.output_tokens || 0;
-        sse({ type: "done", ...(await buildPayload(fullText)) });
+        usageTotals.sonnet_in += usage.input_tokens || 0;
+        usageTotals.sonnet_out += usage.output_tokens || 0;
+        const payload = await buildPayload(fullText);
+        // The 'done' answer already includes the preamble; the preamble text was
+        // streamed separately above, so strip it from the streamed-answer field to
+        // avoid the client duplicating it (client replaces content with e.answer).
+        sse({ type: "done", ...payload });
       } catch (err) {
         sse({ type: "error", error: err.message });
       }
@@ -994,15 +743,16 @@ export default async function handler(req, res) {
       return;
     }
 
-    // ── Buffered path (back-compatible JSON) ─────────────────────────────────────
+    // ── Buffered path ────────────────────────────────────────────────────────────
     const resp = await anthropicRequest(synthBody);
-    totalInputTokens  += resp.usage?.input_tokens  || 0;
-    totalOutputTokens += resp.usage?.output_tokens || 0;
+    usageTotals.sonnet_in += resp.usage?.input_tokens || 0;
+    usageTotals.sonnet_out += resp.usage?.output_tokens || 0;
     const rawText = resp.content.find(b => b.type === "text")?.text || "(No answer generated)";
     return res.status(200).json(await buildPayload(rawText));
 
   } catch (err) {
     console.error("[agent] error:", err.message, err.stack?.slice(0, 500));
+    if (streaming && !res.writableEnded) { try { sse({ type: "error", error: err.message }); res.end(); } catch { /* noop */ } return; }
     return res.status(500).json({ error: err.message || "Internal error" });
   }
 }

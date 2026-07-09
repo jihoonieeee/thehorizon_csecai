@@ -308,12 +308,22 @@ Also BAD (bare paper summary with no judgment — REJECT):
 - "A new benchmark evaluated jailbreak robustness across models."
 
 For EACH insight, produce these fields:
-- insight: one specific, grounded judgment naming the concrete technique/system + why it matters, 20-38 words, active voice. Prefer naming real systems/techniques over abstractions.
+- insight: one specific, grounded judgment naming the concrete technique/system + why it matters, 20-38 words, active voice. Prefer naming real systems/techniques over abstractions. This is the skimmable headline.
+- explanation: a clear, self-contained paragraph (120-180 words) that explains the insight in DEPTH to a smart reader who is not a specialist. Requirements:
+    * Walk through WHAT happened and HOW the technique or mechanism actually works, step by step, in plain language.
+    * Name the specifics: the researcher/vendor/actor, the technique's name, the affected systems, and any hard numbers (counts, success rates, dollar losses).
+    * When a concept may be unfamiliar, explain it in a few plain words, or contrast it with something familiar (e.g. how it differs from typosquatting or phishing). Do not assume the reader knows the jargon.
+    * Weave in WHY it matters and what changes for defenders as part of the narrative — do not tack on a separate "defenders should" sentence.
+    * End with the broader significance if there is one (what class of new attacks this points to), but only if the evidence supports it.
+    * BANNED: buzzwords, hype, filler ("it's worth noting", "in an increasingly", "the landscape", "paradigm", "leverage" as a verb, "robust", "cutting-edge"). Short, direct sentences. Every specific must come from the themes/evidence below — invent nothing.
 - evidence: the concrete kinds of evidence behind it (e.g. "five distinct CVEs across AutoGPT, Flowise and LiteLLM; one confirmed breach"), grounded in the themes.
 - broken_assumption: the specific defensive assumption or control that no longer holds.
 - implication: the concrete action or posture change a defender should make in response.
 - watch_next: what specific evidence would strengthen, weaken, or change this assessment.
 - confidence_reason: one clause tying confidence to evidence maturity (e.g. "multiple CVEs but no confirmed in-the-wild chaining yet").
+
+GOLD STANDARD for the explanation field (this is the depth and clarity to match — note how it names the actor and technique, explains the mechanism plainly, contrasts it with the familiar, gives the hard number, and draws the broader implication, all without buzzwords):
+"Palo Alto Networks Unit 42 identified a technique they call phantom squatting: adversaries repeatedly probe LLMs to find fictitious domains the models consistently invent for real brands, APIs, and developer resources, then pre-register those hallucinated domains and wait for AI systems to send users or agents to attacker-controlled infrastructure. Unlike typosquatting or phishing, it does not rely on a human typo or a software bug. It exploits the model's own habit of predicting plausible-looking URLs. Unit 42 showed these hallucinations recur consistently enough across prompts and models to be predictable, finding roughly 250,000 unregistered domains that could be weaponised. The risk grows in agentic systems, where an AI agent may fetch documentation, download dependencies, or authenticate to services using a model-invented endpoint with no human check."
 
 CALIBRATION (critical): You are told the EVIDENCE MATURITY for this category. If the evidence is research/vulnerability-only with no observed exploitation, you MUST NOT claim activity is "confirmed", "operational", "at scale", or "in the wild". Frame as demonstrated capability and shifting assumptions, not active campaigns.
 
@@ -330,7 +340,7 @@ LEAD WITH THE STRONGEST SIGNAL: order your insights by consequence — realized 
 Write 2-4 insights for rich periods; 1-2 for thin ones. Never pad.
 
 Return ONLY valid JSON:
-{"assessment": "...", "insights": [{"insight": "...", "evidence": "...", "broken_assumption": "...", "implication": "...", "watch_next": "...", "confidence_reason": "..."}]}`;
+{"assessment": "...", "insights": [{"insight": "...", "explanation": "...", "evidence": "...", "broken_assumption": "...", "implication": "...", "watch_next": "...", "confidence_reason": "..."}]}`;
 
 function buildInsightsPrompt(catLabel, windowLabel, themes, maturity, confidence) {
   const themeLines = themes.map((t, i) =>
@@ -1039,17 +1049,19 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs, leadFl
   const themes = Array.isArray(themesOut.themes) ? themesOut.themes : [];
   if (!themes.length) throw new Error("no themes extracted");
 
-  // Stage B: themes → structured insights
+  // Stage B: themes → structured insights. maxTokens raised to fit the new
+  // 120-180-word explanation per insight (2-4 insights → ~600-720 extra words).
   const out = await callAnthropic({
     system: INSIGHTS_SYSTEM, task: "dashboard_insights",
     user: buildInsightsPrompt(cat.label, windowLabel, themes, maturity, confidence),
-    maxTokens: 1600,
+    maxTokens: 2800,
   });
   let insights = Array.isArray(out.insights) ? out.insights : [];
   insights = insights
     .filter(p => p && typeof p.insight === "string" && p.insight.trim().length > 15)
     .map(p => ({
       insight:           p.insight.trim(),
+      explanation:       (p.explanation || "").trim(),
       evidence:          (p.evidence || "").trim(),
       broken_assumption: (p.broken_assumption || "").trim(),
       implication:       (p.implication || "").trim(),
@@ -1064,6 +1076,25 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs, leadFl
   const insightQa = {};
   insights = await qaInsights(insights, maturity, cat.label, insightQa);
   if (!insights.length) throw new Error(`all ${beforeQa} insights removed by QA`);
+
+  // Fact-check the depth EXPLANATIONS against the same findings they were written
+  // from. An explanation that invents specifics or overreaches the evidence is
+  // blanked (the headline insight, already QA'd, still shows) rather than removed —
+  // integrity over always-having-a-paragraph. `findings` is the grounded pool.
+  const explained = insights.map((p, i) => ({ i, text: p.explanation })).filter(x => x.text && x.text.length > 40);
+  if (explained.length) {
+    const explQa = {};
+    const evidenceText = findings.slice(0, 40).map((f, i) => `${i + 1}. ${f}`).join("\n");
+    const verdicts = await qaStatements(explained.map(x => x.text), evidenceText, "insight-explanation", explQa);
+    explained.forEach((x, k) => {
+      if (explQa.ran && !verdicts[k]) {
+        insights[x.i].explanation = "";                       // failed fact-check → drop the narrative
+        insights[x.i].explanation_qa = "rejected";
+      } else if (explQa.ran) {
+        insights[x.i].explanation_qa = "passed";
+      }
+    });
+  }
 
   // Attribution: tag the real sources that most critically support each insight,
   // so the dashboard shows clickable citations rather than prose "evidence".

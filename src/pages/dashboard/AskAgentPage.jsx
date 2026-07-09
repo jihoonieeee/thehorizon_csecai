@@ -100,43 +100,81 @@ function StructuredText({ text, sourceRefs }) {
           );
         }
 
-        // Numbered list — supports both "1." and bare "1" followed by text on same or next line
+        // Numbered list with optional "- " sub-bullets under each point.
         const hasNumbered = lines.some(l => /^\d+[.)]\s+\S/.test(l));
         if (hasNumbered) {
-          // Merge continuation lines (non-numbered lines after a numbered line)
           const merged = [];
           for (const line of lines) {
             const nm = line.match(/^(\d+)[.)]\s+(.*)/);
+            const sub = line.match(/^[-•]\s+(.*)/);
             if (nm) {
-              merged.push({ num: nm[1], text: nm[2] });
+              merged.push({ num: nm[1], text: nm[2], subs: [] });
+            } else if (sub && merged.length > 0) {
+              merged[merged.length - 1].subs.push(sub[1]);
             } else if (merged.length > 0) {
-              merged[merged.length - 1].text += " " + line;
+              // Continuation of the point text, or of the last sub-bullet.
+              const item = merged[merged.length - 1];
+              if (item.subs.length) item.subs[item.subs.length - 1] += " " + line;
+              else item.text += " " + line;
             } else {
-              merged.push({ num: null, text: line });
+              merged.push({ num: null, text: line, subs: [] });
             }
           }
           return (
             <ol key={bi} className="hz-response-list">
-              {merged.map((item, li) =>
-                item.num ? (
-                  <li key={li} className="hz-response-point">
-                    <span className="hz-point-num">{item.num}</span>
-                    <span className="hz-point-text">{renderInline(item.text, sourceRefs)}</span>
-                  </li>
-                ) : (
-                  <li key={li} className="hz-response-point hz-response-point-plain">
-                    <span className="hz-point-text">{renderInline(item.text, sourceRefs)}</span>
-                  </li>
-                )
-              )}
+              {merged.map((item, li) => (
+                <li key={li} className={`hz-response-point${item.num ? "" : " hz-response-point-plain"}`}>
+                  {item.num && <span className="hz-point-num">{item.num}</span>}
+                  <span className="hz-point-text">
+                    {renderInline(item.text, sourceRefs)}
+                    {item.subs.length > 0 && (
+                      <ul className="hz-response-sublist">
+                        {item.subs.map((s, si) => (
+                          <li key={si} className="hz-response-subpoint">{renderInline(s, sourceRefs)}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </span>
+                </li>
+              ))}
             </ol>
           );
         }
 
-        // Plain paragraph
+        // Standalone bullet list (no numbers) — e.g. a general-mode answer.
+        const hasBullets = lines.some(l => /^[-•]\s+\S/.test(l));
+        if (hasBullets) {
+          const items = [];
+          for (const line of lines) {
+            const b = line.match(/^[-•]\s+(.*)/);
+            if (b) items.push(b[1]);
+            else if (items.length) items[items.length - 1] += " " + line;
+            else items.push(line);
+          }
+          return (
+            <ul key={bi} className="hz-response-list hz-response-bullets">
+              {items.map((t, li) => (
+                <li key={li} className="hz-response-point hz-response-point-plain">
+                  <span className="hz-point-text">{renderInline(t, sourceRefs)}</span>
+                </li>
+              ))}
+            </ul>
+          );
+        }
+
+        // Plain paragraph — bold a leading analyst label (Assessment:/So what:/Defenders:).
+        const joined = lines.join(" ");
+        const labelM = joined.match(/^(Assessment|So what|So-what|Bottom line|Defenders|Watch|Gap)\s*:\s*([\s\S]*)/i);
+        if (labelM) {
+          return (
+            <p key={bi} className="hz-response-para hz-response-labeled">
+              <strong className="hz-response-label">{labelM[1]}:</strong> {renderInline(labelM[2], sourceRefs)}
+            </p>
+          );
+        }
         return (
           <p key={bi} className="hz-response-para">
-            {renderInline(lines.join(" "), sourceRefs)}
+            {renderInline(joined, sourceRefs)}
           </p>
         );
       })}
@@ -179,6 +217,11 @@ function Message({ msg, onFollowUp }) {
 
   return (
     <div className="hz-msg-assistant">
+      {msg.answer_mode === "general" && !msg.streaming && (
+        <div className="hz-answer-mode-badge" title="No corpus sources matched this question; answered from general background knowledge.">
+          General knowledge — not grounded in the corpus
+        </div>
+      )}
       <div className="hz-msg-assistant-content">
         <StructuredText text={msg.content} sourceRefs={msg.source_refs} />
       </div>
@@ -226,10 +269,12 @@ function Message({ msg, onFollowUp }) {
 
       {msg.caveat && <div className="hz-caveat">{msg.caveat}</div>}
 
-      {/* Quality/fact-check: surface flags when the automated checks did not pass */}
-      {msg.role === "assistant" && !msg.streaming && msg.qa_pass === false && msg.qa_issues?.length > 0 && (
-        <div className="hz-qa-warn" title="Automated quality & fact checks">
-          <strong>⚠ Quality check:</strong> {msg.qa_issues.join("; ")}
+      {/* Quality/fact-check transparency: surface flags whenever the automated
+          checks (deterministic + Haiku verifier) found something — even when the
+          answer still passed (e.g. a claim the cited source doesn't fully back). */}
+      {msg.role === "assistant" && !msg.streaming && msg.qa_issues?.length > 0 && (
+        <div className={`hz-qa-warn${msg.qa_pass === false ? " hz-qa-warn-blocking" : ""}`} title="Automated quality & fact checks">
+          <strong>{msg.qa_pass === false ? "⚠ Quality check:" : "⚑ Fact-check notes:"}</strong> {msg.qa_issues.join("; ")}
         </div>
       )}
 
@@ -322,6 +367,7 @@ export function AskAgentPage() {
               token_usage:         e.token_usage          || null,
               qa_issues:           e.qa_issues            || [],
               qa_pass:             e.qa_pass !== false,
+              answer_mode:         e.answer_mode          || null,
               streaming:           false,
             });
           } else if (e.type === "error") {
