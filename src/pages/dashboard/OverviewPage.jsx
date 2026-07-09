@@ -203,8 +203,11 @@ function InsightItem({ p }) {
   const headlineRef = useRef(null);
 
   const sources = Array.isArray(p.sources) ? p.sources.filter(s => s && s.url) : [];
-  const evidence = (p.evidence || "").trim();
-  const hasDetail = evidence.length > 0 || sources.length > 0;
+  // "What happened" — the in-depth, fact-checked explanation (replaces the old
+  // terse "evidence" phrase). Falls back to evidence for legacy rows generated
+  // before the explanation field existed.
+  const explanation = (p.explanation || p.evidence || "").trim();
+  const hasDetail = explanation.length > 0 || sources.length > 0;
   // The headline is clamped to 3 lines at rest. If the text overflows that clamp,
   // the item must be expandable even without detail fields — otherwise the full
   // insight is unreadable (cut off with "…" and no way to open it).
@@ -225,10 +228,10 @@ function InsightItem({ p }) {
       <div className="hz-insight-headline" ref={headlineRef}>{p.insight}</div>
       {open && hasDetail && (
         <div className="hz-insight-detail-inner">
-          {evidence && (
-            <div className="hz-insight-line">
-              <span className="hz-insight-tag">Evidence</span>
-              <span className="hz-insight-evidence-text">{evidence}</span>
+          {explanation && (
+            <div className="hz-insight-line hz-insight-explanation">
+              <span className="hz-insight-tag">What happened</span>
+              <span className="hz-insight-explanation-text">{explanation}</span>
             </div>
           )}
           {sources.length > 0 && (

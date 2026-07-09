@@ -106,13 +106,25 @@ function ImportanceBadge({ tier, small }) {
 
 // Expanded detail — everything an analyst needs to vet the source without opening it.
 // Also hosts the admin controls: edit the publish date and delete the source.
-function SourceDetail({ s, onUpdateDate, onDelete, busy }) {
+function SourceDetail({ s, onUpdateDate, onDelete, onSaveClassification, knownTags, busy }) {
   const imp  = s.importance || {};
   const mech = s.mechanism || null;
   const full = s.analyst_brief || s.short_summary || s.summary;
   const domainTag = t => /^(TAI|LLM|ASI|AE)\d/.test(t);
   const [dateVal, setDateVal] = useState((s.date_published || "").slice(0, 10));
   const dirty = dateVal && dateVal !== (s.date_published || "").slice(0, 10);
+
+  // ── Classification draft (main_category + tags) ──────────────────────────────
+  const [catVal,  setCatVal]  = useState(s.main_category || "unclear_or_adjacent");
+  const [tagList, setTagList] = useState(s.tags || []);
+  const [newTag,  setNewTag]  = useState("");
+  const sameSet = (a, b) => a.length === b.length && [...a].sort().join("|") === [...b].sort().join("|");
+  const classDirty = catVal !== (s.main_category || "") || !sameSet(tagList, s.tags || []);
+  const addTag = () => {
+    const t = newTag.trim();
+    if (t && !tagList.includes(t)) setTagList([...tagList, t]);
+    setNewTag("");
+  };
   return (
     <div className="hz-src-detail">
       {full && <p className="hz-src-detail-summary">{full}</p>}
@@ -157,9 +169,50 @@ function SourceDetail({ s, onUpdateDate, onDelete, busy }) {
         </div>
       )}
 
-      {/* Admin controls — edit the publish date + delete the source (persist to DB). */}
+      {/* Admin controls — edit classification / publish date + delete (persist to DB). */}
       <div className="hz-src-admin" onClick={e => e.stopPropagation()}>
         <span className="hz-src-detail-k">Edit</span>
+
+        {/* Classification: main category + tags */}
+        <div className="hz-src-class-editor">
+          <label className="hz-src-admin-cat">
+            Category
+            <select value={catVal} disabled={busy} onChange={e => setCatVal(e.target.value)}>
+              {ALL_CATS.map(c => (
+                <option key={c} value={c}>{CAT_LABEL_FULL[c] || c}</option>
+              ))}
+            </select>
+          </label>
+
+          <div className="hz-src-class-tags">
+            <span className="hz-src-class-tags-label">Tags</span>
+            <div className="hz-src-tag-chips">
+              {tagList.length === 0 && <span className="hz-src-tag-empty">no tags</span>}
+              {tagList.map(t => (
+                <span key={t} className={`hz-src-edit-tag${domainTag(t) ? " domain" : ""}`}>
+                  {t}
+                  <button className="hz-src-tag-x" disabled={busy} title="Remove tag"
+                    onClick={() => setTagList(tagList.filter(x => x !== t))}>×</button>
+                </span>
+              ))}
+            </div>
+            <div className="hz-src-tag-add">
+              <input list="hz-known-tags" placeholder="add tag…" value={newTag} disabled={busy}
+                onChange={e => setNewTag(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }} />
+              <datalist id="hz-known-tags">
+                {(knownTags || []).map(t => <option key={t} value={t} />)}
+              </datalist>
+              <button className="hz-src-tag-add-btn" disabled={busy || !newTag.trim()} onClick={addTag}>Add</button>
+            </div>
+          </div>
+
+          <button className="hz-src-admin-save" disabled={!classDirty || busy}
+            onClick={() => onSaveClassification(s, { main_category: catVal, tags: tagList })}>
+            {busy ? "Saving…" : "Save classification"}
+          </button>
+        </div>
+
         <div className="hz-src-admin-row">
           <label className="hz-src-admin-date">
             Publish date
@@ -195,6 +248,7 @@ export function SourcesPage() {
   const [expandedId,  setExpandedId]  = useState(null);   // row open for vetting
   const [tierFilter,  setTierFilter]  = useState(null);   // filter to one importance tier
   const [starredOnly, setStarredOnly] = useState(false);  // filter to starred sources
+  const [flaggedOnly, setFlaggedOnly] = useState(false);  // filter to flagged (needs_review) sources
   const [labelFilter, setLabelFilter] = useState(null);   // filter to one importance label
   const [sortBy,      setSortBy]      = useState("importance"); // "importance" | "date"
   const [secret,      setSecret]      = useState(loadSecret());   // CRON_SECRET for admin mutations
@@ -261,6 +315,25 @@ export function SourcesPage() {
       .finally(() => setBusyId(null));
   }, [secret]);
 
+  // Save classification (main_category + tags) — persists to DB; optimistic local
+  // update with revert on failure. Gated by the admin secret like the others.
+  const saveClassification = useCallback((s, { main_category, tags }) => {
+    const prevCat = s.main_category, prevTags = s.tags;
+    setBusyId(s.id); setAdminMsg(null);
+    setSources(prev => prev.map(x => x.id === s.id ? { ...x, main_category, tags } : x));   // optimistic
+    fetch("/api/sources", {
+      method: "PATCH", headers: authHeaders(),
+      body: JSON.stringify({ id: s.id, main_category, tags }),
+    })
+      .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`); return j; })
+      .then(() => setAdminMsg({ ok: true, text: "Classification updated" }))
+      .catch(err => {
+        setSources(prev => prev.map(x => x.id === s.id ? { ...x, main_category: prevCat, tags: prevTags } : x));   // revert
+        setAdminMsg({ ok: false, text: `Classification update failed: ${err.message}` });
+      })
+      .finally(() => setBusyId(null));
+  }, [secret]);
+
   // Star toggle — persists starred to the DB; optimistic local update. No admin
   // secret required to READ starred, but the mutation is gated like the others.
   const toggleStar = useCallback((s, e) => {
@@ -275,6 +348,24 @@ export function SourcesPage() {
       .catch(err => {
         setSources(prev => prev.map(x => x.id === s.id ? { ...x, starred: s.starred } : x));   // revert
         setAdminMsg({ ok: false, text: `Star failed: ${err.message}` });
+      });
+  }, [secret]);
+
+  // Flag toggle — marks a source needs_review (distinct from starring). Same
+  // persist-with-revert pattern. 🚩 = "come back to this / mis-classified", vs
+  // ★ = "bookmark/favorite".
+  const toggleFlag = useCallback((s, e) => {
+    if (e) e.stopPropagation();
+    const next = !s.needs_review;
+    setSources(prev => prev.map(x => x.id === s.id ? { ...x, needs_review: next } : x));   // optimistic
+    fetch("/api/sources", {
+      method: "PATCH", headers: authHeaders(),
+      body: JSON.stringify({ id: s.id, needs_review: next }),
+    })
+      .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`); })
+      .catch(err => {
+        setSources(prev => prev.map(x => x.id === s.id ? { ...x, needs_review: s.needs_review } : x));   // revert
+        setAdminMsg({ ok: false, text: `Flag failed: ${err.message}` });
       });
   }, [secret]);
 
@@ -293,21 +384,39 @@ export function SourcesPage() {
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
   }, [sources, activeTab]);
 
-  // Client-side filtering + sorting
-  const filtered = useMemo(() => {
+  // ── Composable, faceted filtering ────────────────────────────────────────────
+  // Each active filter is one predicate. The visible list applies ALL of them.
+  // For a given facet's option counts, we count over the rows that pass every
+  // OTHER active predicate — so the numbers compose: the Starred count while
+  // "Critical" is selected is "starred sources that are also Critical", and the
+  // Label counts while "★ Starred" is on are "…among starred", etc. That is the
+  // behaviour that was missing (each facet previously counted in isolation).
+  const searchPred = useMemo(() => {
     const q = search.toLowerCase();
-    const rows = sources.filter(s => {
-      if (activeTab !== "all" && s.main_category !== activeTab) return false;
-      if (tierFilter && s.importance?.tier !== tierFilter) return false;
-      if (starredOnly && !s.starred) return false;
-      if (labelFilter && s.label !== labelFilter) return false;
-      if (activeTags.length > 0 && !activeTags.every(t => s.tags?.includes(t))) return false;
-      if (q) {
-        const hay = `${s.title || ""} ${s.publisher || ""} ${s.short_summary || s.summary || ""} ${(s.tags || []).join(" ")}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
+    if (!q) return null;
+    return s => `${s.title || ""} ${s.publisher || ""} ${s.short_summary || s.summary || ""} ${(s.tags || []).join(" ")}`.toLowerCase().includes(q);
+  }, [search]);
+
+  const predicates = useMemo(() => ({
+    category: activeTab === "all" ? null : (s => s.main_category === activeTab),
+    label:    labelFilter ? (s => s.label === labelFilter) : null,
+    tier:     tierFilter ? (s => s.importance?.tier === tierFilter) : null,
+    starred:  starredOnly ? (s => s.starred) : null,
+    flagged:  flaggedOnly ? (s => s.needs_review) : null,
+    tags:     activeTags.length ? (s => activeTags.every(t => s.tags?.includes(t))) : null,
+    search:   searchPred,
+  }), [activeTab, labelFilter, tierFilter, starredOnly, flaggedOnly, activeTags, searchPred]);
+
+  // Rows passing every predicate EXCEPT the named one (for that facet's counts).
+  const rowsExcept = useCallback((exceptKey) => {
+    const active = Object.entries(predicates).filter(([k, p]) => p && k !== exceptKey);
+    return sources.filter(s => active.every(([, p]) => p(s)));
+  }, [sources, predicates]);
+
+  // The visible list: passes ALL predicates.
+  const filtered = useMemo(() => {
+    const active = Object.values(predicates).filter(Boolean);
+    const rows = sources.filter(s => active.every(p => p(s)));
     if (sortBy === "importance") {
       rows.sort((a, b) => {
         const ra = TIER_META[a.importance?.tier]?.rank || 0;
@@ -319,29 +428,42 @@ export function SourcesPage() {
       });
     }
     return rows; // already date-desc from the API when sortBy === "date"
-  }, [sources, activeTab, activeTags, search, tierFilter, sortBy, starredOnly, labelFilter]);
+  }, [sources, predicates, sortBy]);
 
-  // Importance-tier counts for the tier filter chips (respecting the active tab).
-  const tierCounts = useMemo(() => {
+  // Faceted counts — each computed over rows passing all OTHER active filters.
+  const catCountsFaceted = useMemo(() => {
+    const base = rowsExcept("category");
     const c = {};
-    for (const s of sources) {
-      if (activeTab !== "all" && s.main_category !== activeTab) continue;
-      const t = s.importance?.tier;
-      if (t) c[t] = (c[t] || 0) + 1;
-    }
+    for (const s of base) if (s.main_category) c[s.main_category] = (c[s.main_category] || 0) + 1;
+    return { counts: c, total: base.length };
+  }, [rowsExcept]);
+
+  const labelCounts = useMemo(() => {
+    const base = rowsExcept("label");
+    const c = {};
+    for (const s of base) if (s.label) c[s.label] = (c[s.label] || 0) + 1;
     return c;
-  }, [sources, activeTab]);
+  }, [rowsExcept]);
+
+  const tierCounts = useMemo(() => {
+    const base = rowsExcept("tier");
+    const c = {};
+    for (const s of base) { const t = s.importance?.tier; if (t) c[t] = (c[t] || 0) + 1; }
+    return c;
+  }, [rowsExcept]);
+
+  const starredCount = useMemo(() => rowsExcept("starred").filter(s => s.starred).length, [rowsExcept]);
+  const flaggedCount = useMemo(() => rowsExcept("flagged").filter(s => s.needs_review).length, [rowsExcept]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // Category counts from all loaded sources
-  const catCounts = useMemo(() => {
+  // All distinct tags across the corpus, most-common first — feeds the tag editor's
+  // autocomplete so manual tagging reuses the existing controlled vocabulary.
+  const knownTags = useMemo(() => {
     const c = {};
-    for (const s of sources) {
-      if (s.main_category) c[s.main_category] = (c[s.main_category] || 0) + 1;
-    }
-    return c;
+    for (const s of sources) for (const t of (s.tags || [])) c[t] = (c[t] || 0) + 1;
+    return Object.entries(c).sort((a, b) => b[1] - a[1]).map(([t]) => t);
   }, [sources]);
 
   const toggleTag = (tag) => {
@@ -384,10 +506,10 @@ export function SourcesPage() {
           onClick={() => setActiveTab("all")}
         >
           All
-          <span className="hz-cat-tab-count">{sources.length}</span>
+          <span className="hz-cat-tab-count">{catCountsFaceted.total}</span>
         </button>
         {ALL_CATS.map(cat => {
-          const count = catCounts[cat] ?? 0;
+          const count = catCountsFaceted.counts[cat] ?? 0;
           const active = activeTab === cat;
           return (
             <button
@@ -446,9 +568,9 @@ export function SourcesPage() {
         <div className="hz-tier-chips">
           {LABEL_ORDER.map(lb => {
             const m = LABEL_META[lb];
-            const n = sources.filter(s => (activeTab === "all" || s.main_category === activeTab) && s.label === lb).length;
-            if (!n) return null;
+            const n = labelCounts[lb] || 0;
             const on = labelFilter === lb;
+            if (!n && !on) return null;
             return (
               <button key={lb}
                 className={`hz-tier-chip${on ? " active" : ""}`}
@@ -465,7 +587,7 @@ export function SourcesPage() {
       <div className="hz-tier-filter-row">
         <span className="hz-tag-filter-label">Importance</span>
         <div className="hz-tier-chips">
-          {TIER_ORDER.filter(t => tierCounts[t]).map(t => {
+          {TIER_ORDER.filter(t => tierCounts[t] || tierFilter === t).map(t => {
             const m = TIER_META[t];
             const on = tierFilter === t;
             return (
@@ -477,20 +599,29 @@ export function SourcesPage() {
                 onClick={() => { setTierFilter(on ? null : t); setPage(1); setExpandedId(null); }}
                 title={m.label}
               >
-                {m.short}<span className="hz-tier-chip-count">{tierCounts[t]}</span>
+                {m.short}<span className="hz-tier-chip-count">{tierCounts[t] || 0}</span>
               </button>
             );
           })}
           {tierFilter && (
             <button className="hz-tag-clear" onClick={() => { setTierFilter(null); setPage(1); }}>Clear</button>
           )}
-          {/* Starred filter — show only sources you've starred. */}
+          {/* Starred filter — count reflects the other active filters (e.g. starred
+              WITHIN the current category + label), so the facets compose. */}
           <button
             className={`hz-tier-chip hz-star-chip${starredOnly ? " active" : ""}`}
             onClick={() => { setStarredOnly(v => !v); setPage(1); setExpandedId(null); }}
-            title="Show only starred sources"
+            title="Show only starred sources (count reflects the other active filters)"
           >
-            ★ Starred{(() => { const n = sources.filter(s => s.starred).length; return n ? <span className="hz-tier-chip-count">{n}</span> : null; })()}
+            ★ Starred{starredCount ? <span className="hz-tier-chip-count">{starredCount}</span> : null}
+          </button>
+          {/* Flagged filter — sources marked needs_review (manual 🚩 or pipeline). */}
+          <button
+            className={`hz-tier-chip hz-flag-chip${flaggedOnly ? " active" : ""}`}
+            onClick={() => { setFlaggedOnly(v => !v); setPage(1); setExpandedId(null); }}
+            title="Show only flagged sources (needs review) — count reflects the other active filters"
+          >
+            🚩 Flagged{flaggedCount ? <span className="hz-tier-chip-count">{flaggedCount}</span> : null}
           </button>
         </div>
       </div>
@@ -586,13 +717,22 @@ export function SourcesPage() {
                     >
                       <td className="hz-src-caret">{open ? "▾" : "▸"}</td>
                       <td className="hz-src-star-cell">
-                        <button
-                          className={`hz-star-btn${s.starred ? " on" : ""}`}
-                          title={s.starred ? "Starred — click to unstar" : "Star this source"}
-                          onClick={(e) => toggleStar(s, e)}
-                        >
-                          {s.starred ? "★" : "☆"}
-                        </button>
+                        <div className="hz-src-mark-btns">
+                          <button
+                            className={`hz-star-btn${s.starred ? " on" : ""}`}
+                            title={s.starred ? "Starred — click to unstar" : "Star this source"}
+                            onClick={(e) => toggleStar(s, e)}
+                          >
+                            {s.starred ? "★" : "☆"}
+                          </button>
+                          <button
+                            className={`hz-flag-btn${s.needs_review ? " on" : ""}`}
+                            title={s.needs_review ? "Flagged for review — click to clear" : "Flag this source for review"}
+                            onClick={(e) => toggleFlag(s, e)}
+                          >
+                            {s.needs_review ? "🚩" : "⚐"}
+                          </button>
+                        </div>
                       </td>
                       <td>
                         <div className="hz-src-title-cell">
@@ -676,7 +816,9 @@ export function SourcesPage() {
                       <tr className="hz-src-detail-row">
                         <td colSpan={colSpan}>
                           <SourceDetail s={s} busy={busyId === s.id}
-                            onUpdateDate={updateDate} onDelete={deleteSource} />
+                            knownTags={knownTags}
+                            onUpdateDate={updateDate} onDelete={deleteSource}
+                            onSaveClassification={saveClassification} />
                         </td>
                       </tr>
                     )}

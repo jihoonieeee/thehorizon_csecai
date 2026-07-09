@@ -575,6 +575,12 @@ a:hover { text-decoration: underline; }
 }
 .hz-insight-evidence { color: var(--text-tertiary); }
 .hz-insight-evidence-text { color: var(--text-secondary); font-size: 0.82rem; line-height: 1.45; }
+/* "What happened" — the in-depth explanation reads as a proper paragraph. */
+.hz-insight-explanation-text {
+  color: var(--text-primary, #1e293b);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
 .hz-insight-tag {
   font-size: 0.58rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.04em; color: var(--cat-color);
@@ -1813,6 +1819,47 @@ a:hover { text-decoration: underline; }
   color: var(--text-secondary);
 }
 
+/* ── Sub-bullets under a numbered point (breakdown / evidence) ─────────────── */
+.hz-response-sublist {
+  list-style: none;
+  padding: 0;
+  margin: 5px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hz-response-subpoint {
+  position: relative;
+  padding-left: 15px;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.hz-response-subpoint::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0.62em;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent-mid);
+}
+.hz-response-bullets { gap: 6px; }
+
+/* Analyst labels (Assessment / So what / Defenders) on plain lines. */
+.hz-response-labeled { line-height: 1.6; }
+.hz-response-label {
+  font-weight: 700;
+  color: var(--accent-mid);
+}
+/* The Assessment line is the synthesis — give it a touch more weight. */
+.hz-response-para.hz-response-labeled:first-child {
+  padding: 8px 12px;
+  background: var(--accent-dim);
+  border-radius: 8px;
+}
+
 /* ── Section heading inside response ──────────────────────────────────────── */
 
 .hz-response-heading {
@@ -2060,6 +2107,26 @@ a:hover { text-decoration: underline; }
   line-height: 1.5;
 }
 .hz-qa-warn strong { font-weight: 700; }
+/* Non-blocking fact-check notes (answer still passed) — amber, not red. */
+.hz-qa-warn:not(.hz-qa-warn-blocking) {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+/* "General knowledge — not grounded in the corpus" banner. */
+.hz-answer-mode-badge {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 4px 10px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #1e40af;
+  letter-spacing: 0.01em;
+}
 
 .hz-followups {
   display: flex;
@@ -2316,15 +2383,53 @@ a:hover { text-decoration: underline; }
 .hz-src-admin-delete { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
 .hz-src-admin-save:disabled, .hz-src-admin-delete:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* Classification editor (category + tags) */
+.hz-src-class-editor {
+  display: flex; flex-direction: column; gap: 8px;
+  margin: 6px 0 12px; padding-bottom: 12px;
+  border-bottom: 1px dashed var(--border, #e2e8f0);
+}
+.hz-src-admin-cat { display: flex; flex-direction: column; gap: 3px; font-size: 0.72rem; color: var(--text-tertiary, #94a3b8); max-width: 240px; }
+.hz-src-admin-cat select { padding: 4px 8px; font-size: 0.8rem; border: 1px solid var(--border, #cbd5e1); border-radius: 6px; background: #fff; }
+.hz-src-class-tags { display: flex; flex-direction: column; gap: 5px; }
+.hz-src-class-tags-label { font-size: 0.72rem; color: var(--text-tertiary, #94a3b8); }
+.hz-src-tag-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.hz-src-tag-empty { font-size: 0.75rem; color: var(--text-tertiary, #94a3b8); font-style: italic; }
+.hz-src-edit-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 4px 2px 8px; font-size: 0.72rem; border-radius: 5px;
+  background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0;
+}
+.hz-src-edit-tag.domain { background: #eef2ff; color: #4338ca; border-color: #e0e7ff; }
+.hz-src-tag-x {
+  border: none; background: transparent; cursor: pointer; font-size: 0.95rem; line-height: 1;
+  color: #94a3b8; padding: 0 2px;
+}
+.hz-src-tag-x:hover { color: #b91c1c; }
+.hz-src-tag-x:disabled { opacity: 0.4; cursor: not-allowed; }
+.hz-src-tag-add { display: flex; gap: 6px; align-items: center; }
+.hz-src-tag-add input { padding: 4px 8px; font-size: 0.78rem; border: 1px solid var(--border, #cbd5e1); border-radius: 6px; min-width: 160px; }
+.hz-src-tag-add-btn {
+  padding: 4px 10px; font-size: 0.76rem; font-weight: 600; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--border, #cbd5e1); background: #fff; color: #334155;
+}
+.hz-src-tag-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* ── Star sources ────────────────────────────────────────────────────────── */
-.hz-src-star-cell { width: 24px; text-align: center; }
-.hz-star-btn {
+.hz-src-star-cell { width: 44px; text-align: center; }
+.hz-src-mark-btns { display: inline-flex; gap: 1px; align-items: center; }
+.hz-star-btn, .hz-flag-btn {
   background: none; border: none; cursor: pointer; padding: 0 2px;
   font-size: 1rem; line-height: 1; color: var(--text-tertiary, #cbd5e1);
 }
 .hz-star-btn:hover, .hz-star-btn.on { color: #f59e0b; }
 .hz-star-chip { color: #b45309; border-color: #f59e0b55; }
 .hz-star-chip.active { background: #f59e0b; border-color: #f59e0b; color: #fff; }
+/* Flag (needs review) — red, distinct from the amber star. */
+.hz-flag-btn { filter: grayscale(1) opacity(0.5); }
+.hz-flag-btn:hover, .hz-flag-btn.on { filter: none; opacity: 1; color: #dc2626; }
+.hz-flag-chip { color: #b91c1c; border-color: #dc262655; }
+.hz-flag-chip.active { background: #dc2626; border-color: #dc2626; color: #fff; }
 
 .hz-src-detail-mech {
   display: inline-block;
