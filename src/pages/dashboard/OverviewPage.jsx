@@ -197,26 +197,37 @@ function MaturityBar({ maturity }) {
 // ── Insight item — terse by default, expandable on click ──────────────────────
 // Click an insight to reveal its evidence + the ranked sources it was attributed to.
 
+// Split a paragraph into individual fact bullets.
+// Splits on sentence boundaries (". "), transitional connectives ("Separately,",
+// "Additionally,", etc.), and semicolons. Filters fragments under 20 chars.
+function splitToBullets(text) {
+  if (!text) return [];
+  // Step 1: break on strong transitional words first
+  const CONNECTIVES = /(?<=[.!?])\s+(?=(?:Separately|Additionally|Also|However|Furthermore|Meanwhile|In addition|At the same time|Notably|Importantly),?\s)/g;
+  let parts = text.split(CONNECTIVES);
+  // Step 2: within each part, split on sentence-ending period + capital letter
+  parts = parts.flatMap(p =>
+    p.split(/(?<=[a-z0-9"')\]])\.\s+(?=[A-Z"'])/)
+  );
+  // Step 3: strip leading/trailing whitespace, drop very short fragments
+  return parts.map(s => s.trim()).filter(s => s.length > 25);
+}
+
 function InsightItem({ p }) {
   const [open, setOpen] = useState(false);
   const [clamped, setClamped] = useState(false);
   const headlineRef = useRef(null);
 
   const sources = Array.isArray(p.sources) ? p.sources.filter(s => s && s.url) : [];
-  // "What happened" — the in-depth, fact-checked explanation (replaces the old
-  // terse "evidence" phrase). Falls back to evidence for legacy rows generated
-  // before the explanation field existed.
-  const explanation = (p.explanation || p.evidence || "").trim();
-  const hasDetail = explanation.length > 0 || sources.length > 0;
-  // The headline is clamped to 3 lines at rest. If the text overflows that clamp,
-  // the item must be expandable even without detail fields — otherwise the full
-  // insight is unreadable (cut off with "…" and no way to open it).
+  const rawText  = (p.explanation || p.evidence || "").trim();
+  // Split into bullets; fall back to the raw insight headline if no separate explanation
+  const bullets  = splitToBullets(rawText);
+  const hasDetail = bullets.length > 0 || sources.length > 0;
   const expandable = hasDetail || clamped;
 
   useEffect(() => {
     const el = headlineRef.current;
     if (!el) return;
-    // scrollHeight exceeds clientHeight only when the 3-line clamp actually hides text.
     setClamped(el.scrollHeight - el.clientHeight > 1);
   }, [p.insight]);
 
@@ -228,36 +239,40 @@ function InsightItem({ p }) {
       <div className="hz-insight-headline" ref={headlineRef}>{p.insight}</div>
       {open && hasDetail && (
         <div className="hz-insight-detail-inner">
-          {explanation && (
-            <div className="hz-insight-line hz-insight-explanation">
-              <span className="hz-insight-tag">Details</span>
-              <span className="hz-insight-explanation-text">{explanation}</span>
-            </div>
+
+          {/* Fact bullets */}
+          {bullets.length > 0 && (
+            <ul className="hz-insight-bullets">
+              {bullets.map((b, i) => (
+                <li key={i} className="hz-insight-bullet">{b}</li>
+              ))}
+            </ul>
           )}
+
+          {/* Source chips — one per source, compact, clickable */}
           {sources.length > 0 && (
-            <div className="hz-insight-line hz-insight-evidence">
+            <div className="hz-insight-source-chips">
               <span className="hz-insight-tag">Sources</span>
-              <ul className="hz-insight-sources">
+              <div className="hz-insight-chips-row">
                 {sources.map((s, i) => (
-                  <li key={i}>
-                    <a
-                      href={s.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {s.title || s.url}
-                    </a>
-                    {(s.publisher || s.date || s.importance || s.significance) && (
-                      <span className="hz-insight-source-meta">
-                        {" · "}{[s.publisher, s.date, s.significance || s.importance].filter(Boolean).join(" · ")}
-                      </span>
-                    )}
-                  </li>
+                  <a
+                    key={i}
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`hz-source-chip hz-source-chip--${s.importance || "research"}`}
+                    onClick={e => e.stopPropagation()}
+                    title={s.title || s.url}
+                  >
+                    <span className="hz-source-chip-pub">{s.publisher || new URL(s.url).hostname.replace("www.", "")}</span>
+                    {s.date && <span className="hz-source-chip-date">{s.date.slice(0, 7)}</span>}
+                    {s.importance === "realized" && <span className="hz-source-chip-badge">confirmed</span>}
+                  </a>
                 ))}
-              </ul>
+              </div>
             </div>
           )}
+
         </div>
       )}
     </li>
