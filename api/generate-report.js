@@ -9,26 +9,25 @@
  *
  * POST body (JSON):
  *   window   "month" | "quarter" | "half_year" | "year"  (default "quarter")
- *   format   "pptx" | "json"                              (default "pptx")
- *   skipLlm  boolean                                      (default false)
+ *   format   "pptx" | "json"                             (default "pptx")
+ *   skipLlm  boolean                                     (default false)
  *
  * POST response:
  *   format=pptx → binary PPTX download
  *   format=json → deck JSON object
  *
- * Note: generation can take 5–15 minutes. This endpoint works without timeout
- * constraints when running locally via `npx vercel dev`. Vercel Hobby (10 s
- * limit) will time out in production for LLM-enabled runs.
+ * IMPORTANT: runPipelineFromDB and renderDeckPptxToBuffer are dynamically
+ * imported inside the POST handler to keep the function bundle small enough
+ * to load on Vercel. Static imports of the full pipeline + PptxGenJS exceed
+ * the Vercel bundle size limit and cause FUNCTION_INVOCATION_FAILED.
+ * Generation still requires local execution (npx vercel dev) due to the
+ * Vercel Hobby 10s timeout; the POST handler will always time out on prod.
  *
  * Authorization: Bearer CRON_SECRET header (or x-vercel-cron: 1).
  */
 
-import { createClient }      from "@supabase/supabase-js";
+import { createClient }   from "@supabase/supabase-js";
 import { loadLatestDeck, listDecks, getDeck } from "../lib/storage/deckStore.js";
-import { runPipelineFromDB } from "../lib/pipeline/runPipeline.js";
-import { renderDeckPptxToBuffer } from "../lib/pipeline/slides/renderDeckPptx.js";
-// Newsletter generation is handled by POST /api/dashboard to avoid bundling
-// this heavy endpoint (runPipeline + PptxGenJS) with the lightweight newsletter lib.
 
 const WINDOW_DAYS = {
   month:     30,
@@ -58,7 +57,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  // ── GET: read saved decks ────────────────────────────────────────────────────
+  // ── GET: read saved decks ──────────────────────────────────────────────────
   if (req.method === "GET") {
     try {
       const { list, deck_id } = req.query;
@@ -68,9 +67,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ decks });
       }
 
-      const deck = deck_id
-        ? await getDeck(deck_id)
-        : await loadLatestDeck();
+      const deck = deck_id ? await getDeck(deck_id) : await loadLatestDeck();
 
       if (!deck) {
         return res.status(404).json({
@@ -85,13 +82,13 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── POST: generate a new deck ────────────────────────────────────────────────
+  // ── POST: generate a new deck ──────────────────────────────────────────────
   if (req.method === "POST") {
     try {
       const {
-        window:  win      = "quarter",
-        format            = "pptx",
-        skipLlm           = false,
+        window:  win    = "quarter",
+        format          = "pptx",
+        skipLlm         = false,
       } = req.body || {};
 
       if (!["pptx", "json"].includes(format)) {
@@ -114,6 +111,11 @@ export default async function handler(req, res) {
         process.env.SUPABASE_SERVICE_ROLE_KEY,
       );
 
+      // Dynamic imports keep the module bundle lightweight so GET routes work
+      // on Vercel. Generation itself requires local execution (vercel dev).
+      const { runPipelineFromDB }      = await import("../lib/pipeline/runPipeline.js");
+      const { renderDeckPptxToBuffer } = await import("../lib/pipeline/slides/renderDeckPptx.js");
+
       const result = await runPipelineFromDB(supabase, {
         days,
         skipLlm: Boolean(skipLlm),
@@ -129,7 +131,6 @@ export default async function handler(req, res) {
         return res.status(200).json(result.deck);
       }
 
-      // pptx — render to buffer and stream as download
       const windowLabel = WINDOW_LABEL[win] || win;
       const buf = await renderDeckPptxToBuffer(result.deck, {
         title: `AI Threat Horizon Scan — ${windowLabel}`,
