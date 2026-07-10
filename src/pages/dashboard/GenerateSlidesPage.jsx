@@ -17,12 +17,17 @@ export function GenerateSlidesPage() {
   const [skipLlm,    setSkipLlm]    = useState(false);
   const [secret,     setSecret]     = useState(loadSecret);
   const [showSecret, setShowSecret] = useState(false);
-  const [status,     setStatus]     = useState("idle");
+  const [status,     setStatus]     = useState("idle");   // idle | running | done | error
   const [error,      setError]      = useState(null);
   const [elapsed,    setElapsed]    = useState(0);
+  const [blobUrl,    setBlobUrl]    = useState(null);
   const [filename,   setFilename]   = useState(null);
-  const timerRef = useRef(null);
-  const startRef = useRef(null);
+  const timerRef  = useRef(null);
+  const startRef  = useRef(null);
+  const blobRef   = useRef(null);   // track blob URL for cleanup
+
+  // Clean up blob URL on unmount
+  useEffect(() => () => { if (blobRef.current) URL.revokeObjectURL(blobRef.current); }, []);
 
   useEffect(() => {
     if (status === "running") {
@@ -40,10 +45,15 @@ export function GenerateSlidesPage() {
 
   async function generate() {
     if (status === "running") return;
+
+    // Revoke previous blob if any
+    if (blobRef.current) { URL.revokeObjectURL(blobRef.current); blobRef.current = null; }
+    setBlobUrl(null);
+    setFilename(null);
     setStatus("running");
     setError(null);
     setElapsed(0);
-    setFilename(null);
+
     try {
       const res = await fetch("/api/generate-report", {
         method: "POST",
@@ -58,16 +68,14 @@ export function GenerateSlidesPage() {
         try { const j = await res.json(); msg = j.error || msg; } catch {}
         throw new Error(msg);
       }
-      const blob  = await res.blob();
+      const blob   = await res.blob();
       const dateStr = new Date().toISOString().slice(0, 10);
       const fname   = `horizon_scan_${period}_${dateStr}.pptx`;
+      const url     = URL.createObjectURL(blob);
+      blobRef.current = url;
+      setBlobUrl(url);
       setFilename(fname);
-      const url = URL.createObjectURL(blob);
-      const a   = document.createElement("a");
-      a.href = url; a.download = fname;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      setStatus("success");
+      setStatus("done");
     } catch (err) {
       setError(err.message);
       setStatus("error");
@@ -75,6 +83,7 @@ export function GenerateSlidesPage() {
   }
 
   const isRunning = status === "running";
+  const isDone    = status === "done";
   const periodObj = PERIODS.find(p => p.id === period);
 
   return (
@@ -90,7 +99,7 @@ export function GenerateSlidesPage() {
         </h1>
         <p style={{ margin: "10px 0 0", fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
           Runs the analysis pipeline across validated sources for the selected
-          reporting window and downloads a ready-to-present <strong>PPTX deck</strong>.
+          reporting window and produces a ready-to-present <strong>PPTX deck</strong>.
           Generation typically takes <strong>5–15 minutes</strong>.
         </p>
       </div>
@@ -116,9 +125,9 @@ export function GenerateSlidesPage() {
                   padding: "6px 14px", borderRadius: 6, border: "1px solid",
                   fontSize: "0.8rem", fontWeight: 600, cursor: isRunning ? "not-allowed" : "pointer",
                   transition: "all 0.15s",
-                  background: period === p.id ? "var(--accent-dim)" : "transparent",
-                  borderColor: period === p.id ? "var(--accent-border)" : "var(--border)",
-                  color: period === p.id ? "var(--accent)" : "var(--text-secondary)",
+                  background:   period === p.id ? "var(--accent-dim)" : "transparent",
+                  borderColor:  period === p.id ? "var(--accent-border)" : "var(--border)",
+                  color:        period === p.id ? "var(--accent)" : "var(--text-secondary)",
                 }}
               >
                 {p.label}
@@ -174,41 +183,55 @@ export function GenerateSlidesPage() {
             ▸ Advanced options
           </summary>
           <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, cursor: "pointer" }}>
-            <input
-              type="checkbox"
-              checked={skipLlm}
-              onChange={e => setSkipLlm(e.target.checked)}
-              disabled={isRunning}
-            />
+            <input type="checkbox" checked={skipLlm} onChange={e => setSkipLlm(e.target.checked)} disabled={isRunning} />
             <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
               Skip LLM calls — deterministic stubs only (fast, structural test)
             </span>
           </label>
         </details>
 
-        {/* Generate button */}
-        <button
-          onClick={generate}
-          disabled={isRunning}
-          style={{
-            width: "100%", padding: "12px 20px", borderRadius: 8,
-            border: isRunning ? "1px solid var(--border)" : "none",
-            fontSize: "0.9rem", fontWeight: 700, cursor: isRunning ? "not-allowed" : "pointer",
-            transition: "opacity 0.15s",
-            background: isRunning ? "var(--surface-2)" : "var(--accent)",
-            color: isRunning ? "var(--text-tertiary)" : "#fff",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-          }}
-        >
-          {isRunning ? (
-            <>
-              <Spinner />
-              Generating… {formatElapsed(elapsed)}
-            </>
-          ) : (
-            "Generate Presentation"
+        {/* Action buttons */}
+        <div style={{ display: "flex", gap: 10 }}>
+          {/* Generate / Processing button */}
+          <button
+            onClick={generate}
+            disabled={isRunning}
+            style={{
+              flex: 1, padding: "12px 20px", borderRadius: 8,
+              border: isRunning ? "1px solid var(--border)" : "none",
+              fontSize: "0.9rem", fontWeight: 700, cursor: isRunning ? "not-allowed" : "pointer",
+              transition: "opacity 0.15s",
+              background: isRunning ? "var(--surface-2)" : "var(--accent)",
+              color: isRunning ? "var(--text-tertiary)" : "#fff",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+            }}
+          >
+            {isRunning ? (
+              <><Spinner /> Processing… {formatElapsed(elapsed)}</>
+            ) : isDone ? (
+              "Regenerate"
+            ) : (
+              "Generate Presentation"
+            )}
+          </button>
+
+          {/* Download button — only shown when ready */}
+          {isDone && blobUrl && (
+            <a
+              href={blobUrl}
+              download={filename}
+              style={{
+                padding: "12px 20px", borderRadius: 8, border: "none",
+                fontSize: "0.9rem", fontWeight: 700, cursor: "pointer",
+                background: "#15803d", color: "#fff",
+                display: "flex", alignItems: "center", gap: 8,
+                textDecoration: "none", whiteSpace: "nowrap",
+              }}
+            >
+              ↓ Download PPTX
+            </a>
           )}
-        </button>
+        </div>
 
         {isRunning && (
           <p style={{ margin: 0, textAlign: "center", fontSize: "0.76rem", color: "var(--text-tertiary)" }}>
@@ -218,7 +241,7 @@ export function GenerateSlidesPage() {
       </div>
 
       {/* Success */}
-      {status === "success" && (
+      {status === "done" && (
         <div style={{
           marginTop: 16, padding: "14px 18px", borderRadius: 8,
           background: "#f0fdf4", border: "1px solid #bbf7d0",
@@ -226,7 +249,7 @@ export function GenerateSlidesPage() {
         }}>
           <span style={{ fontSize: "1.1rem", color: "#16a34a" }}>✓</span>
           <div>
-            <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#15803d" }}>Download started</div>
+            <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#15803d" }}>Deck ready</div>
             {filename && <div style={{ fontSize: "0.76rem", color: "#16a34a", marginTop: 2 }}>{filename}</div>}
           </div>
         </div>

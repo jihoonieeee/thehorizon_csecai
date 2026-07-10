@@ -27,6 +27,7 @@ import { createClient }      from "@supabase/supabase-js";
 import { loadLatestDeck, listDecks, getDeck } from "../lib/storage/deckStore.js";
 import { runPipelineFromDB } from "../lib/pipeline/runPipeline.js";
 import { renderDeckPptxToBuffer } from "../lib/pipeline/slides/renderDeckPptx.js";
+import { generateNewsletterHtml } from "../lib/newsletter/index.js";
 
 const WINDOW_DAYS = {
   month:     30,
@@ -98,8 +99,23 @@ export default async function handler(req, res) {
           error: `Invalid window "${win}". Must be one of: ${Object.keys(WINDOW_DAYS).join(", ")}`,
         });
       }
-      if (!["pptx", "json"].includes(format)) {
-        return res.status(400).json({ error: `Invalid format "${format}". Must be pptx or json.` });
+      if (!["pptx", "json", "newsletter"].includes(format)) {
+        return res.status(400).json({ error: `Invalid format "${format}". Must be pptx, json, or newsletter.` });
+      }
+
+      // ── Newsletter ─────────────────────────────────────────────────────────
+      if (format === "newsletter") {
+        if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+          return res.status(500).json({ error: "Supabase env vars not configured" });
+        }
+        const sbClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+        const { window: nlWindow = "week", asof = null } = req.body || {};
+        const { html, period, sourceCount, insightCount } = await generateNewsletterHtml(sbClient, {
+          window: ["week", "month"].includes(nlWindow) ? nlWindow : "week",
+          asof,
+        });
+        res.setHeader("Content-Type", "application/json");
+        return res.status(200).json({ html, period, sourceCount, insightCount });
       }
 
       if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
