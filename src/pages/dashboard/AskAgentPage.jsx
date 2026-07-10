@@ -268,25 +268,6 @@ function Message({ msg, onFollowUp }) {
       </div>
 
       {msg.caveat && <div className="hz-caveat">{msg.caveat}</div>}
-
-      {/* Quality/fact-check transparency: surface flags whenever the automated
-          checks (deterministic + Haiku verifier) found something — even when the
-          answer still passed (e.g. a claim the cited source doesn't fully back). */}
-      {msg.role === "assistant" && !msg.streaming && msg.qa_issues?.length > 0 && (
-        <div className={`hz-qa-warn${msg.qa_pass === false ? " hz-qa-warn-blocking" : ""}`} title="Automated quality & fact checks">
-          <strong>{msg.qa_pass === false ? "⚠ Quality check:" : "⚑ Fact-check notes:"}</strong> {msg.qa_issues.join("; ")}
-        </div>
-      )}
-
-      {msg.suggested_followups?.length > 0 && (
-        <div className="hz-followups">
-          {msg.suggested_followups.slice(0, 2).map((s, i) => (
-            <button key={i} className="hz-suggestion-pill" onClick={() => onFollowUp(s)}>
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

@@ -598,7 +598,7 @@ a:hover { text-decoration: underline; }
 }
 .hz-insight-bullet {
   position: relative; padding-left: 14px;
-  font-size: 0.81rem; color: #cbd5e1; line-height: 1.55;
+  font-size: 0.81rem; color: var(--text-primary); line-height: 1.55;
 }
 .hz-insight-bullet::before {
   content: "▸"; position: absolute; left: 0; top: 1px;

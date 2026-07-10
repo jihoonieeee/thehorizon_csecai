@@ -55,10 +55,20 @@ CALIBRATION (critical): You are told the EVIDENCE MATURITY for this category. If
 Also produce a one-sentence "assessment": the current overall posture for this category (used for period-over-period comparison). The assessment is bound by the SAME evidence-maturity calibration as the insights — its verb must match the evidence:
   - research/vulnerability-only (no observed exploitation) → describe demonstrated capability and shifting assumptions. Use verbs like "research is demonstrating", "capability is maturing", "assumptions are weakening". Do NOT say "escalating into production", "moving in-the-wild", "being weaponised", or "confirmed in operations".
   - exploitation/incidents/operational evidence present → you MAY describe escalation or operational use, proportional to that evidence.
+
+ASSESSMENT RULES — these are hard bans:
+  ✗ No "crossed a critical threshold" or "crossed from X to Y" framings — these are clichés.
+  ✗ No "attacker playbook", "maturing playbook", "breadth of … signals", "not isolated events" — all vague.
+  ✗ No "operational ransomware delivery via AI agents" unless a named ransomware operator is confirmed.
+  ✗ No em-dashes. Write two short sentences if needed.
+  ✗ Do NOT list framework names (Langflow, MCP, AutoGen) unless a specific incident in those frameworks is confirmed.
+  ✓ Name the single most concrete thing that happened and what it changes for defenders.
+  ✓ One sentence, ≤ 25 words.
+
 Examples calibrated to maturity:
   - research-heavy:  "LLM jailbreak capability is maturing in research faster than guardrail designs can absorb."
-  - operational:     "AI-enabled deepfake fraud has crossed from demonstration into confirmed financial-loss incidents."
-Pick the verb that the stated maturity supports — an overreaching assessment will be rejected downstream.
+  - operational:     "AI-enabled deepfake fraud shifted from demos to confirmed financial-loss incidents this period."
+Pick the verb that the stated maturity supports — an overreaching or buzzword-heavy assessment will be rejected downstream.
 
 LEAD WITH THE STRONGEST SIGNAL: order your insights by consequence — realized real-world incidents and landmark research first, demonstrated capability next; low-signal/incremental findings are background context, not headline insights. Your first insight should be the single most consequential development of the period. Do not give a routine finding the same prominence as a confirmed incident or a field-first result.
 

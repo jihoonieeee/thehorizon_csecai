@@ -35,6 +35,4 @@ SCOPE: in_scope|out_of_scope
 CONFIDENCE: high|moderate|low
 CONFIDENCE_REASON: one sentence
 CAVEAT: one specific limitation, or null
-FOLLOWUP: a concrete follow-up question
-FOLLOWUP: a second follow-up question
 ```

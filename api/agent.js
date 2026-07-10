@@ -146,7 +146,7 @@ function buildGeneralSystem(query) {
 function parseResponse(text) {
   const lines = text.split("\n");
   const answerLines = [];
-  const meta = { confidence: "low", confidence_reason: "", caveat: null, followups: [], out_of_scope: false };
+  const meta = { confidence: "low", confidence_reason: "", caveat: null, out_of_scope: false };
   for (const line of lines) {
     if (line.startsWith("SCOPE:")) meta.out_of_scope = /out_of_scope/i.test(line);
     else if (line.startsWith("CONFIDENCE_REASON:")) meta.confidence_reason = line.replace("CONFIDENCE_REASON:", "").trim();
@@ -156,7 +156,7 @@ function parseResponse(text) {
     } else if (line.startsWith("CAVEAT:")) {
       const val = line.replace("CAVEAT:", "").trim();
       meta.caveat = val === "null" ? null : val;
-    } else if (line.startsWith("FOLLOWUP:")) meta.followups.push(line.replace("FOLLOWUP:", "").trim());
+    } else if (line.startsWith("FOLLOWUP:")) { /* dropped */ }
     else answerLines.push(line);
   }
   return { answer: answerLines.join("\n").trim(), ...meta };
@@ -452,7 +452,7 @@ export default async function handler(req, res) {
       const payload = {
         answer: msg, citations: [], source_refs: [], confidence: "high",
         confidence_reason: "Question is outside the AI-security scope of this corpus.",
-        caveat: null, suggested_followups: [], answer_mode: "out_of_scope",
+        caveat: null, answer_mode: "out_of_scope",
         retrieval_verdict: "n/a", qa_issues: [], qa_pass: true, qa_blocked: false,
         temporal_scope: plan.temporal.scope_label, token_usage: tokenUsage("out_of_scope"),
       };
@@ -521,7 +521,7 @@ export default async function handler(req, res) {
       return {
         answer: preamble + gp.answer, citations: [], source_refs: [],
         confidence: "low", confidence_reason: "No corpus sources addressed this specific question; general answer.",
-        caveat: gp.caveat, suggested_followups: gp.followups, answer_mode: "general",
+        caveat: gp.caveat, answer_mode: "general",
         retrieval_verdict: "none_effective", relevant_source_count: 0, planner_method: plan.planner_method,
         qa_issues: [], qa_pass: true, qa_blocked: false,
         qa_report: { blocked: false, blocking: [], repaired: [], verifier: { ran: false, verdict: "n/a", unsupported: [] } },
@@ -639,7 +639,6 @@ export default async function handler(req, res) {
         confidence:          blocked ? "low" : (isGeneral ? "low" : confidence),
         confidence_reason:   isGeneral ? "General answer — no corpus sources matched this question." : parsed.confidence_reason,
         caveat:              parsed.caveat,
-        suggested_followups: parsed.followups,
         answer_mode:         isGeneral ? "general" : "grounded",
         retrieval_verdict:   ret.verdict,
         relevant_source_count: ret.relevant_count,
