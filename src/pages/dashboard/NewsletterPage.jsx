@@ -9,13 +9,13 @@ const SECRET_KEY = "hz_api_secret";
 function loadSecret() { try { return localStorage.getItem(SECRET_KEY) || ""; } catch { return ""; } }
 
 export function NewsletterPage() {
-  const [win,       setWin]       = useState("week");
-  const [status,    setStatus]    = useState("idle");   // idle | running | done | error
-  const [html,      setHtml]      = useState(null);
-  const [meta,      setMeta]      = useState(null);     // { period, sourceCount, insightCount }
-  const [error,     setError]     = useState(null);
-  const [elapsed,   setElapsed]   = useState(0);
-  const [copied,    setCopied]    = useState(false);
+  const [win,     setWin]     = useState("week");
+  const [status,  setStatus]  = useState("idle");   // idle | running | done | error
+  const [text,    setText]    = useState(null);
+  const [meta,    setMeta]    = useState(null);
+  const [error,   setError]   = useState(null);
+  const [elapsed, setElapsed] = useState(0);
+  const [copied,  setCopied]  = useState(false);
   const timerRef = useRef(null);
   const startRef = useRef(null);
   const secret   = loadSecret();
@@ -36,7 +36,7 @@ export function NewsletterPage() {
     if (status === "running") return;
     setStatus("running");
     setError(null);
-    setHtml(null);
+    setText(null);
     setMeta(null);
     setElapsed(0);
     setCopied(false);
@@ -55,7 +55,7 @@ export function NewsletterPage() {
         throw new Error(msg);
       }
       const data = await res.json();
-      setHtml(data.html || "");
+      setText(data.text || "");
       setMeta({ period: data.period, sourceCount: data.sourceCount, insightCount: data.insightCount });
       setStatus("done");
     } catch (err) {
@@ -64,52 +64,48 @@ export function NewsletterPage() {
     }
   }
 
-  async function copyHtml() {
-    if (!html) return;
+  async function copy() {
+    if (!text) return;
     try {
-      await navigator.clipboard.writeText(html);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(text);
     } catch {
-      // fallback: select a hidden textarea
       const ta = document.createElement("textarea");
-      ta.value = html;
-      ta.style.position = "fixed"; ta.style.opacity = "0";
+      ta.value = text;
+      ta.style.cssText = "position:fixed;opacity:0";
       document.body.appendChild(ta);
       ta.select();
       document.execCommand("copy");
       document.body.removeChild(ta);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   const isRunning = status === "running";
   const isDone    = status === "done";
 
   return (
-    <div style={{ maxWidth: 780, margin: "0 auto", padding: "48px 24px" }}>
+    <div style={{ maxWidth: 740, margin: "0 auto", padding: "48px 24px" }}>
 
       {/* Header */}
-      <div style={{ marginBottom: 32 }}>
+      <div style={{ marginBottom: 28 }}>
         <div style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.1em", color: "var(--text-tertiary)", textTransform: "uppercase", marginBottom: 8 }}>
           Communications
         </div>
         <h1 style={{ margin: 0, fontSize: "1.5rem", fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.2 }}>
           Newsletter
         </h1>
-        <p style={{ margin: "10px 0 0", fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
-          Generates a curated AI threat intelligence digest — category insights, emerging signals, and a reading list with plain-English source summaries.
+        <p style={{ margin: "8px 0 0", fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+          Generates a weekly AI threat intelligence digest — category insights, emerging signals, and a curated reading list. Copy and paste into any email client.
         </p>
       </div>
 
       {/* Controls */}
       <div style={{
         background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
-        padding: "22px 24px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
-        marginBottom: 24,
+        padding: "18px 20px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+        marginBottom: 20,
       }}>
-        {/* Window selector */}
         <div style={{ display: "flex", gap: 6 }}>
           {WINDOWS.map(w => (
             <button
@@ -130,81 +126,83 @@ export function NewsletterPage() {
           ))}
         </div>
 
-        {/* Generate button */}
         <button
           onClick={generate}
           disabled={isRunning}
           style={{
-            padding: "8px 22px", borderRadius: 8, border: "none",
+            padding: "8px 20px", borderRadius: 8,
+            border: isRunning ? "1px solid var(--border)" : "none",
             fontSize: "0.88rem", fontWeight: 700, cursor: isRunning ? "not-allowed" : "pointer",
-            transition: "opacity 0.15s",
             background: isRunning ? "var(--surface-2)" : "var(--accent)",
             color: isRunning ? "var(--text-tertiary)" : "#fff",
-            border: isRunning ? "1px solid var(--border)" : "none",
             display: "flex", alignItems: "center", gap: 8,
           }}
         >
-          {isRunning ? <><Spinner /> Generating… {formatElapsed(elapsed)}</> : isDone ? "Regenerate" : "Generate Newsletter"}
+          {isRunning ? <><Spinner /> Generating… {formatElapsed(elapsed)}</> : isDone ? "Regenerate" : "Generate"}
         </button>
 
-        {/* Meta pill when done */}
         {isDone && meta && (
-          <div style={{ fontSize: "0.74rem", color: "var(--text-tertiary)", marginLeft: "auto" }}>
-            {meta.insightCount} insights · {meta.sourceCount} sources · {meta.period?.label}
-          </div>
+          <span style={{ fontSize: "0.73rem", color: "var(--text-tertiary)", marginLeft: "auto" }}>
+            {meta.sourceCount} sources · {meta.period?.label}
+          </span>
         )}
       </div>
 
       {/* Error */}
       {status === "error" && (
         <div style={{
-          marginBottom: 24, padding: "14px 18px", borderRadius: 8,
+          marginBottom: 20, padding: "12px 16px", borderRadius: 8,
           background: "var(--red-dim)", border: "1px solid var(--red-border)",
+          fontSize: "0.82rem", color: "var(--red)",
         }}>
-          <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--red)", marginBottom: 4 }}>Generation failed</div>
-          <div style={{ fontSize: "0.78rem", color: "var(--red)" }}>{error}</div>
+          <strong>Generation failed:</strong> {error}
         </div>
       )}
 
-      {/* Newsletter preview */}
-      {isDone && html && (
+      {/* Text output */}
+      {isDone && text && (
         <div style={{ position: "relative" }}>
           {/* Copy button */}
           <button
-            onClick={copyHtml}
-            title="Copy HTML source"
+            onClick={copy}
             style={{
-              position: "absolute", top: 12, right: 12, zIndex: 10,
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "5px 10px", borderRadius: 6,
+              position: "absolute", top: 12, right: 12, zIndex: 2,
+              display: "flex", alignItems: "center", gap: 5,
+              padding: "5px 11px", borderRadius: 6,
               border: "1px solid var(--border)",
               background: copied ? "#f0fdf4" : "var(--surface)",
               color: copied ? "#15803d" : "var(--text-secondary)",
               fontSize: "0.74rem", fontWeight: 600, cursor: "pointer",
               transition: "all 0.15s",
-              boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.07)",
             }}
           >
-            {copied ? (
-              <><CheckIcon /> Copied</>
-            ) : (
-              <><CopyIcon /> Copy HTML</>
-            )}
+            {copied ? <><CheckIcon /> Copied</> : <><CopyIcon /> Copy</>}
           </button>
 
-          {/* iframe preview */}
-          <iframe
-            srcDoc={html}
+          <textarea
+            readOnly
+            value={text}
+            onClick={e => e.target.select()}
             style={{
               width: "100%",
-              height: "min(80vh, 900px)",
+              minHeight: 560,
+              padding: "20px 20px 20px 20px",
               border: "1px solid var(--border)",
               borderRadius: 10,
-              background: "#f3f4f6",
+              background: "var(--surface)",
+              color: "var(--text-primary)",
+              fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
+              fontSize: "0.78rem",
+              lineHeight: 1.7,
+              resize: "vertical",
+              outline: "none",
+              boxSizing: "border-box",
             }}
-            title="Newsletter preview"
-            sandbox="allow-same-origin"
           />
+          <div style={{ marginTop: 6, fontSize: "0.72rem", color: "var(--text-tertiary)" }}>
+            Click to select all · or use the Copy button above
+          </div>
         </div>
       )}
 
@@ -215,7 +213,7 @@ export function NewsletterPage() {
           border: "1px dashed var(--border)", borderRadius: 12,
           color: "var(--text-tertiary)", fontSize: "0.85rem",
         }}>
-          Select a window and click Generate to build the newsletter.
+          Select a window and click Generate.
         </div>
       )}
     </div>
@@ -234,8 +232,8 @@ function Spinner() {
 
 function CopyIcon() {
   return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2"/>
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
     </svg>
   );
@@ -243,7 +241,7 @@ function CopyIcon() {
 
 function CheckIcon() {
   return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="20 6 9 17 4 12"/>
     </svg>
   );

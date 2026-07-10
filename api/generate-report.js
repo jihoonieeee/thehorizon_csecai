@@ -100,12 +100,12 @@ export default async function handler(req, res) {
         }
         const sbClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
         const { window: nlWindow = "week", asof = null } = req.body || {};
-        const { html, period, sourceCount, insightCount } = await generateNewsletterHtml(sbClient, {
+        const { text, period, sourceCount, insightCount } = await generateNewsletterHtml(sbClient, {
           window: ["week", "month"].includes(nlWindow) ? nlWindow : "week",
           asof,
         });
         res.setHeader("Content-Type", "application/json");
-        return res.status(200).json({ html, period, sourceCount, insightCount });
+        return res.status(200).json({ text, period, sourceCount, insightCount });
       }
 
       if (!["pptx", "json"].includes(format)) {

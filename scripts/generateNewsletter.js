@@ -47,20 +47,19 @@ async function main() {
     return;
   }
 
-  const { html, sourceCount, insightCount } = await generateNewsletterHtml(supabase, {
+  const { text, sourceCount, insightCount } = await generateNewsletterHtml(supabase, {
     window: WINDOW, asof: ASOF,
     log: msg => console.log(`  ${msg}`),
   });
 
   const outDir  = path.join(process.cwd(), "output");
-  const outFile = getArg("--out", path.join(outDir, `newsletter-${today}.html`));
+  const outFile = getArg("--out", path.join(outDir, `newsletter-${today}.txt`));
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-  fs.writeFileSync(outFile, html, "utf8");
+  fs.writeFileSync(outFile, text, "utf8");
 
-  const kb = (Buffer.byteLength(html, "utf8") / 1024).toFixed(1);
+  const kb = (Buffer.byteLength(text, "utf8") / 1024).toFixed(1);
   console.log(`\n  Done. ${insightCount} insights · ${sourceCount} sources`);
-  console.log(`  Written to: ${outFile} (${kb} KB)`);
-  console.log(`  Open: file://${path.resolve(outFile)}\n`);
+  console.log(`  Written to: ${outFile} (${kb} KB)\n`);
 }
 
 main().catch(err => { console.error("\nFATAL:", err.message); process.exit(1); });
