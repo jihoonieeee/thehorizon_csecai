@@ -7,18 +7,22 @@ const WINDOWS = [
 
 const SECRET_KEY = "hz_api_secret";
 function loadSecret() { try { return localStorage.getItem(SECRET_KEY) || ""; } catch { return ""; } }
+function saveSecret(v) { try { localStorage.setItem(SECRET_KEY, v); } catch {} }
 
 export function NewsletterPage() {
-  const [win,     setWin]     = useState("week");
-  const [status,  setStatus]  = useState("idle");   // idle | running | done | error
-  const [text,    setText]    = useState(null);
-  const [meta,    setMeta]    = useState(null);
-  const [error,   setError]   = useState(null);
-  const [elapsed, setElapsed] = useState(0);
-  const [copied,  setCopied]  = useState(false);
+  const [win,        setWin]        = useState("week");
+  const [secret,     setSecret]     = useState(loadSecret);
+  const [showSecret, setShowSecret] = useState(false);
+  const [status,     setStatus]     = useState("idle");
+  const [text,       setText]       = useState(null);
+  const [meta,       setMeta]       = useState(null);
+  const [error,      setError]      = useState(null);
+  const [elapsed,    setElapsed]    = useState(0);
+  const [copied,     setCopied]     = useState(false);
   const timerRef = useRef(null);
   const startRef = useRef(null);
-  const secret   = loadSecret();
+
+  function handleSecretChange(v) { setSecret(v); saveSecret(v); }
 
   useEffect(() => {
     if (status === "running") {
@@ -141,8 +145,34 @@ export function NewsletterPage() {
           {isRunning ? <><Spinner /> Generating… {formatElapsed(elapsed)}</> : isDone ? "Regenerate" : "Generate"}
         </button>
 
+        {/* API secret */}
+        <div style={{ display: "flex", gap: 6, marginLeft: "auto", alignItems: "center" }}>
+          <input
+            type={showSecret ? "text" : "password"}
+            placeholder="API secret"
+            value={secret}
+            onChange={e => handleSecretChange(e.target.value)}
+            disabled={isRunning}
+            style={{
+              width: 160, background: "var(--surface-2)", border: "1px solid var(--border)",
+              borderRadius: 6, padding: "6px 10px", fontSize: "0.78rem",
+              color: "var(--text-primary)", outline: "none",
+            }}
+          />
+          <button
+            onClick={() => setShowSecret(v => !v)}
+            style={{
+              padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)",
+              background: "transparent", color: "var(--text-secondary)",
+              fontSize: "0.73rem", cursor: "pointer", whiteSpace: "nowrap",
+            }}
+          >
+            {showSecret ? "Hide" : "Show"}
+          </button>
+        </div>
+
         {isDone && meta && (
-          <span style={{ fontSize: "0.73rem", color: "var(--text-tertiary)", marginLeft: "auto" }}>
+          <span style={{ fontSize: "0.73rem", color: "var(--text-tertiary)" }}>
             {meta.sourceCount} sources · {meta.period?.label}
           </span>
         )}
