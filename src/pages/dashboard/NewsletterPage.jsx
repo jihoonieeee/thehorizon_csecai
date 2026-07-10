@@ -45,7 +45,7 @@ export function NewsletterPage() {
     setElapsed(0);
     setCopied(false);
     try {
-      const res = await fetch("/api/generate-report", {
+      const res = await fetch("/api/dashboard", {
         method: "POST",
         headers: {
           "Content-Type":  "application/json",

@@ -221,7 +221,37 @@ async function getWindowInsights(win, key) {
   }
 }
 
+function isAuthorized(req) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return true;
+  return req.headers.authorization === `Bearer ${secret}` || req.headers["x-vercel-cron"] === "1";
+}
+
 export default async function handler(req, res) {
+
+  // ── POST /api/dashboard — newsletter generation ─────────────────────────────
+  if (req.method === "POST") {
+    if (!isAuthorized(req)) return res.status(401).json({ error: "Unauthorized" });
+    const { format, window: win = "week", asof = null } = req.body || {};
+    if (format !== "newsletter") return res.status(400).json({ error: "Only format=newsletter is supported via POST" });
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return res.status(500).json({ error: "Supabase env vars not configured" });
+    }
+    try {
+      const { generateNewsletterHtml } = await import("../lib/newsletter/index.js");
+      const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+      const result = await generateNewsletterHtml(sb, {
+        window: ["week", "month"].includes(win) ? win : "week",
+        asof,
+      });
+      return res.status(200).json(result);
+    } catch (err) {
+      console.error("[newsletter] error:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── GET /api/dashboard — dashboard data ─────────────────────────────────────
   try {
     const VALID_WINDOWS = new Set(["week", "month", "quarter", "annual"]);
     const win = VALID_WINDOWS.has((req.query?.window || "").toLowerCase())

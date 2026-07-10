@@ -27,8 +27,8 @@ import { createClient }      from "@supabase/supabase-js";
 import { loadLatestDeck, listDecks, getDeck } from "../lib/storage/deckStore.js";
 import { runPipelineFromDB } from "../lib/pipeline/runPipeline.js";
 import { renderDeckPptxToBuffer } from "../lib/pipeline/slides/renderDeckPptx.js";
-// generateNewsletterHtml is imported lazily inside the handler to avoid crashing
-// the entire function at module load time if the newsletter module has an init error.
+// Newsletter generation is handled by POST /api/dashboard to avoid bundling
+// this heavy endpoint (runPipeline + PptxGenJS) with the lightweight newsletter lib.
 
 const WINDOW_DAYS = {
   month:     30,
@@ -94,24 +94,8 @@ export default async function handler(req, res) {
         skipLlm           = false,
       } = req.body || {};
 
-      // ── Newsletter — handle before WINDOW_DAYS check (uses week|month, not slides windows) ──
-      if (format === "newsletter") {
-        if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-          return res.status(500).json({ error: "Supabase env vars not configured" });
-        }
-        const { generateNewsletterHtml } = await import("../lib/newsletter/index.js");
-        const sbClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-        const { window: nlWindow = "week", asof = null } = req.body || {};
-        const { text, period, sourceCount, insightCount } = await generateNewsletterHtml(sbClient, {
-          window: ["week", "month"].includes(nlWindow) ? nlWindow : "week",
-          asof,
-        });
-        res.setHeader("Content-Type", "application/json");
-        return res.status(200).json({ text, period, sourceCount, insightCount });
-      }
-
       if (!["pptx", "json"].includes(format)) {
-        return res.status(400).json({ error: `Invalid format "${format}". Must be pptx, json, or newsletter.` });
+        return res.status(400).json({ error: `Invalid format "${format}". Must be pptx or json.` });
       }
 
       const days = WINDOW_DAYS[win];
