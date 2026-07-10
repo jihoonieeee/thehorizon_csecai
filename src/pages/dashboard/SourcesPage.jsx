@@ -3,7 +3,7 @@
  * No trust-tier filter. Categories are first-class tabs.
  */
 
-import { useState, useEffect, useCallback, useMemo, Fragment, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
 
 const CAT_COLOR = {
   traditional_ai_threats: "#3583C9",
@@ -112,9 +112,6 @@ const DIRECTION_META = {
 };
 
 function WalkthroughBody({ w }) {
-  const [showDiagram, setShowDiagram] = useState(false);
-  const [imgError,    setImgError]    = useState(false);
-
   return (
     <div className="hz-wt-body">
       {w.mechanism && (
@@ -135,38 +132,8 @@ function WalkthroughBody({ w }) {
         </div>
       )}
 
-      {w.impact && (
-        <div className="hz-wt-meta hz-wt-impact">
-          <span className="hz-wt-meta-k">Impact</span>
-          <span className="hz-wt-meta-v">{w.impact}</span>
-        </div>
-      )}
-
       {w.quote && (
         <blockquote className="hz-wt-quote">{w.quote}</blockquote>
-      )}
-
-      {w.diagram_url && !imgError && (
-        <div className="hz-wt-diagram-wrap">
-          {!showDiagram ? (
-            <button className="hz-wt-diagram-toggle" onClick={() => setShowDiagram(true)}>
-              Show attack chain diagram
-            </button>
-          ) : (
-            <div className="hz-wt-diagram">
-              <div className="hz-wt-diagram-label">
-                Attack chain · AI-generated · illustrative only
-              </div>
-              <img
-                src={w.diagram_url}
-                alt={`Attack chain: ${w.technique}`}
-                className="hz-wt-diagram-img"
-                loading="lazy"
-                onError={() => setImgError(true)}
-              />
-            </div>
-          )}
-        </div>
       )}
     </div>
   );
@@ -201,8 +168,6 @@ function ReportAnalysis({ ra }) {
             <div key={i} className={`hz-wt${openWt === i ? " open" : ""}`}>
               <button className="hz-wt-header" onClick={() => setOpenWt(openWt === i ? null : i)}>
                 <span className="hz-wt-caret">{openWt === i ? "▾" : "▸"}</span>
-                <span className="hz-wt-actor">{w.actor !== "unattributed" ? w.actor : "Unattributed"}</span>
-                <span className="hz-wt-sep">—</span>
                 <span className="hz-wt-technique">{w.technique}</span>
               </button>
               {openWt === i && (
