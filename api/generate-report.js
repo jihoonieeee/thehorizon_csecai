@@ -93,17 +93,7 @@ export default async function handler(req, res) {
         skipLlm           = false,
       } = req.body || {};
 
-      const days = WINDOW_DAYS[win];
-      if (!days) {
-        return res.status(400).json({
-          error: `Invalid window "${win}". Must be one of: ${Object.keys(WINDOW_DAYS).join(", ")}`,
-        });
-      }
-      if (!["pptx", "json", "newsletter"].includes(format)) {
-        return res.status(400).json({ error: `Invalid format "${format}". Must be pptx, json, or newsletter.` });
-      }
-
-      // ── Newsletter ─────────────────────────────────────────────────────────
+      // ── Newsletter — handle before WINDOW_DAYS check (uses week|month, not slides windows) ──
       if (format === "newsletter") {
         if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
           return res.status(500).json({ error: "Supabase env vars not configured" });
@@ -116,6 +106,17 @@ export default async function handler(req, res) {
         });
         res.setHeader("Content-Type", "application/json");
         return res.status(200).json({ html, period, sourceCount, insightCount });
+      }
+
+      if (!["pptx", "json"].includes(format)) {
+        return res.status(400).json({ error: `Invalid format "${format}". Must be pptx, json, or newsletter.` });
+      }
+
+      const days = WINDOW_DAYS[win];
+      if (!days) {
+        return res.status(400).json({
+          error: `Invalid window "${win}". Must be one of: ${Object.keys(WINDOW_DAYS).join(", ")}`,
+        });
       }
 
       if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {

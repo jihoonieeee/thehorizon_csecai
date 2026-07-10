@@ -32,12 +32,12 @@ STRUCTURE — produce EXACTLY this HTML structure, no extra sections:
 
 3. <section class="hz-signals"> — "Early Signals to Watch" — 3-5 of the most specific emerging signals as a <ul>. Use only the provided signals; do not invent new ones.
 
-4. <section class="hz-reading"> — "This Week's Reading List" — one <article class="hz-source"> per item:
+4. <section class="hz-reading"> — "Reading List" — one <article class="hz-source"> per item. Keep the title short (truncate after 80 chars if needed). Use the blurb exactly as provided — do not expand, rephrase, or add sentences. Each entry should feel like a fast scan item, not a paragraph:
    <article class="hz-source">
      <span class="hz-cat-tag">{category label}</span>
      <a class="hz-source-title" href="{url}">{title}</a>
      <span class="hz-meta">{publisher} · {date}</span>
-     <p class="hz-blurb">{blurb}</p>
+     <p class="hz-blurb">{blurb — use verbatim, one sentence only}</p>
    </article>
 
 5. <footer>: one short sentence closing the edition (e.g. "Next edition: {next Monday's date}.").
