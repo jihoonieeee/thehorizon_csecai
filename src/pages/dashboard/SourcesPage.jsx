@@ -3,7 +3,7 @@
  * No trust-tier filter. Categories are first-class tabs.
  */
 
-import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
+import { useState, useEffect, useCallback, useMemo, Fragment, useRef } from "react";
 
 const CAT_COLOR = {
   traditional_ai_threats: "#3583C9",
@@ -104,6 +104,153 @@ function ImportanceBadge({ tier, small }) {
   );
 }
 
+const DIRECTION_META = {
+  increasing: { label: "Increasing", color: "#b91c1c", bg: "#fee2e2" },
+  decreasing: { label: "Decreasing", color: "#15803d", bg: "#dcfce7" },
+  emerging:   { label: "Emerging",   color: "#7c3aed", bg: "#ede9fe" },
+  stable:     { label: "Stable",     color: "#475569", bg: "#e2e8f0" },
+};
+
+function WalkthroughBody({ w }) {
+  const [showDiagram, setShowDiagram] = useState(false);
+  const [imgError,    setImgError]    = useState(false);
+
+  return (
+    <div className="hz-wt-body">
+      {w.mechanism && (
+        <div className="hz-wt-meta">
+          <span className="hz-wt-meta-k">Mechanism</span>
+          <span className="hz-wt-meta-v">{w.mechanism}</span>
+        </div>
+      )}
+
+      {w.steps?.length > 0 && (
+        <div className="hz-wt-steps">
+          {w.steps.map((step, si) => (
+            <div key={si} className="hz-wt-step">
+              <span className="hz-wt-step-n">{si + 1}</span>
+              <span className="hz-wt-step-text">{step}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {w.impact && (
+        <div className="hz-wt-meta hz-wt-impact">
+          <span className="hz-wt-meta-k">Impact</span>
+          <span className="hz-wt-meta-v">{w.impact}</span>
+        </div>
+      )}
+
+      {w.quote && (
+        <blockquote className="hz-wt-quote">{w.quote}</blockquote>
+      )}
+
+      {w.diagram_url && !imgError && (
+        <div className="hz-wt-diagram-wrap">
+          {!showDiagram ? (
+            <button className="hz-wt-diagram-toggle" onClick={() => setShowDiagram(true)}>
+              Show attack chain diagram
+            </button>
+          ) : (
+            <div className="hz-wt-diagram">
+              <div className="hz-wt-diagram-label">
+                Attack chain · AI-generated · illustrative only
+              </div>
+              <img
+                src={w.diagram_url}
+                alt={`Attack chain: ${w.technique}`}
+                className="hz-wt-diagram-img"
+                loading="lazy"
+                onError={() => setImgError(true)}
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReportAnalysis({ ra }) {
+  const [openWt, setOpenWt] = useState(null);
+  if (!ra) return null;
+  const { report_summary, attack_walkthroughs = [], critical_insights = [], trends = [] } = ra;
+  const total = attack_walkthroughs.length + critical_insights.length + trends.length;
+  if (total === 0) return null;
+
+  return (
+    <div className="hz-report-analysis">
+      <div className="hz-ra-header">
+        <span className="hz-ra-title">Report Intelligence</span>
+        <span className="hz-ra-counts">
+          {attack_walkthroughs.length > 0 && <span>{attack_walkthroughs.length} walkthroughs</span>}
+          {critical_insights.length > 0   && <span>{critical_insights.length} insights</span>}
+          {trends.length > 0              && <span>{trends.length} trends</span>}
+        </span>
+      </div>
+
+      {report_summary && (
+        <p className="hz-ra-summary">{report_summary}</p>
+      )}
+
+      {attack_walkthroughs.length > 0 && (
+        <div className="hz-ra-section">
+          <div className="hz-ra-section-label">Attack Walkthroughs</div>
+          {attack_walkthroughs.map((w, i) => (
+            <div key={i} className={`hz-wt${openWt === i ? " open" : ""}`}>
+              <button className="hz-wt-header" onClick={() => setOpenWt(openWt === i ? null : i)}>
+                <span className="hz-wt-caret">{openWt === i ? "▾" : "▸"}</span>
+                <span className="hz-wt-actor">{w.actor !== "unattributed" ? w.actor : "Unattributed"}</span>
+                <span className="hz-wt-sep">—</span>
+                <span className="hz-wt-technique">{w.technique}</span>
+              </button>
+              {openWt === i && (
+                <WalkthroughBody w={w} />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {critical_insights.length > 0 && (
+        <div className="hz-ra-section">
+          <div className="hz-ra-section-label">Critical Insights</div>
+          <div className="hz-ra-insights">
+            {critical_insights.map((ins, i) => (
+              <div key={i} className="hz-ra-insight">
+                <div className="hz-ra-insight-finding">{ins.finding}</div>
+                {ins.significance && <div className="hz-ra-insight-sig">{ins.significance}</div>}
+                {ins.taxonomy_hint && (
+                  <span className="hz-src-detail-tag domain" style={{ marginTop: 4, display: "inline-block" }}>{ins.taxonomy_hint}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {trends.length > 0 && (
+        <div className="hz-ra-section">
+          <div className="hz-ra-section-label">Observed Trends</div>
+          <div className="hz-ra-trends">
+            {trends.map((t, i) => {
+              const dm = DIRECTION_META[t.direction] || DIRECTION_META.stable;
+              return (
+                <div key={i} className="hz-ra-trend">
+                  <span className="hz-ra-trend-dir" style={{ color: dm.color, background: dm.bg }}>{dm.label}</span>
+                  <span className="hz-ra-trend-text">{t.trend}</span>
+                  {t.timeframe && <span className="hz-ra-trend-time">{t.timeframe}</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Expanded detail — everything an analyst needs to vet the source without opening it.
 // Also hosts the admin controls: edit the publish date and delete the source.
 function SourceDetail({ s, onUpdateDate, onDelete, onSaveClassification, knownTags, busy }) {
@@ -128,6 +275,8 @@ function SourceDetail({ s, onUpdateDate, onDelete, onSaveClassification, knownTa
   return (
     <div className="hz-src-detail">
       {full && <p className="hz-src-detail-summary">{full}</p>}
+
+      <ReportAnalysis ra={s.report_analysis} />
 
       <div className="hz-src-detail-grid">
         <div className="hz-src-detail-field">

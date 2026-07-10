@@ -214,6 +214,12 @@ export default async function handler(req, res) {
           is_defensive:  s.intelligence?.is_defensive === true,
           starred:       s.starred === true,
           needs_review:  s.needs_review === true,
+          report_analysis: s.intelligence?.report_analysis ? {
+            report_summary:      s.intelligence.report_analysis.report_summary || null,
+            attack_walkthroughs: s.intelligence.report_analysis.attack_walkthroughs || [],
+            critical_insights:   s.intelligence.report_analysis.critical_insights   || [],
+            trends:              s.intelligence.report_analysis.trends               || [],
+          } : null,
           mechanism: mech ? {
             exploit:     mech.primary_exploit_mechanism || null,
             consequence: mech.primary_consequence || null,

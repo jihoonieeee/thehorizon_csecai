@@ -11,6 +11,7 @@ import {
 } from "../lib/storage/ingestionRunStore.js";
 import { flushPipelineCostToDB } from "../lib/llm/usagePersistence.js";
 import { detectDigest, fanOutDigest } from "../lib/pipeline/ingest/digestFanout.js";
+import { extractAndSaveReportInsights } from "../lib/pipeline/ingest/extractLongReportInsights.js";
 import { callLLM } from "../lib/llm/callLLM.js";
 
 function isAuthorized(req) {
@@ -191,6 +192,12 @@ export default async function handler(req, res) {
               .eq("id", digestSrc.id);
           }
           fanoutCount += children.length;
+          // Deep-extract walkthroughs/insights/trends for qualifying landscape reports
+          // (long, high-trust). Fire-and-forget: failure must not abort the run.
+          extractAndSaveReportInsights(
+            { ...digestSrc, intelligence: { ...(digestSrc.intelligence || {}), ...parent_patch?.intelligence }, is_digest: true },
+            supabase
+          ).catch(() => {});
         } catch { /* non-fatal: fanout failure must not abort the run */ }
       }
 
