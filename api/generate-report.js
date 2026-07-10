@@ -27,7 +27,8 @@ import { createClient }      from "@supabase/supabase-js";
 import { loadLatestDeck, listDecks, getDeck } from "../lib/storage/deckStore.js";
 import { runPipelineFromDB } from "../lib/pipeline/runPipeline.js";
 import { renderDeckPptxToBuffer } from "../lib/pipeline/slides/renderDeckPptx.js";
-import { generateNewsletterHtml } from "../lib/newsletter/index.js";
+// generateNewsletterHtml is imported lazily inside the handler to avoid crashing
+// the entire function at module load time if the newsletter module has an init error.
 
 const WINDOW_DAYS = {
   month:     30,
@@ -98,6 +99,7 @@ export default async function handler(req, res) {
         if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
           return res.status(500).json({ error: "Supabase env vars not configured" });
         }
+        const { generateNewsletterHtml } = await import("../lib/newsletter/index.js");
         const sbClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
         const { window: nlWindow = "week", asof = null } = req.body || {};
         const { text, period, sourceCount, insightCount } = await generateNewsletterHtml(sbClient, {
