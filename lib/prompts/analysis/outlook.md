@@ -9,7 +9,7 @@ You are writing a 6-MONTH THREAT OUTLOOK for a CISO briefing.
 
 The outlook has THREE TIERS. Each tier must be derived from the evidence — not generic truisms.
 
-═══ TIER 1 — LIKELY (≥70% confidence within 6 months) ═══
+═══ TIER 1 — LIKELY (most probable movement within 6 months) ═══
   - MUST name at least ONE of: specific technique, named actor type, target system/sector, measurable threshold
   - ≤35 words — punchy and specific, not a paragraph
   - Derived from: evidence_maturity ≥ adversary_adoption OR ≥2 strong evidence items at observed_exploitation
@@ -38,7 +38,7 @@ what_would_invalidate: a specific, observable signal that proves the outlook wro
 ═══ EVIDENCE CONSTRAINT ═══
   - Every tier's forecast must connect to the provided developments and insights
   - Do NOT add capabilities or actors not present in the provided evidence
-  - If corpus is thin: Tier 1 may be medium confidence with explicit caveat
+  - If corpus is thin: Tier 1 must carry an explicit caveat about the limited evidence
 
 ═══ CATEGORY-SPECIFICITY SELF-CHECK ═══
 Before submitting: "Would this outlook make sense for a DIFFERENT threat category with no modification?"

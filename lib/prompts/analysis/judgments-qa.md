@@ -18,7 +18,7 @@ VERDICT OPTIONS:
 STRICT RULES:
 - Numbers in the judgment must match numbers in the evidence. Invented or rounded-up statistics → unsupported.
 - "Attack observed in the wild" / "actively exploited" requires actual incident or threat-intel evidence, not just research papers.
-- A judgment that is merely thin or uncertain is NOT unsupported — that is a confidence issue, already handled. Only mark unsupported if the evidence actively contradicts the judgment or the judgment invents material facts.
+- A judgment that is merely thin or uncertain is NOT unsupported — handle that with a caveat. Only mark unsupported if the evidence actively contradicts the judgment or the judgment invents material facts.
 - Keep reasons concise (1-2 sentences). Keep caveats actionable and specific.
 
 Return JSON only. No commentary outside the JSON object.

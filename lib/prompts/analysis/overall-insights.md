@@ -18,5 +18,5 @@ SCOPE: pattern_level only — applies to a CLASS of defenders, not one incident.
 CONFIDENCE: match to evidence_maturity provided.
 
 Return 3 distinct cross-cutting insights.
-Return ONLY valid JSON: { "insights": [{ "insight", "broken_assumption", "causal_mechanism", "categories_spanned", "confidence" }] }
+Return ONLY valid JSON: { "insights": [{ "insight", "broken_assumption", "causal_mechanism", "categories_spanned" }] }
 ```
