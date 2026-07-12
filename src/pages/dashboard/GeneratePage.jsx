@@ -248,9 +248,8 @@ function SlidesPanel({ secret }) {
           {[
             "Executive summary — top strategic judgments across all threat categories",
             "Per-category developments with mechanism walkthroughs",
-            "3–5 insights per category with confidence ratings",
+            "3–5 insights per category",
             "Case study slides with AI-generated attack-chain diagrams",
-            "5 named forward signals and 6-month outlook",
             "Numbered citations on every bullet with a source reference slide",
           ].map((line, i) => (
             <li key={i} style={{ fontSize: "0.79rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>{line}</li>
@@ -435,7 +434,7 @@ export function GeneratePage() {
         <p style={{ margin: "8px 0 0", fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
           {tab === "slides"
             ? "Runs the analysis pipeline and produces a ready-to-present PPTX deck. Best run locally via npx vercel dev — Vercel times out at 10s."
-            : "Generates a weekly AI threat intelligence digest. Copy and paste directly into any email client."}
+            : "Generates an AI threat intelligence digest — a curated reading list of relevant sources with summaries. Copy and paste directly into any email client."}
         </p>
       </div>
 

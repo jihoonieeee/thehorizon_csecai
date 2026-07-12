@@ -375,7 +375,7 @@ function buildContextMessage(query, plan, sources, evidence, judgments, trends, 
     for (const j of judgments.slice(0, 6)) parts.push(`• ${j.judgment}${j.short_takeaway ? ` — ${j.short_takeaway}` : ""}`);
   }
   if (trends?.length) {
-    parts.push(``, `TREND DATA (weekly source volume):`);
+    parts.push(``, `PUBLICATION RATE DATA — NOT CITABLE, DO NOT QUOTE IN ANSWER. These are article-ingestion counts per week (a measure of research attention, NOT of real-world attack frequency or incident counts). Use only to calibrate relative activity levels between categories:`);
     for (const t of trends.slice(0, 4)) {
       parts.push(`• ${t.label}: ${t.trend_direction}${t.spike_detected ? ", spike detected" : ""} (recent ${t.recent_avg_per_week}/wk vs baseline ${t.baseline_avg_per_week}/wk)${t.cluster_warning ? ` [${t.cluster_warning}]` : ""}`);
     }
@@ -469,8 +469,12 @@ export default async function handler(req, res) {
     let evidence = [], judgments = [], trends = [], cveResults = [];
     if (!isGeneral) {
       const cveIds = (plan.entities || []).filter(e => /^CVE-\d{4}-\d{4,}$/i.test(e)).map(e => e.toUpperCase()).slice(0, 5);
+      // Use the planner's expanded search terms (domain terminology) rather than
+      // the raw user question — prevents evidence retrieval from only matching the
+      // user's words and missing sources that use different but equivalent phrasing.
+      const evidenceQuery = plan.search_terms?.length ? plan.search_terms.join(" ") : query;
       const jobs = [
-        executeTool("get_evidence", { query, categories: plan.category ? [plan.category] : undefined, tags: plan.taxonomy_tags?.length ? plan.taxonomy_tags : undefined, limit: 12 }).catch(() => null),
+        executeTool("get_evidence", { query: evidenceQuery, categories: undefined, tags: plan.taxonomy_tags?.length ? plan.taxonomy_tags : undefined, limit: 16 }).catch(() => null),
         plan.needs_judgments ? executeTool("get_judgments", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
         plan.needs_trends ? executeTool("trend_analysis", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
         cveIds.length ? executeTool("lookup_cve", { cve_ids: cveIds }).catch(() => null) : Promise.resolve(null),

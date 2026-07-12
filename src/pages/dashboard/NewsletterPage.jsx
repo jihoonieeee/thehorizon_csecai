@@ -100,7 +100,7 @@ export function NewsletterPage() {
           Newsletter
         </h1>
         <p style={{ margin: "8px 0 0", fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
-          Generates a weekly AI threat intelligence digest — category insights, emerging signals, and a curated reading list. Copy and paste into any email client.
+          Generates an AI threat intelligence digest — a curated reading list of actually relevant sources with summaries and elaboration. Copy and paste into any email client.
         </p>
       </div>
 
