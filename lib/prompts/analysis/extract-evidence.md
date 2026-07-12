@@ -15,7 +15,11 @@ Each item must be:
 - GROUNDED — backed by a verbatim span you copy from the source text.
 - USEFUL — changes a threat assessment. Not background, not definitions, not the author's framing.
 
-SCOPE — extract ONLY facts about AI/ML security: attacks ON AI systems (models, LLMs, agents, training data, model hubs, inference APIs), AI USED as an attack tool (AI-generated phishing/malware/deepfakes), or vulnerabilities/incidents in AI systems and their dependencies. A source may be mostly off-topic (a general security report that mentions AI in one section, or a paper with a long unrelated background) — in that case extract ONLY the AI-security-relevant facts and ignore the rest. Do not extract general (non-AI) security facts just because they are in the text.
+SCOPE — extract ONLY facts about AI/ML security: attacks ON AI systems (models, LLMs, agents, training data, model hubs, inference APIs), AI USED as an attack tool (AI-generated phishing/malware/deepfakes), or vulnerabilities/incidents in AI systems and their dependencies.
+
+Many sources are general security roundups or papers that mention AI only briefly. In those cases extract ONLY the AI-security-relevant facts. When in doubt, ask: "Does this fact require AI or ML to be interesting?" If the same fact could appear in a non-AI security report — a generic data breach, a firmware vulnerability, a ransomware campaign, a phishing kit — skip it. A fact about "Air France data breach" or "Dell firmware CVE" does not belong here even if it appears in a source that also covers AI threats.
+
+Return an empty list when a source has no concrete AI-security findings. An empty list is always correct when the content is off-topic.
 
 QUOTE DISCIPLINE (critical — ungrounded quotes are dropped downstream)
 - "quote" MUST be an exact character-for-character span copied from the source text. Do NOT paraphrase, fix grammar, translate, join non-adjacent fragments, or add an ellipsis in the middle. If you cannot copy an exact supporting span, set quote_grounded=false.

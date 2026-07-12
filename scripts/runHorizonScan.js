@@ -488,6 +488,61 @@ async function main() {
     }
   }
 
+  // ── Evidence backfill — catch up any sources not in this run's window ───────
+  // The pipeline only extracts evidence for sources it loaded (within --days).
+  // Older sources accumulate a backlog. Run a capped backfill here so every full
+  // pipeline run chips away at the backlog automatically.
+  if (!NO_PERSIST && !CLASSIFY_ONLY && supabase) {
+    console.log("\nEvidence backfill (corpus-wide)...");
+    try {
+      const { extractAllEvidence } = await import("../lib/pipeline/analysis/extractEvidence.js");
+      const { getEvidenceHashes, contentHashOf, loadEvidence, saveSourceEvidence } = await import("../lib/storage/evidenceStore.js");
+
+      // Load all pass sources (paginated)
+      const BACKFILL_PAGE = 1000;
+      const BACKFILL_CATS = ["traditional_ai_threats","llm_threats","agentic_ai_threats","ai_enabled_threats"];
+      let allBackfill = [];
+      for (let from = 0; ; from += BACKFILL_PAGE) {
+        const { data: page } = await supabase.from("sources")
+          .select("id,title,url,publisher,source_type,trust_tier,main_category,full_text")
+          .eq("validation_status","pass")
+          .in("main_category", BACKFILL_CATS)
+          .order("created_at",{ascending:false})
+          .range(from, from + BACKFILL_PAGE - 1);
+        if (!page?.length) break;
+        allBackfill.push(...page);
+        if (page.length < BACKFILL_PAGE) break;
+      }
+
+      const hashes = await getEvidenceHashes(supabase, allBackfill.map(s=>s.id));
+      const stale  = allBackfill
+        .map(s=>({...s, category: s.main_category}))
+        .filter(s => hashes.get(s.id) !== contentHashOf(s.full_text || ""));
+
+      const BACKFILL_LIMIT = 150;  // process at most 150 per run — keeps runtime bounded
+      const batch = stale.slice(0, BACKFILL_LIMIT);
+      if (batch.length) {
+        let done = 0;
+        for (let i = 0; i < batch.length; i += 4) {
+          const chunk = batch.slice(i, i + 4);
+          await Promise.all(chunk.map(async s => {
+            const { extractEvidence } = await import("../lib/pipeline/analysis/extractEvidence.js");
+            const items = await extractEvidence(s);
+            await saveSourceEvidence(supabase, s.id, contentHashOf(s.full_text || ""), items);
+          }));
+          done += chunk.length;
+          if (done % 20 === 0) process.stdout.write(`  backfill ${done}/${batch.length}\r`);
+        }
+        process.stdout.write("\n");
+        console.log(`  Backfill: ${batch.length} sources processed (${stale.length - batch.length} still pending)`);
+      } else {
+        console.log("  Backfill: corpus is up to date");
+      }
+    } catch (err) {
+      console.warn(`  Evidence backfill failed (non-fatal): ${err.message}`);
+    }
+  }
+
   // ── Final report ────────────────────────────────────────────────────────────
   const { counts } = result;
   console.log(`\n${banner}`);

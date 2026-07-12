@@ -19,8 +19,8 @@ import { getEvidenceHashes, contentHashOf } from "../lib/storage/evidenceStore.j
 
 const args   = process.argv.slice(2);
 const getArg = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i + 1] ? args[i + 1] : d; };
-const LIMIT  = parseInt(getArg("--limit", "150"), 10);
-const CONC   = parseInt(getArg("--concurrency", "5"), 10);
+const LIMIT  = parseInt(getArg("--limit", "300"), 10);
+const CONC   = parseInt(getArg("--concurrency", "4"), 10);
 
 const CATS = ["traditional_ai_threats", "llm_threats", "agentic_ai_threats", "ai_enabled_threats"];
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -45,7 +45,7 @@ const PAGE = 1000;
 let data = [];
 for (let from = 0; ; from += PAGE) {
   const { data: page, error } = await sb.from("sources")
-    .select("id, title, url, publisher, source_type, trust_tier, main_category, full_text")
+    .select("id, title, url, publisher, source_type, trust_tier, main_category, full_text, clean_text")
     .eq("validation_status", "pass")
     .in("main_category", CATS)
     .order("created_at", { ascending: false })
@@ -58,7 +58,10 @@ for (let from = 0; ; from += PAGE) {
 
 const sources = (data || []).map(s => ({ ...s, category: s.main_category }));
 const haveHash = await getEvidenceHashes(sb, sources.map(s => s.id));
-const stale = sources.filter(s => haveHash.get(s.id) !== contentHashOf(s.full_text || ""));
+// Use the same text-fallback chain as extractAllEvidence uses when saving:
+// full_text → clean_text → "" so the hash comparison is consistent.
+const sourceText = s => s.full_text || s.clean_text || "";
+const stale = sources.filter(s => haveHash.get(s.id) !== contentHashOf(sourceText(s)));
 
 console.log(`  ${sources.length} pass sources | ${sources.length - stale.length} already cached | ${stale.length} need extraction`);
 const batch = stale.slice(0, LIMIT);
