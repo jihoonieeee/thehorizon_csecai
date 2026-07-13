@@ -1,0 +1,34 @@
+name: Daily classify
+
+on:
+  schedule:
+    # 22:30 UTC daily — 30 min after Vercel collects sources at 22:00 UTC
+    - cron: '30 22 * * *'
+  workflow_dispatch:
+    inputs:
+      since_hours:
+        description: 'Look back N hours for unclassified sources (default 3)'
+        default: '3'
+
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Classify + QA + digest fanout
+        run: node scripts/dailyClassify.js --since-hours ${{ github.event.inputs.since_hours || '3' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

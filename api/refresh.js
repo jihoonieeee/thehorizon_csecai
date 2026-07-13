@@ -1,8 +1,5 @@
 import { collectRawSources }      from "../lib/pipeline/ingest/collectRawSources.js";
-import { understandAllSources }   from "../lib/pipeline/understand/understandSource.js";
-import { qaClassificationLLM }    from "../lib/pipeline/understand/qaClassification.js";
 import { saveSnapshotToDatabase } from "../lib/storage/snapshotDatabase.js";
-import { createClient }           from "@supabase/supabase-js";
 import {
   startIngestionRun,
   finishIngestionRun,
@@ -10,9 +7,6 @@ import {
   findRecentSuccessfulRun,
 } from "../lib/storage/ingestionRunStore.js";
 import { flushPipelineCostToDB } from "../lib/llm/usagePersistence.js";
-import { detectDigest, fanOutDigest } from "../lib/pipeline/ingest/digestFanout.js";
-import { extractAndSaveReportInsights } from "../lib/pipeline/ingest/extractLongReportInsights.js";
-import { callLLM } from "../lib/llm/callLLM.js";
 
 function isAuthorized(req) {
   const secret = process.env.CRON_SECRET;
@@ -69,16 +63,11 @@ export default async function handler(req, res) {
       }
     }
 
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-    );
-
     runId = await startIngestionRun();
 
-    // Web discovery (Layer 1B/1C) is NOT run here — Vercel Hobby caps functions
-    // at 10s; discovery takes 3–8 min. Run it outside Vercel instead:
-    //   node scripts/ingestOperational.js --days 1
+    // Collect-only: Layer 1–3 (RSS feeds, APIs, validation).
+    // Classification (Layer 4), QA, and digest fanout run in GitHub Actions
+    // (scripts/dailyClassify.js) 30 min after this cron completes.
     const result = await collectRawSources(customWindow);
 
     const snapshot = {
@@ -111,102 +100,6 @@ export default async function handler(req, res) {
 
     const stored = await saveSnapshotToDatabase(snapshot);
 
-    // ── Step 2: Classify + QA all new sources ──────────────────────────────
-    // collectRawSources saves sources with main_category="unclassified" and
-    // validation_status="pass". Strip both so understandAllSources makes a
-    // fresh LLM call (its cache check requires a real domain + pass status).
-    // The QA verifier then cross-checks every new source (full mode — daily
-    // batches are always small) and auto-fixes any misclassifications.
-    //
-    // Digests are pre-detected BEFORE single classification so multi-topic
-    // reports are never collapsed to one dominant mechanism by understandSource.
-    // detectDigest() is cheap (no LLM); only the fan-out step spends tokens.
-    const DIGEST_CAP = 10;
-    let classifyCounts = null;
-    let qaCounts       = null;
-    let fanoutCount    = 0;
-    if (result.sources.length > 0) {
-      const toClassify = result.sources.map(s => ({
-        ...s,
-        main_category:     null,
-        validation_status: null,
-      }));
-
-      // ── Step 2a: Pre-detect digests ────────────────────────────────────────
-      // Split before the single-mechanism LLM call. Detected digests skip
-      // understandSource entirely — they go straight to fanOutDigest so each
-      // extracted item is classified independently. Sources where the LLM later
-      // disagrees (single-topic after all) fall back to normal classification.
-      const preDigests   = toClassify.filter(s => detectDigest(s).is_digest && !s.parent_source_id).slice(0, DIGEST_CAP);
-      const preDigestIds = new Set(preDigests.map(s => s.id));
-      const singles      = toClassify.filter(s => !preDigestIds.has(s.id));
-
-      // ── Step 2b: Classify single-topic sources ─────────────────────────────
-      const { relevant, adjacent, discarded, counts } = await understandAllSources(
-        singles,
-        { skipLlm: false, supabase, concurrency: 4 },
-      );
-      classifyCounts = counts;
-
-      // QA verifier — full mode on daily batches (always ≤200 sources)
-      const { report } = await qaClassificationLLM(relevant, {
-        skipLlm:     false,
-        full:        true,
-        concurrency: 3,
-        supabase,
-      });
-      qaCounts = {
-        checked:        report.checked,
-        agreed:         report.agreed,
-        fixed:          report.fixed,
-        agreement_rate: report.agreement_rate,
-      };
-
-      // ── Step 3: Digest fanout ──────────────────────────────────────────────
-      // Fan out pre-detected digests. For any that the LLM decides are
-      // single-topic after all, fall back to normal single classification.
-      // Also check adjacent sources that slipped past the heuristic — a long
-      // mixed report can land as adjacent_context before the LLM sees it whole.
-      const llmFn    = (sys, usr, opts) => callLLM(sys, usr, opts);
-      const scoredAt = new Date().toISOString();
-
-      // Post-classify catch: adjacent sources not already in preDigests that
-      // structurally look like digests (slipped the title/URL heuristic).
-      const postDigests = adjacent.filter(s => detectDigest(s).is_digest && !s.parent_source_id);
-      const allDigests  = [...preDigests, ...postDigests].slice(0, DIGEST_CAP);
-
-      const fallbackSingles = [];
-      for (const digestSrc of allDigests) {
-        try {
-          const { is_digest, children, parent_patch } = await fanOutDigest(digestSrc, { llmFn, scoredAt });
-          if (!is_digest || !children.length) {
-            // LLM said single-topic — classify the source normally instead.
-            if (preDigestIds.has(digestSrc.id)) fallbackSingles.push(digestSrc);
-            continue;
-          }
-          await supabase.from("sources")
-            .upsert(children, { onConflict: "id", ignoreDuplicates: false });
-          if (parent_patch) {
-            await supabase.from("sources")
-              .update({ is_digest: true, intelligence: { ...(digestSrc.intelligence || {}), ...parent_patch.intelligence } })
-              .eq("id", digestSrc.id);
-          }
-          fanoutCount += children.length;
-          // Deep-extract walkthroughs/insights/trends for qualifying landscape reports
-          // (long, high-trust). Fire-and-forget: failure must not abort the run.
-          extractAndSaveReportInsights(
-            { ...digestSrc, intelligence: { ...(digestSrc.intelligence || {}), ...parent_patch?.intelligence }, is_digest: true },
-            supabase
-          ).catch(() => {});
-        } catch { /* non-fatal: fanout failure must not abort the run */ }
-      }
-
-      // Classify any pre-detected digests that the LLM decided were single-topic.
-      if (fallbackSingles.length > 0) {
-        await understandAllSources(fallbackSingles, { skipLlm: false, supabase, concurrency: 4 });
-      }
-    }
-
     await finishIngestionRun(runId, snapshot);
     flushPipelineCostToDB(runId).catch(() => {}); // fire-and-forget
 
@@ -215,9 +108,6 @@ export default async function handler(req, res) {
       days_window: days,
       ...snapshot,
       stored,
-      classify_counts: classifyCounts,
-      qa_counts:       qaCounts,
-      fanout_children: fanoutCount ?? 0,
     });
   } catch (error) {
     if (runId) {
