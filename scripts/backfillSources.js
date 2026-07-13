@@ -79,7 +79,19 @@ const FEEDS_ONLY = process.argv.includes("--feeds-only");
 const startArg      = process.argv[2] || `${new Date().getFullYear()}-01-01`;
 const endArg        = process.argv[3] || new Date().toISOString().slice(0, 10);
 const connectorArg  = (process.argv[4] || "all").toLowerCase();
-const connectorFilter = connectorArg === "all" ? null : connectorArg.split(",");
+
+// Parse optional per-connector group suffix: "arxiv:traditional_ml" or "arxiv:traditional"
+// → connectorFilter=["arxiv"], connectorOptions={ arxiv: { queryGroups:["traditional_ml"] } }
+const connectorOptions = {};
+const connectorFilter = connectorArg === "all" ? null : connectorArg.split(",").map(part => {
+  const [key, group] = part.split(":");
+  if (group) {
+    const resolved = group === "traditional" ? "traditional_ml" : group;
+    if (!connectorOptions[key]) connectorOptions[key] = { queryGroups: [] };
+    connectorOptions[key].queryGroups.push(resolved);
+  }
+  return key;
+});
 
 // Inter-chunk pause. arXiv bursts 15 queries per chunk; when raw=0 (all queries
 // rate-limited) the chunk completes in ~5 min instead of ~12 min, so the natural
@@ -138,7 +150,9 @@ const endUtc   = new Date(`${endArg}T23:59:59+08:00`).toISOString();
 
 const chunks = weekChunks(startUtc, endUtc);
 
-const connectorLabel = connectorFilter ? connectorFilter.join("+") : "nvd+arxiv+ghsa+cisa_kev";
+const connectorLabel = connectorFilter
+  ? connectorFilter.map(k => connectorOptions[k]?.queryGroups?.length ? `${k}:${connectorOptions[k].queryGroups.join("+")}` : k).join("+")
+  : "nvd+arxiv+ghsa+cisa_kev";
 
 console.log(`\n${"═".repeat(60)}`);
 console.log(` Horizon Backfill: ${startArg} → ${endArg}`);
@@ -161,6 +175,7 @@ for (let i = 0; i < chunks.length; i++) {
     const result = await collectRawSources(window, {
       includeFeeds: false,                // RSS has no historical depth — skip
       connectors: connectorFilter,        // null = all API connectors
+      connectorOptions,                   // per-connector options, e.g. { arxiv: { queryGroups } }
     });
 
     const snapshot = {
@@ -205,7 +220,7 @@ console.log(`   Raw sources seen  : ${grandRaw}`);
 console.log(`   Sources saved     : ${grandTotal}`);
 if (errors > 0) console.log(`   Errors            : ${errors}`);
 console.log(`\n Next steps:`);
-console.log(`   1. POST /api/classify-sources?limit=1000  (run 2–3 times for full coverage)`);
-console.log(`   2. POST /api/score-sources?limit=1000`);
-console.log(`   3. POST /api/generate-report?period=monthly`);
+console.log(`   1. node scripts/dailyClassify.js --since-hours 48 --limit 500  (classify + QA + digest fanout)`);
+console.log(`   2. node scripts/generateDashboardInsights.js  (rebuild period insights)`);
+console.log(`   3. node scripts/generateNewsletter.js --window week  (generate newsletter)`);
 console.log(`${"═".repeat(60)}\n`);

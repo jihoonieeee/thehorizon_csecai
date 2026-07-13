@@ -147,8 +147,40 @@ The daily cron runs at 22:00 UTC which is 06:00 SGT the next day. The reporting 
 npm run dev — starts Vite dev server on :5173 (frontend only)
 npx vercel dev — starts full local environment with API functions on :3000 (use this)
 
-Scripts that must be run locally (Vercel timeout is 10s for most operations):
-- node scripts/backfillSources.js [start] [end] [connectors] — historical ingestion
-- node scripts/importCuratedExcel.js <path-to-xlsx> — import curated sources from Excel
-- node scripts/debugValidation.js [options] — inspect Layer 3 validation (relevance/summary/typing) on live sources
-- node scripts/llmDiscoverySources.js — LLM-assisted source discovery
+
+## Operational Scripts (run locally — Vercel times out)
+
+End-to-end pipeline order for a manual run:
+
+  1. INGEST
+     node scripts/backfillSources.js [start] [end] [connectors]
+       connectors: arxiv | nvd | ghsa | cisa_kev | all (default: all)
+       e.g. node scripts/backfillSources.js 2026-07-01 2026-07-13 nvd,ghsa,cisa_kev
+
+  2. CLASSIFY + QA + DIGEST FANOUT
+     node scripts/dailyClassify.js [--since-hours 48] [--limit 200]
+       Runs understand layer, cross-model QA, and digest splitting on new sources.
+
+  3. DISCOVER (optional — open-web source discovery)
+     node scripts/discoverOperationalSources.js
+     node scripts/ingestOperational.js
+
+  4. DASHBOARD INSIGHTS
+     node scripts/generateDashboardInsights.js
+
+  5. NEWSLETTER
+     node scripts/generateNewsletter.js [--window week|month] [--asof YYYY-MM-DD]
+
+  6. SLIDES / FULL PIPELINE
+     node scripts/runHorizonScan.js   — full pipeline + PPTX deck
+     node scripts/runSynthesisOnly.js — synthesis + slides only (no new ingest)
+
+Other useful scripts:
+  node scripts/importCuratedExcel.js <path-to-xlsx>   — import curated sources
+  node scripts/importCuratedPdfs.js <dir>             — import curated PDFs
+  node scripts/debugValidation.js [options]           — inspect Layer 3 validation
+  node scripts/labelSources.js [--limit N]            — re-run source label scoring
+  node scripts/reprocessAllSources.js                 — full QA + URL liveness check
+  node scripts/auditSourceLinks.js                    — check URL liveness
+
+scripts/archive/ — one-time data-fix and superseded scripts (kept for reference)

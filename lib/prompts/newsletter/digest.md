@@ -24,44 +24,49 @@ FORMAT — output exactly this structure, plain text:
 
 THE HORIZON
 {{period_label}} | AI Threat Intelligence
+{{date_range}}
+
+--------------------------------------------------
 
 [One sentence: the single sharpest signal across all categories this period. What changed, specifically.]
 
----
-
+--------------------------------------------------
 THREAT CATEGORIES
+--------------------------------------------------
 
 [For each category that has analysis — skip any with "No analysis available":]
 
-[CATEGORY NAME]
+[CATEGORY NAME IN CAPS]
 [Assessment sentence verbatim from the provided assessment — do not rephrase]
 
-- [Insight headline verbatim]
-- [Insight headline verbatim]
-- [Insight headline verbatim — max 3]
+  - [Insight headline verbatim]
+  - [Insight headline verbatim]
+  - [Insight headline verbatim — max 3]
 
-[Repeat for next category]
+[One blank line before next category]
 
----
-
+--------------------------------------------------
 READING LIST
+--------------------------------------------------
 
-[For each source:]
-[CATEGORY TAG] [Title — truncate after 70 chars if needed]
-[Publisher] - [Date]
-[Blurb verbatim — do not rephrase or expand]
-[URL]
+[For each source, numbered sequentially:]
+
+[N]. [Title — truncate after 70 chars if needed]
+     [CATEGORY TAG] | [Publisher] | [Date]
+     [Blurb verbatim — do not rephrase or expand]
+     [URL]
 
 [blank line between sources]
 
----
+--------------------------------------------------
 The Horizon | {{today}}
 
 RULES:
 - Use the assessment and insight text verbatim — do not paraphrase or summarise.
 - Use the blurb verbatim — one sentence, as provided.
-- No em-dashes. No bullet points using • or *. Use only - for list items.
+- No em-dashes. No bullet points using - or *. Use only - for list items under categories.
 - No hype: "groundbreaking", "unprecedented", "landscape", "evolving".
 - If a category has no analysis, skip it entirely — do not write "No analysis available" in the output.
-- Keep the whole newsletter under 600 words.
+- Keep the whole newsletter under 650 words.
+- The separator line is exactly 50 hyphens: --------------------------------------------------
 ```

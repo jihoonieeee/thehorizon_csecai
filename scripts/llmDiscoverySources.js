@@ -138,7 +138,5 @@ console.log(`\n${"─".repeat(60)}`);
 console.log(` Discovery complete.`);
 console.log(`   Sources saved : ${tagged.length}`);
 console.log(`\n Next steps:`);
-console.log(`   1. POST /api/classify-sources?limit=500  (run 2x)`);
-console.log(`   2. POST /api/score-sources?limit=500`);
-console.log(`   3. node scripts/enrichSources.js 50 500  (OpenAI key needed)`);
+console.log(`   1. node scripts/dailyClassify.js --since-hours 6 --limit 500  (classify + QA + digest fanout)`);
 console.log(`${"═".repeat(60)}\n`);

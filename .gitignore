@@ -30,6 +30,7 @@ dist-ssr
 # Generated pipeline run artifacts — never commit outputs
 outputs/
 !outputs/.gitkeep
+output/
 
 # LLM response cache
 .llm_cache/

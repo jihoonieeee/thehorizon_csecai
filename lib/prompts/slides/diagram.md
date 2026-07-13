@@ -32,9 +32,9 @@ concept map, not an architecture overview, not a decorative cluster.
 
 STYLE PRINCIPLES:
 - 5-7 nodes, ≤8 edges. Fill the landscape width; too few nodes makes a thin strip.
-- Node labels: ≤4 words, plain English. NO CVE numbers, no library names.
-  ("Fake software package" not "flashinfer-jit-cache confusion CVE-2026-48746")
-- Edge labels: SHORT action verbs — the story reads through the edges.
+- Node labels: ≤4 words, plain English. NO CVE numbers, no library names, NO dashes or hyphens.
+  ("Fake software package" not "flashinfer-jit-cache confusion CVE-2026-48746"; "MCP dev tools" not "mcp-devtools-pro")
+- Edge labels: SHORT action verbs — NO dashes or hyphens, use spaces only. ("sends data" not "sends-data")
 - Color: classDef threat fill:#FCE8E8,stroke:#CC0033; classDef system fill:#EAF1FB,stroke:#3583C9;
   Apply :::threat to attacker-controlled nodes, :::system to victim systems.
 
