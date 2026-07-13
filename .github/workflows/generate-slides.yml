@@ -6,9 +6,6 @@ on:
       days:
         description: 'Lookback window in days'
         default: '180'
-      limit:
-        description: 'Max sources to load'
-        default: '500'
 
 jobs:
   generate:
@@ -25,7 +22,7 @@ jobs:
       - run: npm ci
 
       - name: Generate horizon scan deck
-        run: node scripts/runHorizonScan.js --days ${{ github.event.inputs.days }} --limit ${{ github.event.inputs.limit }} --pptx
+        run: node scripts/runHorizonScan.js --days ${{ github.event.inputs.days }} --pptx
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

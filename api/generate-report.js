@@ -46,7 +46,7 @@ async function dispatchGitHubWorkflow({ days, limit }) {
         "Content-Type":  "application/json",
         "X-GitHub-Api-Version": "2022-11-28",
       },
-      body: JSON.stringify({ ref: "main", inputs: { days: String(days), limit: String(limit) } }),
+      body: JSON.stringify({ ref: "main", inputs: { days: String(days) } }),
     }
   );
 
@@ -116,7 +116,7 @@ export default async function handler(req, res) {
   // GET /api/generate-report?list=1 for completion.
   if (req.method === "POST") {
     try {
-      const { window: win = "half_year", days: daysOverride, limit = 500 } = req.body || {};
+      const { window: win = "half_year", days: daysOverride } = req.body || {};
 
       const days = daysOverride || WINDOW_DAYS[win];
       if (!days) {
@@ -130,7 +130,6 @@ export default async function handler(req, res) {
       return res.status(202).json({
         queued: true,
         days,
-        limit,
         window: win,
         triggered_at: new Date().toISOString(),
         message: "Generation queued. Poll GET /api/generate-report?list=1 — a new deck will appear in 10–30 minutes.",
