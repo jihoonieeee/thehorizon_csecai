@@ -8,29 +8,28 @@ const PERIODS = [
   { id: "annual",    label: "2025 Q3 – 2026 Q2", days: 365 },
 ];
 
+const POLL_INTERVAL_MS = 20000; // 20s between polls
+
 const SECRET_KEY = "hz_api_secret";
 function loadSecret() { try { return localStorage.getItem(SECRET_KEY) || ""; } catch { return ""; } }
 function saveSecret(v) { try { localStorage.setItem(SECRET_KEY, v); } catch {} }
 
 export function GenerateSlidesPage() {
-  const [period,     setPeriod]     = useState("quarter");
-  const [skipLlm,    setSkipLlm]    = useState(false);
-  const [secret,     setSecret]     = useState(loadSecret);
-  const [showSecret, setShowSecret] = useState(false);
-  const [status,     setStatus]     = useState("idle");   // idle | running | done | error
-  const [error,      setError]      = useState(null);
-  const [elapsed,    setElapsed]    = useState(0);
-  const [blobUrl,    setBlobUrl]    = useState(null);
-  const [filename,   setFilename]   = useState(null);
-  const timerRef  = useRef(null);
-  const startRef  = useRef(null);
-  const blobRef   = useRef(null);   // track blob URL for cleanup
-
-  // Clean up blob URL on unmount
-  useEffect(() => () => { if (blobRef.current) URL.revokeObjectURL(blobRef.current); }, []);
+  const [period,      setPeriod]      = useState("quarter");
+  const [secret,      setSecret]      = useState(loadSecret);
+  const [showSecret,  setShowSecret]  = useState(false);
+  const [status,      setStatus]      = useState("idle");   // idle | queued | done | error
+  const [error,       setError]       = useState(null);
+  const [elapsed,     setElapsed]     = useState(0);
+  const [pptxUrl,     setPptxUrl]     = useState(null);
+  const [filename,    setFilename]    = useState(null);
+  const timerRef      = useRef(null);
+  const pollRef       = useRef(null);
+  const startRef      = useRef(null);
+  const triggeredAtRef = useRef(null);
 
   useEffect(() => {
-    if (status === "running") {
+    if (status === "queued") {
       startRef.current = Date.now();
       timerRef.current = setInterval(() => {
         setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
@@ -41,18 +40,47 @@ export function GenerateSlidesPage() {
     return () => clearInterval(timerRef.current);
   }, [status]);
 
+  // Poll for completed deck
+  useEffect(() => {
+    if (status !== "queued") {
+      clearInterval(pollRef.current);
+      return;
+    }
+    async function poll() {
+      try {
+        const res = await fetch("/api/generate-report?list=1", {
+          headers: { "Authorization": secret ? `Bearer ${secret}` : "" },
+        });
+        if (!res.ok) return;
+        const { decks } = await res.json();
+        if (!decks?.length) return;
+        const latest = decks[0];
+        if (latest.pptx_url && new Date(latest.generated_at) >= new Date(triggeredAtRef.current)) {
+          clearInterval(pollRef.current);
+          const dateStr = new Date().toISOString().slice(0, 10);
+          setFilename(`horizon_scan_${period}_${dateStr}.pptx`);
+          setPptxUrl(latest.pptx_url);
+          setStatus("done");
+        }
+      } catch {}
+    }
+    pollRef.current = setInterval(poll, POLL_INTERVAL_MS);
+    return () => clearInterval(pollRef.current);
+  }, [status, secret, period]);
+
   function handleSecretChange(v) { setSecret(v); saveSecret(v); }
 
   async function generate() {
-    if (status === "running") return;
+    if (status === "queued") return;
 
-    // Revoke previous blob if any
-    if (blobRef.current) { URL.revokeObjectURL(blobRef.current); blobRef.current = null; }
-    setBlobUrl(null);
+    setPptxUrl(null);
     setFilename(null);
-    setStatus("running");
+    setStatus("queued");
     setError(null);
     setElapsed(0);
+    triggeredAtRef.current = new Date().toISOString();
+
+    const periodObj = PERIODS.find(p => p.id === period);
 
     try {
       const res = await fetch("/api/generate-report", {
@@ -61,29 +89,21 @@ export function GenerateSlidesPage() {
           "Content-Type":  "application/json",
           "Authorization": secret ? `Bearer ${secret}` : "",
         },
-        body: JSON.stringify({ window: period, format: "pptx", skipLlm }),
+        body: JSON.stringify({ window: period, days: periodObj?.days }),
       });
       if (!res.ok) {
         let msg = `HTTP ${res.status}`;
         try { const j = await res.json(); msg = j.error || msg; } catch {}
         throw new Error(msg);
       }
-      const blob   = await res.blob();
-      const dateStr = new Date().toISOString().slice(0, 10);
-      const fname   = `horizon_scan_${period}_${dateStr}.pptx`;
-      const url     = URL.createObjectURL(blob);
-      blobRef.current = url;
-      setBlobUrl(url);
-      setFilename(fname);
-      setStatus("done");
     } catch (err) {
       setError(err.message);
       setStatus("error");
     }
   }
 
-  const isRunning = status === "running";
-  const isDone    = status === "done";
+  const isQueued = status === "queued";
+  const isDone   = status === "done";
   const periodObj = PERIODS.find(p => p.id === period);
 
   return (
@@ -98,9 +118,9 @@ export function GenerateSlidesPage() {
           Generate Slides
         </h1>
         <p style={{ margin: "10px 0 0", fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
-          Runs the analysis pipeline across validated sources for the selected
-          reporting window and produces a ready-to-present <strong>PPTX deck</strong>.
-          Generation typically takes <strong>5–15 minutes</strong>.
+          Queues a generation job in GitHub Actions. The full analysis pipeline
+          runs in the cloud — no timeout. The <strong>PPTX deck</strong> is ready
+          in <strong>10–30 minutes</strong> and will appear here automatically.
         </p>
       </div>
 
@@ -119,11 +139,11 @@ export function GenerateSlidesPage() {
             {PERIODS.map(p => (
               <button
                 key={p.id}
-                disabled={isRunning}
+                disabled={isQueued}
                 onClick={() => setPeriod(p.id)}
                 style={{
                   padding: "6px 14px", borderRadius: 6, border: "1px solid",
-                  fontSize: "0.8rem", fontWeight: 600, cursor: isRunning ? "not-allowed" : "pointer",
+                  fontSize: "0.8rem", fontWeight: 600, cursor: isQueued ? "not-allowed" : "pointer",
                   transition: "all 0.15s",
                   background:   period === p.id ? "var(--accent-dim)" : "transparent",
                   borderColor:  period === p.id ? "var(--accent-border)" : "var(--border)",
@@ -155,7 +175,7 @@ export function GenerateSlidesPage() {
               placeholder="CRON_SECRET from .env"
               value={secret}
               onChange={e => handleSecretChange(e.target.value)}
-              disabled={isRunning}
+              disabled={isQueued}
               style={{
                 flex: 1, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 6,
                 padding: "8px 12px", fontSize: "0.82rem", color: "var(--text-primary)", outline: "none",
@@ -177,37 +197,23 @@ export function GenerateSlidesPage() {
           </div>
         </div>
 
-        {/* Advanced */}
-        <details style={{ cursor: "pointer" }}>
-          <summary style={{ fontSize: "0.76rem", color: "var(--text-tertiary)", userSelect: "none", listStyle: "none" }}>
-            ▸ Advanced options
-          </summary>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, cursor: "pointer" }}>
-            <input type="checkbox" checked={skipLlm} onChange={e => setSkipLlm(e.target.checked)} disabled={isRunning} />
-            <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-              Skip LLM calls — deterministic stubs only (fast, structural test)
-            </span>
-          </label>
-        </details>
-
         {/* Action buttons */}
         <div style={{ display: "flex", gap: 10 }}>
-          {/* Generate / Processing button */}
           <button
             onClick={generate}
-            disabled={isRunning}
+            disabled={isQueued}
             style={{
               flex: 1, padding: "12px 20px", borderRadius: 8,
-              border: isRunning ? "1px solid var(--border)" : "none",
-              fontSize: "0.9rem", fontWeight: 700, cursor: isRunning ? "not-allowed" : "pointer",
+              border: isQueued ? "1px solid var(--border)" : "none",
+              fontSize: "0.9rem", fontWeight: 700, cursor: isQueued ? "not-allowed" : "pointer",
               transition: "opacity 0.15s",
-              background: isRunning ? "var(--surface-2)" : "var(--accent)",
-              color: isRunning ? "var(--text-tertiary)" : "#fff",
+              background: isQueued ? "var(--surface-2)" : "var(--accent)",
+              color: isQueued ? "var(--text-tertiary)" : "#fff",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
             }}
           >
-            {isRunning ? (
-              <><Spinner /> Processing… {formatElapsed(elapsed)}</>
+            {isQueued ? (
+              <><Spinner /> Generating… {formatElapsed(elapsed)}</>
             ) : isDone ? (
               "Regenerate"
             ) : (
@@ -215,10 +221,9 @@ export function GenerateSlidesPage() {
             )}
           </button>
 
-          {/* Download button — only shown when ready */}
-          {isDone && blobUrl && (
+          {isDone && pptxUrl && (
             <a
-              href={blobUrl}
+              href={pptxUrl}
               download={filename}
               style={{
                 padding: "12px 20px", borderRadius: 8, border: "none",
@@ -233,12 +238,30 @@ export function GenerateSlidesPage() {
           )}
         </div>
 
-        {isRunning && (
+        {isQueued && (
           <p style={{ margin: 0, textAlign: "center", fontSize: "0.76rem", color: "var(--text-tertiary)" }}>
-            Pipeline is running — do not close this tab.
+            Running in GitHub Actions — you can close this tab and come back.
+            This page will poll for completion automatically.
           </p>
         )}
       </div>
+
+      {/* Queued notice */}
+      {status === "queued" && (
+        <div style={{
+          marginTop: 16, padding: "14px 18px", borderRadius: 8,
+          background: "var(--accent-dim)", border: "1px solid var(--accent-border)",
+          display: "flex", alignItems: "center", gap: 12,
+        }}>
+          <Spinner />
+          <div>
+            <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--accent)" }}>Generation in progress</div>
+            <div style={{ fontSize: "0.76rem", color: "var(--accent)", marginTop: 2 }}>
+              Checking for completion every 20s. Usually ready in 10–30 minutes.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Success */}
       {status === "done" && (
@@ -263,12 +286,6 @@ export function GenerateSlidesPage() {
         }}>
           <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--red)", marginBottom: 4 }}>Generation failed</div>
           <div style={{ fontSize: "0.78rem", color: "var(--red)" }}>{error}</div>
-          {(error?.includes("timeout") || error?.includes("504") || error?.includes("502")) && (
-            <div style={{ marginTop: 8, fontSize: "0.74rem", color: "var(--text-secondary)" }}>
-              Timed out — run locally instead:{" "}
-              <code style={{ color: "var(--text-secondary)" }}>node scripts/runHorizonScanMVP.js --days {periodObj?.days}</code>
-            </div>
-          )}
         </div>
       )}
 

@@ -26,8 +26,35 @@
  * Authorization: Bearer CRON_SECRET header (or x-vercel-cron: 1).
  */
 
-import { createClient }   from "@supabase/supabase-js";
 import { loadLatestDeck, listDecks, getDeck } from "../lib/storage/deckStore.js";
+
+const GH_OWNER    = "landonzhao";
+const GH_REPO     = "thehorizon";
+const GH_WORKFLOW = "generate-slides.yml";
+
+async function dispatchGitHubWorkflow({ days, limit }) {
+  const pat = process.env.GITHUB_PAT;
+  if (!pat) throw new Error("GITHUB_PAT env var not set — add a GitHub personal access token with actions:write scope");
+
+  const res = await fetch(
+    `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${GH_WORKFLOW}/dispatches`,
+    {
+      method:  "POST",
+      headers: {
+        "Authorization": `Bearer ${pat}`,
+        "Accept":        "application/vnd.github+json",
+        "Content-Type":  "application/json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      body: JSON.stringify({ ref: "main", inputs: { days: String(days), limit: String(limit) } }),
+    }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`GitHub API ${res.status}: ${text.slice(0, 200)}`);
+  }
+}
 
 const WINDOW_DAYS = {
   month:     30,
@@ -82,68 +109,34 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── POST: generate a new deck ──────────────────────────────────────────────
+  // ── POST: trigger generation via GitHub Actions ───────────────────────────
+  // The pipeline takes 10–30 min and cannot run inside a Vercel function.
+  // This endpoint dispatches a GitHub Actions workflow that runs the full
+  // pipeline and saves the PPTX + deck JSON to Vercel Blob. Poll
+  // GET /api/generate-report?list=1 for completion.
   if (req.method === "POST") {
     try {
-      const {
-        window:  win    = "quarter",
-        format          = "pptx",
-        skipLlm         = false,
-      } = req.body || {};
+      const { window: win = "half_year", days: daysOverride, limit = 500 } = req.body || {};
 
-      if (!["pptx", "json"].includes(format)) {
-        return res.status(400).json({ error: `Invalid format "${format}". Must be pptx or json.` });
-      }
-
-      const days = WINDOW_DAYS[win];
+      const days = daysOverride || WINDOW_DAYS[win];
       if (!days) {
         return res.status(400).json({
           error: `Invalid window "${win}". Must be one of: ${Object.keys(WINDOW_DAYS).join(", ")}`,
         });
       }
 
-      if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        return res.status(500).json({ error: "Supabase env vars not configured" });
-      }
+      await dispatchGitHubWorkflow({ days, limit });
 
-      const supabase = createClient(
-        process.env.SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY,
-      );
-
-      // Dynamic imports keep the module bundle lightweight so GET routes work
-      // on Vercel. Generation itself requires local execution (vercel dev).
-      const { runPipelineFromDB }      = await import("../lib/pipeline/runPipeline.js");
-      const { renderDeckPptxToBuffer } = await import("../lib/pipeline/slides/renderDeckPptx.js");
-
-      const result = await runPipelineFromDB(supabase, {
+      return res.status(202).json({
+        queued: true,
         days,
-        skipLlm: Boolean(skipLlm),
-        skipSlides: false,
-        limit: 500,
+        limit,
+        window: win,
+        triggered_at: new Date().toISOString(),
+        message: "Generation queued. Poll GET /api/generate-report?list=1 — a new deck will appear in 10–30 minutes.",
       });
-
-      if (!result.deck) {
-        return res.status(500).json({ error: "Pipeline did not produce a deck" });
-      }
-
-      if (format === "json") {
-        return res.status(200).json(result.deck);
-      }
-
-      const windowLabel = WINDOW_LABEL[win] || win;
-      const buf = await renderDeckPptxToBuffer(result.deck, {
-        title: `AI Threat Horizon Scan — ${windowLabel}`,
-      });
-
-      const dateStr  = new Date().toISOString().slice(0, 10);
-      const filename = `horizon_scan_${win}_${dateStr}.pptx`;
-      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.presentationml.presentation");
-      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.setHeader("Content-Length", buf.length);
-      return res.status(200).send(buf);
     } catch (error) {
-      return res.status(500).json({ error: error.message, stack: error.stack });
+      return res.status(500).json({ error: error.message });
     }
   }
 

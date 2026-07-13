@@ -426,6 +426,27 @@ async function main() {
     try {
       const { saveDeck } = await import("../lib/storage/deckStore.js");
       const deckResult = result.deck || { slides: [], deck_version: "v2", traceability_issues: [] };
+
+      // Upload the rendered PPTX to Vercel Blob (public so frontend can download directly)
+      let pptxBlobUrl = null;
+      if (pptxPath && fs.existsSync(pptxPath)) {
+        try {
+          const { put } = await import("@vercel/blob");
+          const buf  = fs.readFileSync(pptxPath);
+          const blob = await put(`decks/deck-v2-${result.run_id.slice(-10)}.pptx`, buf, {
+            access: "public",
+            token: process.env.BLOB_READ_WRITE_TOKEN,
+            addRandomSuffix: false,
+            allowOverwrite: true,
+            contentType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          });
+          pptxBlobUrl = blob.url;
+          console.log(`  Uploaded PPTX to blob: ${blob.url}`);
+        } catch (err) {
+          console.warn(`  PPTX blob upload failed: ${err.message}`);
+        }
+      }
+
       await saveDeck({
         synthesisResult: {
           feed_sources:      result.relevant || [],
@@ -441,27 +462,10 @@ async function main() {
           start: result.corpus_summary?.date_range?.split(" to ")?.[0],
           end:   result.corpus_summary?.date_range?.split(" to ")?.[1],
         },
-        deckId: `deck-v2-${result.run_id.slice(-10)}`,
+        deckId:   `deck-v2-${result.run_id.slice(-10)}`,
+        pptxUrl:  pptxBlobUrl,
       });
       console.log(`  Persisted deck to blob + decks table`);
-
-      // Upload the rendered PPTX alongside the deck JSON (binary blob)
-      if (pptxPath && fs.existsSync(pptxPath)) {
-        try {
-          const { put } = await import("@vercel/blob");
-          const buf = fs.readFileSync(pptxPath);
-          const blob = await put(`decks/deck-v2-${result.run_id.slice(-10)}.pptx`, buf, {
-            access: "private",
-            token: process.env.BLOB_READ_WRITE_TOKEN,
-            addRandomSuffix: false,
-            allowOverwrite: true,
-            contentType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-          });
-          console.log(`  Uploaded PPTX to blob: ${blob.pathname}`);
-        } catch (err) {
-          console.warn(`  PPTX blob upload failed: ${err.message}`);
-        }
-      }
     } catch (err) {
       console.warn(`  Deck persist failed: ${err.message}`);
     }

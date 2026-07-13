@@ -87,22 +87,22 @@ const PERIODS = [
   { id: "year",      label: "1 Year",     days: 365 },
 ];
 
+const POLL_MS = 20000;
+
 function SlidesPanel({ secret }) {
   const [period,   setPeriod]   = useState("quarter");
-  const [skipLlm,  setSkipLlm]  = useState(false);
   const [status,   setStatus]   = useState("idle");
   const [error,    setError]    = useState(null);
   const [elapsed,  setElapsed]  = useState(0);
-  const [blobUrl,  setBlobUrl]  = useState(null);
+  const [pptxUrl,  setPptxUrl]  = useState(null);
   const [filename, setFilename] = useState(null);
-  const timerRef = useRef(null);
-  const startRef = useRef(null);
-  const blobRef  = useRef(null);
-
-  useEffect(() => () => { if (blobRef.current) URL.revokeObjectURL(blobRef.current); }, []);
+  const timerRef      = useRef(null);
+  const pollRef       = useRef(null);
+  const startRef      = useRef(null);
+  const triggeredAtRef = useRef(null);
 
   useEffect(() => {
-    if (status === "running") {
+    if (status === "queued") {
       startRef.current = Date.now();
       timerRef.current = setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 1000);
     } else {
@@ -111,33 +111,51 @@ function SlidesPanel({ secret }) {
     return () => clearInterval(timerRef.current);
   }, [status]);
 
+  useEffect(() => {
+    if (status !== "queued") { clearInterval(pollRef.current); return; }
+    async function poll() {
+      try {
+        const res = await fetch("/api/generate-report?list=1", {
+          headers: { "Authorization": secret ? `Bearer ${secret}` : "" },
+        });
+        if (!res.ok) return;
+        const { decks } = await res.json();
+        const latest = decks?.[0];
+        if (latest?.pptx_url && new Date(latest.generated_at) >= new Date(triggeredAtRef.current)) {
+          clearInterval(pollRef.current);
+          const dateStr = new Date().toISOString().slice(0, 10);
+          setFilename(`horizon_scan_${period}_${dateStr}.pptx`);
+          setPptxUrl(latest.pptx_url);
+          setStatus("done");
+        }
+      } catch {}
+    }
+    pollRef.current = setInterval(poll, POLL_MS);
+    return () => clearInterval(pollRef.current);
+  }, [status, secret, period]);
+
   async function generate() {
-    if (status === "running") return;
-    if (blobRef.current) { URL.revokeObjectURL(blobRef.current); blobRef.current = null; }
-    setBlobUrl(null); setFilename(null); setStatus("running"); setError(null); setElapsed(0);
+    if (status === "queued") return;
+    setPptxUrl(null); setFilename(null); setStatus("queued"); setError(null); setElapsed(0);
+    triggeredAtRef.current = new Date().toISOString();
+    const periodObj = PERIODS.find(p => p.id === period);
     try {
       const res = await fetch("/api/generate-report", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": secret ? `Bearer ${secret}` : "" },
-        body: JSON.stringify({ window: period, format: "pptx", skipLlm }),
+        body: JSON.stringify({ window: period, days: periodObj?.days }),
       });
       if (!res.ok) {
         let msg = `HTTP ${res.status}`;
         try { const j = await res.json(); msg = j.error || msg; } catch {}
         throw new Error(msg);
       }
-      const blob    = await res.blob();
-      const dateStr = new Date().toISOString().slice(0, 10);
-      const fname   = `horizon_scan_${period}_${dateStr}.pptx`;
-      const url     = URL.createObjectURL(blob);
-      blobRef.current = url;
-      setBlobUrl(url); setFilename(fname); setStatus("done");
     } catch (err) {
       setError(err.message); setStatus("error");
     }
   }
 
-  const isRunning = status === "running";
+  const isQueued  = status === "queued";
   const isDone    = status === "done";
   const periodObj = PERIODS.find(p => p.id === period);
 
@@ -186,19 +204,19 @@ function SlidesPanel({ secret }) {
 
       {/* Buttons */}
       <div style={{ display: "flex", gap: 10 }}>
-        <button onClick={generate} disabled={isRunning} style={{
+        <button onClick={generate} disabled={isQueued} style={{
           flex: 1, padding: "11px 20px", borderRadius: 8,
-          border: isRunning ? "1px solid var(--border)" : "none",
-          fontSize: "0.88rem", fontWeight: 700, cursor: isRunning ? "not-allowed" : "pointer",
-          background: isRunning ? "var(--surface-2)" : "var(--accent)",
-          color: isRunning ? "var(--text-tertiary)" : "#fff",
+          border: isQueued ? "1px solid var(--border)" : "none",
+          fontSize: "0.88rem", fontWeight: 700, cursor: isQueued ? "not-allowed" : "pointer",
+          background: isQueued ? "var(--surface-2)" : "var(--accent)",
+          color: isQueued ? "var(--text-tertiary)" : "#fff",
           display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
         }}>
-          {isRunning ? <><Spinner /> Processing… {formatElapsed(elapsed)}</> : isDone ? "Regenerate" : "Generate Slides"}
+          {isQueued ? <><Spinner /> Generating… {formatElapsed(elapsed)}</> : isDone ? "Regenerate" : "Generate Slides"}
         </button>
 
-        {isDone && blobUrl && (
-          <a href={blobUrl} download={filename} style={{
+        {isDone && pptxUrl && (
+          <a href={pptxUrl} download={filename} style={{
             padding: "11px 20px", borderRadius: 8, border: "none",
             fontSize: "0.88rem", fontWeight: 700, cursor: "pointer",
             background: "#15803d", color: "#fff",
@@ -210,9 +228,9 @@ function SlidesPanel({ secret }) {
         )}
       </div>
 
-      {isRunning && (
+      {isQueued && (
         <p style={{ margin: 0, textAlign: "center", fontSize: "0.76rem", color: "var(--text-tertiary)" }}>
-          Pipeline running — do not close this tab. Production times out at 10s; use <code>npx vercel dev</code> locally for full runs.
+          Running in GitHub Actions — you can close this tab and come back.
         </p>
       )}
 
@@ -232,10 +250,6 @@ function SlidesPanel({ secret }) {
         <div style={{ padding: "12px 16px", borderRadius: 8, background: "var(--red-dim)", border: "1px solid var(--red-border)" }}>
           <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "var(--red)", marginBottom: 4 }}>Generation failed</div>
           <div style={{ fontSize: "0.78rem", color: "var(--red)" }}>{error}</div>
-          <div style={{ marginTop: 8, fontSize: "0.74rem", color: "var(--text-secondary)" }}>
-            Run locally instead:{" "}
-            <code style={{ color: "var(--text-secondary)" }}>node scripts/runHorizonScanMVP.js --days {periodObj?.days}</code>
-          </div>
         </div>
       )}
 
