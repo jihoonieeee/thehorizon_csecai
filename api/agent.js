@@ -473,8 +473,10 @@ export default async function handler(req, res) {
       // the raw user question — prevents evidence retrieval from only matching the
       // user's words and missing sources that use different but equivalent phrasing.
       const evidenceQuery = plan.search_terms?.length ? plan.search_terms.join(" ") : query;
+      const evDateFrom = plan.temporal?.all_time ? undefined : (plan.temporal?.date_from || undefined);
+      const evDateTo   = plan.temporal?.all_time ? undefined : (plan.temporal?.date_to   || undefined);
       const jobs = [
-        executeTool("get_evidence", { query: evidenceQuery, categories: undefined, tags: plan.taxonomy_tags?.length ? plan.taxonomy_tags : undefined, limit: 16 }).catch(() => null),
+        executeTool("get_evidence", { query: evidenceQuery, categories: undefined, tags: plan.taxonomy_tags?.length ? plan.taxonomy_tags : undefined, limit: 16, date_from: evDateFrom, date_to: evDateTo }).catch(() => null),
         plan.needs_judgments ? executeTool("get_judgments", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
         plan.needs_trends ? executeTool("trend_analysis", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
         cveIds.length ? executeTool("lookup_cve", { cve_ids: cveIds }).catch(() => null) : Promise.resolve(null),

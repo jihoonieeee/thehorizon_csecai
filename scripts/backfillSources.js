@@ -12,7 +12,7 @@
  *   cisa_kev — CISA Known Exploited Vulnerabilities (AI-relevant subset)
  *
  * Usage:
- *   node scripts/backfillSources.js [start] [end] [connectors]
+ *   node scripts/backfillSources.js [start] [end] [connectors] [--gap=N]
  *   node scripts/backfillSources.js 2025-07-01 2026-06-24
  *   node scripts/backfillSources.js 2025-07-01 2026-06-24 arxiv
  *   node scripts/backfillSources.js 2025-07-01 2026-06-24 nvd,ghsa,cisa_kev
@@ -20,6 +20,11 @@
  *
  * Connectors: arxiv | nvd | ghsa | cisa_kev | all (default: all)
  * Defaults to Jan 1 of current year → today.
+ *
+ * --gap=N: override inter-chunk pause (seconds). Defaults: 90s for arxiv-only
+ *   (arXiv rate-limits per session burst; when raw=0 the natural LLM processing
+ *   buffer vanishes and every chunk immediately hits 429 without a longer gap),
+ *   20s for all other connector combinations.
  *
  * --feeds-only: runs a single collectRawSources with all 40 RSS feeds enabled.
  *   RSS feeds return their current items only (no historical depth), so the
@@ -76,6 +81,15 @@ const endArg        = process.argv[3] || new Date().toISOString().slice(0, 10);
 const connectorArg  = (process.argv[4] || "all").toLowerCase();
 const connectorFilter = connectorArg === "all" ? null : connectorArg.split(",");
 
+// Inter-chunk pause. arXiv bursts 15 queries per chunk; when raw=0 (all queries
+// rate-limited) the chunk completes in ~5 min instead of ~12 min, so the natural
+// gap evaporates and every subsequent chunk immediately hits another 429.
+// Override with --gap=N (seconds). Default: 90s for arxiv-only, 20s otherwise.
+const gapArg = process.argv.find(a => a.startsWith("--gap="));
+const INTER_CHUNK_GAP_MS = gapArg
+  ? parseInt(gapArg.slice(6), 10) * 1000
+  : (connectorFilter?.length === 1 && connectorFilter[0] === "arxiv" ? 90_000 : 20_000);
+
 // ── Feeds-only mode: single RSS pull, no date-range loop ─────────────────────
 if (FEEDS_ONLY) {
   const sep = "═".repeat(60);
@@ -129,6 +143,7 @@ const connectorLabel = connectorFilter ? connectorFilter.join("+") : "nvd+arxiv+
 console.log(`\n${"═".repeat(60)}`);
 console.log(` Horizon Backfill: ${startArg} → ${endArg}`);
 console.log(` ${chunks.length} weekly chunks · connectors: ${connectorLabel}`);
+console.log(` Inter-chunk gap: ${INTER_CHUNK_GAP_MS / 1000}s${gapArg ? " (--gap override)" : connectorFilter?.length === 1 && connectorFilter[0] === "arxiv" ? " (arXiv default)" : " (default)"}`);
 console.log(`${"═".repeat(60)}\n`);
 
 let grandTotal = 0;
@@ -171,9 +186,11 @@ for (let i = 0; i < chunks.length; i++) {
 
     console.log(`raw=${pad(raw)} → saved=${pad(result.sources.length)}`);
 
-    // Pause between chunks to respect API rate limits (arXiv in particular)
+    // Pause between chunks to respect API rate limits (arXiv in particular).
+    // Gap is connector-aware: 90s for arXiv-only runs (where the natural LLM
+    // processing buffer disappears when raw=0), 20s otherwise. Override: --gap=N.
     if (i < chunks.length - 1) {
-      await new Promise((r) => setTimeout(r, 20000));
+      await new Promise((r) => setTimeout(r, INTER_CHUNK_GAP_MS));
     }
   } catch (err) {
     errors++;
