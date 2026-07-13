@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 /**
- * extractReportInsights.js — manual / backfill deep-extraction for long reports.
+ * extractReportInsights.js — backfill deep-extraction for ALL eligible long reports.
  *
- * Targets OpenAI "Disrupting malicious uses of AI" series + major GTIG reports,
- * or any source matching the eligibility criteria in extractLongReportInsights.js.
+ * Queries ALL sources that are eligible for report extraction:
+ *   - is_digest = true  (multi-topic landscape reports)
+ *   - trust_tier IN (primary, high, curated)
+ *   - full_text length >= 3000 chars
+ *   - no existing intelligence.report_analysis (unless --all)
  *
  * The extraction logic lives in lib/pipeline/ingest/extractLongReportInsights.js
  * and is also wired into api/refresh.js so future long reports are auto-processed
  * on ingestion.
  *
  * Usage:
- *   node scripts/extractReportInsights.js [--dry-run] [--id <sourceId>]
- *   node scripts/extractReportInsights.js --all   # re-run all eligible sources (even with existing RA)
+ *   node scripts/extractReportInsights.js [--dry-run] [--id <sourceId>] [--limit N]
+ *   node scripts/extractReportInsights.js --all   # re-run even sources with existing RA
  */
 
 import "dotenv/config";
@@ -22,10 +25,11 @@ import {
   extractAndSaveReportInsights,
 } from "../lib/pipeline/ingest/extractLongReportInsights.js";
 
-const args   = process.argv.slice(2);
-const DRY    = args.includes("--dry-run");
-const ALL    = args.includes("--all");     // ignore existing report_analysis
-const idArg  = args.includes("--id") ? args[args.indexOf("--id") + 1] : null;
+const args    = process.argv.slice(2);
+const DRY     = args.includes("--dry-run");
+const ALL     = args.includes("--all");
+const idArg   = args.includes("--id")    ? args[args.indexOf("--id")    + 1] : null;
+const LIMIT   = args.includes("--limit") ? parseInt(args[args.indexOf("--limit") + 1], 10) || 100 : 100;
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -35,22 +39,18 @@ async function getTargets() {
     return data || [];
   }
 
-  // OpenAI threat reports + GTIG reports by publisher
-  const { data: openai } = await supabase.from("sources").select("*")
-    .ilike("publisher", "%openai%").ilike("source_origin", "%curated%");
+  // All eligible digests: is_digest=true, authoritative trust tier, sufficient text.
+  // The isEligibleForReportExtraction() check further enforces the 3000-char floor.
+  const { data, error } = await supabase
+    .from("sources")
+    .select("*")
+    .eq("is_digest", true)
+    .in("trust_tier", ["primary", "high", "curated"])
+    .order("date_published", { ascending: false })
+    .limit(LIMIT);
 
-  const { data: google } = await supabase.from("sources").select("*")
-    .or("publisher.ilike.%google%,publisher.ilike.%gtig%")
-    .in("source_type", ["threat_intelligence"]);
-
-  const googleFiltered = (google || []).filter(s =>
-    /gtig|threat.tracker|threat.actor.usage|distillation|adversaries.leverage/i.test(s.title || "") &&
-    (s.full_text?.length || 0) > 1000
-  );
-
-  const all = [...(openai || []), ...googleFiltered];
-  // Remove duplicates by id
-  return [...new Map(all.map(s => [s.id, s])).values()];
+  if (error) throw new Error(`DB query failed: ${error.message}`);
+  return data || [];
 }
 
 async function main() {
