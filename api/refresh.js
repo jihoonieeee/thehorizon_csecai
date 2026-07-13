@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     // ?days=N runs a wider ingestion window. Defaults to 30 (monthly lookback)
     // so each run recovers sources missed when connectors were temporarily broken.
     // Deduplication by URL hash prevents re-ingesting already-stored items.
-    const days = Math.min(Number(req.query.days || 30), 30);
+    const days = Math.min(Number(req.query.days || 3), 30);
     const period = days <= 1 ? "daily" : days <= 7 ? "weekly" : "monthly";
 
     // Build an explicit N-day window anchored to end-of-today UTC.
