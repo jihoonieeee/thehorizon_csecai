@@ -169,9 +169,9 @@ function SlidesPanel({ secret }) {
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           {PERIODS.map(p => (
-            <button key={p.id} disabled={isRunning} onClick={() => setPeriod(p.id)} style={{
+            <button key={p.id} disabled={isQueued} onClick={() => setPeriod(p.id)} style={{
               padding: "6px 14px", borderRadius: 6, border: "1px solid",
-              fontSize: "0.8rem", fontWeight: 600, cursor: isRunning ? "not-allowed" : "pointer",
+              fontSize: "0.8rem", fontWeight: 600, cursor: isQueued ? "not-allowed" : "pointer",
               background:  period === p.id ? "var(--accent-dim)" : "transparent",
               borderColor: period === p.id ? "var(--accent-border)" : "var(--border)",
               color:       period === p.id ? "var(--accent)" : "var(--text-secondary)",
@@ -188,19 +188,6 @@ function SlidesPanel({ secret }) {
       </div>
 
       <div style={{ borderTop: "1px solid var(--border)" }} />
-
-      {/* Advanced */}
-      <details style={{ cursor: "pointer" }}>
-        <summary style={{ fontSize: "0.76rem", color: "var(--text-tertiary)", userSelect: "none", listStyle: "none" }}>
-          ▸ Advanced options
-        </summary>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, cursor: "pointer" }}>
-          <input type="checkbox" checked={skipLlm} onChange={e => setSkipLlm(e.target.checked)} disabled={isRunning} />
-          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-            Skip LLM — deterministic stubs only (structural test)
-          </span>
-        </label>
-      </details>
 
       {/* Buttons */}
       <div style={{ display: "flex", gap: 10 }}>
