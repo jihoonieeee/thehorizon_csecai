@@ -377,6 +377,10 @@ async function main() {
     .from("sources")
     .select("id,title,url,publisher,date_published,main_category,source_type,trust_tier,short_summary,analyst_brief,intelligence,parent_source_id,starred")
     .eq("validation_status", "pass")
+    // Only sources with an AUTHORITATIVE publish date go into a dated deck — a
+    // source with an estimated/inferred date could be placed in the wrong period.
+    // Fix the date on the Sources page (→ date_confidence="exact") to include it.
+    .eq("date_confidence", "exact")
     .not("main_category", "is", null)
     .not("main_category", "eq", "unclear_or_adjacent")
     .gte("date_published", since)

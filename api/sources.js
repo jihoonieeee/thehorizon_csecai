@@ -104,7 +104,11 @@ export default async function handler(req, res) {
           return res.status(400).json({ error: "date_published must be YYYY-MM-DD" });
         }
         patch.date_published = `${date}T00:00:00+00:00`;
+        // A manual date edit is an authoritative confirmation → mark it exact so the
+        // source re-enters the newsletter / agent / slide queries, and clear the
+        // unconfirmed-date review flag since the reason for it is now resolved.
         patch.date_confidence = "exact";
+        if (patch.needs_review === undefined) patch.needs_review = false;
       }
       if (body.main_category !== undefined) {
         const mc = String(body.main_category || "").trim();
