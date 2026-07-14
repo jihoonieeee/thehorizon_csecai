@@ -140,22 +140,22 @@ async function main() {
 
     if (DRY_RUN) { process.stdout.write("[dry-run]\n"); continue; }
 
+    // Save raw metadata only — do NOT pre-set main_category or validation_status.
+    // The pipeline (understandAllSources below) sets those fields. Pre-setting
+    // them triggers the skip gate in understandSource.js and bypasses Layer 3/4.
     const row = {
       id,
-      title:             src.name,
-      url:               src.url,
-      publisher:         src.publisher,
-      source_type:       src.source_type,
-      trust_tier:        src.trust_tier,
-      is_curated:        true,
-      main_category:     src.main_category,
-      date_published:    new Date(date_published).toISOString(),
-      date_confidence:   "estimated",
+      title:           src.name,
+      url:             src.url,
+      publisher:       src.publisher,
+      source_type:     src.source_type,   // hint; Layer 3 may refine
+      trust_tier:      src.trust_tier,
+      is_curated:      true,
+      date_published:  new Date(date_published).toISOString(),
+      date_confidence: "estimated",
       full_text,
-      summary:           full_text.slice(0, 500),
-      validation_status: "pass",
-      claim_extraction_status: null,
-      source_origin:     "curated_search",
+      summary:         full_text.slice(0, 500),
+      source_origin:   "curated_search",
     };
 
     const { error } = await supabase.from("sources").upsert(row, { onConflict: "id" });

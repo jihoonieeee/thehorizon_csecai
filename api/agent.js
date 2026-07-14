@@ -23,6 +23,7 @@
 
 import { executeTool, retrieveRelevant } from "../lib/agent/agentTools.js";
 import { planQuery } from "../lib/agent/queryPlanner.js";
+import { selectSources } from "../lib/agent/agentLlm.js";
 import { verifyAnswer } from "../lib/agent/verifyAnswer.js";
 import { ANTHROPIC_MODELS } from "../lib/llm/taskProfiles.js";
 import { logAgentCostToDB } from "../lib/llm/usagePersistence.js";
@@ -359,7 +360,9 @@ function buildContextMessage(query, plan, sources, evidence, judgments, trends, 
   }
   const srcBlock = sources.map(s => {
     const q = quoteByUrl[norm(s.url)];
-    return `[${s.ref}] ${s.publisher || "?"} — ${s.date || "n.d."} — ${CATEGORY_LABELS[s.category] || s.category || ""} (${s.trust_tier || "unknown"} trust)\n  ${s.title}\n  ${s.summary || ""}${q ? `\n  quote: "${q}"` : ""}`;
+    const typePart = s.source_type ? ` | type: ${s.source_type}` : "";
+    // Title on the first line so it can't be skimmed past during source selection.
+    return `[${s.ref}] TITLE: ${s.title}\n  ${s.publisher || "?"} — ${s.date || "n.d."} (${s.trust_tier || "unknown"} trust${typePart})\n  ${s.summary || ""}${q ? `\n  quote: "${q}"` : ""}`;
   }).join("\n\n");
 
   const parts = [
@@ -461,10 +464,23 @@ export default async function handler(req, res) {
       return res.status(200).json(payload);
     }
 
-    // ── 3. Retrieve (targeted, expanded) + conditional side data ────────────────
-    const ret = await retrieveRelevant(plan, { limit: 12 });
-    const sourceRefs = ret.sources;   // already numbered src-1..N
-    const isGeneral = ret.verdict === "none";
+    // ── 3. Retrieve candidates (broad, date-filtered) ────────────────────────────
+    const ret = await retrieveRelevant(plan, { limit: 25 });
+
+    // ── 4. Selector (Haiku) — semantic pick from the candidate pool ───────────
+    const sel = ret.sources.length
+      ? await selectSources(query, ret.sources)
+      : { selected: [], verdict: "none", usage: { input_tokens: 0, output_tokens: 0 } };
+    addHaiku(sel.usage);
+
+    const selectedSet = new Set(sel.selected);
+    // Renumber 1..N so [src-N] in the answer always refers to position N in this
+    // array. Without renumbering, [src-7] would mean the 7th retrieval candidate,
+    // not the 7th selected source, making every citation resolve to the wrong article.
+    const sourceRefs = ret.sources
+      .filter(s => selectedSet.has(s.ref))
+      .map((s, i) => ({ ...s, ref: `src-${i + 1}` }));
+    const isGeneral = sel.verdict === "none" || sourceRefs.length === 0;
 
     let evidence = [], judgments = [], trends = [], cveResults = [];
     if (!isGeneral) {
@@ -549,7 +565,6 @@ export default async function handler(req, res) {
 
       const { text: cleanAnswer } = harvestAndCleanAnswer(parsed.answer);
 
-      // Citations = resolved [src-N] refs, filtered to real retrieved URLs.
       let citations = extractCitations(parsed.answer, sourceRefs)
         .filter(c => !c.url || retrievedUrls.has(normalizeUrl(c.url)));
       const seen = new Set();
@@ -562,7 +577,9 @@ export default async function handler(req, res) {
 
       if (parsed.out_of_scope) { dedupedCitations = []; }
 
-      // Content for the citation-relevance check.
+      // Content for the citation-relevance check — include all retrieved sources so
+      // the bag-of-words overlap check has full context, but citations are only
+      // drawn from sourceRefs.
       const sourceContentByUrl = {};
       const addContent = (url, ...parts) => {
         const k = url ? normalizeUrl(url) : null; if (!k) return;
@@ -577,6 +594,8 @@ export default async function handler(req, res) {
 
       const citationQa = qaCitations(cleanAnswer, dedupedCitations, sourceContentByUrl, deadUrls, normalizeUrl);
       dedupedCitations = citationQa.citations;
+      // Start from sourceRefs (already has non-selected sources nulled),
+      // then additionally null out anything the dead-link / relevance QA dropped.
       let localSourceRefs = sourceRefs;
       if (citationQa.removedUrls.size) {
         localSourceRefs = sourceRefs.map(s => s?.url && citationQa.removedUrls.has(normalizeUrl(s.url)) ? { ...s, url: null } : s);

@@ -235,19 +235,22 @@ async function main() {
       continue;
     }
 
+    // Save raw metadata only — pipeline sets main_category, validation_status,
+    // layer3_status. Pre-setting them triggers the skip gate in understandSource.js.
+    // main_category from the report definition is passed as candidate_domain so
+    // Layer 3 has a hint if needed, but does not bypass classification.
     const row = {
       id,
-      title:          report.name,
-      url:            report.url,
-      publisher:      report.publisher,
-      source_type:    report.source_type,
-      trust_tier:     report.trust_tier,
-      main_category:  report.main_category,
-      date_published: new Date(report.date_published).toISOString(),
+      title:            report.name,
+      url:              report.url,
+      publisher:        report.publisher,
+      source_type:      report.source_type,
+      trust_tier:       report.trust_tier,
+      candidate_domain: report.main_category,   // hint for Layer 3, not a bypass
+      date_published:   new Date(report.date_published).toISOString(),
       full_text,
-      summary:        full_text.slice(0, 500),
-      validation_status: "pass",       // curated — bypasses Layer 3
-      claim_extraction_status: null,   // understandCorpus will process these
+      summary:          full_text.slice(0, 500),
+      is_curated:       true,
     };
 
     const { error } = await supabase.from("sources").upsert(row, { onConflict: "id" });

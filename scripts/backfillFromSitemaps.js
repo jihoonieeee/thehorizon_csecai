@@ -247,6 +247,28 @@ const PUBLISHERS = [
     source_type: "research_finding",
     urlFilter:   /pillar\.security\/blog\//,
   },
+
+  // ── AI security research vendors (ML-specific attack research) ───────────────
+  {
+    name:        "Protect AI",
+    publisher:   "Protect AI",
+    strategy:    "sitemap",
+    sitemaps:    ["https://protectai.com/sitemap.xml"],
+    trust_tier:  "high",
+    source_type: "research_finding",
+    // /blog/ posts + /threat-research/ advisories; exclude product/company pages
+    urlFilter:   /protectai\.com\/(blog|threat-research)\//,
+  },
+  {
+    name:        "Mindgard",
+    publisher:   "Mindgard",
+    strategy:    "sitemap",
+    sitemaps:    ["https://mindgard.ai/sitemap.xml"],
+    trust_tier:  "medium",
+    source_type: "research_finding",
+    // /learn/blog/ posts only; skip /learn/resources landing pages and product pages
+    urlFilter:   /mindgard\.ai\/learn\/blog\/.+/,
+  },
 ];
 
 // ── Ghost RSS paginator ────────────────────────────────────────────────────────

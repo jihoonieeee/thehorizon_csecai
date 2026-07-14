@@ -29,11 +29,14 @@ Decide the source's relationship to the AI-threat landscape. This platform track
 - "central"  — a genuine OFFENSIVE finding: a specific AI/ML threat, vulnerability, attack, abuse, incident, or AI-enabled offensive capability. This is the subject, not an aside. KEPT and mapped to an offensive domain.
 - "adjacent" — genuinely, centrally about AI CYBER-security but NOT itself an offensive finding — landmark REFERENCE context a threat briefing would still cite. KEPT as context (not an offensive domain). Use "adjacent" (NOT "passing"/"none") for:
     • authoritative frameworks / standards / taxonomies (OWASP LLM/Agentic Top 10, NIST AI 100-2, MITRE ATLAS, Google SAIF, NSA/CISA guidance)
-    • dual-use autonomous offensive CAPABILITY milestones (DARPA AIxCC, Google Big Sleep, an LLM autonomously finding zero-days) even when framed as find-AND-fix
+    • a general capability announcement that "an LLM can do X offensively" without specific measured results (e.g. a high-level blog post saying "we showed LLMs can help find bugs")
     • a standalone defensive method / detection / hardening framework against AI threats
     • a landmark survey / SoK / systematization of the AI threat landscape
     • a frontier-model release or policy event with material AI-security implications
   The test: "Is this real AI-cyber-security a threat analyst should have on file, even though it names no single new attack?" If yes → "adjacent", NOT "passing"/"none".
+
+  CRITICAL DISTINCTION — capability research WITH specific measured results is "central", NOT "adjacent":
+  If a paper/report documents AI offensive capability with CONCRETE numbers — CVEs successfully exploited, exploit timelines (e.g. "first PoC in 12 minutes"), benchmark success rates, real vulnerabilities discovered in production software, cost of exploitation — it IS an offensive finding in ai_enabled_threats. Classify it "central". The "responsible disclosure" or "find-and-fix" framing does NOT make it adjacent; what matters is whether the PRIMARY deliverable is a measured offensive capability. A paper titled "Measuring LLMs' impact on N-day exploits" or "Evaluating LLM-discovered 0-days" with specific exploit counts IS "central", candidate_domain="ai_enabled_threats".
 - "passing"  — the source is about something else and only MENTIONS AI/an AI keyword in passing. The AI angle is incidental. DISCARDED.
 - "none"     — the source has no real connection to an AI/ML security threat at all. DISCARDED.
 
