@@ -334,6 +334,22 @@ Audit each. Return a verdict for every index.`;
   return kept;
 }
 
+// Split a prose explanation into clean, standalone bullet points. Used only as a
+// safety net when the model returns a paragraph instead of explanation_points, so
+// a stored insight always carries point-form elaboration (never a cryptic wall of
+// text the UI has to guess how to break up). Breaks on transitional connectives
+// and sentence boundaries; drops fragments too short to stand alone.
+function proseToBullets(text) {
+  if (!text) return [];
+  const CONNECTIVES = /(?<=[.!?])\s+(?=(?:Separately|Additionally|Also|However|Furthermore|Moreover|Meanwhile|In addition|At the same time|Notably|Importantly|Critically|By contrast|Unlike|Because|Worse|Crucially),?\s)/g;
+  let parts = String(text).split(CONNECTIVES);
+  parts = parts.flatMap(p => p.split(/(?<=[a-z0-9"')\]])\.\s+(?=[A-Z"'])/));
+  return parts
+    .map(s => s.trim().replace(/^[-•*]\s*/, ""))
+    .filter(s => s.length > 25)
+    .slice(0, 7);   // cap to keep the dropdown scannable
+}
+
 // ── Source loading ─────────────────────────────────────────────────────────────
 
 const SRC_SELECT = "id,main_category,short_summary,analyst_brief,intelligence,tags,source_type,trust_tier,title,url,publisher,date_published,parent_source_id,is_digest";
@@ -938,9 +954,16 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs, leadFl
       // joined `explanation` string too, for the fact-check QA below and back-compat
       // with any older reader. If a model still returns a prose `explanation`, keep it
       // as the string (the UI falls back to splitting it).
-      const points = Array.isArray(p.explanation_points)
+      let points = Array.isArray(p.explanation_points)
         ? p.explanation_points.map(s => String(s || "").trim().replace(/^[-•*]\s*/, "")).filter(s => s.length > 3)
         : [];
+      // Robustness: if the model returned a prose `explanation` instead of the
+      // bullet array (it occasionally does), split it into clean bullets HERE so
+      // the stored insight always has point-form elaboration and the UI never has
+      // to fall back to its own cryptic sentence-splitter.
+      if (!points.length && typeof p.explanation === "string" && p.explanation.trim().length > 40) {
+        points = proseToBullets(p.explanation);
+      }
       const explanationStr = points.length ? points.join(" ") : (p.explanation || "").trim();
       return {
         insight:            p.insight.trim(),

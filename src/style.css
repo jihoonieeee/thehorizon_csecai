@@ -619,16 +619,18 @@ a:hover { text-decoration: underline; }
   display: inline-flex; align-items: center; gap: 5px;
   padding: 3px 8px; border-radius: 5px;
   font-size: 0.69rem; font-weight: 600; text-decoration: none;
-  border: 1px solid #1e293b;
-  background: #0f172a; color: #64748b;
-  transition: border-color 0.15s, color 0.15s;
+  border: 1px solid #475569;
+  background: #334155; color: #e2e8f0;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
   max-width: 220px; overflow: hidden;
 }
-.hz-source-chip:hover { border-color: var(--cat-color); color: #e2e8f0; }
+.hz-source-chip:hover {
+  border-color: var(--cat-color); background: #475569; color: #f8fafc;
+}
 .hz-source-chip-pub {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.hz-source-chip-date { color: #475569; font-weight: 400; flex-shrink: 0; }
+.hz-source-chip-date { color: #94a3b8; font-weight: 400; flex-shrink: 0; }
 .hz-source-chip-badge {
   background: #052e16; color: #4ade80; border-radius: 3px;
   padding: 1px 4px; font-size: 0.6rem; font-weight: 700;

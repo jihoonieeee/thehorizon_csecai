@@ -257,7 +257,7 @@ function MaturitySidePanel({ level, category, sources, onClose }) {
 function splitToBullets(text) {
   if (!text) return [];
   // Step 1: break on strong transitional words first
-  const CONNECTIVES = /(?<=[.!?])\s+(?=(?:Separately|Additionally|Also|However|Furthermore|Meanwhile|In addition|At the same time|Notably|Importantly),?\s)/g;
+  const CONNECTIVES = /(?<=[.!?])\s+(?=(?:Separately|Additionally|Also|However|Furthermore|Moreover|Meanwhile|In addition|At the same time|Notably|Importantly|Critically|By contrast|Unlike|Because|Worse|Crucially),?\s)/g;
   let parts = text.split(CONNECTIVES);
   // Step 2: within each part, split on sentence-ending period + capital letter
   parts = parts.flatMap(p =>
