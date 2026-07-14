@@ -264,8 +264,8 @@ function SlidesPanel({ secret }) {
 // ── Newsletter panel ──────────────────────────────────────────────────────────
 
 const NL_WINDOWS = [
-  { id: "week",  label: "This week"  },
-  { id: "month", label: "This month" },
+  { id: "week",  label: "Past week"  },
+  { id: "month", label: "Past month" },
 ];
 
 function NewsletterPanel({ secret }) {

@@ -9,7 +9,7 @@
  */
 
 import assert from "node:assert/strict";
-import { normalizeTemporalOutput, temporalFallback, TEMPORAL_INTENTS } from "../lib/agent/temporal.js";
+import { normalizeTemporalOutput, temporalFallback, resolveExplicitAbsolutePeriod, TEMPORAL_INTENTS } from "../lib/agent/temporal.js";
 
 const TODAY = "2026-07-13";
 
@@ -386,6 +386,64 @@ test("all_time is only true when temporal_intent is 'none'", () => {
     if (r.all_time) assert.equal(r.temporal_intent, "none", `all_time=true but intent=${r.temporal_intent} for "${q}"`);
     if (r.temporal_intent === "none") assert.equal(r.all_time, true, `intent=none but all_time=false for "${q}"`);
   }
+});
+
+// ── resolveExplicitAbsolutePeriod — authoritative override ────────────────────
+
+section("resolveExplicitAbsolutePeriod");
+
+test('"month of july" → whole current month, not previous month', () => {
+  const r = resolveExplicitAbsolutePeriod("top agentic ai incidents in month of july", TODAY);
+  assert.equal(r.date_from, "2026-07-01");
+  assert.equal(r.date_to, "2026-07-31");
+  assert.equal(r.temporal_intent, "bounded_period");
+});
+
+test('"in july" (current month) → July', () => {
+  const r = resolveExplicitAbsolutePeriod("agentic incidents in july", TODAY);
+  assert.equal(r.date_from, "2026-07-01");
+  assert.equal(r.date_to, "2026-07-31");
+});
+
+test('"in June 2026" → June', () => {
+  const r = resolveExplicitAbsolutePeriod("what happened in June 2026", TODAY);
+  assert.equal(r.date_from, "2026-06-01");
+  assert.equal(r.date_to, "2026-06-30");
+});
+
+test('"Q3 2025" → Jul–Sep 2025', () => {
+  const r = resolveExplicitAbsolutePeriod("incidents in Q3 2025", TODAY);
+  assert.equal(r.date_from, "2025-07-01");
+  assert.equal(r.date_to, "2025-09-30");
+});
+
+test('bare month in the future resolves to last year', () => {
+  const r = resolveExplicitAbsolutePeriod("attacks in december", TODAY);   // today is July
+  assert.equal(r.date_from, "2025-12-01");
+  assert.equal(r.date_to, "2025-12-31");
+});
+
+test('modal "may" is NOT treated as the month', () => {
+  assert.equal(resolveExplicitAbsolutePeriod("what attacks may happen next", TODAY), null);
+});
+
+test('"may 2026" (with year) IS treated as the month', () => {
+  const r = resolveExplicitAbsolutePeriod("may 2026 llm attacks", TODAY);
+  assert.equal(r.date_from, "2026-05-01");
+  assert.equal(r.date_to, "2026-05-31");
+});
+
+test('no calendar period → null', () => {
+  assert.equal(resolveExplicitAbsolutePeriod("how does prompt injection work", TODAY), null);
+});
+
+test('explicit period overrides a wrong model output', () => {
+  const r = normalizeTemporalOutput(
+    { temporal_intent: "bounded_period", start_date: "2026-06-01", end_date: "2026-06-30" },
+    TODAY, "top incidents in month of july",
+  );
+  assert.equal(r.date_from, "2026-07-01");
+  assert.equal(r.date_to, "2026-07-31");
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -63,6 +63,7 @@ TEMPORAL EXAMPLES (today = {{today}}):
 - "what should CISOs prepare for next"  → temporal_intent:"forward_looking", start_date:null,          end_date:null,         requires_fresh_sources:true,  forecast_horizon:"12-18 months", reasoning_summary:"forward outlook: next 12-18 months"
 - "between Q3 2025 and today"           → temporal_intent:"bounded_period",  start_date:"2025-07-01", end_date:null,         requires_fresh_sources:false, reasoning_summary:"Q3 2025 to today"
 - "in June 2026"                        → temporal_intent:"bounded_period",  start_date:"2026-06-01", end_date:"2026-06-30", requires_fresh_sources:false, reasoning_summary:"June 2026"
+- "in the month of July" (today in July) → temporal_intent:"bounded_period",  start_date:"2026-07-01", end_date:"2026-07-31", requires_fresh_sources:true,  reasoning_summary:"July 2026"  // a named month is that WHOLE month, even the current one — never the previous month
 - "how does prompt injection work"      → temporal_intent:"none",            start_date:null,          end_date:null,         requires_fresh_sources:false, reasoning_summary:"all available data"
 - "what happened last year"             → temporal_intent:"historical",      start_date:"2025-01-01", end_date:"2025-12-31", requires_fresh_sources:false, reasoning_summary:"2025"
 
