@@ -67,6 +67,12 @@ NEVER escalate one paper to "confirmed in the wild" or one CVE to "being exploit
 Each Evidence bullet states a fact from EXACTLY ONE evidence item and cites THAT item.
 Never merge details from two different items into one bullet — if they come from different items, write two bullets.
 
+════ QUANTITATIVE CLAIMS — COPY EXACTLY ════
+If the evidence contains a number, percentage, or multiplier — use it verbatim.
+  ✗ "achieves high attack success rates" when evidence says "90.3%"
+  ✓ "achieves 90.3% attack success rate against six state-of-the-art defenses"
+Do NOT upgrade a qualified finding into a stronger claim than the evidence supports.
+
 ════ CITATIONS ════
 Array of the evidence_ids and source urls used in this slide.
 

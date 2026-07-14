@@ -54,6 +54,14 @@ WHAT MAKES A BULLET BAD:
     Gloss technical terms: "a symlink (a file shortcut)", "prompt injection (a hidden instruction)".
     Each bullet: cite its evidence_id. ONE BULLET = ONE SOURCE — never merge facts from different items.
 
+════ QUANTITATIVE CLAIMS — COPY EXACTLY ════
+
+If the evidence contains a number, percentage, count, or multiplier — use it verbatim.
+  ✗ WRONG: "significant data was stolen" → evidence says "1.5 TB"
+  ✓ RIGHT:  "attackers exfiltrated 1.5 TB of data"
+
+Do not upgrade a qualified finding: if the paper says "demonstrated in lab conditions" — write that.
+
 ════ RULES ════
 
   ✗ NEVER write a recommendation bullet.

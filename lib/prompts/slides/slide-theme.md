@@ -72,6 +72,20 @@ EXAMPLE — an insight about poisoned AI coding assistants:
 Note: this example uses 4 bullets in the order that best tells the story. You are not required
 to use exactly these types or this order. Choose what works for your evidence.
 
+════ QUANTITATIVE CLAIMS — COPY, DON'T PARAPHRASE ════
+
+When the evidence contains a specific number, percentage, or multiplier — use it exactly.
+Do NOT soften, round, or replace with a vaguer phrase.
+
+  ✗ WRONG: "achieves very high attack success rates"   → evidence says 90.3%
+  ✗ WRONG: "significantly outperforms baseline attacks" → evidence says 26.08x
+  ✓ RIGHT:  "RING achieves 90.3% attack success rate against six state-of-the-art defenses"
+  ✓ RIGHT:  "outperforms baseline backdoor strategies by 26x across four image and text datasets"
+
+Do NOT upgrade a qualified finding into a stronger conclusion:
+  ✗ WRONG: "no compliant way to close this gap" — if the paper says "requires significant utility trade-offs"
+  ✓ RIGHT:  "closing this gap requires significant utility trade-offs in model accuracy"
+
 ════ RULES ════
 
   ✗ NEVER write a recommendation or "defenders should…" bullet.
@@ -85,7 +99,7 @@ to use exactly these types or this order. Choose what works for your evidence.
       operational_campaign    → "sustained campaign confirmed"
   ✓ speaker_notes: 2 sentences only — analytical nuance, not a restatement of bullets.
 
-Each bullet: cite one evidence_id. ≤25 words. Plain English. No dashes at start.
+Each bullet: cite one evidence_id. ≤28 words. Plain English. No dashes at start.
 
 Return ONLY valid JSON:
 { "slides": [ { "headline": "...", "bullets": [ { "text": "...", "bullet_type": "...", "evidence_id": "..." } ], "speaker_notes": "...", "visual_suggestion": "..." } ] }

@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchOverview } from "../../api/dashboardApi.js";
+import { LegendPanel } from "../../components/dashboard/LegendPanel.jsx";
 
 const CAT_COLOR = {
   traditional_ai_threats: "#3583C9",
@@ -493,12 +494,13 @@ function TagDrilldownPanel({ tag, category, tagSources, onClose }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function OverviewPage() {
-  const [win,     setWin]     = useState("quarter");
-  const [data,    setData]    = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState(null);
-  const [lastFetch, setLastFetch] = useState(null);
+  const [win,        setWin]        = useState("quarter");
+  const [data,       setData]       = useState(null);
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState(null);
+  const [lastFetch,  setLastFetch]  = useState(null);
   const [tagSelection, setTagSelection] = useState(null); // { tag, category }
+  const [showLegend, setShowLegend] = useState(false);
   const timerRef = useRef(null);
 
   const load = useCallback((w) => {
@@ -571,8 +573,17 @@ export function OverviewPage() {
           >
             ↺
           </button>
+          <button
+            className="hz-legend-btn"
+            onClick={() => setShowLegend(v => !v)}
+            title="Dashboard legend — what every label means"
+          >
+            ? Legend
+          </button>
         </div>
       </div>
+
+      {showLegend && <LegendPanel onClose={() => setShowLegend(false)} />}
 
       {error && (
         <div className="hz-overview-error">
