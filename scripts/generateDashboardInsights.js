@@ -373,7 +373,11 @@ export async function loadWindowSources(from, to) {
     .from("sources")
     .select(SRC_SELECT)
     .eq("validation_status", "pass")
-    .neq("needs_review", true)
+    // Exclude ONLY genuinely-flagged sources (needs_review = true). Use IS NOT TRUE
+    // rather than <> true so the vast majority of unflagged rows (needs_review NULL)
+    // are KEPT — a plain .neq drops NULLs too (NULL <> true is unknown), which was
+    // silently starving the insight pool.
+    .not("needs_review", "is", true)
     // Insights are bucketed BY DATE into a reporting window — a source with an
     // estimated/inferred date could be counted in the wrong period, so only
     // authoritative-dated sources feed insight generation (matches the
@@ -807,7 +811,7 @@ export async function attributeSources(insights, catSources, windowLabel, catLab
       sourceSignalScore(b) - sourceSignalScore(a) ||
       (SRC_TYPE_RANK[b.source_type] || 0) - (SRC_TYPE_RANK[a.source_type] || 0) ||
       (b.date_published || "").localeCompare(a.date_published || ""))
-    .slice(0, 40);
+    .slice(0, 70);   // wider citation pool — the LLM sees more before choosing which to cite
   if (!ranked.length) return withEmpty;
 
   let attributions = [];
@@ -1000,23 +1004,22 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs, leadFl
       };
     });
   if (totalCount === 1) insights = insights.slice(0, 1);
-  if (!insights.length) throw new Error("no insights produced");
-
   const beforeQa = insights.length;
+
+  // Headline QA — drop summaries, overreach, fabrication, and low-signal lone CVEs.
   const insightQa = {};
-  insights = await qaInsights(insights, maturity, cat.label, insightQa);
-  if (!insights.length) throw new Error(`all ${beforeQa} insights removed by QA`);
+  if (insights.length) insights = await qaInsights(insights, maturity, cat.label, insightQa);
 
   // Fact-check the depth EXPLANATIONS against the same findings they were written
   // from. If an explanation invents specifics (e.g. a fabricated CVE number) or
   // overreaches the evidence, the whole insight is UNTRUSTWORTHY — a headline built
-  // on the same reasoning can't be trusted just because the paragraph was cut. So a
-  // failed explanation now REMOVES the entire insight, not just its narrative.
+  // on the same reasoning can't be trusted just because the paragraph was cut, so a
+  // failed explanation REMOVES the entire insight, not just its narrative.
   // `findings` is the grounded pool.
   const explained = insights.map((p, i) => ({ i, text: p.explanation })).filter(x => x.text && x.text.length > 40);
   if (explained.length) {
     const explQa = {};
-    const evidenceText = findings.slice(0, 40).map((f, i) => `${i + 1}. ${f}`).join("\n");
+    const evidenceText = findings.slice(0, 70).map((f, i) => `${i + 1}. ${f}`).join("\n");
     const verdicts = await qaStatements(explained.map(x => x.text), evidenceText, "insight-explanation", explQa);
     const drop = new Set();
     explained.forEach((x, k) => {
@@ -1028,7 +1031,19 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs, leadFl
       }
     });
     if (drop.size) insights = insights.filter((_, i) => !drop.has(i));
-    if (!insights.length) throw new Error(`all insights removed by explanation fact-check`);
+  }
+
+  // NOTHING INSIGHT-WORTHY → return an empty (but valid) result, not an error. The
+  // caller writes an empty insight set so the card honestly shows "no insight this
+  // period" and stale insights are overwritten — better than forcing a weak one.
+  if (!insights.length) {
+    console.log(`     (no insight-worthy material — ${beforeQa} candidate(s) all filtered)`);
+    return {
+      insights: [], assessment: null, assessment_qa: "not_generated",
+      qa_status: insightQa.ran ? "passed" : (insightQa.reason === "no_api_key" ? "skipped_no_key" : "degraded"),
+      confidence: confidence.level, confidence_reason: confidence.reason,
+      evidence_maturity: maturity, removed: beforeQa,
+    };
   }
 
   // Attribution: tag the real sources that most critically support each insight,
@@ -1119,8 +1134,11 @@ async function main() {
 
     // Compose findings: evidence facts (round-robin across sources) + summary fallback.
     const catRows = currRows.filter(r => r.main_category === cat.key);
+    // Give the synthesis a wide view of the period's sources in ONE pass (was 40)
+    // so it can see the whole field and pick/cluster the strongest signals rather
+    // than latching onto whatever a small window happened to include.
     const { findings, leadFlags, leadCount, fromEvidence, fromSummary, evidenceSources, noiseSuppressed } =
-      composeCategoryFindings(catRows, evidenceByCat[cat.key], 40);
+      composeCategoryFindings(catRows, evidenceByCat[cat.key], 70);
 
     if (!FORCE && existingCats.has(cat.key)) {
       console.log(`  ${cat.label.padEnd(28)} SKIP (already generated)`);

@@ -11,6 +11,8 @@ Insights SHOULD be specific and name real techniques, systems, or actors — do 
 
 REJECT (verdict "summary") — the insight is a bare description of one paper/CVE/benchmark with NO judgment: it states what a source found but draws no consequence for defenders (no broken assumption, no posture change, no "so what").
 
+REJECT (verdict "low_signal") — the insight rests on a SINGLE, routine, disclosed-only vulnerability in ONE product, with no evidence of exploitation and no broader pattern. A lone CVE that was merely disclosed/patched is not insight-worthy on its own, no matter how vividly its impact is described — one improper-access-control or DoS CVE in one project is routine housekeeping, not a landscape signal. KEEP such an item only if it is genuinely landmark: a first-of-its-kind class of flaw, a critical vuln in very widely deployed infrastructure, OR confirmed exploited in the wild. Prefer an insight that CLUSTERS several related CVEs into a systemic pattern ("N access-control/DoS CVEs across the self-hosted LLM stack this period") over one that spotlights a single ordinary CVE — reject the single-CVE spotlight as low_signal when a pattern was available.
+
 REJECT (verdict "overreach") — it claims confirmed / operational / in-the-wild / at-scale / "actively exploited" / named-victim activity when the stated evidence maturity is research- or vulnerability-only. The verb must match the maturity: research demonstrates capability; it does not confirm campaigns.
 
 REJECT (verdict "fabrication") — the insight hinges on a specific identifier that is IMPLAUSIBLE or INTERNALLY INCONSISTENT. This is about impossibility, not about whether you can personally verify a real-looking detail:

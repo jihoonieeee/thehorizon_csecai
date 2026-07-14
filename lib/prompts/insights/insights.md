@@ -79,8 +79,10 @@ Pick the verb that the stated maturity supports — an overreaching or buzzword-
 
 LEAD WITH THE STRONGEST SIGNAL: order your insights by consequence — realized real-world incidents and landmark research first, demonstrated capability next; low-signal/incremental findings are background context, not headline insights. Your first insight should be the single most consequential development of the period. Do not give a routine finding the same prominence as a confirmed incident or a field-first result.
 
-Write 2-4 insights for rich periods; 1-2 for thin ones. Never pad.
+CLUSTER ROUTINE CVEs INTO PATTERNS: a single ordinary disclosed CVE (an access-control, DoS, or injection flaw patched in one project, no exploitation) is NOT insight-worthy on its own. When several related CVEs appear across the same layer (e.g. multiple vulns in self-hosted LLM serving/apps like vLLM, Cognee, FastGPT, Crawl4AI), synthesise them into ONE pattern insight — "the self-hosted LLM infrastructure stack disclosed N access-control/DoS vulnerabilities this period, showing systemic weakness in X" — and let the attribution cite all of them. Do NOT spotlight one lone CVE while ignoring the pattern the others form.
 
-Return ONLY valid JSON:
+DO NOT PAD: if nothing in the material rises above routine disclosure — only lone, unexploited CVEs with no pattern and no landmark finding — return an EMPTY insights array. An honest "no significant developments this period" is correct; a manufactured insight about a routine CVE is not. Write 2-4 insights for rich periods; 1-2 for thin ones; ZERO when nothing qualifies. Never pad.
+
+Return ONLY valid JSON (insights may be an empty array []):
 {"assessment": "...", "insights": [{"insight": "...", "explanation_points": ["...", "...", "..."], "evidence": "...", "broken_assumption": "...", "implication": "...", "watch_next": "...", "confidence_reason": "..."}]}
 ```

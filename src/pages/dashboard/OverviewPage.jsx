@@ -384,7 +384,7 @@ function CategoryCard({ cat, trendValues, selectedMaturity, onMaturitySelect }) 
         )}
 
         {insights.length === 0 && count > 0 && (
-          <div className="hz-cat-card-empty">No analysis generated for this period yet.</div>
+          <div className="hz-cat-card-empty">No significant developments this period — sources were routine (e.g. lone disclosed CVEs) with no insight-worthy pattern.</div>
         )}
         {count === 0 && (
           <div className="hz-cat-card-empty">No sources this period.</div>
