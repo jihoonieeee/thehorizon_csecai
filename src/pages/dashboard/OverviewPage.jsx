@@ -278,7 +278,12 @@ function InsightItem({ p }) {
   const points = Array.isArray(p.explanation_points)
     ? p.explanation_points.map(s => String(s || "").trim()).filter(s => s.length > 3)
     : [];
-  const bullets  = points.length ? points : splitToBullets((p.explanation || p.evidence || "").trim());
+  // Bullets come from explanation_points, or a split of the prose `explanation`.
+  // NEVER fall back to `evidence` — it is a terse, semicolon-packed technical
+  // string (e.g. "CVE-…; confirmed side-channel via auto-fetched Markdown images")
+  // that reads as a cryptic wall. When the elaboration was QA-blanked, show the
+  // clean headline (and sources) with no cryptic dropdown text.
+  const bullets  = points.length ? points : splitToBullets((p.explanation || "").trim());
   const hasDetail = bullets.length > 0 || sources.length > 0;
   const expandable = hasDetail || clamped;
 

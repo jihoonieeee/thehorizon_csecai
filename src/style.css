@@ -619,13 +619,13 @@ a:hover { text-decoration: underline; }
   display: inline-flex; align-items: center; gap: 5px;
   padding: 3px 8px; border-radius: 5px;
   font-size: 0.69rem; font-weight: 600; text-decoration: none;
-  border: 1px solid #475569;
-  background: #334155; color: #e2e8f0;
+  border: 1px solid #dbe4f0;
+  background: #eef2f8; color: #334155;
   transition: border-color 0.15s, background 0.15s, color 0.15s;
   max-width: 220px; overflow: hidden;
 }
 .hz-source-chip:hover {
-  border-color: var(--cat-color); background: #475569; color: #f8fafc;
+  border-color: var(--cat-color); background: #fff; color: var(--cat-color);
 }
 .hz-source-chip-pub {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
