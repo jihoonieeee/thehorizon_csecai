@@ -73,8 +73,13 @@ const WINDOW_LABEL = {
 function isAuthorized(req) {
   const secret = process.env.CRON_SECRET;
   if (!secret) return true;
+  const auth = req.headers.authorization || "";
+  // GEN_TOKEN: separate rotatable token, baked into the frontend, that unlocks
+  // ONLY the generation endpoints — never the rest of the admin surface.
+  const genToken = process.env.GEN_TOKEN;
   return (
-    req.headers.authorization === `Bearer ${secret}` ||
+    auth === `Bearer ${secret}` ||
+    (genToken && auth === `Bearer ${genToken}`) ||
     req.headers["x-vercel-cron"] === "1"
   );
 }

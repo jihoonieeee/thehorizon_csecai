@@ -3,7 +3,11 @@ import { useState, useEffect, useRef } from "react";
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
 const SECRET_KEY = "hz_api_secret";
-function loadSecret() { try { return localStorage.getItem(SECRET_KEY) || ""; } catch { return ""; } }
+// Baked-in generation token (separate from CRON_SECRET) — set VITE_GEN_TOKEN at
+// build time so the field auto-fills and no secret typing is ever needed. Falls
+// back to the per-browser saved secret when the token isn't baked in.
+const BAKED_TOKEN = import.meta.env.VITE_GEN_TOKEN || "";
+function loadSecret() { try { return BAKED_TOKEN || localStorage.getItem(SECRET_KEY) || ""; } catch { return BAKED_TOKEN; } }
 function saveSecret(v) { try { localStorage.setItem(SECRET_KEY, v); } catch {} }
 
 function Spinner() {
@@ -465,12 +469,14 @@ export function GeneratePage() {
             : <NewsletterPanel secret={secret} />}
         </div>
 
-        {/* Shared secret input — always visible at the bottom */}
-        <div style={{ padding: "0 24px 24px" }}>
-          <div style={{ borderTop: "1px solid var(--border)", paddingTop: 20 }}>
-            <SecretInput value={secret} onChange={handleSecretChange} />
+        {/* Shared secret input — hidden when a generation token is baked in */}
+        {!BAKED_TOKEN && (
+          <div style={{ padding: "0 24px 24px" }}>
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: 20 }}>
+              <SecretInput value={secret} onChange={handleSecretChange} />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

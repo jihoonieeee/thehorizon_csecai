@@ -223,7 +223,16 @@ async function getWindowInsights(win, key) {
 function isAuthorized(req) {
   const secret = process.env.CRON_SECRET;
   if (!secret) return true;
-  return req.headers.authorization === `Bearer ${secret}` || req.headers["x-vercel-cron"] === "1";
+  const auth = req.headers.authorization || "";
+  // GEN_TOKEN is a separate, rotatable token that unlocks ONLY the generation
+  // endpoints (baked into the frontend so no secret typing). It never grants the
+  // rest of the admin surface, and can be rotated without touching CRON_SECRET.
+  const genToken = process.env.GEN_TOKEN;
+  return (
+    auth === `Bearer ${secret}` ||
+    (genToken && auth === `Bearer ${genToken}`) ||
+    req.headers["x-vercel-cron"] === "1"
+  );
 }
 
 export default async function handler(req, res) {
