@@ -2407,6 +2407,12 @@ a:hover { text-decoration: underline; }
 
 .hz-src-admin { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border, #e2e8f0); }
 .hz-src-admin-row { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.hz-src-summary-row { flex-direction: column; align-items: stretch; }
+.hz-src-admin-summary { display: flex; flex-direction: column; gap: 4px; font-size: 0.72rem; color: var(--text-tertiary, #94a3b8); width: 100%; }
+.hz-src-summary-textarea { width: 100%; padding: 6px 8px; font-size: 0.82rem; font-family: inherit; border: 1px solid var(--border, #cbd5e1); border-radius: 6px; resize: vertical; line-height: 1.5; color: var(--text-primary, #1e293b); background: var(--surface, #fff); }
+.hz-src-summary-textarea:focus { outline: none; border-color: #2563eb; }
+.hz-src-summary-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+.hz-src-summary-count { font-size: 0.68rem; color: var(--text-tertiary, #94a3b8); }
 .hz-src-admin-date { display: flex; flex-direction: column; gap: 3px; font-size: 0.72rem; color: var(--text-tertiary, #94a3b8); }
 .hz-src-admin-date input { padding: 4px 8px; font-size: 0.8rem; border: 1px solid var(--border, #cbd5e1); border-radius: 6px; }
 .hz-src-admin-save, .hz-src-admin-delete {

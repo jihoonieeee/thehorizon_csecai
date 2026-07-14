@@ -22,10 +22,9 @@ export function SourceCard({ source, featured = false }) {
     ? source.ai_specificity_score
     : null;
 
-  // Best available preview text: prefer analyst brief, then short summary, then raw text
   const previewText =
-    source.analyst_brief?.what_happened ||
     source.short_summary ||
+    source.analyst_brief?.what_happened ||
     source.summary ||
     source.full_text ||
     "";

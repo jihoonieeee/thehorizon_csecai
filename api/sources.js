@@ -121,8 +121,13 @@ export default async function handler(req, res) {
         }
         patch.tags = [...new Set(body.tags.map(t => String(t || "").trim()).filter(Boolean))].slice(0, 50);
       }
+      if (body.short_summary !== undefined) {
+        const s = String(body.short_summary || "").trim();
+        if (s.length > 1000) return res.status(400).json({ error: "short_summary too long (max 1000 chars)" });
+        patch.short_summary = s || null;
+      }
       if (Object.keys(patch).length === 0) {
-        return res.status(400).json({ error: "nothing to update (expected starred, needs_review, date_published, main_category, and/or tags)" });
+        return res.status(400).json({ error: "nothing to update (expected starred, needs_review, date_published, main_category, tags, and/or short_summary)" });
       }
       const { error } = await supabase.from("sources").update(patch).eq("id", id);
       if (error) throw new Error(error.message);

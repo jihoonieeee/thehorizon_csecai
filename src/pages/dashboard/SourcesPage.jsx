@@ -64,14 +64,7 @@ const LABEL_META = {
 };
 const LABEL_ORDER = ["critical", "important", "supporting", "archive"];
 
-// Advisory significance overlay (research sources only) — breaks ties WITHIN an
-// importance tier so a landmark paper outranks a routine one.
-const SIGNIFICANCE_RANK = { landmark: 3, notable: 2, routine: 1, incremental: 0 };
-const sigRank = s => SIGNIFICANCE_RANK[s.significance?.level] ?? 0;
-const SIG_META = {
-  landmark: { short: "Landmark", color: "#7c3aed", bg: "#ede9fe" },
-  notable:  { short: "Notable",  color: "#2563eb", bg: "#dbeafe" },
-};
+const sigRank = () => 0;
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -193,7 +186,6 @@ function ReportAnalysis({ ra }) {
             {critical_insights.map((ins, i) => (
               <div key={i} className="hz-ra-insight">
                 <div className="hz-ra-insight-finding">{ins.finding}</div>
-                {ins.significance && <div className="hz-ra-insight-sig">{ins.significance}</div>}
                 {ins.taxonomy_hint && (
                   <span className="hz-src-detail-tag domain" style={{ marginTop: 4, display: "inline-block" }}>{ins.taxonomy_hint}</span>
                 )}
@@ -226,13 +218,17 @@ function ReportAnalysis({ ra }) {
 
 // Expanded detail — everything an analyst needs to vet the source without opening it.
 // Also hosts the admin controls: edit the publish date and delete the source.
-function SourceDetail({ s, onUpdateDate, onDelete, onSaveClassification, knownTags, busy }) {
+function SourceDetail({ s, onUpdateDate, onDelete, onSaveClassification, onSaveSummary, knownTags, busy }) {
   const imp  = s.importance || {};
   const mech = s.mechanism || null;
-  const full = s.analyst_brief || s.short_summary || s.summary;
+  const full = s.short_summary || s.analyst_brief || s.summary;
   const domainTag = t => /^(TAI|LLM|ASI|AE)\d/.test(t);
   const [dateVal, setDateVal] = useState((s.date_published || "").slice(0, 10));
   const dirty = dateVal && dateVal !== (s.date_published || "").slice(0, 10);
+
+  // Summary editor
+  const [summaryVal, setSummaryVal] = useState(s.short_summary || "");
+  const summaryDirty = summaryVal.trim() !== (s.short_summary || "").trim();
 
   // ── Classification draft (main_category + tags) ──────────────────────────────
   const [catVal,  setCatVal]  = useState(s.main_category || "unclear_or_adjacent");
@@ -339,6 +335,27 @@ function SourceDetail({ s, onUpdateDate, onDelete, onSaveClassification, knownTa
             onClick={() => onSaveClassification(s, { main_category: catVal, tags: tagList })}>
             {busy ? "Saving…" : "Save classification"}
           </button>
+        </div>
+
+        <div className="hz-src-admin-row hz-src-summary-row">
+          <label className="hz-src-admin-summary">
+            Summary
+            <textarea
+              className="hz-src-summary-textarea"
+              value={summaryVal}
+              disabled={busy}
+              rows={4}
+              maxLength={1000}
+              onChange={e => setSummaryVal(e.target.value)}
+            />
+          </label>
+          <div className="hz-src-summary-footer">
+            <span className="hz-src-summary-count">{summaryVal.length}/1000</span>
+            <button className="hz-src-admin-save" disabled={!summaryDirty || busy}
+              onClick={() => onSaveSummary(s, summaryVal.trim())}>
+              {busy ? "Saving…" : "Save summary"}
+            </button>
+          </div>
         </div>
 
         <div className="hz-src-admin-row">
@@ -459,6 +476,23 @@ export function SourcesPage() {
       .catch(err => {
         setSources(prev => prev.map(x => x.id === s.id ? { ...x, main_category: prevCat, tags: prevTags } : x));   // revert
         setAdminMsg({ ok: false, text: `Classification update failed: ${err.message}` });
+      })
+      .finally(() => setBusyId(null));
+  }, [secret]);
+
+  const saveSummary = useCallback((s, summary) => {
+    const prev = s.short_summary;
+    setBusyId(s.id); setAdminMsg(null);
+    setSources(prev => prev.map(x => x.id === s.id ? { ...x, short_summary: summary } : x));  // optimistic
+    fetch("/api/sources", {
+      method: "PATCH", headers: authHeaders(),
+      body: JSON.stringify({ id: s.id, short_summary: summary }),
+    })
+      .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`); return j; })
+      .then(() => setAdminMsg({ ok: true, text: "Summary updated" }))
+      .catch(err => {
+        setSources(prev => prev.map(x => x.id === s.id ? { ...x, short_summary: prev } : x));  // revert
+        setAdminMsg({ ok: false, text: `Summary update failed: ${err.message}` });
       })
       .finally(() => setBusyId(null));
   }, [secret]);
@@ -913,13 +947,7 @@ export function SourcesPage() {
                         )}
                         <div style={{ marginTop: 2 }}>
                           <ImportanceBadge tier={s.maturity} small />
-                          {SIG_META[s.significance?.level] && (
-                            <span className="hz-imp-badge" title={`Research significance: ${s.significance.level}${s.significance.reason ? " — " + s.significance.reason : ""}`}
-                              style={{ color: SIG_META[s.significance.level].color, background: SIG_META[s.significance.level].bg, fontSize: "0.6rem", marginLeft: 4 }}>
-                              {SIG_META[s.significance.level].short}
-                            </span>
-                          )}
-                        </div>
+                          </div>
                       </td>
                       <td className="hz-src-publisher">{s.publisher || "—"}</td>
                       {activeTab === "all" && (
@@ -962,7 +990,8 @@ export function SourcesPage() {
                           <SourceDetail s={s} busy={busyId === s.id}
                             knownTags={knownTags}
                             onUpdateDate={updateDate} onDelete={deleteSource}
-                            onSaveClassification={saveClassification} />
+                            onSaveClassification={saveClassification}
+                            onSaveSummary={saveSummary} />
                         </td>
                       </tr>
                     )}
