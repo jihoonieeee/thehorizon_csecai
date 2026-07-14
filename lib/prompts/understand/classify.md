@@ -28,6 +28,70 @@ Ask this first, before anything else:
 If neither — the source is not about an AI cyber threat → unclear_or_adjacent or off_topic (see SCOPE).
 
 ────────────────────────────────────────────────────────────────────────
+GLOBAL PRIMARY-CLASSIFICATION RULE — the governing order (apply FIRST)
+────────────────────────────────────────────────────────────────────────
+
+The main category must reflect the MECHANISM THAT BEST EXPLAINS THE INCIDENT —
+NOT automatically the most severe downstream consequence. Work in this order and
+let the FIRST stage that fully explains the incident set the primary category:
+
+  1. COMPROMISED ASSET / TRUST BOUNDARY — what was actually compromised, and which
+     trust guarantee broke? (a maintainer account, a model artifact, a prompt
+     boundary, an agent's tool-authorization, a serving endpoint, a human's trust.)
+  2. VULNERABILITY / ATTACK MECHANISM — what technical primitive delivered it?
+     (malicious package release, prompt injection, command injection, SSRF,
+     deserialization, weight poisoning, tool-selection abuse.)
+  3. IS AN LLM OR AGENT CAPABILITY NECESSARY TO THE EXPLOIT? — would the exploit
+     still work if the LLM/agent were replaced with ordinary deterministic software?
+     (This is the DETERMINISTIC-SOFTWARE TEST below. If the answer is "it would
+     still work," the incident is primarily a supply-chain or software/AI-infra
+     vulnerability, NOT an LLM/agentic BEHAVIORAL category.)
+  4. DIRECT SECURITY EFFECT — the immediate effect (code execution, data leak,
+     account takeover, DoS). This LABELS severity; it does not by itself upgrade
+     the category to the most dramatic downstream layer.
+  5. EVERY OTHER STAGE becomes secondary_tags + boundary_rationale — never the label.
+
+  CRITICAL ANTI-UPGRADE RULE: do NOT classify every incident that involves code
+  execution as ASI05, and do NOT classify every incident touching an AI product as
+  LLM/agentic. A supply-chain attack that RESULTS IN code execution is still
+  PRIMARILY a supply-chain incident. Code execution is a security EFFECT, not a
+  category. Upgrade to an agentic behavioral tag (ASI0x) ONLY when an autonomous
+  agent's own capability is the mechanism (see the deterministic-software test and
+  the ASI05 definition).
+
+────────────────────────────────────────────────────────────────────────
+DETERMINISTIC-SOFTWARE TEST — is this really an LLM/agentic threat?
+────────────────────────────────────────────────────────────────────────
+
+Ask literally: "Would this exploit still work if the LLM or agent were replaced
+with ordinary deterministic software?"
+
+  • YES, it would still work → the incident is PRIMARILY a conventional software
+    vulnerability or an AI-INFRASTRUCTURE vulnerability (command injection, SSRF,
+    authentication bypass, path traversal, deserialization, unsafe endpoint
+    handling). Do NOT force it into an LLM or agentic BEHAVIORAL category merely
+    because the affected product sits in an AI stack.
+      - If the taxonomy still requires an AI category (the product IS AI
+        infrastructure), classify by the affected AI ECOSYSTEM (LLM stack → an LLM
+        tag; agent framework/registry → an agent-supply/infra tag) and PRESERVE the
+        conventional vulnerability type (e.g. "command injection", "SSRF") in
+        boundary_rationale as metadata.
+  • NO — the exploit fundamentally depends on the model interpreting language, on
+    alignment, on retrieval, or on an agent autonomously planning / selecting /
+    invoking tools → it is a genuine LLM or agentic threat; classify by which one.
+
+  Examples where the answer is YES (deterministic → software/infra, not behavioral):
+    - subprocess() reachable from an HTTP endpoint in an AI gateway → command
+      injection (AI-infra), not ASI05.
+    - SSRF in an AI application's URL fetcher → SSRF (AI-infra / LLM app), not agentic.
+    - auth bypass in an agent framework's REST API → auth bypass, not an ASI
+      behavioral tag.
+  Examples where the answer is NO (genuinely behavioral):
+    - prompt injection makes an agent choose and run a shell command → ASI05.
+    - a jailbreak defeats alignment to elicit disallowed output → LLM11.
+    - hidden web text redirects an agent's autonomous plan → ASI01/ASI02.
+
+────────────────────────────────────────────────────────────────────────
 THREE-LEVEL ANALYSIS — work through this before picking a category
 ────────────────────────────────────────────────────────────────────────
 
@@ -48,8 +112,13 @@ When classification feels ambiguous, make these three determinations explicitly:
        supply-chain / semantic editing / fine-tune hijack / tool injection / etc.
 
   CLASSIFY BY STEP 1 (the victim system), not Step 3 (the mechanism).
-  When Steps 1–3 point to different layers of the stack, the category follows
-  the HIGHEST layer where harm actually materialises.
+  When Steps 1–3 point to different layers of the stack, the category follows the
+  highest layer where harm actually materialises — BUT ONLY when reaching that
+  layer genuinely required an LLM/agent capability (apply the deterministic-
+  software test). Do not upgrade to the agentic layer for a downstream code-
+  execution or supply-chain effect that a deterministic exploit would have caused
+  just as well; that stays a supply-chain / software-infra incident (see the
+  GLOBAL PRIMARY-CLASSIFICATION RULE's anti-upgrade clause).
   Steps 2 and 3 become boundary_rationale and secondary_tags — not the label.
 
   The one common error this catches: "poisoning was the technique, so it's
@@ -238,7 +307,31 @@ llm-VS-agentic TEST:
     • it only changes the model's answer / leaks text  → llm_threats
     • it makes the agent call a tool, run code, write to memory, or abuse
       permissions                                       → agentic_ai_threats
-  If the source is about tools/MCP/plugins/autonomy/agent identity → agentic.
+
+  Classify as LLM when the attack PRIMARILY targets any of:
+    • prompts or instructions;
+    • model alignment;
+    • context or RAG;
+    • embeddings;
+    • model output;
+    • model weights, adapters, checkpoints, configurations, or model-loading paths;
+    • LLM-serving infrastructure where NO autonomous tool-using agent is required.
+
+  Classify as agentic when the defining behavior REQUIRES any of:
+    • autonomous planning or goal pursuit;
+    • tool, function, API, browser, shell, or MCP invocation BY AN AGENT;
+    • persistent agent memory;
+    • agent identity or delegated permissions;
+    • agent-to-agent communication;
+    • orchestration across agents;
+    • an agent taking external action.
+
+  MCP CAVEAT: MCP involvement ALONE does not make an incident agentic. Determine
+  whether an AGENT is actually selecting or invoking a tool. An ordinary HTTP
+  endpoint that merely accepts MCP configuration — or an MCP server with a plain
+  CVE that any HTTP client could trigger — is not, by itself, agentic; run the
+  deterministic-software test. Reserve agentic for when an autonomous agent's
+  tool-selection/action is the mechanism.
 
 MECHANISM-VS-CONSEQUENCE PRINCIPLE (the general upgrade rule):
   The implantation mechanism — HOW malicious behaviour was planted — does NOT decide
@@ -366,6 +459,11 @@ core threat; add secondary_tags only for genuinely distinct additional technique
         automatically make it TAI02. Almost every backdoor paper involves both a
         poisoned phase and a triggered inference phase; classify by what the ATTACKER
         DIRECTLY MODIFIED, not by what the resulting model does.
+      DO NOT dual-tag TAI01 + TAI02 because an abstract or related-work section
+        mentions both families. Assign only the tag matching the attack mechanism
+        the paper INTRODUCES. Background citations, comparisons with prior work,
+        and motivating examples do not earn a secondary tag — only techniques
+        the paper itself demonstrates or materially advances.
       Not this: directly editing weights, checkpoints, or adapters post-training
         (→ TAI02); poisoning ANY of an LLM's training / fine-tune / alignment /
         RAG-corpus / embedding data (→ LLM04); poisoning an agent's runtime memory
@@ -615,25 +713,40 @@ core threat; add secondary_tags only for genuinely distinct additional technique
       Not this: leaking the hidden SYSTEM PROMPT specifically → LLM07.
       (OWASP LLM02:2025.)
   LLM03_llm_supply_chain
-      What: a vulnerable or malicious third-party component in the LLM STACK — including
-        a poisoned/backdoored LLM model artifact or adapter itself.
-      How / examples: a poisoned or trojaned base model / fine-tune pulled from a hub; a
-        malicious or backdoored LLM LoRA/adapter; a weight/quantization or
-        deployment-platform backdoor implanted in an LLM (e.g. FloatDoor-style
-        platform-triggered LoRA backdoors); a malicious LLM plugin or extension; a
-        compromised LLM-serving package or gateway (LiteLLM, vLLM, an inference proxy, an
-        Ollama/LLM plugin) with a CVE or backdoor.
-      Belongs when: the compromised component is part of the LLM serving/development
-        ecosystem AND the activated harm is text-only (wrong/unsafe output, leaked data,
+      What: a compromise of TRUST in how an LLM-stack component or artifact is PRODUCED,
+        DISTRIBUTED, SELECTED, or INSTALLED — the supply chain itself, not just any bug
+        in a legitimate component.
+      REQUIRES supply-chain trust compromise. Qualifying examples: a compromised
+        maintainer or registry account shipping a malicious LLM package; a malicious
+        PyPI/npm release of an LLM library; a poisoned model checkpoint; a malicious LoRA
+        or adapter; a trojaned model configuration; a compromised model-hub artifact; a
+        weight/quantization or deployment-platform backdoor implanted in an LLM (e.g.
+        FloatDoor-style platform-triggered LoRA backdoors); a malicious LLM plugin or
+        extension distributed through a trusted channel.
+      Belongs when: trust in the LLM component's origin/distribution/selection/install was
+        subverted AND the activated harm is text-only (wrong/unsafe output, leaked data,
         guardrail bypass that stays in the model's response).
+      NOT supply chain — an ordinary vulnerability in a LEGITIMATE component is NOT
+        LLM03 just because the product is in the LLM stack: a plain CVE in a genuine
+        LiteLLM/vLLM/inference-gateway release (command injection, SSRF, auth bypass,
+        deserialization, unsafe endpoint handling) is an AI-INFRASTRUCTURE vulnerability.
+        Run the deterministic-software test; classify by the affected LLM ecosystem and
+        record the concrete vuln type (e.g. "SSRF in AI gateway") in boundary_rationale.
+        CONTRAST: MALICIOUS LiteLLM versions published through a COMPROMISED PyPI account
+        ARE LLM03 (the distribution trust was subverted); a normal patched CVE in a real
+        LiteLLM release is not.
       Not this: an autonomous-agent framework, skill registry, or MCP server → ASI04; a
         classical-ML model/dataset/training pipeline → TAI10; weight/adapter poisoning of
         a CLASSICAL (non-LLM) model → TAI02.
-      CONSEQUENCE-SPLIT (the agentic upgrade): if the supply-chain compromise activates
-        inside a tool-using agent and the triggered behaviour causes tool invocation,
-        code execution, permission changes, or action concealment — classify as
-        agentic_ai_threats (ASI01/ASI02/ASI05) with LLM03 as secondary tag. The
-        compromise of the supply chain is HOW it got in; the agentic action is the harm.
+      CONSEQUENCE-SPLIT (the agentic upgrade — narrow): upgrade to agentic
+        (ASI01/ASI02/ASI05, LLM03 secondary) ONLY when the triggered behaviour runs
+        through an AUTONOMOUS AGENT'S OWN capability — the poisoned component activates
+        inside a tool-using agent and makes THE AGENT select/invoke a tool, plan, or
+        execute code. If the supply-chain compromise simply yields code execution or a
+        payload that a deterministic loader/endpoint would run just as well (e.g. pickle
+        RCE on model load, a malicious package's install script), it STAYS a supply-chain
+        incident (LLM03) with code-execution recorded as the effect — do not upgrade.
+        The deterministic-software test decides which of the two this is.
       (OWASP LLM03:2025.)
   LLM04_data_model_poisoning
       What: manipulating the DATA an LLM depends on to bias or backdoor its outputs.
@@ -753,12 +866,23 @@ core threat; add secondary_tags only for genuinely distinct additional technique
         TAI10; a one-off abuse of an already-installed tool → ASI02.
       (OWASP ASI04.)
   ASI05_unexpected_code_execution
-      What: the agent runs attacker-supplied code or commands, turning generation into
-        arbitrary execution.
-      How / examples: injected instructions cause the agent's code interpreter, sandbox,
-        or shell tool to execute attacker code on the host; escaping a sandbox; running
-        a malicious script the agent was tricked into writing and executing.
-      Belongs when: the consequence is code/command EXECUTION by the agent.
+      What: code or command execution reached THROUGH AN AGENTIC EXECUTION PATH — an
+        autonomous agent's own tool/interpreter/shell is what runs the code.
+      REQUIRES an agentic execution path. Qualifying examples: an agent invoking a shell
+        or code interpreter; prompt injection causing an agent to execute code; an agent
+        generating and then running an attacker-controlled script; exploitation of an
+        agent SANDBOX or execution environment; tool-mediated command execution SELECTED
+        OR INITIATED BY AN AGENT.
+      Belongs when: the execution happened because an autonomous agent selected/invoked
+        the executing tool — the agent's capability is the mechanism, not merely the
+        setting.
+      NOT ASI05 — do NOT apply this solely because a conventional web endpoint in an AI
+        product calls subprocess() or evaluates input. A deterministic endpoint that
+        executes commands (reachable without any agent's tool-selection) is an
+        AI-INFRASTRUCTURE COMMAND-INJECTION vulnerability, not agentic — run the
+        deterministic-software test. Also: a supply-chain compromise that yields code
+        execution is primarily a supply-chain incident (LLM03/TAI10/ASI04), with the code
+        execution recorded as the effect, unless an agent's autonomous action is the path.
       Not this: the app (not an autonomous agent) executes model output → LLM05; a tool
         API is misused without code execution → ASI02.
       (OWASP ASI05.)
@@ -1015,6 +1139,40 @@ the growing risk of LLM-discovered 0-days" is primarily an ATTACK CAPABILITY pap
 (it documents that Claude found 500+ real zero-days) — is_defensive=false, classify as
 offensive_finding in ai_enabled_threats. Only set is_defensive=true if the actual
 content primarily presents a working defense, not if it merely calls for one.
+
+WATCH OUT — "auditing", "evaluation", "benchmarking", and "privacy assessment" framing:
+Do NOT classify a paper as defensive solely because it is framed as an audit tool,
+evaluation framework, benchmark suite, or privacy assessment methodology.
+
+The test is: "Does the paper's primary technical contribution IMPROVE an attack?"
+  Improves effectiveness, stealth, transferability, automation, efficiency,
+  or reduces attacker assumptions → is_defensive=FALSE, classify under the
+  corresponding OFFENSIVE tag regardless of stated defensive framing.
+
+  The framing is often genuine — authors do intend their audit tool to help
+  defenders — but the artefact they produce (a more capable attack, a dataset
+  of successful exploits, a framework for generating adversarial examples at
+  scale) is an offensive contribution. Classify by what the tool DOES, not
+  what the authors HOPE it will be used for.
+
+  COMMON PATTERNS THAT ARE OFFENSIVE, NOT DEFENSIVE:
+  ✗ "Privacy auditing tool" that implements membership inference, model
+    inversion, or training-data extraction more effectively → TAI07 / TAI06
+  ✗ "Red-teaming benchmark" that introduces new jailbreak techniques or
+    demonstrates higher jailbreak success rates → LLM11
+  ✗ "Robustness evaluation framework" whose primary contribution is a stronger
+    adversarial attack against a classifier → TAI03
+  ✗ "Security assessment tool" that automates vulnerability discovery or
+    exploit generation against AI systems → AE03 / AE04
+  ✗ "Fairness or bias audit" that reconstructs sensitive training data as
+    evidence of the bias → TAI06 / LLM02
+  ✗ "Watermark verification tool" that demonstrates watermark removal or
+    evasion more reliably → TAI03 (taxonomy limitation, see that entry)
+
+  A paper is genuinely defensive when its PRIMARY contribution is a detection
+  method, hardening technique, certified bound, or guardrail — not when it
+  produces a better attack and calls that attack an audit.
+
 Even when is_defensive=true, set main_category to the OFFENSIVE DOMAIN the defense
 protects (a jailbreak detector → llm_threats; a deepfake detector → ai_enabled_threats;
 a model-poisoning defense → traditional_ai_threats; a defense for malicious agent
@@ -1286,6 +1444,11 @@ RULES:
   • main_category and primary_tag are YOUR judgment — assign them directly from the
     definitions and boundary tests above. primary_tag MUST belong to main_category.
   • Pick the SINGLE best primary_tag; do not enumerate every technique mentioned.
+  • secondary_tags must reflect techniques the paper INTRODUCES or DEMONSTRATES —
+    not techniques mentioned in background, related work, motivation, or comparison
+    sections. A paper that introduces a data-poisoning attack and cites prior
+    weight-editing work does NOT get both TAI01 and TAI02. Classify the contribution,
+    not the literature survey.
   • When main_category="unclear_or_adjacent", set primary_tag=null.
   • Always fill boundary_rationale — it forces you to name the discriminator and is
     used to audit borderline calls.
