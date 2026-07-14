@@ -136,9 +136,16 @@ core threat; add secondary_tags only for genuinely distinct additional technique
         fine-tune or LoRA/adapter merge; implanting a neural trojan/backdoor that stays
         dormant until a trigger input activates it; optimizer- or quantization-time
         backdoors.
-      Belongs when: the manipulated asset is the MODEL (its parameters), not its data.
+      Belongs when: the manipulated asset is the MODEL (its parameters), not its data,
+        AND the poisoned model is a CLASSICAL / non-LLM model (a classifier, detector,
+        vision/CV model, recommender, tabular or scientific model, etc.).
       Not this: manipulating training DATA (→ TAI01); shipping the poisoned model
         through a hub/pipeline as the main story (→ TAI10).
+      SURFACE-SPLIT (important): if the poisoned model is an LLM — including a weight,
+        checkpoint, LoRA/adapter, quantization, or deployment/serving-platform backdoor
+        implanted into an LLM — it is NOT TAI02. Route it to LLM03_llm_supply_chain,
+        because the compromised asset lives in the LLM stack. TAI02 is only for
+        weight/adapter poisoning of a classical (non-LLM) model.
       (MITRE ATLAS AML.T0018.)
   TAI03_adversarial_evasion
       What: the attacker crafts an INPUT at inference time so a deployed model
@@ -236,14 +243,19 @@ core threat; add secondary_tags only for genuinely distinct additional technique
       Not this: leaking the hidden SYSTEM PROMPT specifically → LLM07.
       (OWASP LLM02:2025.)
   LLM03_llm_supply_chain
-      What: a vulnerable or malicious third-party component in the LLM STACK.
+      What: a vulnerable or malicious third-party component in the LLM STACK — including
+        a poisoned/backdoored LLM model artifact or adapter itself.
       How / examples: a poisoned or trojaned base model / fine-tune pulled from a hub; a
-        malicious LLM plugin or extension; a compromised LLM-serving package or gateway
-        (LiteLLM, vLLM, an inference proxy, an Ollama/LLM plugin) with a CVE or backdoor.
+        malicious or backdoored LLM LoRA/adapter; a weight/quantization or
+        deployment-platform backdoor implanted in an LLM (e.g. FloatDoor-style
+        platform-triggered LoRA backdoors); a malicious LLM plugin or extension; a
+        compromised LLM-serving package or gateway (LiteLLM, vLLM, an inference proxy, an
+        Ollama/LLM plugin) with a CVE or backdoor.
       Belongs when: the compromised component is part of the LLM serving/development
-        ecosystem.
+        ecosystem — including the LLM's own weights/adapters when the model is an LLM.
       Not this: an autonomous-agent framework, skill registry, or MCP server → ASI04; a
-        classical-ML model/dataset/training pipeline → TAI10.
+        classical-ML model/dataset/training pipeline → TAI10; weight/adapter poisoning of
+        a CLASSICAL (non-LLM) model → TAI02.
       (OWASP LLM03:2025.)
   LLM04_data_model_poisoning
       What: manipulating the DATA an LLM depends on to bias or backdoor its outputs.
