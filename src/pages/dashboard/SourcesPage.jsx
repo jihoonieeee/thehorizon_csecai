@@ -218,7 +218,7 @@ function ReportAnalysis({ ra }) {
 
 // Expanded detail — everything an analyst needs to vet the source without opening it.
 // Also hosts the admin controls: edit the publish date and delete the source.
-function SourceDetail({ s, onUpdateDate, onDelete, onSaveClassification, onSaveSummary, knownTags, busy }) {
+function SourceDetail({ s, onUpdateDate, onConfirmDate, onDelete, onSaveClassification, onSaveSummary, knownTags, busy }) {
   const imp  = s.importance || {};
   const mech = s.mechanism || null;
   const full = s.short_summary || s.analyst_brief || s.summary;
@@ -368,6 +368,17 @@ function SourceDetail({ s, onUpdateDate, onDelete, onSaveClassification, onSaveS
             onClick={() => onUpdateDate(s, dateVal)}>
             {busy ? "Saving…" : "Save date"}
           </button>
+          {/* Confirm the existing date as authoritative (date_confidence → exact)
+              without changing its value. Shows a confirmed state when already exact. */}
+          {s.date_confidence === "exact" ? (
+            <span className="hz-src-date-confirmed" title="Publish date is confirmed (exact)">✓ Date confirmed</span>
+          ) : (
+            <button className="hz-src-admin-confirm" disabled={busy || !dateVal}
+              title="Mark this publish date as confirmed/exact — re-admits the source to the newsletter, chatbot, slides, and insights"
+              onClick={() => onConfirmDate(s)}>
+              {busy ? "Saving…" : "Confirm date exact"}
+            </button>
+          )}
           <button className="hz-src-admin-delete" disabled={busy}
             onClick={() => onDelete(s)}>
             Delete source
@@ -439,13 +450,24 @@ export function SourcesPage() {
     })
       .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`); return j; })
       .then(j => {
-        // Reflect in local state immediately (already persisted in DB).
-        setSources(prev => prev.map(x => x.id === s.id ? { ...x, date_published: j.date_published } : x));
-        setAdminMsg({ ok: true, text: `Date updated → ${date}` });
+        // A date edit confirms the date: server sets date_confidence="exact" and
+        // clears needs_review — reflect all three locally (already persisted).
+        setSources(prev => prev.map(x => x.id === s.id
+          ? { ...x, date_published: j.date_published, date_confidence: "exact", needs_review: false } : x));
+        setAdminMsg({ ok: true, text: `Date confirmed → ${date} (marked exact)` });
       })
       .catch(e => setAdminMsg({ ok: false, text: `Date update failed: ${e.message}` }))
       .finally(() => setBusyId(null));
   }, [secret]);
+
+  // Confirm the EXISTING date as authoritative without changing its value:
+  // re-sends the current date so the server marks date_confidence="exact" and
+  // clears the review flag, re-admitting the source to newsletter/agent/slides.
+  const confirmDate = useCallback((s) => {
+    const date = (s.date_published || "").slice(0, 10);
+    if (!date) { setAdminMsg({ ok: false, text: "No date to confirm — enter one first" }); return; }
+    updateDate(s, date);
+  }, [updateDate]);
 
   const deleteSource = useCallback((s) => {
     if (!window.confirm(`Delete this source permanently?\n\n${s.title || s.url}\n\nThis removes it (and its evidence) from the database.`)) return;
@@ -989,7 +1011,7 @@ export function SourcesPage() {
                         <td colSpan={colSpan}>
                           <SourceDetail s={s} busy={busyId === s.id}
                             knownTags={knownTags}
-                            onUpdateDate={updateDate} onDelete={deleteSource}
+                            onUpdateDate={updateDate} onConfirmDate={confirmDate} onDelete={deleteSource}
                             onSaveClassification={saveClassification}
                             onSaveSummary={saveSummary} />
                         </td>

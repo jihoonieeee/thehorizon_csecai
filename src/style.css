@@ -2417,13 +2417,19 @@ a:hover { text-decoration: underline; }
 .hz-src-summary-count { font-size: 0.68rem; color: var(--text-tertiary, #94a3b8); }
 .hz-src-admin-date { display: flex; flex-direction: column; gap: 3px; font-size: 0.72rem; color: var(--text-tertiary, #94a3b8); }
 .hz-src-admin-date input { padding: 4px 8px; font-size: 0.8rem; border: 1px solid var(--border, #cbd5e1); border-radius: 6px; }
-.hz-src-admin-save, .hz-src-admin-delete {
+.hz-src-admin-save, .hz-src-admin-delete, .hz-src-admin-confirm {
   padding: 5px 12px; font-size: 0.78rem; font-weight: 600; border-radius: 6px; cursor: pointer;
   border: 1px solid transparent;
 }
 .hz-src-admin-save   { background: #2563eb; color: #fff; }
+.hz-src-admin-confirm { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
 .hz-src-admin-delete { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
-.hz-src-admin-save:disabled, .hz-src-admin-delete:disabled { opacity: 0.5; cursor: not-allowed; }
+.hz-src-admin-save:disabled, .hz-src-admin-delete:disabled, .hz-src-admin-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
+.hz-src-date-confirmed {
+  display: inline-flex; align-items: center; padding: 5px 10px;
+  font-size: 0.76rem; font-weight: 700; color: #15803d;
+  background: #dcfce7; border: 1px solid #bbf7d0; border-radius: 6px;
+}
 
 /* Classification editor (category + tags) */
 .hz-src-class-editor {
