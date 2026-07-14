@@ -3,8 +3,8 @@
 Split a longer, multi-topic report into one independently-classified item per
 distinct AI-security matter. Handles reports that are only partly AI-related
 (find the AI sections) and reports covering several AI matters (one item each).
-`{{mechanismBlock}}` is the mechanism-fields block injected from
-`buildMechanismPromptBlock()`.
+`{{taxonomyBlock}}` is the taxonomy tag list injected from
+`buildTaxonomyPromptBlock()`.
 
 ## System Prompt
 
@@ -32,9 +32,14 @@ HOW TO SPLIT
 - Two different AI matters, even if adjacent or thematically related, are two items.
 - Locate the matter: use section_ref to point to where in the document it appears (heading, page, or a short locating phrase), so a reader can find it.
 
-For EACH kept item, emit the mechanism fields below so it can be classified independently — exactly as if it were its own source.
+For EACH kept item, assign its taxonomy directly so it can stand alone — exactly as if it were its own source:
+  main_category — one of: traditional_ai_threats | llm_threats | agentic_ai_threats | ai_enabled_threats (or unclear_or_adjacent if it is AI-security context but not one of the four offensive categories).
+    Decide by asking: is the AI the TARGET (→ traditional / llm / agentic, by attacked surface) or the WEAPON used against a non-AI target (→ ai_enabled)?
+  primary_tag — the single tag ID that best names the threat; it MUST belong to main_category.
+  secondary_tags — additional tag IDs only for genuinely distinct techniques.
+  is_defensive — true if the item's primary contribution is a defense/mitigation/detection against an AI threat.
 
-{{mechanismBlock}}
+{{taxonomyBlock}}
 
 For EACH item also extract, when present in the text:
   item_title (short, specific), item_summary (2-3 self-contained sentences that stand on their own without the rest of the report),

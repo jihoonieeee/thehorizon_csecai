@@ -92,7 +92,7 @@ plumbing, not prose to tune. Config-driven blocks (`buildMechanismPromptBlock`,
 
 ## (legacy — pre-existing, different format)
 
-`layer3-sourceTyping`, `layer5-taxonomy`, `validation-relevance`,
+`layer3-sourceTyping`, `validation-relevance`,
 `validation-relevance-qa`, `validation-content-quality` — the original prompt
 files. Some carry a `## User Prompt Template` section in addition to (or instead
 of) `## System Prompt`.

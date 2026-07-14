@@ -24,7 +24,6 @@
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { routedLLM } from "../lib/llm/llmRouter.js";
-import { resolveDomain } from "../lib/pipeline/understand/mechanism.js";
 import { computeImportance } from "../lib/pipeline/scoring/importance.js";
 
 const args  = process.argv.slice(2);
@@ -54,12 +53,13 @@ const SCHEMA = {
 };
 
 async function inferDefended(s) {
-  // Deterministic first: stored attack mechanism → domain.
+  // Deterministic first: the classifier already assigns a defensive source to the
+  // OFFENSIVE domain it protects (mechanism_classification.main_category, or the
+  // source's own main_category), so use that when it is a real offensive domain.
   const m = s.intelligence?.mechanism_classification || {};
-  const mech = m.primary_exploit_mechanism;
-  if (mech && !["unknown", "defense_only", "generic_software_vulnerability", "benchmark_or_evaluation"].includes(mech)) {
-    const dom = resolveDomain({ primary_exploit_mechanism: mech, affected_layer: m.affected_layer, primary_consequence: m.primary_consequence, target_is_llm: m.target_is_llm });
-    if (DOMAINS.includes(dom)) return { defended_category: dom, reason: `mechanism ${mech}`, via: "deterministic" };
+  const dom = m.main_category || s.main_category;
+  if (dom && DOMAINS.includes(dom) && dom !== "unclear_or_adjacent") {
+    return { defended_category: dom, reason: `assigned category ${dom}`, via: "deterministic" };
   }
   // LLM inference.
   const usr = `TITLE: ${s.title || ""}\nTAGS: ${(s.tags || []).join(", ")}\nSUMMARY: ${(s.short_summary || s.summary || "").slice(0, 500)}\n\nWhich offensive domain does this defense protect against?`;

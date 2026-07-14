@@ -123,91 +123,54 @@ function reportTrends(src, n = 4) {
   return t.map(x => `${x.trend}${x.direction ? ` [${x.direction}]` : ""}`).filter(s => s.length > 15).slice(0, n);
 }
 
-// ── Build tiered category briefing ───────────────────────────────────────────
-// Each source is presented as a DOSSIER: its analyst CLAIMS (the strategic framing)
-// + key FIGURES + TRENDS, followed by evidence facts WITH ids so the synthesis can
-// cite them. Tiers control how much detail each source gets.
-//   HEADLINE  — starred / primary / realized incidents → full dossier (top ~28)
-//   CONFIRMED — proven exploits / notable research     → claims + 1-2 evidence
-//   CONTEXT   — everything else                        → one claim/summary line
-// Parent-capping stops one multi-part report from monopolising.
+// ── Build category briefing — ALL sources, full extracted info ───────────────
+// Every source is included with its analyst claims, key figures, and evidence items.
+// ★ marks confirmed incidents / primary sources (LLM should weight these highly).
+// ▲ marks proven exploits / notable research.
+// · marks supporting context (still cite if relevant).
 
-function buildCategoryBriefing(cat, srcList, evBySource, options = {}) {
-  const HEADLINE_CAP  = options.headlineCap  ?? 28;
-  const CONFIRMED_CAP = options.confirmedCap ?? 30;
-  const CONTEXT_CAP   = options.contextCap   ?? 40;
-  const MAX_PER_PARENT = options.maxPerParent ?? 3;
+function buildCategoryBriefing(cat, srcList, evBySource) {
+  const lines = [
+    `CATEGORY: ${CAT_LABEL[cat] || cat}`,
+    `${srcList.length} sources. ★ = confirmed incident or primary source. ▲ = proven exploit or notable research. · = supporting context.`,
+    "",
+  ];
 
-  const sorted = [...srcList];
-  const lines  = [`CATEGORY: ${CAT_LABEL[cat] || cat}`, ""];
-  const perParent = new Map();
-  const included  = new Set();
+  for (const src of srcList) {
+    const claims = mainClaims(src, 5);
+    const nums   = keyNumbers(src, 4);
+    const trends = reportTrends(src, 4);
+    const facts  = (evBySource.get(src.id) || []).slice(0, 6);
+    if (!claims.length && !facts.length && summaryText(src).length < 20) continue;
 
-  const parentOk = (src) => {
-    const p = src.parent_source_id || src.id;
-    if ((perParent.get(p) || 0) >= MAX_PER_PARENT) return false;
-    perParent.set(p, (perParent.get(p) || 0) + 1);
-    return true;
-  };
+    const reality  = src._imp?.reality || "";
+    const priority = (src.starred || src.trust_tier === "primary" || reality === "realized") ? "★"
+                   : (reality === "proven" || src._sig >= 2) ? "▲" : "·";
 
-  // Full dossier for a strong source: claims + figures + trends + evidence (with ids).
-  function dossier(src, tier, maxEvidence, maxClaims) {
-    const claims = mainClaims(src, maxClaims);
-    const nums   = keyNumbers(src);
-    const trends = reportTrends(src);
-    const facts  = (evBySource.get(src.id) || []).slice(0, maxEvidence);
-    if (!claims.length && !facts.length && summaryText(src).length < 20) return;
+    lines.push(`\n${priority} SOURCE [${src.id}]`);
+    lines.push(`  Publisher: ${src.publisher || "?"}`);
+    lines.push(`  Title:     ${(src.title || "").slice(0, 100)}`);
+    lines.push(`  URL:       ${src.url || "?"}`);
+    lines.push(`  Published: ${src.date_published || "?"}`);
 
-    lines.push(`\n${tier} ${src.publisher || "?"} — ${(src.title || "").slice(0, 90)}`);
     if (claims.length) {
-      lines.push(`  CLAIMS:`);
+      lines.push(`  KEY CLAIMS:`);
       for (const c of claims) lines.push(`    • ${c}`);
     } else {
-      const s = summaryText(src).slice(0, 220);
+      const s = summaryText(src).slice(0, 300);
       if (s) lines.push(`  SUMMARY: ${s}`);
     }
-    if (nums.length)   lines.push(`  FIGURES: ${nums.join("; ")}`);
+    if (nums.length)   lines.push(`  KEY FIGURES: ${nums.join("; ")}`);
     if (trends.length) lines.push(`  TRENDS: ${trends.join("; ")}`);
     if (facts.length) {
-      lines.push(`  EVIDENCE (cite these ids):`);
+      lines.push(`  SUPPORTING FACTS:`);
       for (const e of facts) {
-        const numStr = (e.numbers || []).filter(n => n?.value && n?.context).map(n => `${n.value} (${n.context})`).join("; ");
-        lines.push(`    [${e.evidence_id}] ${e.fact}${numStr ? ` — ${numStr}` : ""}`);
+        const numStr = (e.numbers || []).filter(n => n?.value && n?.context)
+          .map(n => `${n.value} (${n.context})`).join("; ");
+        lines.push(`    • ${e.fact}${numStr ? ` — ${numStr}` : ""}`);
       }
     }
-    included.add(src.id);
   }
-
-  // ── HEADLINE ──────────────────────────────────────────────────────────────
-  lines.push("━━ HEADLINE SOURCES (analyst claims are the strategic framing; evidence ids are for citation) ━━");
-  let n = 0;
-  for (const src of sorted.filter(s => s.starred || s.trust_tier === "primary" || s._imp?.reality === "realized")) {
-    if (n >= HEADLINE_CAP) break;
-    if (!parentOk(src)) continue;
-    dossier(src, "★", 4, 4);
-    n++;
-  }
-
-  // ── CONFIRMED / NOTABLE RESEARCH ─────────────────────────────────────────
-  lines.push("\n━━ CONFIRMED / NOTABLE RESEARCH ━━");
-  n = 0;
-  for (const src of sorted.filter(s => !included.has(s.id) && (s._imp?.reality === "proven" || s._sig >= 2))) {
-    if (n >= CONFIRMED_CAP) break;
-    if (!parentOk(src)) continue;
-    dossier(src, "▲", 2, 3);
-    n++;
-  }
-
-  // ── SUPPORTING CONTEXT (one line each) ───────────────────────────────────
-  lines.push("\n━━ SUPPORTING CONTEXT ━━");
-  n = 0;
-  for (const src of sorted.filter(s => !included.has(s.id))) {
-    if (n >= CONTEXT_CAP) break;
-    const claim = mainClaims(src, 1)[0] || summaryText(src).slice(0, 160);
-    if (claim.length > 20) { lines.push(`· [${src.publisher || "?"}] ${claim}`); n++; }
-    included.add(src.id);
-  }
-
   return lines.join("\n");
 }
 
@@ -232,18 +195,26 @@ const CATEGORY_SCOPE = {
 };
 
 // ── Synthesis ─────────────────────────────────────────────────────────────────
-const SYNTHESIS_USER = (catKey, catLabel, windowLabel, briefing) => `
-Cluster the findings below into 3-4 STRATEGIC THEMES for: ${catLabel.toUpperCase()}
-Period: ${windowLabel}
+const WINDOW_TYPE = (days) =>
+  days <= 10  ? "WEEKLY — focus on specific events and immediate tactical developments"
+: days <= 40  ? "MONTHLY — focus on operational patterns forming across multiple incidents"
+: days <= 100 ? "QUARTERLY — focus on threat actor behaviour changes and capability development"
+: days <= 200 ? "6-MONTH — focus on what has matured from research to real-world use"
+:               "ANNUAL — focus on macro-level structural changes in the AI threat landscape";
+
+const SYNTHESIS_USER = (catKey, catLabel, windowLabel, briefing, days) => `
+Produce the strategic leadership briefing for: ${catLabel.toUpperCase()}
+Reporting period: ${windowLabel} (${days} days)
+Window type: ${WINDOW_TYPE(days)}
 
 ${CATEGORY_SCOPE[catKey] || ""}
 
+ALL SOURCES THIS PERIOD (use all of them — ★ and ▲ carry more weight but cite · if relevant):
 ${briefing}
 
-Each theme must absorb MULTIPLE findings (3-8) and state the strategic shift, not restate any
-single finding. Keep headlines ≤10 words and plain (no CVE numbers, no version strings). Apply the
-novelty and generalizability tests. Nominate ONE single-incident case study.
-Return the JSON schema exactly as specified in your instructions.`.trim();
+Produce 2–3 KEY INSIGHTS and 2–3 MAIN HAPPENINGS.
+Every item MUST include source_urls — copy the exact URL values shown in the SOURCE URL fields above.
+Return JSON exactly as specified in your instructions.`.trim();
 
 // Cross-category slide removed per design — no cross-category synthesis.
 
@@ -254,22 +225,22 @@ function maturityToLevel(m) {
     research_demonstration:"research_demonstration" }[m] || "research_demonstration";
 }
 
-// Map a synthesis THEME → the judgment shape buildPresentation expects.
-// theme_headline (short) becomes the slide title; sub_vectors + what_changed drive
-// the bullets; evidence_for spans multiple sources. No recommendation.
+// Map a synthesis theme → the judgment shape buildPresentation expects.
 function toJudgment(raw) {
   const subVectors = Array.isArray(raw.sub_vectors) ? raw.sub_vectors.filter(v => typeof v === "string") : [];
-  const headline = (raw.theme_headline || raw.theme_insight || raw.judgment || "").trim();
+  const headline = (raw.theme_headline || raw.headline || raw.theme_insight || raw.judgment || "").trim();
   return {
     judgment_id:        crypto.randomUUID(),
     judgment:           headline,
+    theme_type:         raw.theme_type || "insight",
     sub_vectors:        subVectors,
-    what_changed:       (raw.what_changed      || "").trim(),
-    causal_mechanism:   (raw.causal_mechanism  || "").trim(),
-    why_this_matters:   (raw.why_this_matters  || "").trim(),
-    recommended_action: "",   // recommendations removed from the deck
+    what_changed:       (raw.what_changed || raw.what_happened || "").trim(),
+    causal_mechanism:   (raw.causal_mechanism || "").trim(),
+    why_this_matters:   (raw.why_it_matters || raw.why_this_matters || "").trim(),
+    recommended_action: "",
     evidence_maturity:  maturityToLevel(raw.evidence_maturity),
-    evidence_for:       Array.isArray(raw.evidence_for) ? raw.evidence_for : [],
+    evidence_for:       [],                                               // resolved from _source_urls below
+    _source_urls:       Array.isArray(raw.source_urls) ? raw.source_urls : [],
     blocked:            false,
     short_takeaway:     headline.slice(0, 60),
     caveats:            [],
@@ -309,6 +280,7 @@ function toSgSlide(s) {
     bullets,
     speaker_notes: s.speaker_notes || "",
     metrics,
+    footnotes:     (s._footnotes || []).slice(0, 5),
     ...(hasDiag ? { diagram: {
       image_data:  s.diagram_spec.image_data,
       caption:     s.diagram_spec.caption     || "",
@@ -514,7 +486,7 @@ async function main() {
     try {
       raw = await callAnthropic({
         system:    SYNTHESIS_SYSTEM,
-        user:      SYNTHESIS_USER(cat.key, cat.label, windowLabel, briefing),
+        user:      SYNTHESIS_USER(cat.key, cat.label, windowLabel, briefing, DAYS),
         maxTokens: 4000,
         task:      "deck_synthesis",
       });
@@ -523,29 +495,44 @@ async function main() {
       raw = { themes: [], outlook_assessment: null };
     }
 
-    // Synthesis returns THEMES (short headline + fields).
-    const rawThemes = Array.isArray(raw?.themes) ? raw.themes
-                    : Array.isArray(raw?.judgments) ? raw.judgments : [];
+    // Synthesis may return key_insights + main_happenings (new format) or flat themes (legacy).
+    const insights   = (raw?.key_insights   || []).map(t => ({ ...t, theme_type: "insight"   }));
+    const happenings = (raw?.main_happenings || []).map(t => ({ ...t, theme_type: "happening" }));
+    const legacyThemes = Array.isArray(raw?.themes) ? raw.themes : Array.isArray(raw?.judgments) ? raw.judgments : [];
+    const rawThemes = insights.length || happenings.length
+      ? [...insights, ...happenings]
+      : legacyThemes;
     const validThemes = rawThemes.filter(t =>
-      (t.theme_headline || t.theme_insight || t.judgment)?.length > 8 &&
-      (t.causal_mechanism || "").length > 20
+      (t.theme_headline || t.theme_insight || t.judgment || t.headline)?.length > 8
     );
     const judgments = validThemes.map(toJudgment);
 
-    // Resolve evidence_for IDs — keep only IDs that actually exist in evidenceIndex;
-    // fall back to top-rated evidence from this category
+    // Build a URL → [evidence_ids] map for this category so we can resolve
+    // the LLM's source_urls back to evidence IDs for citation numbering.
+    const urlToEvIds = new Map();
+    for (const src of srcs) {
+      const url = src.url;
+      if (!url) continue;
+      const ids = (evBySource.get(src.id) || [])
+        .map(e => e.evidence_id)
+        .filter(id => id in evidenceIndex);
+      if (ids.length) urlToEvIds.set(url, ids);
+    }
+
+    // Fallback pool: all ev-IDs for this category, for themes with no URL hits
     const catEvIds = [...evBySource.keys()]
       .filter(sid => sourceById.get(sid)?.main_category === cat.key)
       .flatMap(sid => (evBySource.get(sid) || []).map(e => e.evidence_id))
       .filter(id => id in evidenceIndex);
 
     for (const j of judgments) {
-      j.evidence_for = j.evidence_for.filter(id => id in evidenceIndex);
-      if (j.evidence_for.length < 2) {
-        // A theme needs multi-source evidence — backfill from category pool
-        const extra = catEvIds.filter(id => !j.evidence_for.includes(id)).slice(0, 4);
-        j.evidence_for = [...j.evidence_for, ...extra].slice(0, 6);
-      }
+      // Resolve source_urls → evidence_ids
+      const fromUrls = (j._source_urls || [])
+        .flatMap(url => urlToEvIds.get(url) || [])
+        .filter((id, i, a) => a.indexOf(id) === i); // dedupe
+      j.evidence_for = fromUrls.length >= 2 ? fromUrls.slice(0, 8)
+        : [...fromUrls, ...catEvIds.filter(id => !fromUrls.includes(id)).slice(0, 4 - fromUrls.length)].slice(0, 6);
+      delete j._source_urls;
     }
 
     // Case study: synthesis nominates a source. DEDUPE against theme anchors —

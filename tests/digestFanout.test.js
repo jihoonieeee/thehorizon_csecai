@@ -47,11 +47,11 @@ const parent = {
 };
 const items = [
   { item_title: "Gemini-powered phishing-as-a-service (Outsider)", item_summary: "China-based network used Gemini to generate fake sites and SMS phishing at scale.",
-    primary_exploit_mechanism: "ai_social_engineering", primary_consequence: "false_information", affected_layer: "application", mechanism_evidence_role: "incident" },
+    main_category: "ai_enabled_threats", primary_tag: "AE02_ai_social_engineering" },
   { item_title: "Prompt injection vs Claude Code GitHub Action", item_summary: "Injection makes the agent run a tool that leaks CI/CD secrets.",
-    primary_exploit_mechanism: "prompt_injection", primary_consequence: "tool_execution", affected_layer: "agent", mechanism_evidence_role: "attack" },
+    main_category: "agentic_ai_threats", primary_tag: "ASI02_tool_misuse_exploitation", secondary_tags: ["LLM01_prompt_injection"] },
   { item_title: "Malicious LLM-gateway package backdoor", item_summary: "A compromised LLM-serving package dependency executes code.",
-    primary_exploit_mechanism: "supply_chain_compromise", primary_consequence: "code_execution", affected_layer: "package_dependency", target_is_llm: true, mechanism_evidence_role: "cve" },
+    main_category: "llm_threats", primary_tag: "LLM03_llm_supply_chain" },
 ];
 const children = buildChildSources(parent, items, { scoredAt: "2026-07-06T00:00:00Z" });
 
@@ -124,8 +124,8 @@ await test("a long report is chunked; findings merge + dedupe across chunks", as
   let calls = 0;
   // Each chunk returns 2 items; item "shared" repeats across chunks (must dedupe to 1).
   const llm = async () => { calls++; return { is_digest: true, items: [
-    { item_title: `finding ${calls}`, item_summary: "s", primary_exploit_mechanism: "data_poisoning", primary_consequence: "false_information" },
-    { item_title: "shared finding", item_summary: "s", primary_exploit_mechanism: "prompt_injection", primary_consequence: "tool_execution" },
+    { item_title: `finding ${calls}`, item_summary: "s", main_category: "traditional_ai_threats", primary_tag: "TAI01_data_poisoning" },
+    { item_title: "shared finding", item_summary: "s", main_category: "agentic_ai_threats", primary_tag: "ASI02_tool_misuse_exploitation" },
   ] }; };
   const r = await extractDigestItems(bigReport, { llmFn: llm });
   assert.ok(r.chunks >= 2, `expected multiple chunks, got ${r.chunks}`);
@@ -138,7 +138,7 @@ await test("fetchFullText is used when stored text is short", async () => {
   const shortRep = { id: "r2", title: "GTIG AI Threat Tracker", url: "https://x/threat-tracker", full_text: "tiny" };
   let fetched = false;
   const fetchFullText = async () => { fetched = true; return "FULL REPORT ".repeat(500); };
-  const llm = async () => ({ is_digest: true, items: [{ item_title: "f", item_summary: "s", primary_exploit_mechanism: "prompt_injection", primary_consequence: "tool_execution" }] });
+  const llm = async () => ({ is_digest: true, items: [{ item_title: "f", item_summary: "s", main_category: "agentic_ai_threats", primary_tag: "ASI02_tool_misuse_exploitation" }] });
   await extractDigestItems(shortRep, { llmFn: llm, fetchFullText });
   assert.equal(fetched, true, "should fetch full text when stored text is short");
 });

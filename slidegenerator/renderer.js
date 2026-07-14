@@ -59,6 +59,46 @@ function estLines(text, ptSize, widthIn) {
   return Math.min(4, Math.max(1, Math.ceil(String(text || "").length / cpl)));
 }
 
+// ── Citation footnotes ────────────────────────────────────────────────────────
+// Renders a compact footnote strip at the bottom of each content slide.
+// Each entry is "[n] Publisher — Title" hyperlinked to the source URL.
+// Returns the vertical height consumed (0 if no footnotes), so callers can
+// reduce contH accordingly and avoid content/footnote overlap.
+function addFootnotes(s, footnotes) {
+  if (!footnotes?.length) return 0;
+  const items  = footnotes.slice(0, 5);
+  const lineH  = 0.16;
+  const blockH = items.length * lineH + 0.10;  // +rule gap
+  const ruleY  = FOOTER_Y - blockH - 0.02;
+  const textY  = ruleY + 0.08;
+
+  s.addShape("rect", { x: MARGIN, y: ruleY, w: FULL_W, h: 0.02,
+    fill: { color: T.silver }, line: { color: T.silver } });
+
+  const runs = [];
+  items.forEach((ref, i) => {
+    const label = clamp(
+      `${ref.publisher}${ref.title && ref.title !== ref.publisher ? ` — ${ref.title}` : ""}`,
+      110,
+    );
+    runs.push({ text: `[${ref.num}] `, options: { bold: true, color: T.blue, fontSize: 7 } });
+    runs.push({
+      text: label,
+      options: {
+        color:    T.blue,
+        fontSize: 7,
+        ...(ref.url ? { hyperlink: { url: ref.url } } : { color: T.muted }),
+        breakLine: i < items.length - 1,
+      },
+    });
+  });
+  s.addText(runs, {
+    x: MARGIN, y: textY, w: FULL_W - 1.20, h: items.length * lineH,
+    fontSize: 7, fontFace: T.fontB, color: T.muted, valign: "top", wrap: true,
+  });
+  return blockH + 0.04;
+}
+
 // ── Chrome ────────────────────────────────────────────────────────────────────
 function chrome(slide, pageNum, total) {
   // Thin bottom rule on content slides (when no branded frame)
@@ -268,6 +308,7 @@ function buildSectionC(pptx, slide, num) { buildSection("SEC_DARK",  pptx, slide
 function buildHighlight(pptx, slide, pageNum, total) {
   const s   = pptx.addSlide({ masterName: "CONTENT" });
   const top = addTitle(s, slide.headline || "", slide.kicker || null);
+  addFootnotes(s, slide.footnotes);
 
   const mainM = slide.metrics?.[0];
   if (mainM) {
@@ -447,7 +488,8 @@ function buildTeamCards(pptx, slide, pageNum, total) {
 function buildTwoColumn(pptx, slide, pageNum, total) {
   const s     = pptx.addSlide({ masterName: "CONTENT" });
   const top   = addTitle(s, slide.headline || "", slide.kicker || null);
-  const contH = FOOTER_Y - top - 0.12;
+  const footH = addFootnotes(s, slide.footnotes);
+  const contH = FOOTER_Y - top - 0.12 - footH;
   const cw    = FULL_W / 2 - 0.16;
   const all   = (slide.bullets || []).filter(b => bt(b));
   const mid   = Math.ceil(all.length / 2);
@@ -466,31 +508,27 @@ function buildTwoColumn(pptx, slide, pageNum, total) {
 function buildDefault(pptx, slide, pageNum, total) {
   const s     = pptx.addSlide({ masterName: "CONTENT" });
   const top   = addTitle(s, slide.headline || "", slide.kicker || null);
-  const contH = FOOTER_Y - top - 0.12;
+  const footH = addFootnotes(s, slide.footnotes);
+  const contH = FOOTER_Y - top - 0.12 - footH;
   const hasDiag    = !!slide.diagram?.image_data;
   const hasMetrics = !hasDiag && Array.isArray(slide.metrics) && slide.metrics.length > 0;
 
   if (hasDiag) {
-    // Stacked: compact bullets at top, full-width diagram fills the rest.
-    // Bullets share the slide with a full-width diagram, so they run a touch
-    // smaller than the 24pt used on text-only slides to avoid crowding the visual.
     const bulletsH = Math.min(contH * 0.40, 2.40);
     const gapY     = top + bulletsH + 0.12;
-    const diagH    = FOOTER_Y - gapY - 0.10;
+    const diagH    = FOOTER_Y - footH - gapY - 0.10;
     addBullets(s, slide.bullets, MARGIN, top, FULL_W, bulletsH, { sz: 18, gap: 10, max: 4 });
-    // Thin rule separating bullets from diagram
     s.addShape("rect", { x: MARGIN, y: gapY - 0.08, w: FULL_W, h: 0.02,
       fill: { color: "DDE4EC" }, line: { color: "DDE4EC" } });
     embedDiagram(s, slide.diagram, MARGIN, gapY, FULL_W, diagH);
   } else {
-    // Side-by-side: bullets left, metrics right (or bullets full-width if no metrics).
     const lw = hasMetrics ? 6.40 : FULL_W;
     const rx = MARGIN + lw + 0.26, rw = W - rx - MARGIN;
     addBullets(s, slide.bullets, MARGIN, top, lw, contH, {
-      sz:      24,
-      gap:     16,
-      max:     6,
-      valign:  "top",
+      sz:     24,
+      gap:    16,
+      max:    6,
+      valign: "top",
     });
     if (hasMetrics) statCards(s, slide.metrics, rx, top + 0.06, rw, contH - 0.12);
   }

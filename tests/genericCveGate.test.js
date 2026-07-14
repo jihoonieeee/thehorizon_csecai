@@ -13,13 +13,15 @@ function test(name, fn) {
   catch (e) { console.error(`  ✗ ${name}\n    ${e.message}`); failed++; }
 }
 
+// A generic-appsec CVE is now identified by the classifier PLACING it in
+// unclear_or_adjacent (the taxonomy prompt routes non-AI-surface CVEs there),
+// not by a separate mechanism field.
 const genericCve = (extra = {}) => ({
   source_type: "vulnerability",
   category: "unclear_or_adjacent",
   trust_tier: "high",
   title: "CVE-2026-1000: SQL injection in Open WebUI",
   short_summary: "A SQL injection vulnerability in Open WebUI allows authenticated users to read the database.",
-  mechanism_classification: { primary_exploit_mechanism: "generic_software_vulnerability" },
   ...extra,
 });
 
@@ -37,9 +39,9 @@ test("an ACTIVELY-EXPLOITED generic CVE survives (realized reality → not gated
   assert.equal(realityOf(exploited), "realized");
   assert.equal(isGenericNoiseCve(exploited), false);
 });
-test("a non-generic-mechanism vuln is never gated (real AI mechanism)", () => {
-  const aiVuln = genericCve({ mechanism_classification: { primary_exploit_mechanism: "prompt_injection" } });
-  assert.equal(isGenericNoiseCve(aiVuln), false);
+test("a vuln with no assigned category is never gated (safety)", () => {
+  const noCat = genericCve({ category: undefined });
+  assert.equal(isGenericNoiseCve(noCat), false);
 });
 test("a CVE placed in a real offensive category is never gated", () => {
   const placed = genericCve({ category: "llm_threats" });
@@ -49,11 +51,10 @@ test("a non-vulnerability source is never gated", () => {
   const research = genericCve({ source_type: "research_finding" });
   assert.equal(isGenericNoiseCve(research), false);
 });
-test("reads mechanism from intelligence.mechanism_classification too (DB-row shape)", () => {
+test("reads category from main_category too (DB-row shape)", () => {
   const dbRow = {
     source_type: "vulnerability", main_category: "unclear_or_adjacent", trust_tier: "high",
     title: "CVE-2026-1002: path traversal in Flowise", short_summary: "Path traversal in Flowise.",
-    intelligence: { mechanism_classification: { primary_exploit_mechanism: "generic_software_vulnerability" } },
   };
   assert.equal(isGenericNoiseCve(dbRow), true);
 });
