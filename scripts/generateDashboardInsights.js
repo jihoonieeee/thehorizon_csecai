@@ -777,6 +777,7 @@ const SRC_TYPE_RANK = {
 const titleOf = (t) => String(t || "").trim();
 
 const ATTRIBUTION_SYSTEM = loadPrompt("insights/attribution").system;
+const CITE_GROUND_SYSTEM = loadPrompt("insights/citation-grounding").system;
 
 function buildAttributionPrompt(catLabel, windowLabel, insights, sources) {
   const insightLines = insights.map((p, i) => `[${i}] ${p.insight}`).join("\n");
@@ -851,7 +852,7 @@ export async function attributeSources(insights, catSources, windowLabel, catLab
     const seenUrl = new Set();
     const seenTitle = new Set();
     const srcs = [];
-    for (const n of nums.slice(0, 5)) {
+    for (const n of nums.slice(0, 3)) {   // prefer 1, cap at 3 — the insight is validated against these only
       const s = ranked[n - 1];
       if (!s) continue;
       const uk = normUrl(s.url), tk = normTitle(s.title);
@@ -871,6 +872,67 @@ export async function attributeSources(insights, catSources, windowLabel, catLab
     }
     return { ...p, sources: srcs };
   });
+}
+
+// ── Citation grounding: keep only bullets the CITED sources actually support ────
+// Runs AFTER attribution. Each explanation bullet is checked against ONLY the
+// insight's cited sources (not the whole corpus). This catches the failure where a
+// bullet drifts to a DIFFERENT source's finding ("A second attack, FloatDoor…"),
+// which the pool-wide fact-check missed because that fact was real elsewhere in the
+// window. Unsupported bullets are dropped; if the insight's explanation collapses,
+// the whole insight is removed — a headline whose walkthrough can't be grounded in
+// its own citations is not trustworthy.
+async function groundExplanationsInCitations(insights, catSources, catLabel) {
+  if (!process.env.ANTHROPIC_API_KEY) return insights;
+  const normUrl = (u) => String(u || "").toLowerCase()
+    .replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[?#].*$/, "").replace(/\/+$/, "");
+  const byUrl = new Map();
+  for (const s of (catSources || [])) if (s.url) byUrl.set(normUrl(s.url), s);
+
+  const kept = [];
+  for (const p of insights) {
+    const bullets = Array.isArray(p.explanation_points) ? p.explanation_points.filter(Boolean) : [];
+    if (!bullets.length) { kept.push(p); continue; }
+
+    const cited = (p.sources || []).map(c => byUrl.get(normUrl(c.url))).filter(Boolean);
+    if (!cited.length) {
+      // No resolvable cited-source text — can't ground the walkthrough. Keep the
+      // (already headline-QA'd) insight but drop the unverifiable elaboration.
+      kept.push({ ...p, explanation_points: [], explanation: "", explanation_qa: "no_citations" });
+      continue;
+    }
+
+    const citedText = cited.map((s, i) => `[S${i + 1}] ${titleOf(s.title)} — ${summaryText(s).slice(0, 500)}`).join("\n");
+    let verdicts;
+    try {
+      const out = await callAnthropic({
+        system: CITE_GROUND_SYSTEM, task: "dashboard_citation_grounding",
+        model: process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
+        user: `Insight: ${p.insight}\n\nCITED SOURCES (the only allowed scope):\n${citedText}\n\nBULLETS:\n${bullets.map((b, i) => `[${i}] ${b}`).join("\n")}\n\nVerdict for every bullet index.`,
+        maxTokens: 700,
+      });
+      verdicts = Array.isArray(out.verdicts) ? out.verdicts : null;
+    } catch { verdicts = null; }
+    if (!verdicts) { kept.push(p); continue; }   // QA couldn't run — keep as-is
+
+    const good = bullets.filter((_, k) => {
+      const v = verdicts.find(v => v.index === k);
+      return !v || v.verdict === "ok";
+    });
+    const dropped = bullets.length - good.length;
+    if (dropped) {
+      const badReasons = verdicts.filter(v => v.verdict === "reject").map(v => (v.reason || "").slice(0, 55));
+      console.log(`  [QA:citation] "${p.insight.slice(0, 46)}" — dropped ${dropped}/${bullets.length} ungrounded bullet(s): ${badReasons.join(" | ").slice(0, 90)}`);
+    }
+    // If the explanation collapses (fewer than half, or under 2 bullets survive),
+    // the insight isn't grounded in its citations → remove it entirely.
+    if (good.length < Math.max(2, Math.ceil(bullets.length / 2))) {
+      console.log(`  [QA:citation] REMOVED insight — walkthrough not grounded in its citations: ${p.insight.slice(0, 55)}`);
+      continue;
+    }
+    kept.push({ ...p, explanation_points: good, explanation: good.join(" "), explanation_qa: "citation_grounded" });
+  }
+  return kept;
 }
 
 // ── Top sources: deterministic filter → LLM semantic rank + justify ────────────
@@ -1010,45 +1072,26 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs, leadFl
   const insightQa = {};
   if (insights.length) insights = await qaInsights(insights, maturity, cat.label, insightQa);
 
-  // Fact-check the depth EXPLANATIONS against the same findings they were written
-  // from. If an explanation invents specifics (e.g. a fabricated CVE number) or
-  // overreaches the evidence, the whole insight is UNTRUSTWORTHY — a headline built
-  // on the same reasoning can't be trusted just because the paragraph was cut, so a
-  // failed explanation REMOVES the entire insight, not just its narrative.
-  // `findings` is the grounded pool.
-  const explained = insights.map((p, i) => ({ i, text: p.explanation })).filter(x => x.text && x.text.length > 40);
-  if (explained.length) {
-    const explQa = {};
-    const evidenceText = findings.slice(0, 70).map((f, i) => `${i + 1}. ${f}`).join("\n");
-    const verdicts = await qaStatements(explained.map(x => x.text), evidenceText, "insight-explanation", explQa);
-    const drop = new Set();
-    explained.forEach((x, k) => {
-      if (explQa.ran && !verdicts[k]) {
-        drop.add(x.i);
-        console.log(`  [QA] REMOVED insight [${x.i}] — explanation failed fact-check: ${insights[x.i].insight.slice(0, 70)}`);
-      } else if (explQa.ran) {
-        insights[x.i].explanation_qa = "passed";
-      }
-    });
-    if (drop.size) insights = insights.filter((_, i) => !drop.has(i));
-  }
+  const emptyResult = () => ({
+    insights: [], assessment: null, assessment_qa: "not_generated",
+    qa_status: insightQa.ran ? "passed" : (insightQa.reason === "no_api_key" ? "skipped_no_key" : "degraded"),
+    confidence: confidence.level, confidence_reason: confidence.reason,
+    evidence_maturity: maturity, removed: beforeQa,
+  });
+  if (!insights.length) { console.log(`     (no insight-worthy material — ${beforeQa} candidate(s) all filtered)`); return emptyResult(); }
 
-  // NOTHING INSIGHT-WORTHY → return an empty (but valid) result, not an error. The
-  // caller writes an empty insight set so the card honestly shows "no insight this
-  // period" and stale insights are overwritten — better than forcing a weak one.
-  if (!insights.length) {
-    console.log(`     (no insight-worthy material — ${beforeQa} candidate(s) all filtered)`);
-    return {
-      insights: [], assessment: null, assessment_qa: "not_generated",
-      qa_status: insightQa.ran ? "passed" : (insightQa.reason === "no_api_key" ? "skipped_no_key" : "degraded"),
-      confidence: confidence.level, confidence_reason: confidence.reason,
-      evidence_maturity: maturity, removed: beforeQa,
-    };
-  }
-
-  // Attribution: tag the real sources that most critically support each insight,
-  // so the dashboard shows clickable citations rather than prose "evidence".
+  // Attribution FIRST — tag the real sources that support each insight, so the
+  // grounding check below can validate the explanation against ONLY those cited
+  // sources (not the whole corpus). Order matters: writing the walkthrough from a
+  // multi-source theme and validating it against the whole pool let bullets drift
+  // to other sources' findings ("A second attack, FloatDoor…") and still pass.
   insights = await attributeSources(insights, maturitySrcs, windowLabel, cat.label);
+
+  // CITATION GROUNDING — drop explanation bullets the cited sources don't support;
+  // remove the insight if its walkthrough collapses. This is the strong guarantee
+  // that every bullet is verifiable from the citations shown beside it.
+  insights = await groundExplanationsInCitations(insights, maturitySrcs, cat.label);
+  if (!insights.length) { console.log(`     (all insights removed by citation grounding)`); return emptyResult(); }
 
   // QA the category ASSESSMENT sentence itself — it drives period-over-period
   // comparison, so it must be grounded too. (Previously stored un-audited.)
