@@ -351,6 +351,12 @@ export async function loadWindowSources(from, to) {
     .from("sources")
     .select(SRC_SELECT)
     .eq("validation_status", "pass")
+    // Insights are bucketed BY DATE into a reporting window — a source with an
+    // estimated/inferred date could be counted in the wrong period, so only
+    // authoritative-dated sources feed insight generation (matches the
+    // newsletter, agent, and slide surfaces). Confirm a date on the Sources page
+    // (→ date_confidence="exact") to include the source.
+    .eq("date_confidence", "exact")
     .gte("date_published", from)
     .lte("date_published", to)
     .not("main_category", "is", null);
