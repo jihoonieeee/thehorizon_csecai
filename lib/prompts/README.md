@@ -28,6 +28,14 @@ plumbing, not prose to tune. Config-driven blocks (`buildMechanismPromptBlock`,
 | `agent/planner` | Haiku query expansion → search terms, tags, timeframe, scope. |
 | `agent/verifier` | Haiku anti-hallucination check of the drafted answer vs its sources. |
 
+## newsletter — weekly reading-list email
+
+| Prompt | What it does |
+|---|---|
+| `newsletter/source-blurb` | One-sentence reading-list blurb per source (Haiku, batched). |
+| `newsletter/dedup-qa` | QA pass: collapse duplicate coverage of the same event to one canonical source before the category round-robin. |
+| `newsletter/digest` | Assemble the selected reading list into the plain-text email (layout only). |
+
 ## insights — dashboard insight generation
 
 | Prompt | What it does |

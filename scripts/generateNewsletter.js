@@ -13,7 +13,7 @@ import "dotenv/config";
 import fs   from "fs";
 import path from "path";
 import { createClient } from "@supabase/supabase-js";
-import { generateNewsletterHtml, buildPeriod, loadReadingList } from "../lib/newsletter/index.js";
+import { generateNewsletterHtml, buildPeriod, loadReadingList, dedupReadingList } from "../lib/newsletter/index.js";
 
 const args    = process.argv.slice(2);
 const getArg  = (flag, def) => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : def; };
@@ -41,7 +41,9 @@ async function main() {
   console.log(`  Window : ${period.label} (${period.date_from} → ${period.date_to})`);
   if (DRY_RUN) {
     console.log("  [DRY-RUN] Printing context only.\n");
-    const sources = await loadReadingList(supabase, period.date_from, period.date_to);
+    const sources = await loadReadingList(supabase, period.date_from, period.date_to, 10, {
+      dedup: dedupReadingList, log: msg => console.log(`  ${msg}`),
+    });
     console.log(`  ${sources.length} sources in reading list:`);
     for (const s of sources) console.log(`    ${s.date_published?.slice(0, 10)}  [${s.main_category}]  ${s.title?.slice(0, 70)}`);
     return;
