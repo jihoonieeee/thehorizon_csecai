@@ -30,6 +30,12 @@ const USE_GEMINI = hasFlag("--gemini") && !FROM_SKIPS;  // --from-skips always u
 // ── LLM provider selection ────────────────────────────────────────────────────
 if (USE_GEMINI) {
   process.env.LLM_PROVIDER_ORDER = "gemini";
+  // Force all Gemini slots to gemini-2.5-flash (full model) — the lite model
+  // (gemini-2.5-flash-lite) hits 503 capacity errors under sustained load.
+  // These override both callLLM.js constants AND the llmRouter/taskProfiles env vars.
+  process.env.GEMINI_FLASH_MODEL = "gemini-2.5-flash";
+  process.env.GEMINI_MODEL       = "gemini-2.5-flash";
+  process.env.GEMINI_LITE_MODEL  = "gemini-2.5-flash";
   delete process.env.OPENAI_API_KEY;
   delete process.env.OPENAI_API_KEY_2;
   delete process.env.GROQ_API_KEY;
