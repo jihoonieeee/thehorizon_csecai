@@ -164,15 +164,16 @@ function TrendChart({ trend }) {
 
 // ── Confidence chip + evidence-maturity bar ─────────────────────────────────────
 
+// Mirrors MATURITY_RUNGS in lib/dashboard/evidenceMaturity.js
 const MATURITY_RUNGS = [
-  { key: "research",        label: "Research",       color: "#94a3b8" },
-  { key: "vulnerabilities", label: "Vulnerabilities",color: "#f59e0b" },
-  { key: "exploitation",    label: "Exploited",      color: "#ef4444" },
-  { key: "incidents",       label: "Incidents",      color: "#b91c1c" },
-  { key: "operational",     label: "Operational",    color: "#7f1d1d" },
+  { key: "research",     label: "Research",     color: "#94a3b8" },
+  { key: "demonstrated", label: "Demonstrated", color: "#3b82f6" },
+  { key: "disclosed",    label: "Disclosed",    color: "#f59e0b" },
+  { key: "observed",     label: "Observed",     color: "#ef4444" },
+  { key: "operational",  label: "Operational",  color: "#7f1d1d" },
 ];
 
-function MaturityBar({ maturity }) {
+function MaturityBar({ maturity, onSelect, selected }) {
   const m = maturity || {};
   const ladder = MATURITY_RUNGS.map(r => ({ ...r, n: m[r.key] || 0 }));
   const sum = ladder.reduce((s, r) => s + r.n, 0);
@@ -181,19 +182,78 @@ function MaturityBar({ maturity }) {
     <div className="hz-maturity">
       <div className="hz-maturity-bar">
         {ladder.filter(r => r.n > 0).map(r => (
-          <span key={r.key} className="hz-maturity-seg"
+          <span key={r.key}
+            className={`hz-maturity-seg${selected === r.key ? " active" : ""}${onSelect ? " clickable" : ""}`}
             style={{ flexGrow: r.n, background: r.color }}
-            title={`${r.label}: ${r.n}`} />
+            title={`${r.label}: ${r.n} — click to explore`}
+            onClick={onSelect ? () => onSelect(r.key) : undefined}
+          />
         ))}
       </div>
       <div className="hz-maturity-legend">
         {ladder.filter(r => r.n > 0).map(r => (
-          <span key={r.key} className="hz-maturity-legend-item">
+          <button key={r.key}
+            className={`hz-maturity-legend-item${selected === r.key ? " active" : ""}${onSelect ? " clickable" : ""}`}
+            onClick={onSelect ? () => onSelect(r.key) : undefined}
+            title={`Explore ${r.n} ${r.label} source${r.n !== 1 ? "s" : ""}`}
+          >
             <span className="hz-maturity-dot" style={{ background: r.color }} />
             {r.label} {r.n}
-          </span>
+          </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── Maturity drilldown panel ──────────────────────────────────────────────────
+function MaturityDrilldownPanel({ level, category, sources, onClose }) {
+  if (!level || !category) return null;
+  const rung  = MATURITY_RUNGS.find(r => r.key === level);
+  const rows  = sources || [];
+  const color = CAT_COLOR[category] || "#64748b";
+
+  return (
+    <div className="hz-tag-drilldown hz-maturity-drilldown">
+      <div className="hz-tag-drilldown-header">
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span className="hz-maturity-dot" style={{ background: rung?.color, width: 10, height: 10, borderRadius: "50%", display: "inline-block" }} />
+          <span className="hz-tag-drilldown-title">{rung?.label || level}</span>
+          <span className="hz-tag-drilldown-cat" style={{ color }}>
+            · {CAT_LABEL[category] || category}
+          </span>
+          <span className="hz-tag-drilldown-count">· {rows.length} source{rows.length !== 1 ? "s" : ""}</span>
+        </div>
+        <button className="hz-tag-drilldown-close" onClick={onClose}>✕</button>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="hz-overview-empty">No sources at this maturity level in this period.</p>
+      ) : (
+        <ul className="hz-tag-drilldown-list">
+          {rows.map((s, i) => {
+            const trust = TRUST_BADGE[s.trust_tier] || TRUST_BADGE.unknown;
+            return (
+              <li key={i} className="hz-tag-drilldown-row">
+                <span className="hz-incident-dot" style={{ background: rung?.color }} />
+                <div className="hz-tag-drilldown-body">
+                  <div className="hz-tag-drilldown-src-title">
+                    {s.url
+                      ? <a href={s.url} target="_blank" rel="noopener noreferrer">{s.title || s.url}</a>
+                      : (s.title || "Untitled")}
+                  </div>
+                  <div className="hz-incident-meta">
+                    {s.publisher && <span className="hz-incident-publisher">{s.publisher}</span>}
+                    {s.date      && <span className="hz-incident-date">{s.date}</span>}
+                    <span className={`hz-trust-badge ${trust.cls}`}>{trust.label}</span>
+                  </div>
+                  {s.summary && <div className="hz-incident-summary" style={{ marginTop: 3 }}>{s.summary}</div>}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
@@ -273,7 +333,7 @@ function InsightItem({ p }) {
                   >
                     <span className="hz-source-chip-pub">{s.publisher || new URL(s.url).hostname.replace("www.", "")}</span>
                     {s.date && <span className="hz-source-chip-date">{s.date.slice(0, 7)}</span>}
-                    {s.importance === "realized" && <span className="hz-source-chip-badge">confirmed</span>}
+                    {(s.importance === "operational" || s.importance === "observed") && <span className="hz-source-chip-badge">confirmed</span>}
                   </a>
                 ))}
               </div>
@@ -288,7 +348,7 @@ function InsightItem({ p }) {
 
 // ── Category card ─────────────────────────────────────────────────────────────
 
-function CategoryCard({ cat, trendValues }) {
+function CategoryCard({ cat, trendValues, selectedMaturity, onMaturitySelect }) {
   const color = CAT_COLOR[cat.key];
   const count = cat.source_count ?? 0;
   const insights = cat.insights || [];
@@ -309,7 +369,11 @@ function CategoryCard({ cat, trendValues }) {
 
         <div className="hz-cat-card-name">{cat.label}</div>
 
-        <MaturityBar maturity={cat.evidence_maturity} />
+        <MaturityBar
+          maturity={cat.evidence_maturity}
+          selected={selectedMaturity}
+          onSelect={level => onMaturitySelect(cat.key, level)}
+        />
 
         {insights.length > 0 && (
           <div className="hz-cat-card-insight">
@@ -360,7 +424,7 @@ function TopIncidents({ incidents }) {
               {/* Editor's justification — why this is a top source this period */}
               {inc.why && <div className="hz-incident-why">{inc.why}</div>}
               <div className="hz-incident-meta">
-                <ImportanceBadge tier={inc.importance} />
+                <MaturityBadge level={inc.importance} />
                 <span className="hz-incident-publisher">{inc.publisher}</span>
                 <span className="hz-incident-date">{inc.date}</span>
                 <span className="hz-incident-cat" style={{ color }}>{CAT_LABEL[inc.category] || inc.category}</span>
@@ -502,7 +566,8 @@ export function OverviewPage() {
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState(null);
   const [lastFetch,  setLastFetch]  = useState(null);
-  const [tagSelection, setTagSelection] = useState(null); // { tag, category }
+  const [tagSelection,      setTagSelection]      = useState(null); // { tag, category }
+  const [maturitySelection, setMaturitySelection] = useState(null); // { category, level }
   const [showLegend, setShowLegend] = useState(false);
   const timerRef = useRef(null);
 
@@ -517,7 +582,8 @@ export function OverviewPage() {
   // Initial load and window change
   useEffect(() => {
     load(win);
-    setTagSelection(null); // drilldown is window-scoped; clear when switching
+    setTagSelection(null);
+    setMaturitySelection(null);
   }, [win, load]);
 
   // Auto-refresh every 5 minutes
@@ -633,9 +699,33 @@ export function OverviewPage() {
                 key={cat.key}
                 cat={cat}
                 trendValues={catTrend(cat.key)}
+                selectedMaturity={maturitySelection?.category === cat.key ? maturitySelection.level : null}
+                onMaturitySelect={(catKey, level) => {
+                  // Toggle off if same selection
+                  if (maturitySelection?.category === catKey && maturitySelection?.level === level) {
+                    setMaturitySelection(null);
+                  } else {
+                    setMaturitySelection({ category: catKey, level });
+                    setTagSelection(null); // close tag drilldown if open
+                  }
+                }}
               />
             ))}
           </div>
+
+          {/* Maturity drilldown — shown inline below cards */}
+          {maturitySelection && (() => {
+            const cat = (data.categories || []).find(c => c.key === maturitySelection.category);
+            const sources = cat?.maturity_sources?.[maturitySelection.level] || [];
+            return (
+              <MaturityDrilldownPanel
+                level={maturitySelection.level}
+                category={maturitySelection.category}
+                sources={sources}
+                onClose={() => setMaturitySelection(null)}
+              />
+            );
+          })()}
         </>
       )}
 
@@ -667,7 +757,7 @@ export function OverviewPage() {
             <span className="hz-overview-section-note">
               {data.top_sources_justified
                 ? "editor-selected & ranked from this period's analysis — most consequential first"
-                : "ranked by importance — in-the-wild incidents first, then demonstrated, then research"}
+                : "ranked by maturity — operational and observed first, then disclosed, demonstrated, research"}
             </span>
           </div>
           <TopIncidents incidents={data.top_incidents} />

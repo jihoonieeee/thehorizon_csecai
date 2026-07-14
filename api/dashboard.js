@@ -308,17 +308,37 @@ export default async function handler(req, res) {
       const confidence = deriveConfidence(maturity);
       const cd         = categoryData[c.key] || null;
 
+      // Per-maturity-level source lists for drilldown (capped at 30 per level).
+      const ranked = srcs.map(importanceRank).sort(byImportanceThenRecency);
+      const maturitySources = {};
+      for (const s of ranked) {
+        const level = s._maturity || "research";
+        if (!maturitySources[level]) maturitySources[level] = [];
+        if (maturitySources[level].length < 30) {
+          maturitySources[level].push({
+            title:      cleanTitle(s.title),
+            url:        s.url,
+            publisher:  s.publisher,
+            date:       s.date_published?.slice(0, 10),
+            trust_tier: s.trust_tier,
+            maturity:   level,
+            summary:    (s.analyst_brief || s.short_summary || "").trim().slice(0, 300) || null,
+          });
+        }
+      }
+
       return {
         key:               c.key,
         label:             c.label,
         short:             c.short,
         source_count:      srcs.length,
         top_sources:       top,
-        insights:          cd?.insights || null,             // structured insight objects
+        insights:          cd?.insights || null,
         assessment:        cd?.assessment || null,
-        confidence:        confidence.level,                 // deterministic, live
+        confidence:        confidence.level,
         confidence_reason: confidence.reason,
         evidence_maturity: maturity,
+        maturity_sources:  maturitySources,
         insight_from:      cd ? insightFromLabel : null,
       };
     });

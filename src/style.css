@@ -3924,3 +3924,33 @@ details[open] .hz-gen-advanced-toggle::before { content: "▾ "; }
   display: block; font-size: 0.72rem; color: #c2410c;
   margin-top: 2px; font-style: italic;
 }
+
+/* ── Legend maturity rows ─────────────────────────────────────────────────── */
+.hz-legend-maturity-row {
+  display: grid; grid-template-columns: 120px 1fr; gap: 8px 12px;
+  align-items: start; padding: 8px 0;
+  border-top: 1px solid var(--border); font-size: 0.8rem;
+}
+.hz-legend-maturity-row:first-of-type { border-top: none; }
+.hz-legend-maturity-left {
+  display: flex; align-items: center; gap: 7px; padding-top: 1px;
+}
+.hz-legend-maturity-body { line-height: 1.5; color: var(--text-secondary); }
+.hz-legend-maturity-desc { color: var(--text-primary); margin-bottom: 3px; }
+
+/* ── Maturity bar — clickable segments ───────────────────────────────────── */
+.hz-maturity-seg.clickable { cursor: pointer; transition: opacity 0.12s, filter 0.12s; }
+.hz-maturity-seg.clickable:hover { opacity: 0.8; filter: brightness(1.12); }
+.hz-maturity-seg.active { outline: 2px solid #fff; outline-offset: -2px; filter: brightness(1.15); }
+
+.hz-maturity-legend-item { background: none; border: none; padding: 0; font: inherit; }
+.hz-maturity-legend-item.clickable { cursor: pointer; border-radius: 3px; padding: 1px 3px; }
+.hz-maturity-legend-item.clickable:hover { background: var(--surface-2); }
+.hz-maturity-legend-item.active { font-weight: 700; background: var(--surface-2); border-radius: 3px; padding: 1px 3px; }
+
+/* ── Maturity drilldown panel ─────────────────────────────────────────────── */
+.hz-maturity-drilldown { margin-top: 12px; }
+.hz-maturity-drilldown .hz-incident-summary {
+  font-size: 0.78rem; color: var(--text-secondary); line-height: 1.45;
+  margin-top: 2px;
+}
