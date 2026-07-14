@@ -26,19 +26,6 @@ const MATURITY = [
     signals: "\"ongoing campaign\", \"attributed to [named group]\", \"multiple victims\", threat intelligence spanning weeks or months, GTIG/CrowdStrike campaign reporting." },
 ];
 
-const TRUST = [
-  { cls: "hz-trust-primary", label: "Primary",
-    desc: "Official government agencies (CISA, NCSC, NIST) or the AI labs who built the systems (Anthropic, OpenAI). Highest authority.", how: "Manually set based on publisher domain." },
-  { cls: "hz-trust-high",    label: "High",
-    desc: "Established security vendors (Wiz, Google, Microsoft), peer-reviewed academic publications, well-regarded security research.", how: "Manually or automatically assigned." },
-  { cls: "hz-trust-curated", label: "Curated",
-    desc: "Manually imported from the analyst's curated backlog. Human-reviewed. Never auto-deleted.", how: "Set on import via importCuratedExcel.js / importCuratedPdfs.js." },
-  { cls: "hz-trust-medium",  label: "Medium",
-    desc: "General security news outlets — accurate but may rely on secondary reporting.", how: "Automated." },
-  { cls: "hz-trust-low",     label: "Low",
-    desc: "Lower-confidence sources — blogs, unverified aggregators.", how: "Automated." },
-];
-
 const CATEGORIES = [
   { color: "#3583C9", name: "Traditional AI Threats",
     desc: "Attacks on ML models themselves — data poisoning, model extraction, adversarial evasion, backdoors, membership inference." },
@@ -108,34 +95,13 @@ export function LegendPanel({ onClose }) {
         </ul>
       </Section>
 
-      {/* Trust tier */}
-      <Section
-        title="Source Trust Tier"
-        note="Confidence in the source's accuracy and independence. A confidence annotation only — not a ranking signal. A low-trust source can still document an operational campaign."
-      >
-        {TRUST.map(t => (
-          <div key={t.label} className="hz-legend-row">
-            <div className="hz-legend-row-left">
-              <span className={`hz-trust-badge ${t.cls}`}>{t.label}</span>
-            </div>
-            <div className="hz-legend-row-right">
-              {t.desc}
-              <span className="hz-legend-derivation">{t.how}</span>
-            </div>
-          </div>
-        ))}
-      </Section>
-
       {/* Threat categories */}
-      <Section
-        title="Threat Categories"
-        note="Assigned by the Layer 3/4 pipeline. Sources that are defensive, governance-related, or not clearly offensive are counted as 'Other'."
-      >
+      <Section title="Threat Categories">
         {CATEGORIES.map(c => (
           <div key={c.name} className="hz-legend-row">
             <div className="hz-legend-row-left">
               <span className="hz-legend-cat-badge" style={{ background: c.color }}>
-                {c.name.split(" ")[0]}
+                {c.name.split(" ").slice(0, 2).join(" ")}
               </span>
             </div>
             <div className="hz-legend-row-right">
@@ -144,10 +110,6 @@ export function LegendPanel({ onClose }) {
           </div>
         ))}
       </Section>
-
-      <div className="hz-legend-footer">
-        Full reference: <code>src/docs/legend.md</code> · Maturity prompt: <code>lib/prompts/understand/maturity.md</code>
-      </div>
     </div>
   );
 }

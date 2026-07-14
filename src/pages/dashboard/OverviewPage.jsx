@@ -16,14 +16,6 @@ const CAT_COLOR = {
 };
 
 
-const TRUST_BADGE = {
-  primary:  { label: "Primary",  cls: "hz-trust-primary"  },
-  high:     { label: "High",     cls: "hz-trust-high"     },
-  curated:  { label: "Curated",  cls: "hz-trust-curated"  },
-  medium:   { label: "Medium",   cls: "hz-trust-medium"   },
-  low:      { label: "Low",      cls: "hz-trust-low"      },
-  unknown:  { label: "Unknown",  cls: "hz-trust-unknown"  },
-};
 
 const CAT_LABEL = {
   traditional_ai_threats: "Traditional AI Threats",
@@ -401,14 +393,13 @@ function CategoryCard({ cat, trendValues, selectedMaturity, onMaturitySelect }) 
 
 function TopIncidents({ incidents }) {
   if (!incidents?.length) return (
-    <p className="hz-overview-empty">No high-trust sources in this period.</p>
+    <p className="hz-overview-empty">No sources in this period.</p>
   );
 
   return (
     <div className="hz-incidents-list">
       {incidents.map((inc, i) => {
-        const color  = CAT_COLOR[inc.category] || "#64748b";
-        const trust  = TRUST_BADGE[inc.trust_tier] || TRUST_BADGE.unknown;
+        const color = CAT_COLOR[inc.category] || "#64748b";
         return (
           <div key={i} className="hz-incident-row">
             <div className="hz-incident-dot" style={{ background: color }} />
@@ -419,14 +410,12 @@ function TopIncidents({ incidents }) {
                   <a href={inc.url} target="_blank" rel="noopener noreferrer">{inc.title}</a>
                 ) : inc.title}
               </div>
-              {/* Editor's justification — why this is a top source this period */}
               {inc.why && <div className="hz-incident-why">{inc.why}</div>}
               <div className="hz-incident-meta">
                 <MaturityBadge level={inc.importance} />
                 <span className="hz-incident-publisher">{inc.publisher}</span>
                 <span className="hz-incident-date">{inc.date}</span>
                 <span className="hz-incident-cat" style={{ color }}>{CAT_LABEL[inc.category] || inc.category}</span>
-                <span className={`hz-trust-badge ${trust.cls}`}>{trust.label}</span>
               </div>
               {inc.summary && !inc.why && <div className="hz-incident-summary">{inc.summary}</div>}
             </div>
