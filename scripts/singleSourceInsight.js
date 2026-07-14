@@ -17,9 +17,11 @@ import { computeImportance } from "../lib/pipeline/scoring/importance.js";
 
 const args   = process.argv.slice(2);
 const getArg = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i+1] ? args[i+1] : d; };
+const hasFlag = f => args.includes(f);
 const SRC_ID = getArg("--id", null);
 const WINKEY = getArg("--window-key", null);
 const CAT    = getArg("--category", "llm_threats");
+const APPEND = hasFlag("--append");   // add to the card's existing insights instead of replacing
 if (!SRC_ID || !WINKEY) { console.error("need --id and --window-key"); process.exit(1); }
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -90,20 +92,32 @@ ${finding}`;
   insight.explanation_points.forEach((b, i) => console.log(`  ${i+1}. ${b}`));
   console.log(`Cites: ${insight.sources[0].publisher} — ${insight.sources[0].url}`);
 
+  // In append mode, merge into the card's existing insights (dedup by headline).
+  let insights = [insight];
+  let winLabel = "June 2026", srcCount = 1;
+  if (APPEND) {
+    const { data: cur } = await sb.from("dashboard_insights").select("points,window_label,source_count").eq("window_key", WINKEY).eq("category", CAT).maybeSingle();
+    const existing = (cur?.points?.insights || []).filter(x => x.insight !== insight.insight);
+    insights = [...existing, insight];
+    winLabel = cur?.window_label || winLabel;
+    srcCount = (cur?.source_count || 0) + 1;
+    console.log(`  [append] existing ${existing.length} + 1 = ${insights.length} insights`);
+  }
+
   const { error: upErr } = await sb.from("dashboard_insights").upsert({
     win: WINKEY.includes("-W") ? "week" : (WINKEY.includes("-Q") ? "quarter" : (WINKEY.length === 7 ? "month" : "annual")),
-    window_key: WINKEY, window_label: "June 2026", category: CAT,
+    window_key: WINKEY, window_label: winLabel, category: CAT,
     points: {
-      schema: "v2", insights: [insight],
+      schema: "v2", insights,
       assessment: (out.assessment || "").trim() || null,
       confidence: confidence.level, confidence_reason: confidence.reason,
       evidence_maturity: maturity, qa_status: "single_source", assessment_qa: "not_generated",
-      findings_basis: { facts: 0, summaries: 1, evidence_sources: 1 },
+      findings_basis: { facts: 0, summaries: insights.length, evidence_sources: insights.length },
     },
-    source_count: 1,
+    source_count: srcCount,
   }, { onConflict: "window_key,category" });
   if (upErr) throw new Error(`upsert failed: ${upErr.message}`);
-  console.log(`\n✓ upserted ${CAT} insight for ${WINKEY}`);
+  console.log(`\n✓ ${APPEND ? "appended to" : "upserted"} ${CAT} card for ${WINKEY} (${insights.length} insight(s))`);
 }
 
 main().catch(e => { console.error("FATAL:", e.message); process.exit(1); });
