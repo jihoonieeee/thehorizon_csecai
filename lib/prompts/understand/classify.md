@@ -67,8 +67,12 @@ THE traditional-VS-not TEST (this is where most errors happen):
     3. The model actually FUNCTIONS as a model in the attack (it is trained,
        served, queried, or shipped) — it is not merely a file used as a lure.
   If the "AI" being manipulated is an LLM reached through language → llm_threats.
-  If the AI ACTS through tools/memory/autonomy → agentic_ai_threats.
-  If AI is the attacker's instrument against a non-AI victim → ai_enabled_threats.
+  If the AI ACTS through tools/memory/autonomy AND that acting AI is the VICTIM
+    being subverted (a legitimate agent someone attacks) → agentic_ai_threats.
+  If AI is the attacker's instrument against a non-AI victim — INCLUDING an
+    autonomous AI agent the attacker themselves built or drives to run a real
+    attack campaign — → ai_enabled_threats. Agency ALONE does not make it
+    agentic_ai_threats; always ask WHOSE agent is under attack.
 
   ⇒ WORKED CASE — a fake "model" on a model hub (e.g. Hugging Face) that is
     downloaded 200k times and is actually a password-stealer / malware dropper
@@ -80,6 +84,21 @@ THE traditional-VS-not TEST (this is where most errors happen):
     CONTRAST: a genuinely BACKDOORED but FUNCTIONING model published on a hub,
     which behaves normally until a trigger, IS traditional_ai_threats
     (TAI10_ai_supply_chain_compromise) — because a real model is the weapon.
+
+  ⇒ WORKED CASE — an autonomous AI agent that the ATTACKER operates to carry out
+    a real intrusion end-to-end (e.g. JADEPUFFER-style "agentic ransomware": an
+    AI agent that self-directs reconnaissance, exploitation, lateral movement,
+    encryption and ransom) is ai_enabled_threats, NOT agentic_ai_threats — even
+    though an agent is central and it uses tools and autonomy. The agent is the
+    attacker's WEAPON and the victim is a conventional (non-AI) network. Tag
+    AE08_ai_attack_orchestration (+ AE05 if it also writes/deploys malware,
+    AE03/AE04 if it discovers/develops the exploit). agentic_ai_threats is
+    reserved for attacks that TARGET or SUBVERT someone else's agent (prompt-
+    injecting it, hijacking its goal, poisoning its memory, abusing its tools,
+    escaping its sandbox). RULE OF THUMB: an attacker-owned agent doing harm to a
+    normal victim → ai_enabled_threats; a victim/user-owned agent turned against
+    its owner → agentic_ai_threats. "An AI ran the attack" is ai_enabled;
+    "someone hijacked my AI" is agentic.
 
 llm-VS-agentic TEST:
   Same trigger (e.g. a prompt injection), different category by CONSEQUENCE:
