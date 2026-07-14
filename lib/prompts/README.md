@@ -72,6 +72,13 @@ plumbing, not prose to tune. Config-driven blocks (`buildMechanismPromptBlock`,
 
 | Prompt | What it does |
 |---|---|
+| `slides/deck-synthesis` | Per-category strategic synthesis → KEY INSIGHTS + MAIN HAPPENINGS JSON (one Sonnet call per category). |
+| `slides/slide-theme` | Theme/insight slide system prompt — batch generation of 3-bullet insight slides (Finding → Proof → So what). |
+| `slides/slide-content` | Single content slide system prompt — Evidence → Mechanism → Implication structure. |
+| `slides/slide-category-insights` | Category-level overview slide — 3–5 bullets summarising all key insights for ONE category. Placed first in each category section. |
+| `slides/slide-case-study` | Case-study slide system prompt — one named incident told start to finish. |
+| `slides/outlook` | 6-month forward outlook → 5 named predictions grounded in emerging research. |
+| `slides/layout` | Assign slidegenerator layout (default / two_column / highlight) to each content slide. |
 | `slides/plan` | Plan the slide structure for a briefing deck. |
 | `slides/diagram` | Generate a technical diagram spec. |
 

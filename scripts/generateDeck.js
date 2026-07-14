@@ -130,24 +130,39 @@ function reportTrends(src, n = 4) {
 // · marks supporting context (still cite if relevant).
 
 function buildCategoryBriefing(cat, srcList, evBySource) {
+  // For large categories: take top 60 by signal, but include ALL ★/▲ sources first.
+  // This keeps the briefing size manageable while preserving all high-value intelligence.
+  const MAX_SOURCES = 60;
+  const priority = s => {
+    const reality = s._imp?.reality || "";
+    if (s.starred || s.trust_tier === "primary" || reality === "realized") return 2;
+    if (reality === "proven" || s._sig >= 2) return 1;
+    return 0;
+  };
+  const topSrcs = srcList.length > MAX_SOURCES
+    ? [...srcList].sort((a, b) => priority(b) - priority(a) || b._score - a._score).slice(0, MAX_SOURCES)
+    : srcList;
+
   const lines = [
     `CATEGORY: ${CAT_LABEL[cat] || cat}`,
-    `${srcList.length} sources. ★ = confirmed incident or primary source. ▲ = proven exploit or notable research. · = supporting context.`,
+    `${srcList.length} total sources (showing top ${topSrcs.length}). ★ = confirmed incident or primary source. ▲ = proven exploit or notable research. · = supporting context.`,
     "",
   ];
 
-  for (const src of srcList) {
-    const claims = mainClaims(src, 5);
-    const nums   = keyNumbers(src, 4);
-    const trends = reportTrends(src, 4);
-    const facts  = (evBySource.get(src.id) || []).slice(0, 6);
+  for (const src of topSrcs) {
+    const prio   = priority(src);
+    const marker = prio === 2 ? "★" : prio === 1 ? "▲" : "·";
+    // High-priority: 5 claims + 4 nums + 4 trends + 4 facts
+    // Low-priority (·): 2 claims + 2 facts — keep briefing lean
+    const maxClaims = prio >= 1 ? 5 : 2;
+    const maxFacts  = prio >= 1 ? 4 : 2;
+    const claims = mainClaims(src, maxClaims);
+    const nums   = prio >= 1 ? keyNumbers(src, 3) : [];
+    const trends = prio >= 1 ? reportTrends(src, 3) : [];
+    const facts  = (evBySource.get(src.id) || []).slice(0, maxFacts);
     if (!claims.length && !facts.length && summaryText(src).length < 20) continue;
 
-    const reality  = src._imp?.reality || "";
-    const priority = (src.starred || src.trust_tier === "primary" || reality === "realized") ? "★"
-                   : (reality === "proven" || src._sig >= 2) ? "▲" : "·";
-
-    lines.push(`\n${priority} SOURCE [${src.id}]`);
+    lines.push(`\n${marker} SOURCE [${src.id}]`);
     lines.push(`  Publisher: ${src.publisher || "?"}`);
     lines.push(`  Title:     ${(src.title || "").slice(0, 100)}`);
     lines.push(`  URL:       ${src.url || "?"}`);
@@ -157,7 +172,7 @@ function buildCategoryBriefing(cat, srcList, evBySource) {
       lines.push(`  KEY CLAIMS:`);
       for (const c of claims) lines.push(`    • ${c}`);
     } else {
-      const s = summaryText(src).slice(0, 300);
+      const s = summaryText(src).slice(0, 250);
       if (s) lines.push(`  SUMMARY: ${s}`);
     }
     if (nums.length)   lines.push(`  KEY FIGURES: ${nums.join("; ")}`);
@@ -487,7 +502,7 @@ async function main() {
       raw = await callAnthropic({
         system:    SYNTHESIS_SYSTEM,
         user:      SYNTHESIS_USER(cat.key, cat.label, windowLabel, briefing, DAYS),
-        maxTokens: 4000,
+        maxTokens: 6000,
         task:      "deck_synthesis",
       });
     } catch (err) {

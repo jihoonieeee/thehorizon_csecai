@@ -927,16 +927,27 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs, leadFl
   let insights = Array.isArray(out.insights) ? out.insights : [];
   insights = insights
     .filter(p => p && typeof p.insight === "string" && p.insight.trim().length > 15)
-    .map(p => ({
-      insight:           p.insight.trim(),
-      explanation:       (p.explanation || "").trim(),
-      evidence:          (p.evidence || "").trim(),
-      broken_assumption: (p.broken_assumption || "").trim(),
-      implication:       (p.implication || "").trim(),
-      watch_next:        (p.watch_next || "").trim(),
-      confidence:        confidence.level,                 // deterministic, cannot be overstated
-      confidence_reason: (p.confidence_reason || confidence.reason).trim(),
-    }));
+    .map(p => {
+      // Elaboration is now an ARRAY of bullet points (explanation_points). Keep a
+      // joined `explanation` string too, for the fact-check QA below and back-compat
+      // with any older reader. If a model still returns a prose `explanation`, keep it
+      // as the string (the UI falls back to splitting it).
+      const points = Array.isArray(p.explanation_points)
+        ? p.explanation_points.map(s => String(s || "").trim().replace(/^[-•*]\s*/, "")).filter(s => s.length > 3)
+        : [];
+      const explanationStr = points.length ? points.join(" ") : (p.explanation || "").trim();
+      return {
+        insight:            p.insight.trim(),
+        explanation_points: points,
+        explanation:        explanationStr,
+        evidence:           (p.evidence || "").trim(),
+        broken_assumption:  (p.broken_assumption || "").trim(),
+        implication:        (p.implication || "").trim(),
+        watch_next:         (p.watch_next || "").trim(),
+        confidence:         confidence.level,                 // deterministic, cannot be overstated
+        confidence_reason:  (p.confidence_reason || confidence.reason).trim(),
+      };
+    });
   if (totalCount === 1) insights = insights.slice(0, 1);
   if (!insights.length) throw new Error("no insights produced");
 
@@ -957,6 +968,7 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs, leadFl
     explained.forEach((x, k) => {
       if (explQa.ran && !verdicts[k]) {
         insights[x.i].explanation = "";                       // failed fact-check → drop the narrative
+        insights[x.i].explanation_points = [];                // and its bullet form
         insights[x.i].explanation_qa = "rejected";
       } else if (explQa.ran) {
         insights[x.i].explanation_qa = "passed";

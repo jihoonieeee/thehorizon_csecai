@@ -33,22 +33,29 @@ Also BAD (bare paper summary with no judgment — REJECT):
 
 For EACH insight, produce these fields:
 - insight: the skimmable headline. Open with ONE plain sentence a non-specialist immediately understands (what happened and why it matters), then a second sentence adding the specifics (names, systems, numbers). 25-45 words across the two sentences. Gloss any term a general reader wouldn't know. Active voice.
-- explanation: a clear, self-contained explanation (120-200 words) that a smart non-specialist fully understands on one read. Requirements:
-    * BREAK IT DOWN. Short sentences — one idea each. Walk through it step by step: what the attackers did, how the trick actually works, why the normal defense didn't catch it, and what it means. Do not pack multiple ideas into one long sentence.
-    * Gloss EVERY acronym, product, and technique the first time it appears, in plain words. Examples: "an infostealer (malware that steals saved passwords and tokens)"; "provenance checks (a way to verify software really came from who it claims)"; "static scanning (checking code for bad patterns without running it)". If you would have to look a term up, so would the reader.
+- explanation_points: an ARRAY of 4-7 short bullet points that, read top to bottom, walk a smart non-specialist through the whole thing. This is shown as a bulleted list in the dashboard — so it MUST be an array of separate strings, NOT one paragraph. Requirements:
+    * ONE IDEA PER BULLET. Each bullet is a single, complete thought in 1-2 short sentences (roughly 12-30 words). Never pack multiple ideas into one bullet; never write a paragraph inside a bullet.
+    * ORDER THEM as a walkthrough: (1) what the attackers actually did, (2) how the trick works, (3) why the normal defense didn't catch it, (4) the hard number / scale, (5) why it matters and what changes for defenders, (6) optionally the broader class of attack this points to. Merge or drop steps that don't apply — aim for 4-7 bullets total.
+    * Each bullet stands on its own — a reader could read any single bullet and understand it. Do not start a bullet with "This", "It", or "They" referring to a previous bullet; name the thing again.
+    * Gloss EVERY acronym, product, and technique the first time it appears, in plain words, e.g. "an infostealer (malware that steals saved passwords and tokens)"; "provenance checks (a way to verify software really came from who it claims)". If you would have to look a term up, so would the reader.
     * Name the specifics: the researcher/vendor/actor, the technique's name, the affected systems, and any hard numbers (counts, success rates, dollar losses).
     * When a concept is unfamiliar, explain it plainly OR contrast it with something everyday (e.g. how it differs from a typo-based scam).
-    * Weave in WHY it matters and what changes for defenders as part of the narrative — do not tack on a separate "defenders should" sentence.
-    * End with the broader significance if the evidence supports it (what class of new attacks this points to).
-    * BANNED: buzzwords, hype, filler ("it's worth noting", "in an increasingly", "the landscape", "paradigm", "leverage" as a verb, "robust", "cutting-edge"), and undefined jargon. Every specific must come from the themes/evidence below — invent nothing.
+    * BANNED: buzzwords, hype, filler ("it's worth noting", "in an increasingly", "the landscape", "paradigm", "leverage" as a verb, "robust", "cutting-edge"), markdown, leading dashes/bullets inside the strings, and undefined jargon. Every specific must come from the themes/evidence below — invent nothing.
 - evidence: the concrete kinds of evidence behind it (e.g. "five distinct CVEs across AutoGPT, Flowise and LiteLLM; one confirmed breach"), grounded in the themes.
 - broken_assumption: the specific defensive assumption or control that no longer holds.
 - implication: the concrete action or posture change a defender should make in response.
 - watch_next: what specific evidence would strengthen, weaken, or change this assessment.
 - confidence_reason: one clause tying confidence to evidence maturity (e.g. "multiple CVEs but no confirmed in-the-wild chaining yet").
 
-GOLD STANDARD for the explanation field (match this depth AND plainness — short sentences, every term glossed, one idea at a time, a familiar contrast, the hard number, and the broader "so what", with no buzzwords):
-"Security researchers at Palo Alto Networks (a large cybersecurity company) found a new trick they call phantom squatting. AI chatbots often make up web addresses that sound real but do not exist — for example, a plausible-looking download page for a popular tool. The researchers noticed the same models invent the same fake addresses over and over. So an attacker can simply register one of those made-up addresses first, then wait. When an AI later points a person, or another AI, to that address, it now leads to the attacker's server. This is different from an old-style typo scam, where the attacker copies a real name and hopes you mistype it. Here, nobody makes a mistake. The AI itself hands over the traffic. The researchers found about 250,000 of these made-up addresses sitting unregistered and ready to be grabbed. The danger is bigger for AI 'agents' — AI systems that act on their own — because an agent might download software or log in to a service using one of these invented addresses without any human checking it first."
+GOLD STANDARD for explanation_points (match this depth AND plainness — one idea per bullet, every term glossed, a familiar contrast, the hard number, and the broader "so what", no buzzwords). Note it is an ARRAY of separate bullets, each standing alone:
+[
+  "Security researchers at Palo Alto Networks (a large cybersecurity company) found a new trick they call phantom squatting.",
+  "AI chatbots often make up web addresses that sound real but do not exist — like a plausible-looking download page for a popular tool — and the same models invent the same fake addresses over and over.",
+  "An attacker can simply register one of those made-up addresses first and wait; when an AI later points a person or another AI to it, the traffic now lands on the attacker's server.",
+  "This is different from an old-style typo scam where the attacker copies a real name and hopes you mistype it — here nobody makes a mistake, the AI itself hands over the traffic.",
+  "The researchers found about 250,000 of these invented addresses sitting unregistered and ready to be grabbed.",
+  "The danger is worst for AI 'agents' (AI systems that act on their own), because an agent might download software or log in to a service using one of these fake addresses with no human checking first."
+]
 
 CALIBRATION (critical): You are told the EVIDENCE MATURITY for this category. If the evidence is research/vulnerability-only with no observed exploitation, you MUST NOT claim activity is "confirmed", "operational", "at scale", or "in the wild". Frame as demonstrated capability and shifting assumptions, not active campaigns.
 
@@ -75,5 +82,5 @@ LEAD WITH THE STRONGEST SIGNAL: order your insights by consequence — realized 
 Write 2-4 insights for rich periods; 1-2 for thin ones. Never pad.
 
 Return ONLY valid JSON:
-{"assessment": "...", "insights": [{"insight": "...", "explanation": "...", "evidence": "...", "broken_assumption": "...", "implication": "...", "watch_next": "...", "confidence_reason": "..."}]}
+{"assessment": "...", "insights": [{"insight": "...", "explanation_points": ["...", "...", "..."], "evidence": "...", "broken_assumption": "...", "implication": "...", "watch_next": "...", "confidence_reason": "..."}]}
 ```

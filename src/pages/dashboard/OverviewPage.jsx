@@ -219,9 +219,12 @@ function InsightItem({ p }) {
   const headlineRef = useRef(null);
 
   const sources = Array.isArray(p.sources) ? p.sources.filter(s => s && s.url) : [];
-  const rawText  = (p.explanation || p.evidence || "").trim();
-  // Split into bullets; fall back to the raw insight headline if no separate explanation
-  const bullets  = splitToBullets(rawText);
+  // Preferred: the model now emits explanation_points as a real array of bullets.
+  // Legacy fallback: split a prose `explanation`/`evidence` paragraph into sentences.
+  const points = Array.isArray(p.explanation_points)
+    ? p.explanation_points.map(s => String(s || "").trim()).filter(s => s.length > 3)
+    : [];
+  const bullets  = points.length ? points : splitToBullets((p.explanation || p.evidence || "").trim());
   const hasDetail = bullets.length > 0 || sources.length > 0;
   const expandable = hasDetail || clamped;
 
