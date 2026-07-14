@@ -56,6 +56,11 @@ const DRY_RUN  = hasFlag("--dry-run");
 // backfilled (e.g. --window month --asof 2026-05-15 targets April). Defaults to now.
 const ASOF     = getArg("--asof", null);
 const NOW      = ASOF ? new Date(`${ASOF}T12:00:00Z`) : new Date();
+// The actual reporting date — passed to QA so it judges "future-dated" identifiers
+// (e.g. a fabricated CVE) against THIS date, not the model's training cutoff. Without
+// it the QA wrongly flags every real current-year CVE as fabricated.
+const REPORT_DATE = NOW.toISOString().slice(0, 10);
+const REPORT_YEAR = REPORT_DATE.slice(0, 4);
 
 if (!["week", "month", "quarter", "annual"].includes(WINDOW)) {
   console.error("--window must be week | month | quarter | annual"); process.exit(1);
@@ -302,6 +307,7 @@ async function qaInsights(insights, maturity, catLabel, status = {}) {
   status.ran = false;
   if (!process.env.ANTHROPIC_API_KEY) { status.reason = "no_api_key"; return insights; }
   const user = `Category: ${catLabel}
+Reporting date: ${REPORT_DATE} (today). A CVE/date is only "future-dated" if AFTER this date. CVEs from ${REPORT_YEAR} and earlier are current, NOT fabricated by year alone.
 Evidence maturity: ${maturityShortLine(maturity)} (total ${maturity.total})
 
 INSIGHTS:
@@ -367,6 +373,7 @@ export async function loadWindowSources(from, to) {
     .from("sources")
     .select(SRC_SELECT)
     .eq("validation_status", "pass")
+    .neq("needs_review", true)
     // Insights are bucketed BY DATE into a reporting window — a source with an
     // estimated/inferred date could be counted in the wrong period, so only
     // authoritative-dated sources feed insight generation (matches the
@@ -576,6 +583,7 @@ async function qaStatements(statements, evidenceText, kind = "statement", status
   if (!statements.length) { status.reason = "empty"; return statements.map(() => true); }
   if (!process.env.ANTHROPIC_API_KEY) { status.reason = "no_api_key"; return statements.map(() => true); }
   const user = `Type: ${kind}
+Reporting date: ${REPORT_DATE} (today). A CVE or date is only "future-dated" if it is AFTER this date. CVEs from ${REPORT_YEAR} and earlier are NOT future-dated — do not flag them for their year alone.
 
 STATEMENTS:
 ${statements.map((s, i) => `[${i}] ${s}`).join("\n")}
@@ -823,14 +831,28 @@ export async function attributeSources(insights, catSources, windowLabel, catLab
       .map(a => [a.insight_index, Array.isArray(a.source_numbers) ? a.source_numbers : []])
   );
 
+  // Dedup a citation list so the SAME article never appears twice — even when it
+  // was ingested under two URLs (query params, amp, http/https, a digest child +
+  // its parent). Match on a normalised URL (protocol/www/query/fragment/trailing
+  // slash stripped, PATH kept so distinct articles from one publisher stay
+  // distinct) AND on a normalised title (catches the same story at genuinely
+  // different URLs).
+  const normUrl = (u) => String(u || "").toLowerCase()
+    .replace(/^https?:\/\//, "").replace(/^www\./, "")
+    .replace(/[?#].*$/, "").replace(/\/+$/, "");
+  const normTitle = (t) => String(t || "").toLowerCase().replace(/\s+/g, " ").trim();
+
   return insights.map((p, i) => {
     const nums = (byIndex.get(i) || []).filter(n => Number.isInteger(n) && n >= 1 && n <= ranked.length);
-    const seen = new Set();
+    const seenUrl = new Set();
+    const seenTitle = new Set();
     const srcs = [];
     for (const n of nums.slice(0, 5)) {
       const s = ranked[n - 1];
-      if (!s || seen.has(s.url)) continue;
-      seen.add(s.url);
+      if (!s) continue;
+      const uk = normUrl(s.url), tk = normTitle(s.title);
+      if (seenUrl.has(uk) || (tk && seenTitle.has(tk))) continue;
+      seenUrl.add(uk); if (tk) seenTitle.add(tk);
       srcs.push({
         title:       titleOf(s.title),
         url:         s.url,
@@ -986,23 +1008,27 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs, leadFl
   if (!insights.length) throw new Error(`all ${beforeQa} insights removed by QA`);
 
   // Fact-check the depth EXPLANATIONS against the same findings they were written
-  // from. An explanation that invents specifics or overreaches the evidence is
-  // blanked (the headline insight, already QA'd, still shows) rather than removed —
-  // integrity over always-having-a-paragraph. `findings` is the grounded pool.
+  // from. If an explanation invents specifics (e.g. a fabricated CVE number) or
+  // overreaches the evidence, the whole insight is UNTRUSTWORTHY — a headline built
+  // on the same reasoning can't be trusted just because the paragraph was cut. So a
+  // failed explanation now REMOVES the entire insight, not just its narrative.
+  // `findings` is the grounded pool.
   const explained = insights.map((p, i) => ({ i, text: p.explanation })).filter(x => x.text && x.text.length > 40);
   if (explained.length) {
     const explQa = {};
     const evidenceText = findings.slice(0, 40).map((f, i) => `${i + 1}. ${f}`).join("\n");
     const verdicts = await qaStatements(explained.map(x => x.text), evidenceText, "insight-explanation", explQa);
+    const drop = new Set();
     explained.forEach((x, k) => {
       if (explQa.ran && !verdicts[k]) {
-        insights[x.i].explanation = "";                       // failed fact-check → drop the narrative
-        insights[x.i].explanation_points = [];                // and its bullet form
-        insights[x.i].explanation_qa = "rejected";
+        drop.add(x.i);
+        console.log(`  [QA] REMOVED insight [${x.i}] — explanation failed fact-check: ${insights[x.i].insight.slice(0, 70)}`);
       } else if (explQa.ran) {
         insights[x.i].explanation_qa = "passed";
       }
     });
+    if (drop.size) insights = insights.filter((_, i) => !drop.has(i));
+    if (!insights.length) throw new Error(`all insights removed by explanation fact-check`);
   }
 
   // Attribution: tag the real sources that most critically support each insight,
