@@ -310,8 +310,8 @@ async function qaInsights(insights, maturity, catLabel, status = {}) {
 Reporting date: ${REPORT_DATE} (today). A CVE/date is only "future-dated" if AFTER this date. CVEs from ${REPORT_YEAR} and earlier are current, NOT fabricated by year alone.
 Evidence maturity: ${maturityShortLine(maturity)} (total ${maturity.total})
 
-INSIGHTS:
-${insights.map((p, i) => `[${i}] ${p.insight}  (implication: ${p.implication})`).join("\n")}
+INSIGHTS (headline + its bullets — audit both; a "stapled" second finding often hides in the bullets):
+${insights.map((p, i) => `[${i}] ${p.insight}  (implication: ${p.implication})\n${(p.explanation_points || []).map(b => `    - ${b}`).join("\n")}`).join("\n")}
 
 Audit each. Return a verdict for every index.`;
 
@@ -913,7 +913,17 @@ async function groundExplanationsInCitations(insights, catSources, catLabel) {
       continue;
     }
 
-    const citedText = cited.map((s, i) => `[S${i + 1}] ${titleOf(s.title)} — ${summaryText(s).slice(0, 500)}`).join("\n");
+    // Ground against the cited source's FULL TEXT (abstract/body), not its number-free
+    // summary. The summary is a lossy compression that drops the exact figures, so a
+    // fabricated statistic ("82.7%") read as "consistent with high success rates" and
+    // passed. Fetching full_text for the 1-8 cited sources lets the check see the REAL
+    // numbers and reject any figure/entity the source does not actually contain.
+    const { data: fullRows } = await supabase.from("sources").select("id,full_text").in("id", cited.map(s => s.id));
+    const fullById = Object.fromEntries((fullRows || []).map(r => [r.id, r.full_text || ""]));
+    const citedText = cited.map((s, i) => {
+      const body = (fullById[s.id] && fullById[s.id].length > summaryText(s).length ? fullById[s.id] : summaryText(s)).slice(0, 2500);
+      return `[S${i + 1}] ${titleOf(s.title)} — ${body}`;
+    }).join("\n\n");
     let verdicts;
     try {
       const out = await callAnthropic({
