@@ -976,12 +976,33 @@ core threat; add secondary_tags only for genuinely distinct additional technique
       Not this: a standing over-grant of authority by design with no exploit → LLM06.
       (OWASP ASI03.)
   ASI04_agentic_supply_chain
-      What: the attacker compromises the AGENT ECOSYSTEM the agent depends on.
-      How / examples: a malicious or backdoored agent framework; a poisoned tool/skill
-        registry or marketplace; a rogue or trojaned MCP server; a malicious runtime
-        plugin/extension the agent installs and trusts.
-      Belongs when: the compromised component is agent infrastructure (frameworks,
-        skills, MCP servers, agent plugins).
+      What: the attacker compromises a component that AN AGENT LOADS AND RUNS AT RUNTIME,
+        so the malicious component abuses the AGENT'S autonomy, tool-use, or permissions.
+      How / examples: a malicious skill/tool published to an agent marketplace that the
+        agent invokes (e.g. a poisoned ClawHub skill an agent runs that abuses its
+        credentials/tools); a rogue or trojaned MCP server the agent connects to and
+        calls; a malicious runtime plugin/extension the agent loads to act; a backdoored
+        agent framework whose backdoor fires THROUGH the agent's execution (tool calls,
+        planning, memory).
+      Belongs when: the poisoned component is loaded/executed BY THE AGENT and the harm
+        flows through the agent acting (selecting/invoking the malicious tool, running its
+        code, using its permissions) — NOT merely that the affected package belongs to an
+        AI/agent product.
+      DETERMINISTIC-SOFTWARE CARVE-OUT (decisive — this is where ASI04 is over-applied):
+        a GENERIC package / dependency / registry-account compromise whose payload runs
+        DETERMINISTICALLY at build / install / import time (an npm/PyPI install script,
+        imported malicious code, a CI/CD compromise) is NOT ASI04 just because the package
+        belongs to an AI-agent framework. Ask: does the exploit REQUIRE an agent to load
+        and act on the component, or would it run the same on any ordinary software that
+        `npm install`ed the package? If a human developer's build/install runs the payload
+        and no agent autonomy is exploited, it is a conventional software supply-chain
+        attack → route it as AI-ecosystem malware delivery (ai_enabled_threats / AE05), or
+        unclear_or_adjacent if it carries no AI-specific technique of its own. Record the
+        conventional vuln type (e.g. "npm account hijack") in boundary_rationale.
+      ⇒ CONTRAST: 144 poisoned "@mastra/*" npm packages via a hijacked maintainer account
+        run at `npm install` and exploit no agent behavior → conventional supply chain,
+        NOT ASI04. A malicious ClawHub skill that an OpenClaw AGENT invokes and that then
+        abuses the agent's tools/credentials → ASI04 (the agent loads and acts on it).
       Not this: an LLM serving package/plugin → LLM03; a classical-ML model/dataset →
         TAI10; a one-off abuse of an already-installed tool → ASI02.
       (OWASP ASI04.)
