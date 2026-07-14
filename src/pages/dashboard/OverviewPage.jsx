@@ -40,17 +40,20 @@ const CAT_SHORT = {
   ai_enabled_threats:     "AI-Enabled",
 };
 
-// Importance tier — how consequential a source is (from the API, deterministic).
-const TIER_META = {
-  realized:  { label: "In the wild",  color: "#b91c1c", bg: "#fee2e2" },
-  proven:    { label: "Demonstrated", color: "#c2410c", bg: "#ffedd5" },
-  research:  { label: "Research",     color: "#1d4ed8", bg: "#dbeafe" },
+// Unified 5-level maturity ladder — used for both the category bar and per-source badge.
+// Mirrors MATURITY_RUNGS in lib/dashboard/evidenceMaturity.js.
+const MATURITY_META = {
+  research:     { label: "Research",     color: "#64748b", bg: "#f1f5f9" },
+  demonstrated: { label: "Demonstrated", color: "#1d4ed8", bg: "#dbeafe" },
+  disclosed:    { label: "Disclosed",    color: "#b45309", bg: "#fef3c7" },
+  observed:     { label: "Observed",     color: "#dc2626", bg: "#fee2e2" },
+  operational:  { label: "Operational",  color: "#7f1d1d", bg: "#fecaca" },
 };
-function ImportanceBadge({ tier }) {
-  const m = TIER_META[tier];
+function MaturityBadge({ level }) {
+  const m = MATURITY_META[level];
   if (!m) return null;
   return (
-    <span className="hz-imp-badge" title={`Importance: ${m.label}`}
+    <span className="hz-imp-badge" title={`Maturity: ${m.label}`}
       style={{ color: m.color, background: m.bg, fontSize: "0.6rem" }}>
       {m.label}
     </span>

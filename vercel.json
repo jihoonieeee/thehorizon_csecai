@@ -1,4 +1,7 @@
 {
+  "functions": {
+    "api/dashboard.js": { "maxDuration": 60 }
+  },
   "crons": [
     {
       "path": "/api/refresh?days=3",

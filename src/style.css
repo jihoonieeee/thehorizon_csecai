@@ -3894,3 +3894,33 @@ details[open] .hz-gen-advanced-toggle::before { content: "▾ "; }
   font-size: 0.72rem; color: var(--text-tertiary);
 }
 .hz-legend-footer code { font-size: 0.72rem; background: var(--surface-2); padding: 1px 4px; border-radius: 3px; }
+
+/* ── Legend panel additions ───────────────────────────────────────────────── */
+.hz-legend-steps {
+  margin: 4px 0 8px 18px; padding: 0;
+  font-size: 0.79rem; color: var(--text-secondary); line-height: 1.7;
+}
+.hz-legend-steps li { margin-bottom: 2px; }
+.hz-legend-steps code { font-size: 0.72rem; background: var(--surface-2); padding: 1px 4px; border-radius: 3px; }
+
+.hz-legend-compare {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 4px;
+}
+.hz-legend-compare-col {
+  background: var(--surface-2); border-radius: 6px; padding: 10px 12px;
+  border: 1px solid var(--border);
+}
+.hz-legend-compare-head {
+  font-size: 0.75rem; font-weight: 700; color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.hz-legend-compare-body {
+  font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5;
+}
+.hz-legend-compare-body code { font-size: 0.72rem; background: var(--surface); padding: 1px 4px; border-radius: 3px; }
+.hz-legend-compare-body strong { color: var(--text-primary); }
+
+.hz-legend-upgrade {
+  display: block; font-size: 0.72rem; color: #c2410c;
+  margin-top: 2px; font-style: italic;
+}

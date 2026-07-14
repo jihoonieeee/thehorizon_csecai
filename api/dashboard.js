@@ -24,19 +24,18 @@ import { createClient } from "@supabase/supabase-js";
 import { getCompletedPeriodWindow } from "../lib/time/reportingWindow.js";
 import { computeEvidenceMaturity, deriveConfidence } from "../lib/dashboard/evidenceMaturity.js";
 import { truncateAtWord } from "../lib/utils/truncate.js";
-import { computeImportance } from "../lib/pipeline/scoring/importance.js";
+import { maturityOf, MATURITY_RANK } from "../lib/pipeline/scoring/maturityLevel.js";
 
-// Importance-first ranking for "top sources". Substance before recency:
-// realized (in the wild) > proven (demonstrated) > research, then trust tier,
-// then newest. Deterministic — computed live, no persisted dependency.
-const REALITY_ORDER = { realized: 4, proven: 3, research: 2, advisory: 1 };
-const TRUST_ORDER   = { primary: 4, high: 3, curated: 3, medium: 2, low: 1, unknown: 0 };
+// Maturity-first ranking for "top sources". Uses the unified 5-level ladder.
+// operational > observed > disclosed > demonstrated > research, then trust tier, then recency.
+const TRUST_ORDER = { primary: 4, high: 3, curated: 3, medium: 2, low: 1, unknown: 0 };
 function importanceRank(s) {
-  const imp = computeImportance(s);
+  const level = maturityOf(s);
   return {
     ...s,
-    _imp: imp,
-    _rank: (REALITY_ORDER[imp.reality] || 0) * 100 + (TRUST_ORDER[s.trust_tier] || 0) * 10,
+    _imp: { tier: level, reality: level, posture: "offensive" }, // compat shim for existing code
+    _maturity: level,
+    _rank: (MATURITY_RANK[level] || 0) * 100 + (TRUST_ORDER[s.trust_tier] || 0) * 10,
   };
 }
 function byImportanceThenRecency(a, b) {
@@ -405,13 +404,13 @@ export default async function handler(req, res) {
         }))
       : all
           .map(importanceRank)
-          .filter(s => s._imp.posture === "offensive" && REALITY_ORDER[s._imp.reality])
+          .filter(s => s._rank > 0 && s.main_category && s.main_category !== "unclear_or_adjacent")
           .sort(byImportanceThenRecency)
           .slice(0, 12)
           .map(s => ({
             title: cleanTitle(s.title), url: s.url, publisher: s.publisher,
             date: s.date_published?.slice(0, 10), category: s.main_category,
-            trust_tier: s.trust_tier, importance: s._imp.tier, reality: s._imp.reality,
+            trust_tier: s.trust_tier, importance: s._maturity, reality: s._maturity,
             why: null,
             summary: (s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "").trim() || null,
           }));
