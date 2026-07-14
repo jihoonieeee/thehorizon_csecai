@@ -206,55 +206,53 @@ function MaturityBar({ maturity, onSelect, selected }) {
   );
 }
 
-// ── Maturity drilldown panel ──────────────────────────────────────────────────
-function MaturityDrilldownPanel({ level, category, sources, onClose }) {
+// ── Maturity side panel (fixed right drawer) ──────────────────────────────────
+function MaturitySidePanel({ level, category, sources, onClose }) {
   if (!level || !category) return null;
   const rung  = MATURITY_RUNGS.find(r => r.key === level);
   const rows  = sources || [];
   const color = CAT_COLOR[category] || "#64748b";
 
   return (
-    <div className="hz-tag-drilldown hz-maturity-drilldown">
-      <div className="hz-tag-drilldown-header">
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span className="hz-maturity-dot" style={{ background: rung?.color, width: 10, height: 10, borderRadius: "50%", display: "inline-block" }} />
-          <span className="hz-tag-drilldown-title">{rung?.label || level}</span>
-          <span className="hz-tag-drilldown-cat" style={{ color }}>
-            · {CAT_LABEL[category] || category}
-          </span>
-          <span className="hz-tag-drilldown-count">· {rows.length} source{rows.length !== 1 ? "s" : ""}</span>
+    <>
+      <div className="hz-side-panel-backdrop" onClick={onClose} />
+      <div className="hz-side-panel">
+        <div className="hz-side-panel-header">
+          <div className="hz-side-panel-title-row">
+            <span className="hz-maturity-dot hz-side-panel-dot" style={{ background: rung?.color }} />
+            <span className="hz-side-panel-level">{rung?.label || level}</span>
+            <span className="hz-side-panel-cat" style={{ color }}>
+              {CAT_LABEL[category] || category}
+            </span>
+          </div>
+          <div className="hz-side-panel-meta">{rows.length} source{rows.length !== 1 ? "s" : ""}</div>
+          <button className="hz-side-panel-close" onClick={onClose} title="Close">✕</button>
         </div>
-        <button className="hz-tag-drilldown-close" onClick={onClose}>✕</button>
-      </div>
 
-      {rows.length === 0 ? (
-        <p className="hz-overview-empty">No sources at this maturity level in this period.</p>
-      ) : (
-        <ul className="hz-tag-drilldown-list">
-          {rows.map((s, i) => {
-            const trust = TRUST_BADGE[s.trust_tier] || TRUST_BADGE.unknown;
-            return (
-              <li key={i} className="hz-tag-drilldown-row">
-                <span className="hz-incident-dot" style={{ background: rung?.color }} />
-                <div className="hz-tag-drilldown-body">
-                  <div className="hz-tag-drilldown-src-title">
+        <div className="hz-side-panel-body">
+          {rows.length === 0 ? (
+            <p className="hz-overview-empty">No sources at this maturity level in this period.</p>
+          ) : (
+            <ul className="hz-side-panel-list">
+              {rows.map((s, i) => (
+                <li key={i} className="hz-side-panel-row">
+                  <div className="hz-side-panel-src-title">
                     {s.url
                       ? <a href={s.url} target="_blank" rel="noopener noreferrer">{s.title || s.url}</a>
                       : (s.title || "Untitled")}
                   </div>
-                  <div className="hz-incident-meta">
-                    {s.publisher && <span className="hz-incident-publisher">{s.publisher}</span>}
-                    {s.date      && <span className="hz-incident-date">{s.date}</span>}
-                    <span className={`hz-trust-badge ${trust.cls}`}>{trust.label}</span>
+                  <div className="hz-side-panel-src-meta">
+                    {s.publisher && <span>{s.publisher}</span>}
+                    {s.date      && <span>{s.date}</span>}
                   </div>
-                  {s.summary && <div className="hz-incident-summary" style={{ marginTop: 3 }}>{s.summary}</div>}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+                  {s.summary && <div className="hz-side-panel-src-summary">{s.summary}</div>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -713,19 +711,6 @@ export function OverviewPage() {
             ))}
           </div>
 
-          {/* Maturity drilldown — shown inline below cards */}
-          {maturitySelection && (() => {
-            const cat = (data.categories || []).find(c => c.key === maturitySelection.category);
-            const sources = cat?.maturity_sources?.[maturitySelection.level] || [];
-            return (
-              <MaturityDrilldownPanel
-                level={maturitySelection.level}
-                category={maturitySelection.category}
-                sources={sources}
-                onClose={() => setMaturitySelection(null)}
-              />
-            );
-          })()}
         </>
       )}
 
@@ -752,14 +737,7 @@ export function OverviewPage() {
       {/* Top incidents */}
       {data && (
         <>
-          <div className="hz-overview-section-title">
-            Top sources
-            <span className="hz-overview-section-note">
-              {data.top_sources_justified
-                ? "editor-selected & ranked from this period's analysis — most consequential first"
-                : "ranked by maturity — operational and observed first, then disclosed, demonstrated, research"}
-            </span>
-          </div>
+          <div className="hz-overview-section-title">Top sources</div>
           <TopIncidents incidents={data.top_incidents} />
         </>
       )}
@@ -786,6 +764,19 @@ export function OverviewPage() {
           )}
         </>
       )}
+
+      {/* Maturity side panel — fixed drawer, overlays everything */}
+      {maturitySelection && (() => {
+        const cat = (data?.categories || []).find(c => c.key === maturitySelection.category);
+        return (
+          <MaturitySidePanel
+            level={maturitySelection.level}
+            category={maturitySelection.category}
+            sources={cat?.maturity_sources?.[maturitySelection.level] || []}
+            onClose={() => setMaturitySelection(null)}
+          />
+        );
+      })()}
 
     </div>
   );
