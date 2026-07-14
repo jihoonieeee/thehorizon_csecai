@@ -55,6 +55,7 @@ const DRY_RUN  = hasFlag("--dry-run");
 // --asof <YYYY-MM-DD> overrides "now" so a historical completed period can be
 // backfilled (e.g. --window month --asof 2026-05-15 targets April). Defaults to now.
 const ASOF     = getArg("--asof", null);
+const ONLY     = getArg("--only", null);   // regenerate a single category, leave others intact
 const NOW      = ASOF ? new Date(`${ASOF}T12:00:00Z`) : new Date();
 // The actual reporting date — passed to QA so it judges "future-dated" identifiers
 // (e.g. a fabricated CVE) against THIS date, not the model's training cutoff. Without
@@ -1194,6 +1195,14 @@ async function main() {
   const currMaturity = {};
 
   for (const cat of CATEGORIES) {
+    // --only <category> regenerates a single category, leaving the others (and the
+    // period-meta comparison, which still needs every category's assessment) intact.
+    if (ONLY && cat.key !== ONLY) {
+      const { data: row } = await supabase.from("dashboard_insights").select("points").eq("window_key", period.key).eq("category", cat.key).maybeSingle();
+      if (row?.points?.assessment) currAssess[cat.key] = row.points.assessment;
+      currMaturity[cat.key] = computeEvidenceMaturity(curr.catMaturitySrcs[cat.key]);
+      skipped++; continue;
+    }
     const mSrcs      = curr.catMaturitySrcs[cat.key];
     const maturity   = computeEvidenceMaturity(mSrcs);
     const confidence = deriveConfidence(maturity);
