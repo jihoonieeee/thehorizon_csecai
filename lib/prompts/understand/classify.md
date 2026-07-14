@@ -58,7 +58,7 @@ Decide by WHAT KIND OF AI SYSTEM is attacked and HOW the harm is realised:
 
 THE traditional-VS-not TEST (this is where most errors happen):
   A source is traditional_ai_threats ONLY IF a real ML model or its data/
-  pipeline is the thing being attacked, at the ML level. Check all three:
+  pipeline is the thing being attacked, at the ML level. Check all FOUR:
     1. TARGET is a model-as-artifact, its training data, or its inference path
        (NOT a prompt, NOT an agent's tools/memory).
     2. MECHANISM is machine-learning-native (poisoning, adversarial perturbation,
@@ -66,6 +66,52 @@ THE traditional-VS-not TEST (this is where most errors happen):
        or compromise of the model/dataset supply chain).
     3. The model actually FUNCTIONS as a model in the attack (it is trained,
        served, queried, or shipped) — it is not merely a file used as a lure.
+    4. THE ATTACKED MODEL IS A CLASSICAL / NON-LLM MODEL (a classifier, detector,
+       CV/vision, fraud/malware/IDS model, recommender, tabular/scientific model,
+       or RL policy). This is decisive and where most mislabels happen.
+
+  SURFACE-FIRST RULE (critical — the DOMAIN follows the MODEL, the TAG follows the
+  MECHANISM): an ML-native mechanism is NOT enough to make something traditional.
+  The SAME classical technique (poisoning, evasion, extraction, inversion,
+  membership inference, resource exhaustion, model/adapter supply chain) is
+  llm_threats when the model under attack is an LLM (or an LLM-based classifier /
+  guardrail / detector), and traditional_ai_threats only when the model is a
+  classical, non-LLM model. When the target is an LLM, map the mechanism to its
+  LLM tag:
+    • weight / adapter / LoRA / checkpoint / quantization / deployment backdoor
+        → LLM03_llm_supply_chain      (classical model: TAI02 / TAI10)
+    • training / fine-tune / alignment / RAG-corpus / embedding-store DATA poison
+        → LLM04_data_model_poisoning  (classical model: TAI01)
+    • membership inference / model inversion / training-data reconstruction
+        → LLM02_sensitive_info_disclosure  (classical model: TAI06 / TAI07)
+    • model extraction / theft / functionality-stealing via the API
+        → LLM10_unbounded_consumption (OWASP folds model theft here; classical: TAI05)
+    • resource / compute exhaustion, denial-of-wallet against the LLM service
+        → LLM10_unbounded_consumption (classical model: TAI09)
+    • adversarial evasion of an LLM's safety classifier / guardrail
+        → LLM11_jailbreak_safety_bypass if by a direct crafted input, or
+          LLM01_prompt_injection if smuggled through content the model ingests
+          (classical detector/classifier: TAI03)
+
+  GUARD AGAINST OVER-MOVING: "the LLM is the attacker's TOOL" is NOT "the LLM is
+  the target." If an LLM is merely used to GENERATE an attack against a classical
+  model — e.g. "LLM-driven adversarial perturbations against an Android malware
+  classifier" — the TARGET is the classical malware classifier, so it stays
+  traditional (TAI03); the LLM is instrumentation, not the victim. Always ask:
+  which model's integrity/confidentiality/availability is actually harmed?
+
+  ⇒ SURFACE-SPLIT WORKED CASES (the mechanism's classical name does NOT keep it in
+    traditional — the LLM target does the deciding):
+    • Recovering an LLM's weights (e.g. extracting LLaMA-3 / a 405B model), even via
+      a cryptographic / TEE / side-channel flaw, is LLM model theft → llm_threats,
+      LLM10_unbounded_consumption. It is NOT TAI05, despite being "model extraction".
+    • A supply-chain code backdoor in an LLM's FINE-TUNING pipeline (poisoned model
+      code that hijacks training to memorize/exfiltrate secrets) → llm_threats,
+      LLM03_llm_supply_chain (+ LLM02 if the point is leaking the secrets). It is NOT
+      TAI10, despite being a "supply-chain" attack.
+    • Membership inference / model inversion against an LLM or its RAG store →
+      llm_threats, LLM02. Only against a classical model is it TAI07 / TAI06.
+
   If the "AI" being manipulated is an LLM reached through language → llm_threats.
   If the AI ACTS through tools/memory/autonomy AND that acting AI is the VICTIM
     being subverted (a legitimate agent someone attacks) → agentic_ai_threats.
@@ -125,9 +171,11 @@ core threat; add secondary_tags only for genuinely distinct additional technique
         appears at inference; seeding a public/web-scraped corpus that will later be
         scraped for training; a malicious client submitting poisoned updates in
         federated learning.
-      Belongs when: the manipulated asset is DATA, before or during training.
-      Not this: altering the finished weights (→ TAI02); poisoning an LLM's RAG corpus
-        or alignment data (→ LLM04); poisoning an agent's runtime memory (→ ASI06).
+      Belongs when: the manipulated asset is DATA, before or during training, of a
+        CLASSICAL (non-LLM) model.
+      Not this: altering the finished weights (→ TAI02); poisoning ANY of an LLM's
+        training / fine-tune / alignment / RAG-corpus / embedding data (→ LLM04);
+        poisoning an agent's runtime memory (→ ASI06).
       (MITRE ATLAS AML.T0020.)
   TAI02_model_poisoning
       What: the attacker tampers with the trained MODEL ARTIFACT itself so it carries
@@ -154,19 +202,27 @@ core threat; add secondary_tags only for genuinely distinct additional technique
         decision-boundary attacks; transferable perturbations; evading a malware,
         phishing, spam, fraud, or content-moderation classifier by tweaking the sample.
       Belongs when: the model and its data are untouched — only the query is perturbed,
-        and the attacked model lives in the cyber/software domain.
+        the attacked model lives in the cyber/software domain, AND it is a CLASSICAL
+        (non-LLM) classifier/detector.
       Not this: PHYSICAL-world perturbations (road signs, printed patches, LiDAR/camera
         spoofing) are OUT OF SCOPE → unclear_or_adjacent. Record the modality
         (image/audio/text/code) as context.
+      SURFACE-SPLIT: evading an LLM's own safety classifier / guardrail is not TAI03 —
+        a direct crafted input → LLM11, or injected via ingested content → LLM01. TAI03
+        is only for evading a classical (non-LLM) classifier. An LLM merely USED to craft
+        perturbations against a classical model still targets that classical model → TAI03.
       (MITRE ATLAS AML.T0015 / AML.T0043.)
   TAI05_model_extraction
       What: the attacker steals a model's functionality, parameters, architecture, or
         decision boundary to obtain a working copy.
       How / examples: querying the model heavily and training a surrogate/clone on the
         input-output pairs; exploiting side channels; recovering a leaked weights file.
-      Belongs when: the objective is a stolen COPY or a stepping-stone for further
-        attacks.
+      Belongs when: the objective is a stolen COPY of a CLASSICAL (non-LLM) model, or a
+        stepping-stone for further attacks.
       Not this: reconstructing training data (→ TAI06); inferring membership (→ TAI07).
+      SURFACE-SPLIT: stealing/extracting an LLM's functionality or parameters via the API
+        is not TAI05 → LLM10_unbounded_consumption (OWASP folds LLM model theft there).
+        TAI05 is only for extraction of a classical model.
       (MITRE ATLAS AML.T0024 / AML.T0048.)
   TAI06_model_inversion
       What: the attacker reconstructs private TRAINING DATA or input features from a
@@ -174,9 +230,11 @@ core threat; add secondary_tags only for genuinely distinct additional technique
       How / examples: inverting outputs, confidence scores, gradients, or parameters to
         recover a recognizable training face, a private attribute, or the input to a
         prediction.
-      Belongs when: the objective is DATA reconstruction.
+      Belongs when: the objective is DATA reconstruction from a CLASSICAL (non-LLM) model.
       Not this: stealing the model's function (→ TAI05); only learning whether a record
         was in the set (→ TAI07).
+      SURFACE-SPLIT: reconstructing training data from an LLM (or a RAG store) is not
+        TAI06 → LLM02_sensitive_info_disclosure. TAI06 is only for a classical model.
       (MITRE ATLAS AML.T0024 / AML.T0053.)
   TAI07_membership_inference
       What: the attacker determines whether a specific record was part of the model's
@@ -210,11 +268,15 @@ core threat; add secondary_tags only for genuinely distinct additional technique
       How / examples: a backdoored but working model published to a hub (Hugging Face);
         a poisoned public dataset; a tampered training/build pipeline or CI; a malicious
         ML dependency that runs code on model load (pickle/serialization RCE).
-      Belongs when: the compromised thing is a genuine model/dataset/ML pipeline that
-        downstream users actually run.
+      Belongs when: the compromised thing is a genuine CLASSICAL (non-LLM)
+        model/dataset/ML pipeline that downstream users actually run.
       Not this: a fake "model" that is really a conventional malware dropper (no working
         model) → ai_enabled_threats (AE05); an LLM plugin/serving package → LLM03; an
         agent framework/MCP registry → ASI04.
+      SURFACE-SPLIT: if the compromised pipeline/model/dependency belongs to an LLM —
+        an LLM's training/fine-tune/build pipeline, serving package, or model artifact,
+        including "supply-chain code backdoors" in LLM fine-tuning — it is LLM03, not
+        TAI10. TAI10 is only for a classical (non-LLM) model's supply chain.
       (MITRE ATLAS AML.T0010.)
 
 ── llm_threats — attacks on an LLM's language / prompt / context / RAG / output

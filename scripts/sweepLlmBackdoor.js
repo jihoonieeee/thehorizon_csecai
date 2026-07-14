@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 /**
- * sweepLlmBackdoor.js — apply the surface-split rule to weight/adapter backdoor
- * sources. A backdoor/poison implanted into an LLM (weights, LoRA/adapter,
- * quantization, or deployment-platform trigger) is LLM03_llm_supply_chain, not
- * TAI02. Classical (non-LLM) model poisoning stays TAI02.
+ * sweepLlmBackdoor.js — apply the (generalized) surface-split rule: any ML-native
+ * attack whose TARGET is an LLM belongs in llm_threats, not traditional. The
+ * domain follows the model; the tag follows the mechanism:
+ *   weight/adapter/backdoor → LLM03 · data/fine-tune/RAG poison → LLM04 ·
+ *   membership-inference/inversion/reconstruction → LLM02 · extraction/theft → LLM10 ·
+ *   resource exhaustion/DoS → LLM10 · LLM-guardrail evasion → LLM11/LLM01.
+ * Classical (non-LLM) model attacks stay TAI. An LLM merely USED as the attacker's
+ * tool against a classical model stays TAI (guarded by the prompt).
  *
- * We select candidates by a LoRA/backdoor/adapter/poison signal among
- * traditional_ai_threats sources; the updated classify.md prompt (LLM) is the
- * judge — only genuinely LLM-targeted ones move.
+ * We select candidates by a broad ML-attack signal among traditional_ai_threats
+ * sources; the updated classify.md prompt (LLM) is the judge — only genuinely
+ * LLM-targeted ones move.
  *
  * Safety: degraded LLM result retried then SKIPPED (never persisted). Curated
  * protected. Only moves TO llm_threats are persisted; anything the LLM would
@@ -34,7 +38,10 @@ const DRY_RUN = !PERSIST;
 const LIMIT   = parseInt(getArg("--limit", "0"), 10) || null;
 const TODAY   = new Date().toISOString().slice(0, 10);
 
-const SIGNAL = /LoRA|adapter|backdoor|trojan|poison|weight.?(implant|tamper)|neural trojan|fine-?tune/i;
+// Surface-split candidate signal: any ML-native attack whose target might be an
+// LLM. Broadened beyond backdoors to extraction/inversion/membership/evasion/DoS
+// so the LLM re-judge (updated classify.md) can move every LLM-targeted case.
+const SIGNAL = /LoRA|adapter|backdoor|trojan|poison|weight.?(implant|tamper)|fine-?tune|extract|steal|distill|invert|inversion|membership|reconstruct|evasion|adversarial|sponge|denial|watermark|LLM|GPT|language model/i;
 
 const { createClient } = await import("@supabase/supabase-js");
 const { understandSource } = await import("../lib/pipeline/understand/understandSource.js");
@@ -72,7 +79,7 @@ async function loadCandidates() {
 async function main() {
   const rows = await loadCandidates();
   console.log(`\n${"═".repeat(66)}`);
-  console.log(`  Sweep TAI backdoor → LLM03 surface-split · ${DRY_RUN ? "DRY RUN" : "PERSIST"} · ${rows.length} candidates · Anthropic`);
+  console.log(`  Sweep TAI → LLM surface-split (all mechanisms) · ${DRY_RUN ? "DRY RUN" : "PERSIST"} · ${rows.length} candidates · Anthropic`);
   console.log(`${"═".repeat(66)}\n`);
 
   let movedLlm = 0, stayed = 0, otherFlip = 0, failed = 0, persisted = 0;
