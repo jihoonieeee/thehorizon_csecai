@@ -779,12 +779,23 @@ const titleOf = (t) => String(t || "").trim();
 const ATTRIBUTION_SYSTEM = loadPrompt("insights/attribution").system;
 const CITE_GROUND_SYSTEM = loadPrompt("insights/citation-grounding").system;
 
+// Quarter/annual insights synthesise a CLUSTER of sources; week/month focus on a
+// single event. Attribution + grounding scale with this: synthesis windows cite the
+// whole cluster (so every named technique's source is present and each bullet grounds),
+// event windows prefer a single source.
+const SYNTHESIS_WINDOW = WINDOW === "quarter" || WINDOW === "annual";
+const CITE_CAP = SYNTHESIS_WINDOW ? 8 : 3;
+
 function buildAttributionPrompt(catLabel, windowLabel, insights, sources) {
   const insightLines = insights.map((p, i) => `[${i}] ${p.insight}`).join("\n");
   const sourceLines = sources.map((s, i) =>
     `${i + 1}. (${s.source_type || "unknown"}) ${titleOf(s.title).slice(0, 120)} — ${summaryText(s).slice(0, 160)}`
   ).join("\n");
+  const mode = SYNTHESIS_WINDOW
+    ? `This is a QUARTER/ANNUAL synthesis: each insight generalises a PATTERN across several sources. Cite EVERY source the insight draws on — every named technique, incident, or measured result in the insight must have its source attributed here (up to 8). Under-citing a synthesis insight is an error.`
+    : `This is a WEEK/MONTH card: bias to the SINGLE source the insight is about; add a 2nd/3rd only for genuine multi-source synthesis (max 3).`;
   return `Category: ${catLabel}   Period: ${windowLabel}
+Attribution mode: ${mode}
 
 INSIGHTS:
 ${insightLines}
@@ -852,7 +863,7 @@ export async function attributeSources(insights, catSources, windowLabel, catLab
     const seenUrl = new Set();
     const seenTitle = new Set();
     const srcs = [];
-    for (const n of nums.slice(0, 3)) {   // prefer 1, cap at 3 — the insight is validated against these only
+    for (const n of nums.slice(0, CITE_CAP)) {   // week/month cap 3, quarter/annual cap 8 — insight is validated against these only
       const s = ranked[n - 1];
       if (!s) continue;
       const uk = normUrl(s.url), tk = normTitle(s.title);
@@ -924,10 +935,13 @@ async function groundExplanationsInCitations(insights, catSources, catLabel) {
       const badReasons = verdicts.filter(v => v.verdict === "reject").map(v => (v.reason || "").slice(0, 55));
       console.log(`  [QA:citation] "${p.insight.slice(0, 46)}" — dropped ${dropped}/${bullets.length} ungrounded bullet(s): ${badReasons.join(" | ").slice(0, 90)}`);
     }
-    // If the explanation collapses (fewer than half, or under 2 bullets survive),
-    // the insight isn't grounded in its citations → remove it entirely.
-    if (good.length < Math.max(2, Math.ceil(bullets.length / 2))) {
-      console.log(`  [QA:citation] REMOVED insight — walkthrough not grounded in its citations: ${p.insight.slice(0, 55)}`);
+    // Keep the insight as long as a solid GROUNDED CORE survives (>= 3 bullets, or
+    // all of them for a short 2-bullet insight). The headline already passed its own
+    // QA (no fabrication/overreach); dropping the over-specific bullets and keeping
+    // the grounded ones is better than deleting a real insight because a few bullets
+    // named uncited specifics. Remove only when the walkthrough truly collapses.
+    if (good.length < Math.min(3, bullets.length)) {
+      console.log(`  [QA:citation] REMOVED insight — only ${good.length}/${bullets.length} bullets grounded in citations: ${p.insight.slice(0, 55)}`);
       continue;
     }
     kept.push({ ...p, explanation_points: good, explanation: good.join(" "), explanation_qa: "citation_grounded" });
