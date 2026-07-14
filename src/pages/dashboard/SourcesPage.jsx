@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
+import { LegendPanel } from "../../components/dashboard/LegendPanel.jsx";
 
 const CAT_COLOR = {
   traditional_ai_threats: "#3583C9",
@@ -41,14 +42,18 @@ const PERIOD_OPTIONS = [
 const PAGE_SIZE = 50;
 
 // Importance tier — how consequential the source is (deterministic, from the API).
+// Evidence-maturity ladder — UNIFIED with the dashboard (lib/dashboard/
+// evidenceMaturity.js MATURITY_RUNGS). Same five rungs, same words, same colours,
+// so the Sources page and the Overview page never disagree on how "real" a threat
+// is. Read from each source's `maturity` field (API). Higher rank = more mature.
 const TIER_META = {
-  realized:  { label: "In the wild",  short: "Realized",  color: "#b91c1c", bg: "#fee2e2", rank: 5 },
-  proven:    { label: "Demonstrated", short: "Proven",    color: "#c2410c", bg: "#ffedd5", rank: 4 },
-  research:  { label: "Research",     short: "Research",  color: "#1d4ed8", bg: "#dbeafe", rank: 3 },
-  reference: { label: "Reference",    short: "Reference", color: "#475569", bg: "#e2e8f0", rank: 2 },
-  noise:     { label: "Low signal",   short: "Low",       color: "#64748b", bg: "#f1f5f9", rank: 1 },
+  operational:  { label: "Operational",  short: "Operational",  color: "#7f1d1d", bg: "#fee2e2", rank: 5 },
+  observed:     { label: "Observed",     short: "Observed",     color: "#ef4444", bg: "#fee2e2", rank: 4 },
+  disclosed:    { label: "Disclosed",    short: "Disclosed",    color: "#b45309", bg: "#ffedd5", rank: 3 },
+  demonstrated: { label: "Demonstrated", short: "Demonstrated", color: "#1d4ed8", bg: "#dbeafe", rank: 2 },
+  research:     { label: "Research",     short: "Research",     color: "#475569", bg: "#f1f5f9", rank: 1 },
 };
-const TIER_ORDER = ["realized", "proven", "research", "reference", "noise"];
+const TIER_ORDER = ["operational", "observed", "disclosed", "demonstrated", "research"];
 
 // Categorical importance label (critical/important/supporting/archive) from the API.
 const LABEL_META = {
@@ -74,7 +79,10 @@ const SIG_META = {
 // the CRON_SECRET is entered once and shared across admin actions. Sent as a Bearer
 // token on the PATCH/DELETE mutation calls (see api/sources.js).
 const SECRET_KEY = "hz_api_secret";
-const loadSecret = () => { try { return localStorage.getItem(SECRET_KEY) || ""; } catch { return ""; } };
+// Baked-in low-privilege token (same one the Generate page uses). When present,
+// admin edits work with no key typed at all and the admin-secret bar is hidden.
+const BAKED_TOKEN = import.meta.env.VITE_GEN_TOKEN || "";
+const loadSecret = () => { try { return BAKED_TOKEN || localStorage.getItem(SECRET_KEY) || ""; } catch { return BAKED_TOKEN; } };
 const saveSecret = (v) => { try { localStorage.setItem(SECRET_KEY, v); } catch { /* ignore */ } };
 
 function TrustDot({ tier }) {
@@ -97,7 +105,7 @@ function ImportanceBadge({ tier, small }) {
   const m = TIER_META[tier];
   if (!m) return null;
   return (
-    <span className="hz-imp-badge" title={`Importance: ${m.label}`}
+    <span className="hz-imp-badge" title={`Evidence maturity: ${m.label}`}
       style={{ color: m.color, background: m.bg, fontSize: small ? "0.6rem" : "0.66rem" }}>
       {small ? m.short : m.label}
     </span>
@@ -245,9 +253,15 @@ function SourceDetail({ s, onUpdateDate, onDelete, onSaveClassification, knownTa
 
       <div className="hz-src-detail-grid">
         <div className="hz-src-detail-field">
-          <span className="hz-src-detail-k">Importance</span>
+          <span className="hz-src-detail-k">Evidence maturity</span>
           <span className="hz-src-detail-v">
-            <ImportanceBadge tier={imp.tier} />
+            <ImportanceBadge tier={s.maturity} />
+            {LABEL_META[s.label] && (
+              <span className="hz-imp-badge" title={`Priority label: ${s.label}`}
+                style={{ color: LABEL_META[s.label].color, background: LABEL_META[s.label].bg, fontSize: "0.6rem", fontWeight: 700, marginLeft: 4 }}>
+                {LABEL_META[s.label].short}
+              </span>
+            )}
             <span className="hz-src-detail-sub">{imp.reality} · {imp.posture}{s.is_defensive ? " · defensive" : ""}</span>
           </span>
         </div>
@@ -350,6 +364,7 @@ function SourceDetail({ s, onUpdateDate, onDelete, onSaveClassification, knownTa
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function SourcesPage() {
+  const [showLegend,  setShowLegend]  = useState(false);
   const [period,      setPeriod]      = useState("all-time");
   const [activeTab,   setActiveTab]   = useState("all");
   const [activeTags,  setActiveTags]  = useState([]);
@@ -514,7 +529,7 @@ export function SourcesPage() {
   const predicates = useMemo(() => ({
     category: activeTab === "all" ? null : (s => s.main_category === activeTab),
     label:    labelFilter ? (s => s.label === labelFilter) : null,
-    tier:     tierFilter ? (s => s.importance?.tier === tierFilter) : null,
+    tier:     tierFilter ? (s => s.maturity === tierFilter) : null,
     starred:  starredOnly ? (s => s.starred) : null,
     flagged:  flaggedOnly ? (s => s.needs_review) : null,
     tags:     activeTags.length ? (s => activeTags.every(t => s.tags?.includes(t))) : null,
@@ -533,8 +548,8 @@ export function SourcesPage() {
     const rows = sources.filter(s => active.every(p => p(s)));
     if (sortBy === "importance") {
       rows.sort((a, b) => {
-        const ra = TIER_META[a.importance?.tier]?.rank || 0;
-        const rb = TIER_META[b.importance?.tier]?.rank || 0;
+        const ra = TIER_META[a.maturity]?.rank || 0;
+        const rb = TIER_META[b.maturity]?.rank || 0;
         if (rb !== ra) return rb - ra;
         const sa = sigRank(a), sb = sigRank(b);      // landmark research rises within its tier
         if (sb !== sa) return sb - sa;
@@ -562,7 +577,7 @@ export function SourcesPage() {
   const tierCounts = useMemo(() => {
     const base = rowsExcept("tier");
     const c = {};
-    for (const s of base) { const t = s.importance?.tier; if (t) c[t] = (c[t] || 0) + 1; }
+    for (const s of base) { const t = s.maturity; if (t) c[t] = (c[t] || 0) + 1; }
     return c;
   }, [rowsExcept]);
 
@@ -599,19 +614,26 @@ export function SourcesPage() {
           </p>
         </div>
 
-        {/* Period pill switcher */}
-        <div className="hz-seg-group">
-          {PERIOD_OPTIONS.map(o => (
-            <button
-              key={o.value}
-              className={`hz-seg-btn${period === o.value ? " active" : ""}`}
-              onClick={() => { setPeriod(o.value); setPage(1); }}
-            >
-              {o.label}
-            </button>
-          ))}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button className="hz-legend-btn" onClick={() => setShowLegend(true)} title="What do the labels mean?">
+            ⓘ Legend
+          </button>
+          {/* Period pill switcher */}
+          <div className="hz-seg-group">
+            {PERIOD_OPTIONS.map(o => (
+              <button
+                key={o.value}
+                className={`hz-seg-btn${period === o.value ? " active" : ""}`}
+                onClick={() => { setPeriod(o.value); setPage(1); }}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
+      {showLegend && <LegendPanel onClose={() => setShowLegend(false)} />}
 
       {/* Category tabs */}
       <div className="hz-cat-tabs">
@@ -763,20 +785,28 @@ export function SourcesPage() {
         </span>
       </div>
 
-      {/* Admin bar — the secret unlocks the per-source edit/delete controls (expand a row). */}
-      <div className="hz-sources-admin-bar">
-        <input
-          className="hz-admin-secret"
-          type="password"
-          placeholder="Admin secret (CRON_SECRET) — to edit dates / delete"
-          value={secret}
-          onChange={e => { setSecret(e.target.value); saveSecret(e.target.value); }}
-        />
-        <span className="hz-admin-hint">Expand a source to edit its date or delete it.</span>
-        {adminMsg && (
+      {/* Admin bar — hidden when a token is baked in (edits just work). Only the
+          manual-secret fallback shows the input. */}
+      {!BAKED_TOKEN && (
+        <div className="hz-sources-admin-bar">
+          <input
+            className="hz-admin-secret"
+            type="password"
+            placeholder="Admin secret (CRON_SECRET) — to edit dates / delete"
+            value={secret}
+            onChange={e => { setSecret(e.target.value); saveSecret(e.target.value); }}
+          />
+          <span className="hz-admin-hint">Expand a source to edit its date or delete it.</span>
+          {adminMsg && (
+            <span className={`hz-admin-msg ${adminMsg.ok ? "ok" : "err"}`}>{adminMsg.text}</span>
+          )}
+        </div>
+      )}
+      {BAKED_TOKEN && adminMsg && (
+        <div className="hz-sources-admin-bar">
           <span className={`hz-admin-msg ${adminMsg.ok ? "ok" : "err"}`}>{adminMsg.text}</span>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Error */}
       {error && !loading && (
@@ -882,7 +912,7 @@ export function SourcesPage() {
                           </span>
                         )}
                         <div style={{ marginTop: 2 }}>
-                          <ImportanceBadge tier={s.importance?.tier} small />
+                          <ImportanceBadge tier={s.maturity} small />
                           {SIG_META[s.significance?.level] && (
                             <span className="hz-imp-badge" title={`Research significance: ${s.significance.level}${s.significance.reason ? " — " + s.significance.reason : ""}`}
                               style={{ color: SIG_META[s.significance.level].color, background: SIG_META[s.significance.level].bg, fontSize: "0.6rem", marginLeft: 4 }}>

@@ -37,6 +37,25 @@ const CATEGORIES = [
     desc: "AI as the attacker's tool — AI-generated malware, deepfake fraud, AI-assisted phishing, LLM-as-C2, nation-state AI tradecraft." },
 ];
 
+// Priority label — a SEPARATE axis from maturity. Maturity says "how real is the
+// threat"; the priority label says "how much should an analyst prioritise reading
+// this". LLM-validated (lib/pipeline/scoring/assessSourceLabel.js), stored as
+// source_label; deterministic fallback in sourceLabel.js.
+const PRIORITY = [
+  { key: "critical",   color: "#b91c1c", label: "Critical",
+    desc: "Must-read. Adversaries were CONFIRMED to use this technique/tool in a real operation, OR it is the FIRST public disclosure of a genuinely new attack surface / threat class.",
+    signals: "Confirmed in-the-wild adversary use; a named campaign; a field-first disclosure; a CVE marked actively exploited by CISA/the vendor." },
+  { key: "important",  color: "#c2410c", label: "Important",
+    desc: "A working exploit or capability was DEMONSTRATED (PoC, red-team, vendor lab test) with no confirmed real-world use yet, OR a clearly novel technique within a known attack surface.",
+    signals: "Public PoC; researcher demonstrated against a real product; a notable new method; landmark research." },
+  { key: "supporting", color: "#475569", label: "Supporting",
+    desc: "Corroborating detail on a known technique, a routine vendor advisory, a CVE with no exploitation evidence, or a 2nd/3rd source on a topic already covered by a critical/important item.",
+    signals: "\"Adversaries are increasingly…\" with no incident; routine advisory; CVE disclosure only; duplicate coverage." },
+  { key: "archive",    color: "#94a3b8", label: "Archive",
+    desc: "Background context, defensive guidance, governance/policy, or content that turned out not to be an offensive AI-security threat.",
+    signals: "Defensive/how-to-protect content; policy/governance; off-topic despite passing the keyword gate." },
+];
+
 function Section({ title, note, children }) {
   return (
     <div className="hz-legend-section">
@@ -93,6 +112,25 @@ export function LegendPanel({ onClose }) {
           <li>A single confirmed incident → <strong>Observed</strong>. Repeated or sustained campaign → <strong>Operational</strong>.</li>
           <li>The highest level present in a source wins.</li>
         </ul>
+      </Section>
+
+      {/* Priority label — the second axis */}
+      <Section
+        title="Priority Label (Critical / Important / Supporting)"
+        note="A SEPARATE axis from maturity. Maturity answers 'how real is the threat?'; the priority label answers 'how much should an analyst prioritise reading this?'. A source can be high-maturity but low-priority (a routine advisory for an old, well-covered technique) or the reverse (a field-first research paper). Assigned by an LLM (Haiku) — prompt in lib/pipeline/scoring/assessSourceLabel.js — stored as source_label."
+      >
+        {PRIORITY.map(p => (
+          <div key={p.key} className="hz-legend-maturity-row">
+            <div className="hz-legend-maturity-left">
+              <span className="hz-legend-dot" style={{ background: p.color }} />
+              <strong style={{ color: p.color }}>{p.label}</strong>
+            </div>
+            <div className="hz-legend-maturity-body">
+              <div className="hz-legend-maturity-desc">{p.desc}</div>
+              <div className="hz-legend-derivation">Signals: {p.signals}</div>
+            </div>
+          </div>
+        ))}
       </Section>
 
       {/* Threat categories */}

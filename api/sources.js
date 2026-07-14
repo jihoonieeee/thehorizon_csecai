@@ -17,6 +17,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { computeImportance } from "../lib/pipeline/scoring/importance.js";
 import { labelOf } from "../lib/pipeline/scoring/sourceLabel.js";
+import { maturityOf } from "../lib/pipeline/scoring/maturityLevel.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -66,7 +67,12 @@ function periodWindow(period) {
 function authorized(req) {
   const secret = process.env.CRON_SECRET;
   if (!secret) return true;
-  return (req.headers.authorization || "") === `Bearer ${secret}`;
+  const auth = req.headers.authorization || "";
+  // GEN_TOKEN: the same low-privilege, baked-in token used by the Generate page,
+  // so the Sources page never needs the CRON_SECRET typed in. It unlocks the
+  // per-source edits here; CRON_SECRET still works too.
+  const genToken = process.env.GEN_TOKEN;
+  return auth === `Bearer ${secret}` || (genToken && auth === `Bearer ${genToken}`);
 }
 
 export default async function handler(req, res) {
@@ -203,6 +209,10 @@ export default async function handler(req, res) {
           short_summary: s.short_summary || s.analyst_brief || s.summary || null,
           analyst_brief: s.analyst_brief || null,
           importance:    { tier: imp.tier, reality: imp.reality, posture: imp.posture },
+          // Evidence-maturity rung — SAME vocabulary the dashboard uses
+          // (research→demonstrated→disclosed→observed→operational) so the two
+          // pages agree. Reads intelligence.maturity_level, else deterministic.
+          maturity:      maturityOf(s),        // research|demonstrated|disclosed|observed|operational
           label:         labelOf(s),          // critical | important | supporting | archive
           is_report:     s.is_digest === true, // a fanned-out landscape report (container)
           finding_count: s.intelligence?.digest_item_count || null,
