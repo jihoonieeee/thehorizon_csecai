@@ -477,8 +477,12 @@ export default async function handler(req, res) {
     // Renumber 1..N so [src-N] in the answer always refers to position N in this
     // array. Without renumbering, [src-7] would mean the 7th retrieval candidate,
     // not the 7th selected source, making every citation resolve to the wrong article.
+    // Pre-filter marketing blogs HERE before synthesis — if we wait until post-QA
+    // to strip their citations, the prose that referenced them remains in the answer
+    // as orphaned, uncited sentences.
     const sourceRefs = ret.sources
       .filter(s => selectedSet.has(s.ref))
+      .filter(s => !s.url || !isMarketingBlog(s.url))
       .map((s, i) => ({ ...s, ref: `src-${i + 1}` }));
     const isGeneral = sel.verdict === "none" || sourceRefs.length === 0;
 
@@ -491,9 +495,16 @@ export default async function handler(req, res) {
       const evidenceQuery = plan.search_terms?.length ? plan.search_terms.join(" ") : query;
       const evDateFrom = plan.temporal?.all_time ? undefined : (plan.temporal?.date_from || undefined);
       const evDateTo   = plan.temporal?.all_time ? undefined : (plan.temporal?.date_to   || undefined);
+      // Judgments are strategic summaries of the ENTIRE corpus history — injecting
+      // them into a tight recency window (≤ 30 days) causes Sonnet to write about
+      // historical incidents as "context", blowing out the temporal boundary.
+      const windowDays = evDateFrom
+        ? Math.round((Date.now() - new Date(evDateFrom).getTime()) / 86400000)
+        : Infinity;
+      const isTightWindow = !plan.temporal?.all_time && windowDays <= 30;
       const jobs = [
         executeTool("get_evidence", { query: evidenceQuery, categories: undefined, tags: plan.taxonomy_tags?.length ? plan.taxonomy_tags : undefined, limit: 16, date_from: evDateFrom, date_to: evDateTo }).catch(() => null),
-        plan.needs_judgments ? executeTool("get_judgments", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
+        (plan.needs_judgments && !isTightWindow) ? executeTool("get_judgments", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
         plan.needs_trends ? executeTool("trend_analysis", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
         cveIds.length ? executeTool("lookup_cve", { cve_ids: cveIds }).catch(() => null) : Promise.resolve(null),
       ];

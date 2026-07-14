@@ -15,11 +15,13 @@
  *   --dry-run       Fetch + parse but don't write to DB
  *   --limit N       Max articles to ingest per publisher (default: 50)
  *   --concurrency N Parallel article fetches (default: 3)
+ *   --flag-as TAG   Store TAG in intelligence.backfill_source on each new row
  *
  * Examples:
  *   node scripts/backfillFromSitemaps.js --days 365 --publisher talos
  *   node scripts/backfillFromSitemaps.js --days 90
  *   node scripts/backfillFromSitemaps.js --dry-run --publisher crowdstrike
+ *   node scripts/backfillFromSitemaps.js --publisher "protect ai" --days 565 --limit 200 --flag-as traditional_ai_2025
  */
 
 import "dotenv/config";
@@ -40,6 +42,7 @@ const PUBLISHER_F  = getArg("--publisher", "").toLowerCase();
 const DRY_RUN      = hasFlag("--dry-run");
 const PER_PUB_LIMIT= parseInt(getArg("--limit",       "50"),  10);
 const CONCURRENCY  = parseInt(getArg("--concurrency", "3"),   10);
+const FLAG_AS      = getArg("--flag-as", "");
 const ARTICLE_TIMEOUT = 15000;
 const MAX_HTML_CHARS  = 15000;
 
@@ -523,6 +526,7 @@ async function ingestArticle(url, lastmod, pub) {
     ai_threat_focus:   validated.ai_threat_focus || null,
     validation_summary: validated.validation_summary || null,
     claim_extraction_status: null,
+    ...(FLAG_AS ? { intelligence: { backfill_source: FLAG_AS } } : {}),
   };
 
   await upsertSource(dbRow);
@@ -624,6 +628,7 @@ async function main() {
               ai_threat_focus:   validated.ai_threat_focus || null,
               validation_summary: validated.validation_summary || null,
               claim_extraction_status: null,
+              ...(FLAG_AS ? { intelligence: { backfill_source: FLAG_AS } } : {}),
             };
             await upsertSource(row);
             result = { status: "saved" };

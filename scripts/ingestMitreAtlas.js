@@ -14,9 +14,11 @@
  * optionally feed them to backfillSources.js (arxiv) or importCuratedPdfs.js.
  *
  * Usage:
- *   node scripts/ingestMitreAtlas.js [--dry-run] [--until YYYY-MM-DD]
+ *   node scripts/ingestMitreAtlas.js [--dry-run] [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--flag-as TAG]
  *
- * Defaults: ingests all case studies with incident date <= 2025-12-31.
+ * Defaults: ingests all case studies with incident date <= today.
+ * --since   skip case studies with incident date before this date
+ * --flag-as store TAG in intelligence.backfill_source on each new row
  */
 
 import "dotenv/config";
@@ -27,7 +29,11 @@ import { load as yamlLoad } from "js-yaml";
 const args      = process.argv.slice(2);
 const DRY_RUN   = args.includes("--dry-run");
 const untilIdx  = args.indexOf("--until");
-const UNTIL     = untilIdx >= 0 && args[untilIdx + 1] ? args[untilIdx + 1] : "2025-12-31";
+const UNTIL     = untilIdx >= 0 && args[untilIdx + 1] ? args[untilIdx + 1] : new Date().toISOString().slice(0, 10);
+const sinceIdx  = args.indexOf("--since");
+const SINCE     = sinceIdx >= 0 && args[sinceIdx + 1] ? args[sinceIdx + 1] : null;
+const flagIdx   = args.indexOf("--flag-as");
+const FLAG_AS   = flagIdx  >= 0 && args[flagIdx + 1]  ? args[flagIdx + 1]  : null;
 
 const ATLAS_URL = "https://raw.githubusercontent.com/mitre-atlas/atlas-data/main/dist/v6/ATLAS-2026.06.yaml";
 const ATLAS_BASE = "https://atlas.mitre.org/studies";
@@ -51,7 +57,7 @@ function sourceTypeFor(atlasType) {
 
 async function main() {
   console.log(`\n${"═".repeat(60)}`);
-  console.log(`  MITRE ATLAS Ingest — case studies until ${UNTIL}${DRY_RUN ? "  [DRY RUN]" : ""}`);
+  console.log(`  MITRE ATLAS Ingest — case studies ${SINCE ? `from ${SINCE} ` : ""}until ${UNTIL}${DRY_RUN ? "  [DRY RUN]" : ""}${FLAG_AS ? `  [flag: ${FLAG_AS}]` : ""}`);
   console.log(`${"═".repeat(60)}\n`);
 
   // ── Fetch YAML bundle ────────────────────────────────────────────────────────
@@ -94,6 +100,7 @@ async function main() {
   for (const [atlasId, cs] of entries) {
     const incidentDate = cs.date || cs["created-date"] || "";
     if (incidentDate && incidentDate > UNTIL) { skipped++; continue; }
+    if (SINCE && incidentDate && incidentDate < SINCE) { skipped++; continue; }
 
     const url      = `${ATLAS_BASE}/${atlasId}`;
     const sourceId = makeId(url);
@@ -140,6 +147,7 @@ async function main() {
         actor_type:     cs["actor-type"] || null,
         technique_ids:  steps.map(s => s.target),
         date_granularity: cs["date-granularity"] || null,
+        ...(FLAG_AS ? { backfill_source: FLAG_AS } : {}),
       },
     };
 

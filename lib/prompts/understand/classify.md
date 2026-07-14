@@ -28,6 +28,40 @@ Ask this first, before anything else:
 If neither — the source is not about an AI cyber threat → unclear_or_adjacent or off_topic (see SCOPE).
 
 ────────────────────────────────────────────────────────────────────────
+SIX-QUESTION CLASSIFICATION ORDER — work through these before assigning a tag
+────────────────────────────────────────────────────────────────────────
+
+Apply these in order. Each question eliminates incorrect categories before the next runs.
+
+  1. What TRUST BOUNDARY failed?
+       Maintainer account / model artifact / prompt boundary / agent's tool-authorization /
+       serving endpoint / distribution channel / human's trust in output.
+
+  2. What COMPONENT was exploited?
+       Model weights or training data / LLM language surface / agent framework or registry /
+       application-level endpoint / distribution or packaging channel.
+
+  3. Was AUTONOMY REQUIRED?
+       Did an autonomous agent have to select, plan, or invoke the mechanism — or would
+       deterministic software (a fixed script, a curl command, an HTTP client) suffice?
+       If deterministic software suffices → it is AI Infrastructure or conventional software,
+       NOT a behavioral LLM or agentic category.
+
+  4. Would DETERMINISTIC SOFTWARE behave differently?
+       (The deterministic-software test — see full definition below.) If the exploit works
+       identically without the LLM or agent, do NOT force it into an LLM/agentic behavioral
+       category merely because the target product is in the AI stack.
+
+  5. What was the ATTACKER'S PRIMARY OBJECTIVE?
+       Extract a model / steal data / execute code / cause DoS / disinform / bypass a
+       detector / obtain credentials. The objective sets the PRIMARY tag; the mechanism
+       that achieved it becomes secondary_tags. (See PRIMARY-OBJECTIVE RULE below.)
+
+  6. What was the DOWNSTREAM EFFECT?
+       Code execution / data leak / account takeover / availability loss / content harm.
+       This labels SEVERITY — it does not by itself upgrade the primary category.
+
+────────────────────────────────────────────────────────────────────────
 GLOBAL PRIMARY-CLASSIFICATION RULE — the governing order (apply FIRST)
 ────────────────────────────────────────────────────────────────────────
 
@@ -90,6 +124,49 @@ with ordinary deterministic software?"
     - prompt injection makes an agent choose and run a shell command → ASI05.
     - a jailbreak defeats alignment to elicit disallowed output → LLM11.
     - hidden web text redirects an agent's autonomous plan → ASI01/ASI02.
+
+────────────────────────────────────────────────────────────────────────
+AI INFRASTRUCTURE VULNERABILITIES — ordinary software bugs in AI products
+────────────────────────────────────────────────────────────────────────
+
+When the deterministic-software test returns YES, the source describes an AI
+INFRASTRUCTURE vulnerability: a conventional software flaw in a product that
+happens to be in the AI stack. These are NOT supply-chain compromises, and they
+are NOT LLM/agentic behavioral threats. The flaw would be equally exploitable if
+the product served static files or provided a REST calculator.
+
+Prototypical examples:
+  • LiteLLM SQL injection / SSRF (CVE in a legitimate production release)
+  • LMDeploy SSRF or path traversal
+  • LangChain4j SQL injection
+  • Crawl4AI credential theft via misconfigured endpoint
+  • vLLM authentication bypass / arbitrary endpoint exposure
+  • Any AI gateway with command injection reachable by an HTTP client
+
+Classification rules for AI Infrastructure:
+  • If the flaw is a GENERIC appsec class (SQLi, SSRF, auth bypass, path traversal,
+    deserialization) with no AI-specific attack surface — the same CVE class could
+    exist in any web service — route to unclear_or_adjacent. Record the affected
+    product and CVE type in boundary_rationale.
+  • If the flaw meaningfully affects AI capability (e.g. an LLM inference proxy
+    whose SSRF exposes model weights, or a gateway whose command injection runs
+    on the same host as training jobs), use the closest LLM/ASI infrastructure tag
+    AND preserve the concrete CVE class in boundary_rationale.
+  • NEVER route a plain CVE in a legitimate component to LLM03 (supply-chain
+    requires compromised distribution or installation trust, not just a vuln).
+  • NEVER route it to ASI05 (code execution via a deterministic endpoint is not
+    an agentic execution path — the agent's tool-selection is not the mechanism).
+  • A CVE in a real, legitimately released version of LiteLLM, vLLM, LangChain,
+    Ollama, or any AI product is AI infrastructure, not supply chain.
+
+STOLEN ASSET DOES NOT DETERMINE CATEGORY:
+  The category is set by HOW the exploit worked, not by WHAT was stolen.
+  Stealing agentic capabilities, tool-call knowledge, or agent orchestration
+  secrets from a model does NOT make the attack agentic if the attacker never
+  exploited an autonomous agent's own capability to do so. Similarly, extracting
+  an LLM's weights via a side-channel or memory flaw is model extraction (LLM10),
+  not an agentic or supply-chain incident. Always ask: was AUTONOMY the mechanism,
+  or merely the target's characteristic?
 
 ────────────────────────────────────────────────────────────────────────
 THREE-LEVEL ANALYSIS — work through this before picking a category
@@ -326,12 +403,25 @@ llm-VS-agentic TEST:
     • orchestration across agents;
     • an agent taking external action.
 
-  MCP CAVEAT: MCP involvement ALONE does not make an incident agentic. Determine
-  whether an AGENT is actually selecting or invoking a tool. An ordinary HTTP
-  endpoint that merely accepts MCP configuration — or an MCP server with a plain
-  CVE that any HTTP client could trigger — is not, by itself, agentic; run the
-  deterministic-software test. Reserve agentic for when an autonomous agent's
-  tool-selection/action is the mechanism.
+  MCP CAVEAT: MCP involvement ALONE does not make an incident agentic. Test:
+  "Is an autonomous agent selecting or invoking a tool via MCP, and is that
+  selection the mechanism of harm?" If yes → agentic. If no → see below.
+
+  NOT agentic even with MCP present:
+    • A vulnerable MCP endpoint or configuration API that any HTTP client can
+      trigger directly (CVE in MCP server software, SSRF via MCP resource handler,
+      misconfigured auth) → AI Infrastructure; run the deterministic-software test.
+    • An MCP server a human manually connects to without any agent acting → not agentic.
+    • MCP configuration errors that expose data passively → unclear_or_adjacent or
+      llm_threats depending on the victim.
+
+  IS agentic when MCP is present:
+    • An agent autonomously selects an MCP tool and that invocation is the mechanism
+      → ASI02_tool_misuse_exploitation.
+    • A rogue or compromised MCP server the agent connects to and trusts
+      → ASI04_agentic_supply_chain.
+    • An agent's MCP tool call is hijacked mid-execution by an attacker
+      → ASI07_insecure_agent_comms (inter-agent) or ASI02 (tool-level).
 
 MECHANISM-VS-CONSEQUENCE PRINCIPLE (the general upgrade rule):
   The implantation mechanism — HOW malicious behaviour was planted — does NOT decide
@@ -387,13 +477,33 @@ MECHANISM-VS-CONSEQUENCE PRINCIPLE (the general upgrade rule):
     identity / permission escalation → agentic_ai_threats (ASI03)
     Record the lower-layer delivery vector as a secondary tag in all cases.
 
-ENABLING TECHNIQUE VS ATTACKER OBJECTIVE:
+ENABLING TECHNIQUE VS ATTACKER OBJECTIVE (PRIMARY-OBJECTIVE RULE):
   Classify by the attacker's END GOAL — what they gain or achieve — not by
   the supporting machinery they use to get there. Every attack uses enabling
   techniques; those techniques are secondary_tags, not the primary label.
 
   Decision gate: "What does the attacker possess or achieve at the end that
   they did not have at the start?"
+
+  PRIMARY-OBJECTIVE-BEATS-MECHANISM — the key anti-pattern this rule prevents:
+  When an enabling mechanism overlaps with a threat category (e.g. high API query
+  volume looks like LLM10 consumption), always check whether the OBJECTIVE is
+  something more specific:
+
+    • Large query volumes issued to DISTIL or EXTRACT a model's capabilities →
+      the objective is MODEL EXTRACTION (TAI05 for classical models, LLM10's
+      model-theft reading for LLMs) — NOT LLM10_unbounded_consumption (DoS/cost).
+      The high-volume API usage is the MECHANISM; the loot is a working replica.
+      Classify by loot, not by the HTTP call count.
+
+    • Model distillation and capability extraction are MODEL EXTRACTION
+      (TAI05 for classical; LLM10 model-theft for LLMs; ASI03 if the stolen
+      capability is an agent's delegated identity/permissions) — even when:
+        - the target is an LLM or an agentic model;
+        - the technique uses supervised fine-tuning of a student on teacher outputs;
+        - the attacker frames it as "knowledge distillation research."
+      The mechanism (issuing queries, training a student) is secondary. The
+      goal (possessing a functional clone or capability replica) is primary.
 
   COMMON ENABLING-TECHNIQUE MISCLASSIFICATIONS:
     Enabling technique              → Correct primary tag (attacker's objective)
@@ -732,9 +842,19 @@ core threat; add secondary_tags only for genuinely distinct additional technique
         deserialization, unsafe endpoint handling) is an AI-INFRASTRUCTURE vulnerability.
         Run the deterministic-software test; classify by the affected LLM ecosystem and
         record the concrete vuln type (e.g. "SSRF in AI gateway") in boundary_rationale.
+
+      SUPPLY CHAIN REQUIRES A TRUST COMPROMISE IN PRODUCTION, DISTRIBUTION,
+      INSTALLATION, OR SELECTION — not merely the existence of a CVE:
+        ✓ LLM03: malicious PyPI/npm release from a hijacked maintainer account
+        ✓ LLM03: poisoned model checkpoint or LoRA/adapter distributed via a hub
+        ✓ LLM03: trojaned plugin shipped through a trusted extension marketplace
+        ✗ NOT LLM03: CVE-2024-XXXX in a genuine, unmodified LiteLLM release
+        ✗ NOT LLM03: SSRF/SQLi/path-traversal in any legitimately released version
+        ✗ NOT LLM03: a vulnerability that was patched and disclosed by the vendor
+
         CONTRAST: MALICIOUS LiteLLM versions published through a COMPROMISED PyPI account
         ARE LLM03 (the distribution trust was subverted); a normal patched CVE in a real
-        LiteLLM release is not.
+        LiteLLM release is AI Infrastructure → see AI INFRASTRUCTURE block above.
       Not this: an autonomous-agent framework, skill registry, or MCP server → ASI04; a
         classical-ML model/dataset/training pipeline → TAI10; weight/adapter poisoning of
         a CLASSICAL (non-LLM) model → TAI02.
@@ -868,11 +988,16 @@ core threat; add secondary_tags only for genuinely distinct additional technique
   ASI05_unexpected_code_execution
       What: code or command execution reached THROUGH AN AGENTIC EXECUTION PATH — an
         autonomous agent's own tool/interpreter/shell is what runs the code.
-      REQUIRES an agentic execution path. Qualifying examples: an agent invoking a shell
-        or code interpreter; prompt injection causing an agent to execute code; an agent
-        generating and then running an attacker-controlled script; exploitation of an
-        agent SANDBOX or execution environment; tool-mediated command execution SELECTED
-        OR INITIATED BY AN AGENT.
+      REQUIRES an agentic execution path. The source MUST show at least one of:
+        • an autonomous agent invoking a shell, interpreter, REPL, or code-execution tool;
+        • prompt injection or instruction override that causes an agent to run code;
+        • an agent generating and then self-executing an attacker-controlled script;
+        • exploitation of an agent sandbox or execution environment via tool use;
+        • tool-mediated command execution SELECTED OR INITIATED BY THE AGENT'S PLANNING.
+      Also requires at least one of these agent properties to be present in the incident:
+        autonomous planning or goal pursuit / tool invocation / delegated permissions /
+        persistent memory / agent orchestration. A product merely HAVING these features
+        is not enough — the exploit must USE them.
       Belongs when: the execution happened because an autonomous agent selected/invoked
         the executing tool — the agent's capability is the mechanism, not merely the
         setting.
@@ -880,9 +1005,11 @@ core threat; add secondary_tags only for genuinely distinct additional technique
         product calls subprocess() or evaluates input. A deterministic endpoint that
         executes commands (reachable without any agent's tool-selection) is an
         AI-INFRASTRUCTURE COMMAND-INJECTION vulnerability, not agentic — run the
-        deterministic-software test. Also: a supply-chain compromise that yields code
-        execution is primarily a supply-chain incident (LLM03/TAI10/ASI04), with the code
-        execution recorded as the effect, unless an agent's autonomous action is the path.
+        deterministic-software test. A normal REST endpoint behind an MCP configuration
+        layer is still a deterministic endpoint. Also: a supply-chain compromise that
+        yields code execution is primarily a supply-chain incident (LLM03/TAI10/ASI04),
+        with the code execution recorded as the effect, unless an agent's autonomous
+        action is the path.
       Not this: the app (not an autonomous agent) executes model output → LLM05; a tool
         API is misused without code execution → ASI02.
       (OWASP ASI05.)
@@ -1249,6 +1376,30 @@ WORKED BOUNDARY EXAMPLES
       → traditional_ai_threats, TAI03_adversarial_evasion; the malware classifier is
         the victim; the LLM is the attacker's tooling (like using a compiler to craft
         shellcode); classify by the attacked system, not by what generated the attack.
+
+  AI INFRASTRUCTURE vs SUPPLY-CHAIN vs BEHAVIORAL — new examples:
+  • CVE-2024-XXXX: LiteLLM SQL injection in a legitimate v1.x release
+      → unclear_or_adjacent (AI infrastructure; deterministic appsec bug; LLM
+        language surface not exploited; distribution trust not compromised).
+  • CVE in LMDeploy: SSRF in the inference server's URL fetcher
+      → unclear_or_adjacent (AI infrastructure SSRF; deterministic; not LLM03).
+  • LangChain4j SQL injection reachable via a standard API call
+      → unclear_or_adjacent (AI infrastructure; no LLM/agent capability required).
+  • Attacker publishes a malicious "litellm" package from a hijacked PyPI account
+      → llm_threats, LLM03_llm_supply_chain (distribution trust subverted).
+  • MCP server has an authentication bypass CVE any curl command can trigger
+      → unclear_or_adjacent (AI infrastructure; MCP alone ≠ agentic; deterministic).
+  • Prompt injection via a poisoned MCP tool response causes an AGENT to exfiltrate
+      → agentic_ai_threats, ASI02_tool_misuse_exploitation (agent selected the tool;
+        autonomy was the mechanism).
+  • Attacker issues millions of queries to an LLM API to distil a student model
+      → llm_threats, LLM10_unbounded_consumption (model-theft reading); the high
+        query volume is the MECHANISM; the objective is model extraction. NOT just DoS.
+  • Attacker recovers tool-call logs and agent orchestration prompts from a leaked
+    endpoint — but never ran the agent
+      → llm_threats, LLM07_system_prompt_leakage (stolen asset is instructions/logic;
+        no autonomy was exploited; the stolen content being "agentic" in nature does
+        not make the attack agentic).
 
 ════════════════════════════════════════════════════════════════════════
 SUMMARY GENERATION RULES (short_summary and analyst_brief)
