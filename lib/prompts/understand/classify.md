@@ -254,13 +254,20 @@ WHEN THE AI IS THE TARGET — which of the three attacked-surface categories?
 Decide by WHAT KIND OF AI SYSTEM is attacked and HOW the harm is realised:
 
   traditional_ai_threats  — the victim is a CLASSICAL ML MODEL (a classifier,
-     detector, recommender, regression/vision/fraud/malware model) OR its
-     data / training / inference pipeline / model supply chain. The attack
-     operates at the MACHINE-LEARNING level: manipulating training data or
-     weights, perturbing inputs to cause misclassification, stealing or
-     inverting the model, or compromising the artifacts that produce it.
-     The interface is DATA and MODEL MATH — not natural-language prompts and
-     not autonomous tool use.
+     detector, recommender, regression/vision/fraud/malware/IDS model, an RL
+     policy) OR its data / training / inference pipeline / model supply chain.
+     THE DEFINING PROPERTY: the model is PREDICTIVE / DISCRIMINATIVE — it takes
+     an input and outputs a label, score, ranking, detection, or numeric
+     prediction. It does NOT generate free-form language and does NOT take
+     autonomous actions in the world. That inability to generate/act is exactly
+     what separates traditional from llm (which GENERATES text) and agentic
+     (which ACTS via tools). If the attacked model outputs a class/score/decision
+     and nothing more, it is traditional; if it produces language, it is an LLM;
+     if it calls tools or executes, it is agentic. The attack operates at the
+     MACHINE-LEARNING level: manipulating training data or weights, perturbing
+     inputs to cause misclassification, stealing or inverting the model, or
+     compromising the artifacts that produce it. The interface is DATA and MODEL
+     MATH — not natural-language prompts and not autonomous tool use.
 
   llm_threats  — the victim is a LARGE LANGUAGE MODEL and its LANGUAGE / I-O
      surface: the prompt, context window, system prompt, guardrails, RAG
@@ -955,25 +962,45 @@ core threat; add secondary_tags only for genuinely distinct additional technique
         only a wrong text answer with no action → LLM01.
       (OWASP ASI01.)
   ASI02_tool_misuse_exploitation
-      What: the attacker manipulates an agent into abusing its integrated
-        tools/functions/MCP to take harmful actions.
-      How / examples: tool-call injection that makes the agent invoke a legitimate tool
-        destructively (delete data, wire funds, exfiltrate via an API); a malicious or
-        poisoned MCP/tool server the agent calls; over-invoking costly tools. The agent
-        acts within its authorized privileges but applies the tool wrongly.
-      Belongs when: the harmful ACTION is a tool/function/API call.
-      Not this: running arbitrary code/commands → ASI05; escalating identity/permissions
-        → ASI03; the malicious tool arriving via a compromised registry/server as the
-        story → ASI04.
+      What: harm comes from WHAT THE AGENT DOES WITH A TOOL — the agent is driven to
+        invoke a legitimate, already-authorized tool/function/MCP in a harmful way.
+        The permission model is fine; the ACTION is the problem.
+      How / examples: tool-call injection that makes the agent invoke a real tool
+        destructively (delete data, wire funds, exfiltrate via an API it is allowed to
+        use, send an email); a poisoned MCP/tool server the agent calls that returns
+        malicious results the agent acts on; over-invoking costly tools. The agent acts
+        WITHIN its authorized privileges but applies the tool wrongly.
+      Belongs when: the harmful event is a specific tool/function/API CALL, made with
+        authority the agent legitimately has.
+      Not this: running arbitrary code/commands → ASI05; the WEAKNESS is the agent's
+        permission/authorization model itself (too much authority, no approval gate,
+        stolen identity) → ASI03; the malicious tool arriving via a compromised
+        registry/server the agent loads → ASI04.
+      DISCRIMINATOR vs ASI03: ASK "is the harm the ACTION, or the AUTHORITY?" A demon-
+        strated destructive tool call with existing permissions → ASI02. A gap in HOW the
+        agent is authorized to use tools → ASI03.
       (OWASP ASI02.)
   ASI03_identity_privilege_abuse
-      What: the attacker exploits the agent's identity, credentials, or delegated
-        permissions to act beyond intended scope.
+      What: harm comes from WHAT THE AGENT IS ALLOWED TO DO — the agent's identity,
+        credentials, delegated permissions, or AUTHORIZATION/approval model is the
+        weakness. This includes MISSING or too-coarse authorization controls, not just
+        active theft/escalation.
       How / examples: stealing or replaying the high-privilege tokens an agent holds;
         privilege escalation via dynamic role/permission inheritance; an agent acting
-        with a human's or service's identity across systems it shouldn't reach.
-      Belongs when: the core issue is IDENTITY/permission abuse or escalation.
-      Not this: a standing over-grant of authority by design with no exploit → LLM06.
+        with a human's or service's identity across systems it shouldn't reach; and —
+        importantly — an agent framework that lets the agent invoke tools WITHOUT
+        fine-grained authorization or user review (no approval gate), so any tool call
+        runs with unchecked authority (e.g. "Windsurf/MCP integration lacks fine-grained
+        tool-authorization controls, agents invoke tools without user review").
+      Belongs when: the core issue is the IDENTITY / permission / AUTHORIZATION model —
+        who the agent can act as, and whether its tool use is gated — rather than one
+        specific misused tool call.
+      ATTACK-SURFACE NOTE: a researcher DISCLOSING that an agent lacks an authorization
+        control is an OFFENSIVE attack-surface finding (source_type=attack_surface_signal),
+        NOT a defensive capability. Disclosing a missing control is threat intel; only a
+        source that PROVIDES a protection/detection/mitigation is defensive. Do not set
+        is_defensive for "here is a gap in the agent's authorization".
+      Not this: a demonstrated destructive call the agent WAS allowed to make → ASI02.
       (OWASP ASI03.)
   ASI04_agentic_supply_chain
       What: the attacker compromises a component that AN AGENT LOADS AND RUNS AT RUNTIME,
