@@ -438,7 +438,7 @@ export function GeneratePage() {
         </h1>
         <p style={{ margin: "8px 0 0", fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
           {tab === "slides"
-            ? "Runs the analysis pipeline and produces a ready-to-present PPTX deck. Best run locally via npx vercel dev — Vercel times out at 10s."
+            ? "Dispatches a GitHub Actions run that executes the full analysis pipeline off-Vercel and saves a ready-to-present PPTX deck. The deck appears here in about 10–30 minutes — you can close this page while it runs."
             : "Generates an AI threat intelligence digest — a curated reading list of relevant sources with summaries. Copy and paste directly into any email client."}
         </p>
       </div>

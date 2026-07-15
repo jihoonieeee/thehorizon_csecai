@@ -16,12 +16,14 @@
  *   format=pptx → binary PPTX download
  *   format=json → deck JSON object
  *
- * IMPORTANT: runPipelineFromDB and renderDeckPptxToBuffer are dynamically
- * imported inside the POST handler to keep the function bundle small enough
- * to load on Vercel. Static imports of the full pipeline + PptxGenJS exceed
- * the Vercel bundle size limit and cause FUNCTION_INVOCATION_FAILED.
- * Generation still requires local execution (npx vercel dev) due to the
- * Vercel Hobby 10s timeout; the POST handler will always time out on prod.
+ * HOW GENERATION RUNS: the POST handler does NOT run the pipeline itself (that
+ * takes 10-30 min and can't fit Vercel's function limits). Instead it makes one
+ * quick GitHub API call to dispatch the `generate-slides.yml` workflow, which
+ * runs `scripts/runHorizonScan.js --pptx` on a GitHub Actions runner (60-min
+ * budget) and saves the PPTX + deck JSON to Vercel Blob. The dispatch returns in
+ * well under the Vercel timeout; the frontend polls GET ?list=1 for the finished
+ * deck. Requires GITHUB_PAT (actions:write) on Vercel + the pipeline secrets on
+ * the GitHub repo. No local run needed.
  *
  * Authorization: Bearer CRON_SECRET header (or x-vercel-cron: 1).
  */
@@ -130,7 +132,7 @@ export default async function handler(req, res) {
         });
       }
 
-      await dispatchGitHubWorkflow({ days, limit });
+      await dispatchGitHubWorkflow({ days });
 
       return res.status(202).json({
         queued: true,
