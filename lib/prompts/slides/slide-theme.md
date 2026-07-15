@@ -86,11 +86,45 @@ Do NOT upgrade a qualified finding into a stronger conclusion:
   ✗ WRONG: "no compliant way to close this gap" — if the paper says "requires significant utility trade-offs"
   ✓ RIGHT:  "closing this gap requires significant utility trade-offs in model accuracy"
 
+════ SLIDE DISTINCTIVENESS RULE ════
+
+Every slide must introduce at least ONE thing that did NOT appear on earlier slides in this category:
+  - a different attack mechanism
+  - a different threat actor or tool
+  - a different technology layer or victim type
+  - a different strategic implication
+
+If >50% of the named entities (actors, tools, products, techniques) on this slide overlap with
+an earlier slide in the same category, you are writing a duplicate. Reframe at a higher level
+or focus on what this incident adds that the earlier slide did not cover.
+
+Insights explain PATTERNS across multiple sources.
+Developments explain EVENTS (one named incident, tool, or CVE).
+These are distinct. An incident may not appear identically on both.
+
+════ THREE-BULLET DISCIPLINE ════
+
+  Bullet 1 — The Finding   (claim or data_point)
+    Name the SPECIFIC entity: the named tool, actor, or technique that changed.
+    Cite the strongest evidence_id.
+
+  Bullet 2 — The Proof     (data_point or mechanism)
+    The ONE most striking concrete fact: a named victim, a measurement, a named step.
+    Cite a DIFFERENT evidence_id from bullet 1 when possible.
+
+  Bullet 3 — So What       (implication)
+    Which specific defender control or trust assumption now fails, and why.
+    Name the control. Not "security is harder now" — name the specific broken thing.
+    Cite the evidence_id that drives this implication.
+
+Exactly 3 bullets. Each ≤22 words. No recommendations.
+
 ════ RULES ════
 
   ✗ NEVER write a recommendation or "defenders should…" bullet.
-  ✗ NEVER write more than 5 bullets.
-  ✓ Keep the supplied headline VERBATIM — it is already the insight.
+  ✗ NEVER write more than 3 bullets.
+  ✗ NEVER write "X has become increasingly sophisticated/prevalent/effective" — name the specific shift.
+  ✓ Keep the supplied headline VERBATIM — it is already the insight. Do not rewrite it.
   ✓ Match the verb to the evidence maturity:
       research_demonstration  → "researchers demonstrated / showed"
       disclosed_vulnerability → "a confirmed flaw in / CVE confirmed"
@@ -99,7 +133,33 @@ Do NOT upgrade a qualified finding into a stronger conclusion:
       operational_campaign    → "sustained campaign confirmed"
   ✓ speaker_notes: 2 sentences only — analytical nuance, not a restatement of bullets.
 
-Each bullet: cite one evidence_id. ≤28 words. Plain English. No dashes at start.
+Each bullet: cite one evidence_id. ≤22 words. Plain English. No dashes at start.
+
+════ SLIDE ROLE ════
+
+Each slide has a narrative ROLE that constrains what it must do:
+  establish_baseline  — what was true before or at the start of the period
+  introduce_change    — a newly-emerging threat or technique first appearing this period
+  prove_shift         — concrete evidence that a specific shift occurred (the "show" slide)
+  explain_mechanism   — HOW the attack works in causal-chain form
+  illustrate_case     — one named incident told start to finish (case study)
+  compare_patterns    — side-by-side comparison of actors, techniques, or categories
+  state_implication   — strategic "so what" for leadership; does NOT introduce new evidence
+  forecast_next_move  — grounded prediction with a named horizon
+
+You will receive the SLIDE_ROLE in the user prompt. Write bullets that serve that specific function.
+A "prove_shift" slide must lead with evidence, not with implications.
+A "state_implication" slide must not introduce new facts not already covered earlier.
+
+════ CONTEXT CONSTRAINTS ════
+
+You will also receive:
+  PRIOR_SLIDE_CONTEXT   — the argument of the slide that immediately precedes this one.
+                          Do NOT make the same argument or conclusion.
+  PROHIBITED_CLAIMS     — conclusions already established earlier in this category section.
+                          Do NOT restate them. Every slide must introduce something NEW.
+
+A bullet that could appear on the previous slide without modification is wasted content.
 
 Return ONLY valid JSON:
 { "slides": [ { "headline": "...", "bullets": [ { "text": "...", "bullet_type": "...", "evidence_id": "..." } ], "speaker_notes": "...", "visual_suggestion": "..." } ] }

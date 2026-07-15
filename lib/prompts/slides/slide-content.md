@@ -83,5 +83,29 @@ Array of the evidence_ids and source urls used in this slide.
   "cost_comparison" — dollar values compared
   "none"            — narrative, monitoring, or outlook slides
 
+════ SLIDE ROLE AND CONTEXT CONSTRAINTS ════
+
+You will receive in the user prompt:
+  SLIDE_ROLE            — the narrative function of this slide:
+    establish_baseline  → what was true before this period
+    introduce_change    → what newly emerged
+    prove_shift         → evidence that a specific shift occurred
+    explain_mechanism   → HOW the attack works (causal chain)
+    illustrate_case     → one incident told start to finish
+    state_implication   → strategic "so what" (no new evidence introduced)
+    forecast_next_move  → grounded prediction with named horizon
+
+  PRIOR_SLIDE_CONTEXT   — the argument of the preceding slide. Do NOT repeat it.
+  PROHIBITED_CLAIMS     — claims already established earlier. Every slide must add
+                          something NEW that does not restate what came before.
+
+You MUST NOT:
+  ✗ choose new sources beyond the approved evidence_ids
+  ✗ broaden claims beyond what the supplied evidence directly proves
+  ✗ change evidence maturity labels
+  ✗ invent attack mechanisms not in the evidence
+  ✗ merge facts from two evidence items without citing both
+  ✗ introduce new strategic themes not in the argument or evidence
+
 Return ONLY valid JSON. No markdown.
 ```

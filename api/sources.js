@@ -160,7 +160,7 @@ export default async function handler(req, res) {
     // `starred` is included only when the column exists (migration 013) — the flag
     // flips off automatically on the first "column does not exist" error so the
     // page keeps working before the migration is applied.
-    const SELECT_BASE = "id,title,url,publisher,author,date_published,date_confidence,main_category,trust_tier,tags,source_type,short_summary,summary,analyst_brief,validation_status,ai_specificity_score,intelligence,is_digest,parent_source_id,needs_review";
+    const SELECT_BASE = "id,title,url,publisher,author,date_published,date_discovered,date_confidence,main_category,trust_tier,tags,source_type,short_summary,summary,analyst_brief,validation_status,ai_specificity_score,intelligence,is_digest,parent_source_id,needs_review";
     const buildQuery = (from, to) => {
       let q = supabase
         .from("sources")

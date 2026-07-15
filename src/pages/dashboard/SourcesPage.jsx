@@ -384,6 +384,19 @@ function SourceDetail({ s, onUpdateDate, onConfirmDate, onDelete, onSaveClassifi
             Delete source
           </button>
         </div>
+        {s.date_discovered && (
+          <div className="hz-src-admin-row hz-src-ingest-row">
+            <span className="hz-src-detail-k">Date ingested</span>
+            <span className="hz-src-ingest-date">{s.date_discovered.slice(0, 10)}</span>
+            <span className="hz-src-ingest-note">
+              {(s.date_confidence === "low" || s.date_confidence === "none") &&
+                "Publish date unconfirmed — ingestion date shown in the table instead"}
+              {s.date_confidence === "estimated" && "Publish date is estimated"}
+              {s.date_confidence === "exact" && "Publish date is confirmed exact"}
+              {!s.date_confidence && "Date confidence unknown"}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1003,7 +1016,20 @@ export function SourcesPage() {
                         </div>
                       </td>
                       <td className="hz-src-date">
-                        {s.date_published ? s.date_published.slice(0, 10) : "—"}
+                        {s.date_confidence === "low" || s.date_confidence === "none" || !s.date_published ? (
+                          <span className="hz-src-date-unconfirmed" title="Publish date unconfirmed — showing ingestion date">
+                            <span className="hz-src-date-warn">?</span>
+                            {s.date_discovered ? s.date_discovered.slice(0, 10) : "—"}
+                            <span className="hz-src-date-ingest-label">ingested</span>
+                          </span>
+                        ) : (
+                          <>
+                            {s.date_published.slice(0, 10)}
+                            {s.date_confidence === "estimated" && (
+                              <span className="hz-src-date-est" title="Publish date is estimated">~</span>
+                            )}
+                          </>
+                        )}
                       </td>
                     </tr>
                     {open && (

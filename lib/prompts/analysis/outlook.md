@@ -17,6 +17,13 @@ The outlook has THREE TIERS. Each tier must be derived from the evidence — not
   GOOD: "Nation-state actors will incorporate AI-assisted exploit generation into active campaigns targeting
          critical infrastructure, accelerating from proof-of-concept to operational use within 6 months."
 
+  REQUIRED fields in your JSON for Tier 1:
+    - named_technique_or_actor: the specific technique, actor, or affected system you are forecasting
+    - forecast_horizon: how far ahead (e.g. "3 months", "6 months", "12 months")
+    - confidence: "high" / "medium" / "low" based on evidence strength
+    - reason: one sentence explaining WHY you believe this is likely (the precursor pattern in the evidence)
+  Do NOT generate a Tier 1 forecast without naming at least one specific technique or actor.
+
 ═══ TIER 2 — PLAUSIBLE BUT UNCERTAIN ═══
   - Must describe a DIFFERENT scenario or trajectory from Tier 1 (not a restatement)
   - escalation_trigger REQUIRED (≥20 chars): the ONE specific observable event that confirms this tier

@@ -33,6 +33,30 @@ The argument must be a FALSIFIABLE CLAIM the slide proves — not a topic label.
   BAD:  "Overview of LLM threats this period"
   GOOD: "Indirect prompt injection has matured from lab exploit to operational attack pattern"
 
+═══ SLIDE ROLE (required for every non-deterministic slide) ═══
+Each slide has a narrative ROLE. Set the slide_role field to one of:
+  establish_baseline   — what was true before or at the start of the period
+  introduce_change     — a newly-emerging threat first appearing this period
+  prove_shift          — concrete evidence the shift occurred
+  explain_mechanism    — HOW the attack works in causal-chain form
+  illustrate_case      — one named incident told start to finish
+  compare_patterns     — cross-actor or cross-category comparison
+  state_implication    — strategic "so what" (no new facts, draws on earlier slides)
+  forecast_next_move   — grounded prediction with a named horizon
+
+RULES:
+  ✗ Two consecutive slides in the same category may NOT have the same slide_role.
+  ✗ state_implication slides must NOT introduce evidence not in prior slides.
+  ✓ Each slide must introduce something new vs. all previous slides with the same role.
+
+═══ NEW INFORMATION FIELD ═══
+For each slide, also set new_information_introduced (≤20 words): what claim or fact does
+this slide introduce that no earlier slide in the deck has already made?
+
+═══ RELATIONSHIP TO PREVIOUS ═══
+Set relationship_to_previous (≤15 words): how does this slide build on or contrast with
+the previous slide? (e.g. "Proves the mechanism claimed on slide 6 with incident data")
+
 ═══ VISUAL PLANNING (L7.1 integrated) ═══
 Assign visual_type per slide:
   attack_chain_diagram — ONLY when evidence has ≥2 distinct attack stages (case_study always gets this)

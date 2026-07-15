@@ -29,6 +29,11 @@ const DAYS       = parseInt(getArg("--days",  "365"), 10);
 const LIMIT      = parseInt(getArg("--limit", "1000"), 10);
 const SKIP_QA    = hasFlag("--skip-qa");
 const NO_PERSIST = hasFlag("--no-persist");
+const SKIP_SLIDES       = hasFlag("--no-slides");
+const SKIP_LLM          = hasFlag("--no-llm");
+// Force re-extraction of sources whose cached evidence is missing walkthrough data.
+// Use when evidenceStore schema was just updated (e.g. walkthrough fields added).
+const FORCE_REWALK      = hasFlag("--force-reextract");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -73,8 +78,8 @@ function mapDbSource(row) {
 async function main() {
   const banner = "═".repeat(64);
   console.log(`\n${banner}`);
-  console.log(`  Synthesis-Only Pipeline  (L5 evidence + L6 synthesis + QA)`);
-  console.log(`  Days: ${DAYS}  Limit: ${LIMIT}  Skip QA: ${SKIP_QA}  Persist: ${!NO_PERSIST}`);
+  console.log(`  Synthesis-Only Pipeline  (L5 evidence + L6 synthesis + QA + slides)`);
+  console.log(`  Days: ${DAYS}  Limit: ${LIMIT}  Skip QA: ${SKIP_QA}  Persist: ${!NO_PERSIST}  Slides: ${!SKIP_SLIDES}`);
   console.log(`${banner}\n`);
 
   const t0 = Date.now();
@@ -85,6 +90,7 @@ async function main() {
     .from("sources")
     .select("id,title,url,publisher,date_published,main_category,trust_tier,source_type,full_text,summary,short_summary,analyst_brief,tags,intelligence,validation_status")
     .eq("validation_status", "pass")
+    .not("needs_review", "is", true)
     .not("main_category", "is", null)
     .not("main_category", "eq", "unclear_or_adjacent")
     .gte("date_published", since)
@@ -101,16 +107,54 @@ async function main() {
   const { extractAllEvidence } = await import("../lib/pipeline/analysis/extractEvidence.js");
   const { buildCorpusSummary, buildEvidenceGraph } = await import("../lib/pipeline/analysis/corpusSummary.js");
   const { synthesizeAllCategories, synthesizeCrossCategory } = await import("../lib/pipeline/analysis/synthesizeCategory.js");
-  const { buildPresentation } = await import("../lib/pipeline/slides/buildPresentation.js");
-  const { buildDashboardState } = await import("../lib/pipeline/dashboard.js");
+  const { selectAllCaseStudies } = await import("../lib/pipeline/analysis/selectCaseStudies.js");
+  const { generateAllOutlooks }  = await import("../lib/pipeline/analysis/generateOutlook.js");
+  const { buildPresentation }    = await import("../lib/pipeline/slides/buildPresentation.js");
+  const { renderDeckPptx }       = await import("../lib/pipeline/slides/renderDeckPptx.js");
+  const { buildDashboardState }  = await import("../lib/pipeline/dashboard.js");
   const { DOMAINS } = await import("../lib/pipeline/understand/taxonomy.js");
 
   const ACTIVE_CATEGORIES = DOMAINS.filter(d => d !== "unclear_or_adjacent");
 
   console.log(`  [L5] Extracting evidence...`);
+  // --force-reextract: invalidate the content hash for sources that have
+  // report_analysis walkthroughs but whose cached evidence has no walkthrough_steps.
+  // This forces those sources to be re-extracted with the new schema.
+  let sourcesForExtraction = sources;
+  if (FORCE_REWALK) {
+    const { contentHashOf, getEvidenceHashes, loadEvidence } = await import("../lib/storage/evidenceStore.js");
+    const ids = sources.map(s => s.id);
+    const hashes = await getEvidenceHashes(supabase, ids);
+    const cached = await loadEvidence(supabase, ids);
+    const cachedBySource = new Map();
+    for (const ev of cached) {
+      if (!cachedBySource.has(ev.source_id)) cachedBySource.set(ev.source_id, []);
+      cachedBySource.get(ev.source_id).push(ev);
+    }
+    // Identify sources with report_analysis walkthroughs but no cached walkthrough_steps
+    const toInvalidate = new Set(
+      sources
+        .filter(s => {
+          const walkthroughs = s.intelligence?.report_analysis?.attack_walkthroughs || [];
+          if (!walkthroughs.length) return false;
+          const evs = cachedBySource.get(s.id) || [];
+          return !evs.some(e => e.walkthrough_steps?.length);
+        })
+        .map(s => s.id)
+    );
+    if (toInvalidate.size) {
+      console.log(`  [L5] --force-reextract: invalidating cache for ${toInvalidate.size} sources with missing walkthroughs`);
+      // Temporarily mutate source full_text to bust the content hash for these sources
+      sourcesForExtraction = sources.map(s =>
+        toInvalidate.has(s.id)
+          ? { ...s, full_text: (s.full_text || "") + "\n__REEXTRACT__" }
+          : s
+      );
+    }
+  }
   const { items: evidenceItems, packs, counts: evCounts } = await extractAllEvidence(
-    sources, ACTIVE_CATEGORIES,
-    { concurrency: 5, onProgress: (done, total) => process.stdout.write(`    ${done}/${total}\r`) }
+    sourcesForExtraction, ACTIVE_CATEGORIES,
+    { supabase, concurrency: 5, onProgress: (done, total) => process.stdout.write(`    ${done}/${total}\r`), skipLlm: SKIP_LLM }
   );
   process.stdout.write("\n");
   const elapsed2 = ((Date.now() - t0) / 1000).toFixed(1);
@@ -135,24 +179,82 @@ async function main() {
   const cross_category = await synthesizeCrossCategory(category_analyses, {});
   console.log(`  [L6] ${(cross_category.patterns||[]).length} cross-category patterns\n`);
 
+  // ── L6.3–L6.5: Case studies + outlooks ───────────────────────────────────
+  const packsMap      = Object.fromEntries(packs.map(p => [p.category, p]));
+  const evidence_index = Object.fromEntries(evidenceItems.map(ei => [ei.evidence_id, ei]));
+
+  console.log(`  [L6.3] Selecting case studies...`);
+  const case_studies = await selectAllCaseStudies(packsMap, evidence_index, { skipLlm: SKIP_LLM });
+
+  console.log(`  [L6.5] Generating outlooks...`);
+  // Drive outlook generation from category_analyses (which carry outlook_assessment
+  // and evidence_for) rather than separate developments/insights objects that are
+  // only available in the full runPipeline.js path. Pass stub byCategory so the
+  // parallel loop iterates all four categories; the LLM uses the dossier context
+  // and the legacyOutlookFallback from category_analyses for real data.
+  const stubByCategory = Object.fromEntries(ACTIVE_CATEGORIES.map(c => [c, []]));
+  const all_outlooks = await generateAllOutlooks(
+    { byCategory: stubByCategory, overall: [] },
+    { byCategory: stubByCategory, overall: [] },
+    category_analyses, evidenceItems, { skipLlm: SKIP_LLM },
+  );
+  console.log(`  [L6.5] ${Object.values(all_outlooks.byCategory||{}).filter(Boolean).length} category outlooks\n`);
+
+  // ── L7-L8: Slide generation ───────────────────────────────────────────────
+  let deck = null;
+  if (!SKIP_SLIDES) {
+    console.log(`  [L7-L8] Building presentation deck...`);
+    const t_slides = Date.now();
+    // Pass starred + importance tier from source metadata so buildPresentation
+    // can prioritise tier_1 evidence without an extra DB query.
+    const starredSourceUrls   = sources.filter(s => s.starred).map(s => s.url).filter(Boolean);
+    const importanceTierByUrl = Object.fromEntries(
+      sources
+        .filter(s => s.url && s.intelligence?.importance?.tier)
+        .map(s => [s.url, s.intelligence.importance.tier])
+    );
+    deck = await buildPresentation(category_analyses, cross_category, evidenceItems, {
+      skipLlm: SKIP_LLM,
+      corpusSummary:    corpus_summary,
+      allOutlooks:      all_outlooks,
+      starredSourceUrls,
+      importanceTierByUrl,
+      caseStudies:      case_studies,
+    });
+    const elapsed_slides = ((Date.now() - t_slides) / 1000).toFixed(1);
+    console.log(`  [L7-L8] ${deck.slides.length} slides, ${deck.traceability_issues.length} traceability issues, ${deck.coherence_issues?.length || 0} coherence issues (+${elapsed_slides}s)\n`);
+  }
+
   // ── Build dashboard state + run_id ────────────────────────────────────────
   const run_id   = `v2-synthesis-${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}`;
   const run_date = new Date().toISOString();
   const elapsed4 = ((Date.now() - t0) / 1000).toFixed(1);
 
-  const runResult = { run_id, run_date, category_analyses, evidence_items: evidenceItems, corpus_summary, cross_category };
+  const runResult = { run_id, run_date, category_analyses, evidence_items: evidenceItems, corpus_summary, cross_category, case_studies, all_outlooks };
   const dashboard_state = buildDashboardState(runResult);
 
   // ── Write local outputs ────────────────────────────────────────────────────
   const outDir = path.join(ROOT, "outputs", "v2", run_id);
   fs.mkdirSync(outDir, { recursive: true });
   console.log(`  Writing outputs → ${outDir}`);
-  save(outDir, "run-summary.json", { run_id, run_date, pipeline_version: "synthesis-only-v1", counts: { sources_input: sources.length, evidence_items: evCounts.after_dedup, evidence_strong: evCounts.strong, judgments_total: totalJudgments, judgments_approved: approvedJudgments }, elapsed_seconds: parseFloat(elapsed4), corpus_summary });
+  save(outDir, "run-summary.json", { run_id, run_date, pipeline_version: "synthesis-only-v1", counts: { sources_input: sources.length, evidence_items: evCounts.after_dedup, evidence_strong: evCounts.strong, judgments_total: totalJudgments, judgments_approved: approvedJudgments, slides: deck?.slides?.length || 0 }, elapsed_seconds: parseFloat(elapsed4), corpus_summary });
   save(outDir, "category-analyses.json", category_analyses);
   save(outDir, "evidence-items.json", evidenceItems.slice(0, 500));
   save(outDir, "evidence-graph.json", evidence_graph);
   save(outDir, "cross-category.json", cross_category);
   save(outDir, "dashboard-state.json", dashboard_state);
+  if (deck) save(outDir, "deck.json", deck);
+
+  // ── PPTX rendering ─────────────────────────────────────────────────────────
+  if (deck && !SKIP_SLIDES) {
+    const pptxPath = path.join(outDir, `horizon-scan-${run_id}.pptx`);
+    try {
+      const { path: p, slide_count: sc } = await renderDeckPptx(deck, pptxPath, { title: `AI Cyber Threat Horizon Scan — ${corpus_summary.date_range || run_date.slice(0, 10)}` });
+      console.log(`  PPTX saved → ${p}  (${sc} slides)`);
+    } catch (err) {
+      console.warn(`  PPTX render failed: ${err.message}`);
+    }
+  }
 
   // QA report per category
   const qaReport = category_analyses.map(ca => ({
@@ -231,14 +333,18 @@ async function main() {
         pipeline_version:  "synthesis-only-v1",
         run_id,
         source_count:      sources.length,
+        slide_count:       deck?.slides?.length || 0,
         synthesis: {
           run_id, run_date,
           category_analyses,
-          evidence_items: evidenceItems.slice(0, 500),
+          evidence_items:    evidenceItems.slice(0, 500),
           corpus_summary,
           cross_category,
+          case_studies,
+          all_outlooks,
           dashboard_state,
         },
+        ...(deck ? { deck } : {}),
       };
 
       let blob_path = null;
@@ -259,7 +365,7 @@ async function main() {
         pipeline_version:  "synthesis-only-v1",
         blob_path,
         synthesis_version: "synthesis-only-v1",
-        slide_count:       0,
+        slide_count:       deck?.slides?.length || 0,
         overall_pass:      true,
       }, { onConflict: "deck_id" });
       console.log(`  Deck row saved → available to chatbot and dashboard`);
@@ -274,6 +380,7 @@ async function main() {
   console.log(`  Evidence:  ${evCounts.after_dedup} items (${evCounts.strong} strong)`);
   console.log(`  Judgments: ${approvedJudgments} approved / ${totalJudgments} total`);
   console.log(`  Patterns:  ${(cross_category.patterns||[]).length} cross-category`);
+  if (deck) console.log(`  Slides:    ${deck.slides.length} generated (${deck.coherence_issues?.length || 0} coherence issues)`);
 }
 
 import { flushCostBuffer } from "../lib/llm/usagePersistence.js";
