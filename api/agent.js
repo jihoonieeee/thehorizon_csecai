@@ -27,7 +27,12 @@ import { selectSources } from "../lib/agent/agentLlm.js";
 import { verifyAnswer } from "../lib/agent/verifyAnswer.js";
 import { ANTHROPIC_MODELS } from "../lib/llm/taskProfiles.js";
 import { logAgentCostToDB } from "../lib/llm/usagePersistence.js";
-import { loadPrompt, interpolate } from "../lib/prompts/promptLoader.js";
+import { loadPrompt, loadPromptRaw, interpolate } from "../lib/prompts/promptLoader.js";
+
+// Taxonomy reference — loaded once at cold start, injected as the first cached
+// system block so Sonnet uses precise attack-class definitions (e.g. never
+// conflates LLM01 prompt injection with LLM11 jailbreaks).
+const TAXONOMY_CONTEXT = loadPromptRaw("agent/taxonomy");
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -538,7 +543,12 @@ export default async function handler(req, res) {
     const system = isGeneral
       ? buildGeneralSystem(query)
       : buildGroundedSystem(plan.temporal.scope_label, plan.category, ret.verdict === "thin", briefAnswer);
-    const cachedSystem = [{ type: "text", text: system, cache_control: { type: "ephemeral" } }];
+    // Taxonomy block first: it's large, static, and caches across all requests.
+    // The dynamic system prompt is second — it changes per query (category/scope/thin).
+    const cachedSystem = [
+      { type: "text", text: TAXONOMY_CONTEXT, cache_control: { type: "ephemeral" } },
+      { type: "text", text: system, cache_control: { type: "ephemeral" } },
+    ];
 
     const userContent = isGeneral
       ? query.trim()
@@ -561,7 +571,10 @@ export default async function handler(req, res) {
     // dead-end "can't answer" message. Costs one extra Sonnet call, only in this
     // rare case. Returns a general-mode payload.
     async function synthGeneralFallback() {
-      const gSys = [{ type: "text", text: buildGeneralSystem(query), cache_control: { type: "ephemeral" } }];
+      const gSys = [
+        { type: "text", text: TAXONOMY_CONTEXT, cache_control: { type: "ephemeral" } },
+        { type: "text", text: buildGeneralSystem(query), cache_control: { type: "ephemeral" } },
+      ];
       const gResp = await anthropicRequest({
         model: ANTHROPIC_MODELS.sonnet, max_tokens: 2048, system: gSys,
         messages: [...historyMessages, { role: "user", content: query.trim() }],

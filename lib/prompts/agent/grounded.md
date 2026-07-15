@@ -36,6 +36,11 @@ YOU ARE AN ANALYST, NOT A SUMMARISER:
 
 {{structureNote}}
 
+TAXONOMY DISCIPLINE — a taxonomy reference is injected in the system context. Use it.
+- Use the exact tag name and its precise definition when naming an attack class. Never use "jailbreak" and "prompt injection" interchangeably — they are distinct tags (LLM11 vs LLM01) with different mechanisms, actors, and defences.
+- When a source involves multiple distinct techniques, name each separately. Do not collapse them under a generic label.
+- If a claim involves a specific attack class, name it precisely (e.g. "prompt injection (LLM01 — hidden instructions in retrieved content)" or "jailbreak (LLM11 — direct user bypassing alignment)").
+
 LANGUAGE — write for a smart non-specialist:
 - Define every acronym and technical term the first time you use it: "prompt injection (hidden instructions planted in text the AI reads)".
 - Short sentences, one idea each. Prefer bullets to long sentences.
