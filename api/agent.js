@@ -126,7 +126,21 @@ async function anthropicRequest(body, timeoutMs = 90000) {
 // System prompts live as editable .md files in lib/prompts/agent/ (loaded via
 // promptLoader — the same runtime-.md mechanism Layer-3 validation uses). Edit
 // the prose there, not here.
-function buildGroundedSystem(scopeLabel, focusCategory, thin) {
+// Full briefing structure for strategic questions; tight structure for simple
+// lookups. Both keep the machine-parsed SCOPE/CONFIDENCE footer (emitted after
+// this block by the prompt). Dropping the So-what/Defenders lines and 1–2 points
+// on lookups is the main output-length (= latency) saving.
+const STRUCTURE_FULL = `STRUCTURE:
+1) "Assessment:" — 2–3 sentences: the real signal, your confidence, anything overhyped or thin.
+2) 3–5 numbered points. Each opens with a short judgement (under 15 words). Sub-bullets ("- ") carry the evidence with [src-N] on each. Most significant point first.
+3) "So what:" — one line: implication or trajectory for the reader.
+4) "Defenders:" — one line: the single most useful action.`;
+const STRUCTURE_BRIEF = `STRUCTURE (keep it tight — this is a direct-lookup question, not a strategic briefing):
+1) "Assessment:" — 1–2 sentences: the direct answer and your confidence.
+2) 2–3 numbered points. Each opens with a short judgement (under 15 words). Sub-bullets ("- ") carry the evidence with [src-N] on each. Most significant first.
+Do NOT add "So what" or "Defenders" lines — go straight from the numbered points to the footer.`;
+
+function buildGroundedSystem(scopeLabel, focusCategory, thin, brief = false) {
   const today = new Date().toISOString().slice(0, 10);
   const catNote = focusCategory
     ? `\nThe question is about ${CATEGORY_LABELS[focusCategory]}; keep the answer within that category.`
@@ -134,7 +148,8 @@ function buildGroundedSystem(scopeLabel, focusCategory, thin) {
   const thinNote = thin
     ? `\nCoverage is THIN — only a small number of relevant sources were found. Say so plainly and keep confidence at most moderate.`
     : "";
-  return interpolate(loadPrompt("agent/grounded").system, { today, scopeLabel, catNote, thinNote });
+  const structureNote = brief ? STRUCTURE_BRIEF : STRUCTURE_FULL;
+  return interpolate(loadPrompt("agent/grounded").system, { today, scopeLabel, catNote, thinNote, structureNote });
 }
 
 function buildGeneralSystem(query) {
@@ -516,16 +531,23 @@ export default async function handler(req, res) {
     }
 
     // ── 4. Synthesis (Sonnet, streamed) ─────────────────────────────────────────
+    // Simple lookups (no strategic-synthesis need) get the tight structure; only
+    // strategic questions (needs_judgments) get the full 3–5 point briefing. This
+    // shortens output — the dominant synthesis-latency term — on the common case.
+    const briefAnswer = plan.needs_judgments !== true;
     const system = isGeneral
       ? buildGeneralSystem(query)
-      : buildGroundedSystem(plan.temporal.scope_label, plan.category, ret.verdict === "thin");
+      : buildGroundedSystem(plan.temporal.scope_label, plan.category, ret.verdict === "thin", briefAnswer);
     const cachedSystem = [{ type: "text", text: system, cache_control: { type: "ephemeral" } }];
 
     const userContent = isGeneral
       ? query.trim()
       : buildContextMessage(query, plan, sourceRefs, evidence, judgments, trends, cveResults);
     const messages = [...historyMessages, { role: "user", content: userContent }];
-    const synthBody = { model: ANTHROPIC_MODELS.sonnet, max_tokens: 4096, system: cachedSystem, messages };
+    // AGENT_SYNTH_MODEL (haiku|sonnet) overrides the synthesis model — used for
+    // A/B latency/quality testing and (later) intent-based routing. Defaults to sonnet.
+    const synthModel = ANTHROPIC_MODELS[process.env.AGENT_SYNTH_MODEL] || ANTHROPIC_MODELS.sonnet;
+    const synthBody = { model: synthModel, max_tokens: 4096, system: cachedSystem, messages };
 
     // A leading, un-streamed preamble for the general path so the user immediately
     // sees WHY there are no citations before the general answer arrives.
