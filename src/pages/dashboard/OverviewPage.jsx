@@ -858,7 +858,7 @@ export function OverviewPage() {
       {/* Top incidents */}
       {data && (
         <>
-          <div className="hz-overview-section-title">Top sources</div>
+          <div className="hz-overview-section-title">Top threats</div>
           <TopIncidents incidents={data.top_incidents} />
         </>
       )}
