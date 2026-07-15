@@ -452,7 +452,7 @@ const CAT_DESCRIPTIONS = {
   agentic_ai_threats:
     "Attacks that exploit an AI system's ability to act autonomously through tools, memory, permissions, planning, orchestration, or external actions.",
   ai_enabled_threats:
-    "Threats where AI is used by attackers as a capability amplifier, while the victim and attack surface are not inherently AI systems themselves. Examples: AI phishing, deepfake fraud, AI-generated malware, LLM-as-C2, AI-assisted cyber operations, AI-enabled influence campaigns.",
+    "Threats where AI is used by attackers as a capability amplifier, while the victim and attack surface are not inherently AI systems themselves.",
 };
 
 function CategoryLegend() {
