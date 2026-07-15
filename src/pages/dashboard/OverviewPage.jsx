@@ -6,7 +6,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchOverview } from "../../api/dashboardApi.js";
-import { LegendPanel } from "../../components/dashboard/LegendPanel.jsx";
 
 const CAT_COLOR = {
   traditional_ai_threats: "#3583C9",
@@ -341,6 +340,137 @@ function InsightItem({ p }) {
   );
 }
 
+// ── Threat maturity + priority legend (inline, above the 4 cards) ─────────────
+
+const MATURITY_DEFS = [
+  { key: "research",     color: "#94a3b8", label: "Research",
+    desc: "Demonstrated in papers, benchmarks, or controlled lab environments only. No adversary has used it; no working exploit exists outside the research setting.",
+    examples: "Prompt compression attack paper. Backdoor attack benchmark evaluation.",
+    signals: '"we show that", "we demonstrate", academic/arXiv paper, red-team simulation, controlled experiment.' },
+  { key: "demonstrated", color: "#3b82f6", label: "Demonstrated",
+    desc: "A working exploit or capability exists and is reproducible outside a purely academic setting — a public PoC, a released tool, or a technique verified against a real product. No adversary has used it yet, but the barrier to use is low.",
+    examples: "Wiz Research published working code showing symlink traversal against six real AI coding assistants. Researcher extracted training data from the live GPT-4 API.",
+    signals: 'PoC released, exploit published, "successfully bypassed [real system]", "we exploited [real product]", CVE with working PoC.' },
+  { key: "disclosed",    color: "#f59e0b", label: "Disclosed",
+    desc: "A vendor, researcher, or government agency confirmed a vulnerability exists in a specific product or system. Exploitation has not been observed and no working public exploit exists.",
+    examples: "CVE for prompt injection in LangChain, patched in 0.3.15, no exploit code. CISA advisory for an MCP server flaw.",
+    signals: 'CVE with no known exploit, vendor advisory, "patched in version X", "responsibly disclosed", CISA/NIST advisory.' },
+  { key: "observed",     color: "#ef4444", label: "Observed",
+    desc: "The technique has been confirmed in real-world use against real victims. At least one documented incident with evidence of actual exploitation or harm.",
+    examples: "Prompt injection campaign targeting enterprise chatbots with confirmed credential theft. Malware found in a live Hugging Face repo actively harvesting credentials.",
+    signals: '"exploited in the wild", incident report, confirmed breach, named victims, threat intelligence documenting adversary use.' },
+  { key: "operational",  color: "#7f1d1d", label: "Operational",
+    desc: "In sustained, repeated, or scaled use by one or more threat actors. Multiple incidents, an ongoing campaign, or documented adversary adoption at scale.",
+    examples: "Nation-state group integrating AI-generated spear-phishing into standard tradecraft across multiple operations. Ransomware group using AI for payload generation across multiple campaigns.",
+    signals: '"ongoing campaign", "attributed to [named group]", "multiple victims", threat intelligence spanning weeks or months, GTIG/CrowdStrike campaign reporting.' },
+];
+
+const PRIORITY_DEFS = [
+  { key: "critical",   color: "#b91c1c", label: "Critical",
+    desc: "Must-read. Adversaries were CONFIRMED to use this technique/tool in a real operation, OR it is the FIRST public disclosure of a genuinely new attack surface / threat class.",
+    signals: "Confirmed in-the-wild adversary use; a named campaign; a field-first disclosure; a CVE marked actively exploited by CISA/the vendor." },
+  { key: "important",  color: "#c2410c", label: "Important",
+    desc: "A working exploit or capability was DEMONSTRATED (PoC, red-team, vendor lab test) with no confirmed real-world use yet, OR a clearly novel technique within a known attack surface.",
+    signals: "Public PoC; researcher demonstrated against a real product; a notable new method; landmark research." },
+  { key: "supporting", color: "#475569", label: "Supporting",
+    desc: "Corroborating detail on a known technique, a routine vendor advisory, a CVE with no exploitation evidence, or a 2nd/3rd source on a topic already covered by a critical/important item.",
+    signals: '"Adversaries are increasingly…" with no incident; routine advisory; CVE disclosure only; duplicate coverage.' },
+  { key: "archive",    color: "#94a3b8", label: "Archive",
+    desc: "Background context, defensive guidance, governance/policy, or content that turned out not to be an offensive AI-security threat.",
+    signals: "Defensive/how-to-protect content; policy/governance; off-topic despite passing the keyword gate." },
+];
+
+function ThreatLegend({ open, onToggle }) {
+  return (
+    <div className="hz-threat-legend">
+      <button className="hz-threat-legend-toggle" onClick={onToggle}>
+        <span className="hz-threat-legend-toggle-title">Threat Maturity &amp; Priority Reference</span>
+        <span className="hz-threat-legend-toggle-chevron">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="hz-threat-legend-body">
+          <div className="hz-threat-legend-col">
+            <div className="hz-threat-legend-col-title">Threat Maturity Ladder</div>
+            <p className="hz-threat-legend-note">
+              Every source is classified into exactly one level. The same level drives the category card bar and the badge on each source in Top Sources.
+            </p>
+            {MATURITY_DEFS.map(m => (
+              <div key={m.key} className="hz-threat-legend-row">
+                <div className="hz-threat-legend-row-head">
+                  <span className="hz-threat-legend-dot" style={{ background: m.color }} />
+                  <span className="hz-threat-legend-row-label" style={{ color: m.color }}>{m.label}</span>
+                </div>
+                <div className="hz-threat-legend-row-body">
+                  <div className="hz-threat-legend-row-desc">{m.desc}</div>
+                  <div className="hz-threat-legend-row-sub"><b>Examples:</b> {m.examples}</div>
+                  <div className="hz-threat-legend-row-sub"><b>Signals:</b> {m.signals}</div>
+                </div>
+              </div>
+            ))}
+            <div className="hz-threat-legend-rules">
+              <div className="hz-threat-legend-rules-title">Classification rules</div>
+              <ul>
+                <li>CVE alone → <b>Disclosed</b>. CVE + public PoC → <b>Demonstrated</b>. CVE + confirmed exploitation → <b>Observed</b>.</li>
+                <li>Research paper in a controlled environment → <b>Research</b>, even if the attack "worked" there.</li>
+                <li>Paper tested against a real live system (live API, real product) → <b>Demonstrated</b>.</li>
+                <li>Single confirmed incident → <b>Observed</b>. Repeated or sustained campaign → <b>Operational</b>.</li>
+                <li>The highest level present in a source wins.</li>
+              </ul>
+            </div>
+          </div>
+          <div className="hz-threat-legend-col">
+            <div className="hz-threat-legend-col-title">Priority Label</div>
+            <p className="hz-threat-legend-note">
+              A separate axis from maturity. Maturity answers "how real is the threat?"; priority answers "how much should an analyst prioritise reading this?". A source can be high-maturity but low-priority (routine advisory for an old technique) or the reverse (a field-first research paper).
+            </p>
+            {PRIORITY_DEFS.map(p => (
+              <div key={p.key} className="hz-threat-legend-row">
+                <div className="hz-threat-legend-row-head">
+                  <span className="hz-threat-legend-dot" style={{ background: p.color }} />
+                  <span className="hz-threat-legend-row-label" style={{ color: p.color }}>{p.label}</span>
+                </div>
+                <div className="hz-threat-legend-row-body">
+                  <div className="hz-threat-legend-row-desc">{p.desc}</div>
+                  <div className="hz-threat-legend-row-sub"><b>Signals:</b> {p.signals}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Category legend ───────────────────────────────────────────────────────────
+
+const CAT_DESCRIPTIONS = {
+  traditional_ai_threats:
+    "Attacks against machine learning models, training data, or inference behavior that do not depend on language models, prompts, or autonomous agents.",
+  llm_threats:
+    "Attacks against an LLM's prompts, context, retrieval, outputs, alignment, or model ecosystem where the harm remains within the model or its responses rather than autonomous actions.",
+  agentic_ai_threats:
+    "Attacks that exploit an AI system's ability to act autonomously through tools, memory, permissions, planning, orchestration, or external actions.",
+  ai_enabled_threats:
+    "Threats where AI is used by attackers as a capability amplifier, while the victim and attack surface are not inherently AI systems themselves. Examples: AI phishing, deepfake fraud, AI-generated malware, LLM-as-C2, AI-assisted cyber operations, AI-enabled influence campaigns.",
+};
+
+function CategoryLegend() {
+  return (
+    <div className="hz-cat-legend">
+      {Object.entries(CAT_COLOR).map(([key, color]) => (
+        <div key={key} className="hz-cat-legend-item">
+          <div className="hz-cat-legend-dot" style={{ background: color }} />
+          <div className="hz-cat-legend-body">
+            <div className="hz-cat-legend-label" style={{ color }}>{CAT_LABEL[key]}</div>
+            <div className="hz-cat-legend-desc">{CAT_DESCRIPTIONS[key]}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Category card ─────────────────────────────────────────────────────────────
 
 function CategoryCard({ cat, trendValues, selectedMaturity, onMaturitySelect }) {
@@ -560,7 +690,7 @@ export function OverviewPage() {
   const [lastFetch,  setLastFetch]  = useState(null);
   const [tagSelection,      setTagSelection]      = useState(null); // { tag, category }
   const [maturitySelection, setMaturitySelection] = useState(null); // { category, level }
-  const [showLegend, setShowLegend] = useState(false);
+  const [showThreatLegend,  setShowThreatLegend]  = useState(true);
   const timerRef = useRef(null);
 
   const load = useCallback((w) => {
@@ -634,17 +764,8 @@ export function OverviewPage() {
           >
             ↺
           </button>
-          <button
-            className="hz-legend-btn"
-            onClick={() => setShowLegend(v => !v)}
-            title="Dashboard legend — what every label means"
-          >
-            ? Legend
-          </button>
         </div>
       </div>
-
-      {showLegend && <LegendPanel onClose={() => setShowLegend(false)} />}
 
       {error && (
         <div className="hz-overview-error">
@@ -680,6 +801,12 @@ export function OverviewPage() {
           )}
         </div>
       )}
+
+      {/* Category legend */}
+      <CategoryLegend />
+
+      {/* Threat maturity + priority legend */}
+      <ThreatLegend open={showThreatLegend} onToggle={() => setShowThreatLegend(v => !v)} />
 
       {/* Category cards */}
       {data && (
