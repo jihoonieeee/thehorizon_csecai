@@ -1958,12 +1958,32 @@ a:hover { text-decoration: underline; }
   cursor: not-allowed;
 }
 
+.hz-chat-input-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 6px 0 0;
+}
+
 .hz-chat-input-hint {
   font-size: 0.72rem;
   color: var(--text-tertiary);
-  text-align: center;
-  margin: 6px 0 0;
+  margin: 0;
 }
+
+.hz-chat-clear {
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.hz-chat-clear:hover:not(:disabled) { color: var(--text-secondary); }
+.hz-chat-clear:disabled { opacity: 0.4; cursor: default; }
 
 /* ── Message bubbles ───────────────────────────────────────────────────────── */
 

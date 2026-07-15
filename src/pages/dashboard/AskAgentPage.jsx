@@ -274,14 +274,39 @@ function Message({ msg, onFollowUp }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+const STORAGE_KEY = "hz_chat_history";
+
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    // Drop any message that was mid-stream when the page was closed
+    return Array.isArray(parsed) ? parsed.filter(m => !m.streaming) : [];
+  } catch { return []; }
+}
+
+function saveHistory(msgs) {
+  try {
+    // Only persist fully-received messages; cap at 200 to avoid quota issues
+    const toSave = msgs.filter(m => !m.streaming).slice(-200);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+  } catch (_) {}
+}
+
 export function AskAgentPage() {
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(loadHistory);
   const [query,    setQuery]    = useState("");
   const [loading,  setLoading]  = useState(false);
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
 
   const hasConversation = messages.length > 0;
+
+  // Persist history whenever messages change (skip mid-stream updates)
+  useEffect(() => {
+    if (!loading) saveHistory(messages);
+  }, [messages, loading]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -454,9 +479,20 @@ export function AskAgentPage() {
             {loading ? "…" : "↑"}
           </button>
         </div>
-        <p className="hz-chat-input-hint">
-          90-day default · specify timeframe for broader or narrower results
-        </p>
+        <div className="hz-chat-input-footer">
+          <p className="hz-chat-input-hint">
+            90-day default · specify timeframe for broader or narrower results
+          </p>
+          {hasConversation && (
+            <button
+              className="hz-chat-clear"
+              onClick={() => { setMessages([]); localStorage.removeItem(STORAGE_KEY); }}
+              disabled={loading}
+            >
+              Clear history
+            </button>
+          )}
+        </div>
       </div>
 
     </div>
