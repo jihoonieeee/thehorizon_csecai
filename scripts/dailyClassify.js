@@ -278,11 +278,15 @@ async function main() {
   // LLM calls on each (layer3_status=null bypasses the cache gate).
   console.log("\n── L4b: Classify (understand) ─────────────────────────────────");
 
-  // Reset category/status on singles so understandAllSources makes fresh LLM calls.
+  // Clear layer3_status so understandAllSources bypasses its cache gate and makes
+  // fresh LLM calls. The cache gate checks layer3_status (not main_category), so
+  // sources loaded with main_category=null but layer3_status="pass" would otherwise
+  // be restored via fromDbRow() with category=null — the null:37 bug.
+  // Children already have layer3_status=null from buildChildSources.
   const toClassify = [
-    ...singleSources.map(s => ({ ...s, main_category: null, validation_status: null })),
-    ...fallbackSingles.map(s => ({ ...s, main_category: null, validation_status: null })),
-    ...allChildren,   // already null from buildChildSources
+    ...singleSources.map(s => ({ ...s, main_category: null, layer3_status: null })),
+    ...fallbackSingles.map(s => ({ ...s, main_category: null, layer3_status: null })),
+    ...allChildren,
   ];
 
   const { relevant, adjacent, discarded, counts } = await understandAllSources(
