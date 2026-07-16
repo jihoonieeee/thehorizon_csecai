@@ -20,7 +20,7 @@ discovery (open-web) ─────────────────┘     
 | `clean/` | L2 | Clean text, strip boilerplate, extract structured content / code / IOCs |
 | `validation/` | L3 | AI-threat relevance, summary, source typing, trust, final validity gate |
 | `discovery/` | L1B/1C | Open-web source discovery + anti-hallucination triage (opt-in) |
-| `understand/` | L4 | **Mechanism-first classification** → taxonomy tag, domain, defensive flag |
+| `understand/` | L4 | LLM classification → taxonomy tag, domain; defensive sources discarded here |
 | `scoring/` | cross-cut | Deterministic source-ranking signals: importance, research significance, combined signal, landmark-gap detection |
 | `analysis/` | L5–L6 | Evidence extraction, pattern/theme clustering, category synthesis, insights/developments/outlook, analytical QA |
 | `slides/` | L7–L8 | Slide planning, deck build, PPTX render, diagrams, slide QA |

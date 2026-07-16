@@ -124,25 +124,6 @@ const PUBLISHERS = [
     source_type: "threat_intelligence",
     urlFilter:   /dfrlab\.org\/\d{4}\/\d{2}\//,
   },
-  {
-    name:        "404 Media",
-    publisher:   "404 Media",
-    strategy:    "ghost_rss",
-    rssBase:     "https://www.404media.co/rss/",
-    trust_tier:  "medium",
-    source_type: "news_article",
-  },
-  {
-    name:        "The Record",
-    publisher:   "The Record",
-    strategy:    "sitemap",
-    sitemaps:    ["https://therecord.media/sitemap.xml"],
-    trust_tier:  "medium",
-    source_type: "news_article",
-    urlFilter:   /therecord\.media\/[a-z0-9-]+\/?$/,
-    isSitemapIndex: true,
-    indexFilter: /sitemaps\/page/,
-  },
 
   // ── Sitemap + HTML (static sites / Hugo / Jekyll — no JS rendering) ────────
   {
@@ -233,15 +214,6 @@ const PUBLISHERS = [
     urlFilter:   /zenity\.io\/blog\//,
   },
   {
-    name:        "SPLX (Straiker)",
-    publisher:   "SPLX",
-    strategy:    "sitemap",
-    sitemaps:    ["https://splx.ai/sitemap.xml"],
-    trust_tier:  "high",
-    source_type: "research_finding",
-    urlFilter:   /splx\.ai\/blog\//,
-  },
-  {
     name:        "Pillar Security",
     publisher:   "Pillar Security",
     strategy:    "sitemap",
@@ -261,16 +233,6 @@ const PUBLISHERS = [
     source_type: "research_finding",
     // /blog/ posts + /threat-research/ advisories; exclude product/company pages
     urlFilter:   /protectai\.com\/(blog|threat-research)\//,
-  },
-  {
-    name:        "Mindgard",
-    publisher:   "Mindgard",
-    strategy:    "sitemap",
-    sitemaps:    ["https://mindgard.ai/sitemap.xml"],
-    trust_tier:  "medium",
-    source_type: "research_finding",
-    // /learn/blog/ posts only; skip /learn/resources landing pages and product pages
-    urlFilter:   /mindgard\.ai\/learn\/blog\/.+/,
   },
 ];
 

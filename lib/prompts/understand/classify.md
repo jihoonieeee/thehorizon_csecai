@@ -1284,9 +1284,10 @@ scope="adjacent_context"  → KEEP as reference; set relevant=false, main_catego
     NIST AI 100-2, MITRE ATLAS, Google SAIF, NSA/CISA guidance)
   • a general capability announcement that "LLMs can help find bugs/exploits" without
     specific measured results (a high-level blog post or press release, not a paper)
-  • a standalone defensive method/detection/hardening framework
   • a landmark survey / SoK of the AI threat landscape
   • a frontier-model release or policy event with material AI-security implications
+  NOTE: standalone defensive methods, hardening guides, guardrail frameworks, and
+  detection-only techniques are NOT adjacent_context — they are off_topic (see below).
   • THREAT LANDSCAPE SYNTHESES: industry reports, vendor threat blogs, or roundups that
     aggregate MULTIPLE NAMED AI threat developments — named organizations, specific events,
     concrete dates, traceable claims from ≥2 distinct AI threat domains. These are
@@ -1386,12 +1387,13 @@ The test is: "Does the paper's primary technical contribution IMPROVE an attack?
   method, hardening technique, certified bound, or guardrail — not when it
   produces a better attack and calls that attack an audit.
 
-Even when is_defensive=true, set main_category to the OFFENSIVE DOMAIN the defense
-protects (a jailbreak detector → llm_threats; a deepfake detector → ai_enabled_threats;
-a model-poisoning defense → traditional_ai_threats; a defense for malicious agent
-skills → agentic_ai_threats), and set defended_category to that same domain. Fall back
-to unclear_or_adjacent only for a broad governance/standards framework. A defensive
-source stays relevant=false so it never inflates offensive signal counts.
+When is_defensive=true, set scope="off_topic" and relevant=false. This corpus tracks
+offensive AI threats only; defensive techniques, hardening frameworks, detection methods,
+and guardrails are out of scope regardless of how well-written or reputable the source is.
+Do NOT use scope="adjacent_context" for defensive sources — use scope="off_topic".
+Set main_category="unclear_or_adjacent" and primary_tag=null.
+Set defended_category to the offensive domain the defense protects so the data is
+preserved for reference, but the source will be discarded from the pipeline.
 
 ════════════════════════════════════════════════════════════════════════
 SOURCE TYPE — classify by EVIDENCE ROLE (what the source can prove), not format

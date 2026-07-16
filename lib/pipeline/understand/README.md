@@ -21,6 +21,7 @@ source
              ├─ main_category must be a known DOMAIN            (else → unclear_or_adjacent)
              ├─ primary_tag must EXIST and BELONG to it         (else dropped + guardrail_flag)
              ├─ three-way disposition: offensive | adjacent | off_topic
+             ├─ defensive gate: is_defensive=true → disposition forced to off_topic (discarded)
              └─ defensive invariant: is_defensive ⟺ "defensive" tag ⟺ defensive_capability
 ```
 
@@ -29,6 +30,11 @@ WEAPON?* Target → traditional / llm / agentic (by attacked surface); weapon �
 ai_enabled. Within "target", the discriminator is the consequence: an LLM reached
 through language = llm; a system that ACTS through tools/memory/code = agentic; a
 classical ML model / its data / pipeline = traditional.
+
+**Corpus scope:** L4 only classifies offensive findings. Defensive sources
+(`is_defensive=true`) are discarded by `normalise()` regardless of scope — the
+prompt instructs the LLM to set `scope=off_topic` for defensive-primary sources,
+and `normalise()` enforces this as a hard gate on the cached path too.
 
 ## Code
 

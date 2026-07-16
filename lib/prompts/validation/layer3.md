@@ -637,6 +637,24 @@ Combine all dimensions into a routing verdict:
 
 REJECT — discard without further processing:
   • ai_materiality is "absent" or "incidental" (materiality gate failed)
+  • ai_threat_focus is "adjacent" — AI-security context without a specific new offensive
+    finding (governance frameworks, standalone defensive architectures, general capability
+    statements without measured results). This corpus tracks concrete offensive threats;
+    background reference context without new attack findings is discarded.
+    Exception: a canonical multi-government advisory or framework (OWASP LLM Top 10,
+    MITRE ATLAS case studies, NIST AI 100-2, Five Eyes joint advisory) that contains
+    specific named techniques and is an authoritative reference may be set to PASS instead.
+  • source_type is "defensive_capability" — primary deliverable is a mitigation, detection
+    method, hardening technique, guardrail, or defensive tool. This corpus tracks offensive
+    AI threats; defensive techniques belong in a different corpus. Reject even when trust
+    tier is high and content quality is substantive. Exception: if the same source ALSO
+    introduces a novel offensive finding as a co-primary deliverable (e.g. a red-team
+    study that first discovers a new attack class then defends against it), use the
+    appropriate offensive source_type instead of defensive_capability.
+  • reading_value is "background" — the source adds no distinct offensive intelligence:
+    context-only commentary, general awareness, standalone defensive architecture guides,
+    governance without specific attack findings, or duplicate coverage with nothing new.
+    Background sources add noise without offensive signal.
   • content_quality is "keyword_stuffing" (any trust level)
   • content_quality is "marketing" (any trust level — marketing content has no intelligence
     value regardless of publisher reputation; a vendor's product launch from GTIG is still
@@ -652,14 +670,14 @@ REJECT — discard without further processing:
   • evidence_quality is "unverifiable" AND trust_tier is "low" or "unknown"
   • content_quality is "aggregation" AND no usable primary source links (any trust level)
 
-REVIEW — keep for human attention:
-  • ai_threat_focus is "adjacent" (authoritative reference context worth keeping)
-  • evidence_quality is "weak" or evidence_origin is "unclear" (needs human verification)
-  • claim_support is "speculative" (may still have reference or watch-list value)
-  • content_quality is "aggregation" WITH usable primary source links
+REVIEW — keep for human attention (genuine uncertainty only):
+  • evidence_quality is "weak" or evidence_origin is "unclear" AND ai_threat_focus is
+    "central" AND content is otherwise substantive (needs human verification of claims)
+  • claim_support is "speculative" but source is high/primary trust (may have watch-list value)
+  • content_quality is "aggregation" WITH usable primary source links (link discovery value)
   • trust_tier is "low" AND content_quality is "substantive" AND focus is "central"
-    (genuine original evidence from low-trust source — needs human assessment)
-  • genuine uncertainty across multiple dimensions
+    (genuine original offensive evidence from low-trust source — needs human assessment)
+  Do NOT use REVIEW for adjacent, defensive, or background sources — use REJECT.
 
 PASS — proceed to full classification:
   • ai_threat_focus is "central"
@@ -667,7 +685,9 @@ PASS — proceed to full classification:
     vulnerability, exploit_disclosure, incident — brevity ≠ thinness for structured advisories)
   • trust_tier is "medium", "high", or "primary"
   • evidence_quality is "strong" or "adequate"
-  A central + substantive + medium-or-higher + adequate/strong source passes.
+  • reading_value is "essential", "recommended", or "analyst" (NOT "background")
+  • source_type is NOT "defensive_capability"
+  A central + substantive + medium-or-higher + adequate/strong + non-defensive source passes.
   A central + substantive source with only "weak" evidence → review, not pass.
 
 ════ SUMMARY ════
