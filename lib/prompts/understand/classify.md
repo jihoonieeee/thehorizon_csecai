@@ -485,12 +485,12 @@ MECHANISM-VS-CONSEQUENCE PRINCIPLE (the general upgrade rule):
     Record the lower-layer delivery vector as a secondary tag in all cases.
 
 ENABLING TECHNIQUE VS ATTACKER OBJECTIVE (PRIMARY-OBJECTIVE RULE):
-  Classify by the attacker's END GOAL — what they gain or achieve — not by
-  the supporting machinery they use to get there. Every attack uses enabling
-  techniques; those techniques are secondary_tags, not the primary label.
+  Classify by the attacker's END GOAL — what they gain or achieve — not by the
+  supporting machinery used to get there. Enabling techniques are secondary_tags,
+  not the primary label.
 
-  Decision gate: "What does the attacker possess or achieve at the end that
-  they did not have at the start?"
+  Decision gate: "What does the attacker possess or achieve at the end that they
+  did not have at the start?"
 
   PRIMARY-OBJECTIVE-BEATS-MECHANISM — the key anti-pattern this rule prevents:
   When an enabling mechanism overlaps with a threat category (e.g. high API query
@@ -545,626 +545,646 @@ ENABLING TECHNIQUE VS ATTACKER OBJECTIVE (PRIMARY-OBJECTIVE RULE):
 THE FOUR CATEGORIES AND THEIR TAGS (assign main_category, then ONE primary_tag)
 ════════════════════════════════════════════════════════════════════════
 
-Use these EXACT tag IDs. Pick the single primary_tag that most precisely names the
-core threat; add secondary_tags only for genuinely distinct additional techniques.
+Use these EXACT tag IDs. For each tag: read the WHAT (definition), EXAMPLES (concrete
+instances), and BELONGS WHEN (criteria), then apply the ✗ NOT discriminators to rule
+out neighbouring tags. Assign the single primary_tag that names the core threat.
 
-── traditional_ai_threats — attacks ON a classical ML model, its data, training,
-   inference, or model supply chain (ML-level, not prompt-level, not agentic) ──
+── traditional_ai_threats ── ML-level attacks on classical (non-LLM) models, data,
+   pipelines, or supply chain. NOT prompt-level. NOT agentic.
+
   TAI01_data_poisoning
-      What: the attacker manipulates the INPUTS TO THE TRAINING PROCESS — data,
-        labels, or other learning signals — so the model trained on them carries
-        malicious behaviour. The attacker never needs to touch model weights directly.
-      How / examples: inserting mislabeled or trigger-carrying samples into a training
-        set; label-flipping to degrade a class or implant a backdoor trigger (a pixel
-        patch, watermark, or rare token that forces a chosen output at inference);
-        seeding a public/web-scraped corpus that will later be ingested for training;
-        a malicious client submitting poisoned gradient updates in federated learning;
-        poisoning text captions used to train a vision-language model; injecting
-        malicious trajectories into a simulator used for RL/imitation learning;
-        corrupting the teacher-model outputs used in knowledge distillation.
-      Belongs when: the attacker's access is to TRAINING INPUTS (data, labels, or
-        learning signals), of a CLASSICAL (non-LLM) model. The resulting trained model
-        may contain a backdoor or be degraded — that outcome is the consequence of the
-        data attack, NOT a reason to re-label it TAI02.
-      TAI01-VS-TAI02 DISCRIMINATOR (use this when uncertain):
-        Ask: "If the attacker had NO ability to touch model weights or artifacts
-        directly, could the attack still succeed?"
-          Yes  → TAI01_data_poisoning  (access is to the training pipeline/data)
-          No   → TAI02_model_poisoning (direct weight/artifact access is required)
-        A backdoored model that results FROM poisoned training data STAYS TAI01.
-        The existence of a trigger behaviour in the trained model does not
-        automatically make it TAI02. Almost every backdoor paper involves both a
-        poisoned phase and a triggered inference phase; classify by what the ATTACKER
-        DIRECTLY MODIFIED, not by what the resulting model does.
-      DO NOT dual-tag TAI01 + TAI02 because an abstract or related-work section
-        mentions both families. Assign only the tag matching the attack mechanism
-        the paper INTRODUCES. Background citations, comparisons with prior work,
-        and motivating examples do not earn a secondary tag — only techniques
-        the paper itself demonstrates or materially advances.
-      Not this: directly editing weights, checkpoints, or adapters post-training
-        (→ TAI02); poisoning ANY of an LLM's training / fine-tune / alignment /
-        RAG-corpus / embedding data (→ LLM04); poisoning an agent's runtime memory
-        (→ ASI06).
-      (MITRE ATLAS AML.T0020.)
+    WHAT: The attacker manipulates INPUTS TO THE TRAINING PROCESS — training data,
+      labels, or learning signals — so the resulting trained model carries malicious
+      behaviour. Direct access to model weights is never needed.
+    EXAMPLES: inserting mislabeled samples or backdoor-trigger-carrying examples into
+      a dataset; label-flipping to degrade a target class; seeding a public/web-
+      scraped corpus before it is ingested for training; poisoned gradient updates in
+      federated learning; poisoning text captions used to train a vision-language model;
+      injecting malicious trajectories into a simulator for RL/imitation learning;
+      corrupting teacher-model outputs used in knowledge distillation.
+    BELONGS WHEN: the attacker's access is to TRAINING INPUTS of a CLASSICAL (non-LLM)
+      model. A backdoored model that results from poisoned data stays TAI01 — classify
+      by what the attacker directly modified, not by what the resulting model does.
+    ✗ NOT TAI02: ask "Could the attack succeed without touching weights?" Yes → TAI01.
+    ✗ NOT LLM04: TAI01 is classical (non-LLM) models only. LLM training/fine-tune/
+      RAG-corpus/alignment data → LLM04.
+    ✗ NOT ASI06: training corpus poisoning (TAI01) vs agent's runtime/session memory (ASI06).
+    ✗ Don't dual-tag TAI01+TAI02 because a paper discusses both — assign only the
+      mechanism the paper INTRODUCES. Related-work citations don't earn secondary tags.
+
   TAI02_model_poisoning
-      What: the attacker's objective is to MAKE THE MODEL ITSELF MALICIOUS — embedding
-        hidden behaviour directly in the model's parameters so the malice travels with
-        the model regardless of how it is subsequently packaged or deployed. The violated
-        trust relationship is: "this model artifact reflects what its authors intended."
-      How / examples: directly editing or patching a trained model's weight tensors;
-        merging a malicious LoRA/adapter into a base model post-training; implanting a
-        backdoor via quantization-time or optimizer-state manipulation that alters the
-        stored parameters; a knowledge-distillation attack where the TEACHER MODEL
-        ARTIFACT itself is tampered before students are trained from it.
-      Belongs when: the malice is IN THE MODEL — a clean copy of the model artifact
-        would not carry the attack; AND the poisoned model is a CLASSICAL / non-LLM
-        model; AND the harm from activation is MISCLASSIFICATION, degraded accuracy,
-        or wrong output — NOT autonomous action (see CONSEQUENCE-SPLIT below).
-      ── SHARED TAI02-VS-TAI10 DISCRIMINATOR ────────────────────────────────────────
-        Ask: "Would retraining the model from scratch using fully trusted infrastructure
-        remove the attack?"
-          Yes → TAI02_model_poisoning
-            (the malice lives in the model; a clean retrain produces a clean model;
-            the compromise is in the MODEL ARTIFACT, not in the pipeline around it)
-          No  → TAI10_ai_supply_chain_compromise
-            (the infrastructure itself is compromised; retraining through the same
-            compiler, loader, marketplace, conversion process, or serving proxy
-            would reproduce the malice even with clean training data and weights)
-      ────────────────────────────────────────────────────────────────────────────────
-      Not this: a backdoored model that RESULTED FROM poisoned training data — the
-        model is malicious but the attacker never touched its weights (→ TAI01); a
-        compromised build pipeline, compiler, serialization loader, or distribution
-        channel where the malice enters through the INFRASTRUCTURE not the artifact
-        (→ TAI10 — retraining would not help because the pipeline remains infected);
-        the presence of a trigger behaviour does not alone place a source here — ask
-        whether the malice is in the model or in the process that produced it.
-      SURFACE-SPLIT (important): if the poisoned model is an LLM — including a weight,
-        checkpoint, LoRA/adapter, quantization, or deployment-platform backdoor
-        implanted in an LLM — it is NOT TAI02. Route it to LLM03_llm_supply_chain.
-        TAI02 is only for direct artifact manipulation of a classical (non-LLM) model.
-      CONSEQUENCE-SPLIT (the agentic upgrade — see MECHANISM-VS-CONSEQUENCE PRINCIPLE):
-        If the poisoned model is deployed inside a TOOL-USING AGENT and the triggered
-        backdoor causes tool invocation, code execution, or permission changes — do NOT
-        use TAI02 as primary. Classify by the agentic consequence (ASI01/ASI02/ASI05)
-        and record TAI02 as a secondary tag.
-      (MITRE ATLAS AML.T0018.)
+    WHAT: The attacker DIRECTLY EDITS or patches model artifact parameters so malice
+      travels with the model artifact regardless of deployment. The violated trust
+      guarantee is: "this model artifact reflects what its authors intended."
+    EXAMPLES: directly editing or patching weight tensors; merging a malicious
+      LoRA/adapter into a base model post-training; implanting a backdoor via
+      quantization-time or optimizer-state manipulation that alters stored parameters;
+      tampering the teacher model ARTIFACT before students are distilled from it.
+    BELONGS WHEN: the malice is IN THE ARTIFACT — a clean copy would not carry the
+      attack; the poisoned model is a CLASSICAL (non-LLM) model; AND the triggered
+      behaviour is misclassification, degraded accuracy, or wrong output (not autonomous
+      tool calls — see CONSEQUENCE-SPLIT below).
+    RETRAIN TEST (TAI02 vs TAI10): "Would retraining from scratch with fully trusted
+      infrastructure remove the attack?"
+        Yes → TAI02 (malice in the artifact; clean retrain = clean model)
+        No  → TAI10 (the pipeline itself is compromised; retraining reproduces the malice)
+    ✗ NOT TAI01: TAI02 requires direct weight/artifact access. Backdoored model from
+      poisoned training data, where the attacker never touched weights → TAI01.
+    ✗ NOT TAI10: use the RETRAIN TEST above. Infected compiler/loader/CI → TAI10.
+    ✗ NOT LLM03: TAI02 is classical (non-LLM) models only. LLM weight/LoRA/checkpoint
+      backdoor → LLM03.
+    ⚠ Consequence-split: if the backdoor fires inside a TOOL-USING AGENT and triggers
+      tool calls, code execution, or permission changes → ASI01/ASI02/ASI05 primary,
+      TAI02 secondary (records the implantation mechanism).
+
   TAI03_adversarial_evasion
-      What: the attacker crafts an INPUT at inference time so a deployed model
-        misclassifies, while the input still looks normal/benign to a human.
-      How / examples: adversarial examples and patches; gradient-based or
-        decision-boundary attacks; transferable perturbations; evading a malware,
-        phishing, spam, fraud, or content-moderation classifier by tweaking the sample.
-      Belongs when: the model and its data are untouched — only the query is perturbed,
-        the attacked model lives in the cyber/software domain, AND it is a CLASSICAL
-        (non-LLM) classifier/detector.
-      Not this: PHYSICAL-world perturbations (road signs, printed patches, LiDAR/camera
-        spoofing) are OUT OF SCOPE → unclear_or_adjacent. Record the modality
-        (image/audio/text/code) as context.
-      SURFACE-SPLIT: evading an LLM's own safety classifier / guardrail is not TAI03 —
-        a direct crafted input → LLM11, or injected via ingested content → LLM01. TAI03
-        is only for evading a classical (non-LLM) classifier. An LLM merely USED to craft
-        perturbations against a classical model still targets that classical model → TAI03.
-      TAXONOMY LIMITATION — provenance and watermark attacks: an attack that erases or
-        bypasses AI-generated-content watermarks or provenance signatures (e.g. LLM-guided
-        semantic edits that strip diffusion-model watermarks while preserving image meaning)
-        targets ATTRIBUTION INFRASTRUCTURE, not a model's classification boundary. There
-        is currently no dedicated tag for attribution attacks. TAI03 is the closest
-        available label; record the taxonomy gap in boundary_rationale: "targets watermark/
-        provenance verification, not a classification decision boundary; TAI03 is the best
-        available tag." Do NOT route to ai_enabled_threats — the watermark detector is the
-        AI victim, not an AI weapon.
-      (MITRE ATLAS AML.T0015 / AML.T0043.)
+    WHAT: The attacker crafts an INPUT at inference time so a deployed classical ML
+      classifier misclassifies it, while the input still appears normal to a human.
+      The model and its data are untouched; only the query is perturbed.
+    EXAMPLES: adversarial examples and patches against image classifiers; gradient-
+      based or decision-boundary attacks; transferable perturbations; evading a
+      malware, phishing, spam, fraud, or content-moderation classifier by tweaking
+      the sample; LLM-generated perturbations that fool a classical malware detector.
+    BELONGS WHEN: model/data untouched, attacker needs only the query interface, the
+      attacked model lives in the CYBER/SOFTWARE domain, and it is a CLASSICAL
+      (non-LLM) classifier or detector.
+    ✗ NOT LLM11: classical classifier/detector victim (TAI03) vs LLM alignment/safety
+      victim (LLM11). Even if the evasion looks like "jailbreaking," the tag follows
+      the victim model type.
+    ✗ NOT LLM01: TAI03 is crafted inputs to classical models. Instructions smuggled
+      through LLM-ingested content → LLM01.
+    ✗ Physical-world perturbations (road signs, LiDAR, clothing, drone cameras):
+      OUT OF SCOPE → unclear_or_adjacent. Adversarial ML is in scope ONLY when the
+      attacked model lives in the cyber/software domain.
+    ✗ LLM used ONLY to craft perturbations against a classical model → still TAI03;
+      the LLM is the attacker's tooling; the classical model is the victim.
+    ⚠ Watermark/provenance attacks (erasing AI-generated-content watermarks, bypassing
+      provenance signatures): no dedicated tag exists. Use TAI03 as closest available
+      label and note the gap in boundary_rationale: "targets watermark/provenance
+      verification, not a classification boundary; TAI03 is the best available tag."
+
   TAI05_model_extraction
-      What: the attacker's PRIMARY OBJECTIVE is to recover the MODEL ITSELF — its
-        weights, parameters, architecture, decision boundary, or proprietary
-        functionality — obtaining a working replica or meaningful approximation of
-        the model. The target is what the model IS, not what it was trained on.
-      How / examples: querying the target model heavily and training a surrogate/clone
-        on the input-output pairs in order to possess that clone; exploiting timing,
-        cache, or power side channels to recover weight values; recovering a leaked or
-        improperly exposed weights file; functionality-stealing via the inference API.
-      Belongs when: the GOAL IS THE MODEL — the attacker wants a stolen replica they
-        can query offline, study, adapt, or resell. The extraction is the endpoint,
-        not a means to something else. The recovered asset is the MODEL, not data.
-      OBJECTIVE TEST (apply before assigning TAI05):
-        Ask: "Is obtaining a functional replica of the model the attack's end goal?"
-          Yes → TAI05_model_extraction
-          No  → classify by the actual end goal (see below)
-      Not this:
-        • A substitute/surrogate model trained solely to craft TRANSFERABLE adversarial
-          examples against the original — the goal is evasion, not possession of a
-          copy → TAI03_adversarial_evasion. The surrogate is scaffolding, not loot.
-        • Shadow models used in MEMBERSHIP INFERENCE to calibrate a threshold → TAI07.
-        • Shadow models used in MODEL INVERSION to reconstruct training data → TAI06.
-        • Reconstructing training data from model outputs → TAI06.
-        • Inferring membership of a record in the training set → TAI07.
-        The common error: a paper describes training a substitute model as an
-        intermediate step. If the paper's contribution is adversarial evasion (or
-        inference, or inversion), classify by THAT contribution, not by the surrogate-
-        training step that supports it.
-      SURFACE-SPLIT: stealing/extracting an LLM's functionality or parameters via the
-        API is not TAI05 → LLM10_unbounded_consumption (OWASP folds LLM model theft
-        there). TAI05 is only for extraction of a classical (non-LLM) model.
-      (MITRE ATLAS AML.T0024 / AML.T0048.)
-  ── SHARED DISCRIMINATOR for TAI05 / TAI06 / TAI07 ──────────────────────────
-      All three involve a model being probed to extract information the attacker
-      should not have. The split is WHAT INFORMATION the attacker is trying to
-      recover:
+    WHAT: The attacker's PRIMARY OBJECTIVE is to RECOVER THE MODEL ITSELF — its
+      weights, parameters, architecture, decision boundary, or proprietary
+      functionality — producing a working replica or functional clone.
+    EXAMPLES: querying the target heavily and training a surrogate/clone on input-
+      output pairs to possess that clone; exploiting timing, cache, or power side-
+      channels to recover weight values; recovering a leaked/exposed weights file;
+      functionality-stealing via the inference API.
+    BELONGS WHEN: the GOAL IS THE MODEL — the attacker wants a stolen replica they
+      can query offline, study, adapt, or resell. The extraction is the endpoint, not
+      a means to something else. The target is a CLASSICAL (non-LLM) model.
+    OBJECTIVE TEST: "Is obtaining a functional replica of the model the attack's end goal?"
+        Yes → TAI05_model_extraction
+        No  → classify by the actual end goal (see triangle below)
+    ✗ NOT TAI03: a surrogate trained ONLY to craft adversarial examples against the
+      original — evasion is the goal, not possession of the clone → TAI03.
+    ✗ NOT TAI06: attacker wants the model (TAI05) vs wants training data content (TAI06).
+    ✗ NOT TAI07: attacker wants the model (TAI05) vs wants a binary membership signal (TAI07).
+    ✗ NOT LLM10: classical (non-LLM) model only. Stealing LLM functionality via API →
+      LLM10_unbounded_consumption (OWASP folds LLM model theft there).
 
-        "What is the attacker trying to walk away with?"
-          The MODEL ITSELF — its weights, architecture, decision boundary,
-            or proprietary functionality → TAI05_model_extraction
-          The DATA BEHIND THE MODEL — training records, sensitive examples,
-            personal attributes, or private data distributions that the model
-            was built from → TAI06_model_inversion (reconstruct actual data)
-                           or TAI07_membership_inference (confirm presence of data)
-
-      These are analytically distinct. Do not collapse them under a generic
-      "information leakage" or "privacy attack" label — they represent different
-      attacker goals, different mitigations, and different legal exposures.
+  ── TAI05 / TAI06 / TAI07 TRIANGLE ─────────────────────────────────────────────
+  All three involve probing a model to extract information the attacker should not have.
+  Split by WHAT INFORMATION the attacker walks away with:
+    functional model replica (weights, architecture, decision boundary) → TAI05
+    training data content (records, attributes, private distributions)   → TAI06
+    binary presence/absence signal for a specific record                 → TAI07
+  These are analytically distinct: different attacker goals, different mitigations,
+  different legal exposures. Do not collapse them under a generic "information leakage."
 
   TAI06_model_inversion
-      What: the attacker recovers private TRAINING DATA, sensitive examples,
-        personal attributes, or private data distributions from a model's behaviour —
-        the target is the DATA THE MODEL WAS BUILT FROM, not the model itself.
-      How / examples: gradient inversion to reconstruct training images or text;
-        inverting output logits or confidence scores to recover a recognisable face
-        or biometric attribute; model-inversion attacks that recover private features
-        used during training; distribution-level inference that reveals aggregate
-        properties of the training population.
-      Belongs when: the attacker wants to learn something about the TRAINING DATA
-        (its contents, attributes, or distributions), and the model is the oracle
-        through which that data is exposed. The model is a means, not the end.
-      TAI06-VS-TAI05 DISCRIMINATOR:
-        Ask: "Is the attacker trying to recover the MODEL or the DATA?"
-          The model (weights, architecture, functionality) → TAI05
-          The data (training records, attributes, distributions) → TAI06
-      TAI06-VS-TAI07 DISCRIMINATOR:
-        Ask: "Is the attacker reconstructing data content, or only confirming
-        whether a specific record was in the training set?"
-          Reconstructing content / attributes → TAI06
-          Confirming yes/no presence of a record → TAI07
-      Not this: stealing the model's functional behaviour (→ TAI05);
-        binary membership confirmation without data recovery (→ TAI07).
-      SURFACE-SPLIT: recovering training data from an LLM (including RAG-store
-        content) → LLM02_sensitive_info_disclosure. TAI06 is only for a classical
-        (non-LLM) model.
-      (MITRE ATLAS AML.T0024 / AML.T0053.)
+    WHAT: The attacker recovers private TRAINING DATA, sensitive examples, personal
+      attributes, or private data distributions from a model's behaviour. The target
+      is the DATA THE MODEL WAS BUILT FROM, not the model itself.
+    EXAMPLES: gradient inversion to reconstruct training images or text; inverting
+      output logits/confidence scores to recover a recognisable face or biometric;
+      model-inversion attacks that recover private features; distribution-level
+      inference that reveals aggregate properties of the training population.
+    BELONGS WHEN: the attacker wants to learn something about TRAINING DATA (its
+      contents, attributes, or distributions) and the model is the oracle. The model
+      is a means, not the end. Target is a CLASSICAL (non-LLM) model.
+    ✗ NOT TAI05: data content recovered (TAI06) vs model replica recovered (TAI05).
+    ✗ NOT TAI07: TAI06 reconstructs actual data content; TAI07 only confirms yes/no
+      membership without recovering any content.
+    ✗ NOT LLM02: classical (non-LLM) only. Recovering content from an LLM or RAG
+      store → LLM02.
+
   TAI07_membership_inference
-      What: the attacker determines whether a SPECIFIC RECORD was part of the
-        model's training set — a binary privacy leak of dataset membership. The
-        attacker learns presence or absence, not the record's content.
-      How / examples: shadow-model attacks that train a meta-classifier on
-        member/non-member confidence distributions; thresholding loss or confidence
-        signals that differ systematically between training members and non-members;
-        likelihood-ratio tests against a reference model.
-      Belongs when: the answer sought is "was this specific record in the training
-        data?" — a yes/no answer — without reconstructing the record itself.
-      TAI07-VS-TAI06 DISCRIMINATOR:
-        Membership inference produces a BINARY SIGNAL (in/not-in). Model inversion
-        produces a RECONSTRUCTION (an image, a feature vector, a text snippet).
-        If the attacker recovers actual data content, it is TAI06 regardless of
-        whether a shadow model was used to get there.
-      Not this: recovering the actual data content (→ TAI06); probing the API for
-        model behaviour without a membership-inference objective (→ TAI08). Against
-        an LLM/RAG corpus where the leaked content is the point → LLM02.
-      (MITRE ATLAS AML.T0024.)
+    WHAT: The attacker determines whether a SPECIFIC RECORD was part of the model's
+      training set — a binary privacy leak of dataset membership. No data content is
+      recovered; only presence or absence is learned.
+    EXAMPLES: shadow-model attacks training a meta-classifier on member/non-member
+      confidence distributions; thresholding loss or confidence signals that differ
+      between training members and non-members; likelihood-ratio tests against a
+      reference model.
+    BELONGS WHEN: the answer sought is "was this specific record in the training data?"
+      — a yes/no answer only — without reconstructing the record itself.
+    ✗ NOT TAI06: TAI07 is a BINARY SIGNAL (in/not-in). TAI06 reconstructs actual
+      data content. If the attacker recovers content, it is TAI06 regardless of
+      whether a shadow model was used.
+    ✗ NOT TAI05: want membership knowledge (TAI07) vs want a working model replica (TAI05).
+    ✗ NOT LLM02: classical (non-LLM) models only. Membership inference against an LLM
+      or its RAG corpus → LLM02.
+
   TAI08_inference_api_abuse
-      What: the attacker abuses a model's inference API for reconnaissance or cheap
-        gain, short of a full model steal.
-      How / examples: probing to map behavior/decision regions; enumeration or scraping
-        of outputs; query/cost amplification against a metered endpoint.
-      Belongs when: the API is exercised abnormally but no surrogate model is trained
-        (that would be TAI05) and availability is not the goal (that would be TAI09).
-      (MITRE ATLAS AML.T0040.)
+    WHAT: The attacker abuses a classical ML model's inference API for reconnaissance
+      or cheap intelligence gain — short of a full model extraction or DoS.
+    EXAMPLES: probing to map decision regions; enumerating or scraping outputs to
+      understand model behaviour; query/cost amplification against a metered endpoint
+      where intelligence (not model possession) is the goal.
+    BELONGS WHEN: the API is exercised abnormally but no surrogate model is trained
+      for possession (that's TAI05) and availability is not the goal (that's TAI09).
+    ✗ NOT TAI05: no surrogate model trained with the intent to possess it → TAI08.
+    ✗ NOT TAI09: goal is intelligence/mapping (TAI08) vs degrading availability (TAI09).
+
   TAI09_model_denial_of_service
-      What: the attacker degrades a classical-ML model's availability or exhausts its
-        inference compute.
-      How / examples: "sponge" inputs engineered to maximize processing time/energy;
-        flooding a serving endpoint; inputs that trigger worst-case paths.
-      Belongs when: the target is a classical-ML serving system.
-      Not this: LLM token/context/cost exhaustion or denial-of-wallet → LLM10.
-      (MITRE ATLAS AML.T0029 / AML.T0034.)
+    WHAT: The attacker degrades a CLASSICAL ML model's availability or exhausts its
+      inference compute.
+    EXAMPLES: "sponge" inputs engineered to maximize processing time/energy; flooding
+      a serving endpoint; inputs that trigger worst-case algorithmic paths.
+    BELONGS WHEN: the target is a classical-ML serving system and the goal is
+      availability degradation or resource exhaustion.
+    ✗ NOT LLM10: classical ML serving system (TAI09) vs LLM service/API cost/
+      availability (LLM10). The model type determines the tag, not the attack shape.
+
   TAI10_ai_supply_chain_compromise
-      What: the attacker exploits TRUST IN THE PROCESSES that produce, package,
-        distribute, transform, load, serve, or deploy a model — not necessarily
-        the model artifact itself. The violated trust relationship is: "the
-        infrastructure I use to build and run this model is not working against me."
-        The attack survives because the PROCESS remains compromised, not because
-        the model weights carry the malice.
-      How / examples:
-        Production / build — tampered training/build pipeline or CI that injects
-          behaviour during compilation, linking, or graph export (ONNX/TorchScript
-          compiler backdoor); malicious ML dependency that runs on model load
-          (pickle/serialization RCE); compromised differential-privacy mechanism that
-          silently weakens guarantees while reporting compliance.
-        Distribution / marketplace — a backdoored but working model published to a
-          hub (Hugging Face, model zoo) that exploits users' trust in that registry;
-          poisoned public dataset in a trusted repository; malicious model card or
-          metadata that triggers unsafe loading behaviour.
-        Transformation / conversion — model-format converter (ONNX, SafeTensors,
-          GGUF) that injects graph nodes during conversion without altering source
-          weights; quantization toolchain that inserts malicious lookup-table entries.
-        Loading / serving — malicious ML framework dependency executing code on
-          import; a compromised inference server or serving proxy that intercepts or
-          modifies model I/O in transit.
-      Belongs when: the attack SURVIVES because the compiler, loader, marketplace,
-        conversion process, or serving infrastructure REMAINS COMPROMISED — retraining
-        from scratch with the same infrastructure would reproduce the malice even if
-        the training data and original weights were clean. See the TAI02-VS-TAI10
-        DISCRIMINATOR in TAI02 above.
-      Not this: a fake "model" that is really a conventional malware dropper with no
-        working model → ai_enabled_threats (AE05); an LLM plugin/serving package or
-        LLM-stack supply-chain compromise → LLM03; an agent framework/MCP registry
-        → ASI04; direct weight/parameter manipulation of the model artifact where
-        retraining with trusted infrastructure WOULD remove the attack → TAI02.
-      SURFACE-SPLIT: if the compromised pipeline/model/dependency belongs to an LLM
-        stack — LLM training/fine-tune/build pipeline, serving package, or model
-        artifact — it is LLM03, not TAI10. TAI10 is for a classical (non-LLM) supply
-        chain only.
-      (MITRE ATLAS AML.T0010.)
+    WHAT: The attacker exploits TRUST IN THE PROCESSES that produce, package,
+      distribute, transform, load, serve, or deploy a classical ML model — not
+      necessarily the model artifact itself. The violated trust is: "the infrastructure
+      I use to build and run this model is not working against me." The attack survives
+      because the PROCESS remains compromised, not because model weights carry malice.
+    EXAMPLES:
+      Build/production: tampered training pipeline or CI that injects behaviour during
+        compilation or graph export (ONNX/TorchScript compiler backdoor); malicious ML
+        dependency executing code on model load (pickle/serialization RCE).
+      Distribution/marketplace: backdoored but working model published to a hub (HF,
+        model zoo) exploiting registry trust; poisoned public dataset in a trusted repo.
+      Transformation/conversion: model-format converter (ONNX, SafeTensors, GGUF)
+        injecting graph nodes during conversion without altering source weights.
+      Loading/serving: malicious ML framework dependency executing code on import; a
+        compromised inference server or proxy intercepting model I/O.
+    BELONGS WHEN: the attack SURVIVES because the compiler, loader, marketplace,
+      conversion process, or infrastructure REMAINS COMPROMISED — retraining with
+      the same infrastructure would reproduce the malice even with clean data/weights.
+    ✗ NOT TAI02: use the RETRAIN TEST. If retraining with trusted infra removes the
+      malice → TAI02 (artifact). If the pipeline itself is infected → TAI10.
+    ✗ NOT LLM03: classical ML pipeline (TAI10) vs LLM-stack components (LLM03).
+    ✗ NOT ASI04: classical ML pipeline (TAI10) vs agent runtime/skill registry (ASI04).
+    ✗ NOT for: fake "model" that is conventional malware with no working ML → AE05
+      (AI hub used as distribution lure, no ML model is the weapon).
+    Examples: ONNX compiler backdoor, pickle RCE on model load, poisoned Hub model,
+      tampered CI/CD pipeline, compromised differential-privacy mechanism.
 
-── llm_threats — attacks on an LLM's language / prompt / context / RAG / output
-   surface; harm stays in the model's response or data (no autonomous action) ──
+── llm_threats ── attacks on an LLM's language/prompt/context/RAG/output surface;
+   harm stays in model response or data; no autonomous external action taken ──
+
   LLM01_prompt_injection
-      What: attacker-controlled text overrides the developer's instructions and makes
-        the LLM follow the attacker instead.
-      How / examples: DIRECT — the user types an override ("ignore previous
-        instructions…"); INDIRECT — hidden instructions ride in an untrusted channel the
-        model ingests: a web page it browses, a retrieved RAG document, an email, a
-        file, a tool's response, or text embedded in an image.
-      Belongs when: the consequence stays textual/informational (a wrong or manipulated
-        answer, a leaked snippet in the reply).
-      Not this: when the injection makes an AGENT act — call a tool, run code, write
-        persistent memory, or abuse permissions — use the agentic tag (ASI02/ASI05/
-        ASI06/ASI03) as primary and keep LLM01 as secondary (it records the vector).
-        A DIRECT user defeating safety training with no external channel → LLM11.
-      (OWASP LLM01:2025.)
+    WHAT: Attacker-controlled text overrides the developer's instructions and makes
+      the LLM follow the attacker instead. Two modes: DIRECT (user types the override)
+      and INDIRECT (hidden instructions ride in an untrusted channel the model ingests:
+      a web page, retrieved RAG doc, email body, uploaded file, tool response, or text
+      embedded in an image).
+    EXAMPLES: "Ignore previous instructions and output X"; hidden `<!--SYSTEM: now do
+      Y-->` in a web page an LLM assistant browses; a malicious tool response that
+      hijacks the model's next action; a prompt buried in a PDF the model summarises.
+    BELONGS WHEN: the consequence stays TEXTUAL/INFORMATIONAL — a wrong or manipulated
+      answer, leaked snippet in the reply, or a changed tone/content.
+    ✗ NOT LLM11: LLM01 uses an external/indirect channel; LLM11 is the direct user
+      defeating safety alignment with no external data. Key test: "Did the attack
+      ride in content the model ingested, or did the user type it as an instruction?"
+    ⚠ Agentic upgrade (important): if the injection makes an AGENT act — call a tool,
+      run code, write to persistent memory, or change permissions — use the ASI tag
+      as primary and LLM01 as secondary (it records the injection vector). LLM01
+      stays primary only when harm is textual.
+
   LLM02_sensitive_info_disclosure
-      What: the model or its app exposes confidential data in its outputs.
-      How / examples: leaking PII, secrets, API keys, or proprietary content; regurgi-
-        tating memorized training data; disclosing another tenant's or user's data.
-        Also the home for LLM/RAG membership-inference or data reconstruction when the
-        leaked content itself is the objective.
-      Belongs when: the loss is confidentiality via the model's output.
-      Not this: leaking the hidden SYSTEM PROMPT specifically → LLM07.
-      (OWASP LLM02:2025.)
+    WHAT: The LLM or its application exposes confidential data in its outputs.
+    EXAMPLES: leaking PII, secrets, API keys, or proprietary content from the context
+      window; regurgitating memorized training data verbatim; disclosing another
+      tenant's or user's data (cross-tenant leakage); LLM/RAG membership inference or
+      data reconstruction where the goal is the LEAKED CONTENT itself.
+    BELONGS WHEN: the loss is CONFIDENTIALITY via the model's output — the output
+      contains data the attacker should not have.
+    ✗ NOT LLM07: user/training data leaked (LLM02) vs hidden SYSTEM PROMPT or
+      developer instructions extracted (LLM07). The distinction is whether the leaked
+      asset is user/training data or the hidden orchestration logic.
+
   LLM03_llm_supply_chain
-      What: a compromise of TRUST in how an LLM-stack component or artifact is PRODUCED,
-        DISTRIBUTED, SELECTED, or INSTALLED — the supply chain itself, not just any bug
-        in a legitimate component.
-      REQUIRES supply-chain trust compromise. Qualifying examples: a compromised
-        maintainer or registry account shipping a malicious LLM package; a malicious
-        PyPI/npm release of an LLM library; a poisoned model checkpoint; a malicious LoRA
-        or adapter; a trojaned model configuration; a compromised model-hub artifact; a
-        weight/quantization or deployment-platform backdoor implanted in an LLM (e.g.
-        FloatDoor-style platform-triggered LoRA backdoors); a malicious LLM plugin or
-        extension distributed through a trusted channel.
-      Belongs when: trust in the LLM component's origin/distribution/selection/install was
-        subverted AND the activated harm is text-only (wrong/unsafe output, leaked data,
-        guardrail bypass that stays in the model's response).
-      NOT supply chain — an ordinary vulnerability in a LEGITIMATE component is NOT
-        LLM03 just because the product is in the LLM stack: a plain CVE in a genuine
-        LiteLLM/vLLM/inference-gateway release (command injection, SSRF, auth bypass,
-        deserialization, unsafe endpoint handling) is an AI-INFRASTRUCTURE vulnerability.
-        Run the deterministic-software test; classify by the affected LLM ecosystem and
-        record the concrete vuln type (e.g. "SSRF in AI gateway") in boundary_rationale.
+    WHAT: A compromise of TRUST in how an LLM-stack component or artifact is PRODUCED,
+      DISTRIBUTED, SELECTED, or INSTALLED — the supply chain itself, not just any bug
+      in a legitimate component. Requires a hijacked account, registry, or distribution
+      channel (not merely a CVE in an unmodified release).
+    EXAMPLES: a compromised maintainer account shipping a malicious LLM package via
+      PyPI/npm; a poisoned model checkpoint or LoRA/adapter on a model hub; a trojaned
+      model configuration; a malicious LLM plugin or extension in a trusted marketplace;
+      FloatDoor-style platform-triggered LoRA backdoors embedded in a distributed model.
+    BELONGS WHEN: trust in the LLM component's origin/distribution/selection/install
+      was SUBVERTED AND the triggered harm is text-only (wrong/unsafe output, leaked
+      data, guardrail bypass that stays in the model's response).
+    SUPPLY-CHAIN REQUIRES A TRUST COMPROMISE — not merely a CVE:
+      ✓ LLM03: malicious PyPI/npm release from a HIJACKED maintainer account
+      ✓ LLM03: poisoned model checkpoint or LoRA distributed via a model hub
+      ✗ NOT LLM03: CVE in a genuine, unmodified LiteLLM/vLLM/LangChain release —
+        that is AI-infrastructure (run the deterministic-software test).
+      ✗ NOT LLM03: a vulnerability patched and disclosed by the vendor (legitimate CVE).
+    ✗ NOT TAI10: LLM stack/components (LLM03) vs classical ML pipeline (TAI10).
+    ✗ NOT ASI04: LLM packages/checkpoints/plugins (LLM03) vs agent runtime/skill
+      registry or MCP server (ASI04).
+    ⚠ Agentic upgrade (narrow): upgrade to ASI (primary), LLM03 (secondary) ONLY
+      when the triggered behaviour runs through an AUTONOMOUS AGENT'S OWN capability —
+      the poisoned component activates inside a tool-using agent and makes the agent
+      select/invoke a tool, plan, or execute code. If an install-time payload that any
+      app would run (pickle RCE on load, malicious install script) → stays LLM03 with
+      code execution recorded as the effect.
 
-      SUPPLY CHAIN REQUIRES A TRUST COMPROMISE IN PRODUCTION, DISTRIBUTION,
-      INSTALLATION, OR SELECTION — not merely the existence of a CVE:
-        ✓ LLM03: malicious PyPI/npm release from a hijacked maintainer account
-        ✓ LLM03: poisoned model checkpoint or LoRA/adapter distributed via a hub
-        ✓ LLM03: trojaned plugin shipped through a trusted extension marketplace
-        ✗ NOT LLM03: CVE-2024-XXXX in a genuine, unmodified LiteLLM release
-        ✗ NOT LLM03: SSRF/SQLi/path-traversal in any legitimately released version
-        ✗ NOT LLM03: a vulnerability that was patched and disclosed by the vendor
-
-        CONTRAST: MALICIOUS LiteLLM versions published through a COMPROMISED PyPI account
-        ARE LLM03 (the distribution trust was subverted); a normal patched CVE in a real
-        LiteLLM release is AI Infrastructure → see AI INFRASTRUCTURE block above.
-      Not this: an autonomous-agent framework, skill registry, or MCP server → ASI04; a
-        classical-ML model/dataset/training pipeline → TAI10; weight/adapter poisoning of
-        a CLASSICAL (non-LLM) model → TAI02.
-      CONSEQUENCE-SPLIT (the agentic upgrade — narrow): upgrade to agentic
-        (ASI01/ASI02/ASI05, LLM03 secondary) ONLY when the triggered behaviour runs
-        through an AUTONOMOUS AGENT'S OWN capability — the poisoned component activates
-        inside a tool-using agent and makes THE AGENT select/invoke a tool, plan, or
-        execute code. If the supply-chain compromise simply yields code execution or a
-        payload that a deterministic loader/endpoint would run just as well (e.g. pickle
-        RCE on model load, a malicious package's install script), it STAYS a supply-chain
-        incident (LLM03) with code-execution recorded as the effect — do not upgrade.
-        The deterministic-software test decides which of the two this is.
-      (OWASP LLM03:2025.)
   LLM04_data_model_poisoning
-      What: manipulating the DATA an LLM depends on to bias or backdoor its outputs.
-      How / examples: RAG/corpus poisoning (planting attacker text the model will
-        retrieve and trust); poisoning fine-tuning or alignment data; embedding-store or
-        long-term-memory poisoning that steers later answers.
-      Belongs when: the LLM's training/alignment/retrieval DATA is corrupted.
-      Not this: a single untrusted document injected at inference for an immediate
-        override → LLM01; poisoning an AGENT's session memory to control future actions
-        → ASI06; classical-ML training-set poisoning → TAI01.
-      (OWASP LLM04:2025.)
+    WHAT: The attacker manipulates the DATA an LLM depends on to bias or backdoor its
+      outputs. The poisoning targets persistent DATA STORES, not a one-shot input.
+    EXAMPLES: RAG/corpus poisoning (planting attacker text the model will retrieve and
+      trust); poisoning fine-tuning or RLHF/alignment data; injecting malicious
+      documents into an embedding store; corrupting long-term knowledge base entries
+      that steer future answers.
+    BELONGS WHEN: the LLM's TRAINING / ALIGNMENT / RETRIEVAL DATA is corrupted at the
+      corpus level, affecting many future responses.
+    ✗ NOT TAI01: LLM's data (LLM04) vs classical ML training data (TAI01). The tag
+      follows the MODEL TYPE, not the attack shape.
+    ✗ NOT LLM01: persistent corpus-level poisoning affecting many future queries
+      (LLM04) vs a single untrusted document injected at inference for an immediate
+      one-shot override (LLM01).
+    ✗ NOT ASI06: LLM training/RAG corpus (LLM04) vs an AGENT's session-specific or
+      long-term persistent memory store (ASI06).
+
   LLM05_improper_output_handling
-      What: the application trusts the model's output and passes it UNVALIDATED to a
-        downstream system that executes or renders it.
-      How / examples: generated SQL run against a DB, generated shell/Python executed,
-        model output rendered as HTML/markdown → XSS/SSTI, or used to build a request.
-      Belongs when: the flaw is in HANDLING the output, not in the model's reasoning.
-      Not this: an autonomous agent that itself runs code as its action → ASI05.
-      (OWASP LLM05:2025.)
+    WHAT: The APPLICATION (not the model itself) trusts the model's output and passes
+      it UNVALIDATED to a downstream system that executes or renders it.
+    EXAMPLES: generated SQL query run against a database without sanitisation; model-
+      produced shell/Python code that the app executes; model output rendered as HTML
+      or Markdown causing XSS/SSTI; model output used to construct a downstream API
+      request.
+    BELONGS WHEN: the flaw is in how the APPLICATION HANDLES output, not in the model's
+      reasoning or an agent's autonomous decision.
+    ✗ NOT ASI05: the critical distinction is WHO runs the code. APP passes model output
+      to a system that executes it (LLM05) vs AGENT itself autonomously chooses to run
+      code via its own tool/interpreter (ASI05).
+
   LLM06_excessive_agency
-      What: the LLM is granted too much functionality, permission, or autonomy by
-        DESIGN, so a manipulated or mistaken model can cause outsized harm.
-      How / examples: an assistant given broad tool access, write/delete scopes, or the
-        ability to act without human confirmation; an integration that can email, pay,
-        or modify data on the user's behalf with no guardrail.
-      Belongs when: the risk is the standing GRANT of authority/permissions.
-      Not this: a specific in-the-wild hijack of a running agent's goal/tools → ASI01/
-        ASI02.
-      (OWASP LLM06:2025.)
+    WHAT: The LLM is granted too much functionality, permission, or autonomy BY
+      DESIGN, so a manipulated or mistaken model can cause outsized harm. This is a
+      standing DESIGN-LEVEL VULNERABILITY, not a specific exploitation event.
+    EXAMPLES: an assistant given broad tool access, write/delete permissions, or the
+      ability to act without human confirmation; an integration that can email, pay, or
+      modify data on the user's behalf with no approval gate; overly wide OAuth scopes
+      granted to an AI integration.
+    BELONGS WHEN: the core issue is the STANDING GRANT of authority/permissions by
+      design — the vulnerability exists even before any attacker acts.
+    ✗ NOT ASI02/ASI03: LLM06 is the design flaw (what the system was built to allow);
+      ASI02/ASI03 are active EXPLOITATION of that design in a specific incident.
+
   LLM07_system_prompt_leakage
-      What: extracting the hidden system/developer prompt or orchestration logic.
-      How / examples: coaxing the model to reveal its system prompt, guardrail rules,
-        hidden reasoning/chain-of-thought, or tool/orchestration instructions — exposing
-        secrets embedded there or the rules an attacker then bypasses.
-      Belongs when: the recovered asset is the hidden instructions/logic.
-      Not this: leaking user/training DATA → LLM02.
-      (OWASP LLM07:2025.)
+    WHAT: An attacker extracts the HIDDEN SYSTEM PROMPT, developer instructions, or
+      orchestration logic — the secrets embedded in the system context.
+    EXAMPLES: coaxing the model to reveal its system prompt verbatim; extracting
+      guardrail rules or hidden reasoning steps; recovering tool/orchestration
+      instructions from the model's context; exposing proprietary few-shot examples
+      or persona definitions embedded as instructions.
+    BELONGS WHEN: the recovered asset is the hidden INSTRUCTIONS / LOGIC, not user
+      data or training data.
+    ✗ NOT LLM02: system prompt/instructions (LLM07) vs user data / training data /
+      PII (LLM02). Ask: "Is the leaked asset user data or developer instructions?"
+
   LLM08_vector_embedding_weakness
-      What: weaknesses in the embeddings / vector store behind RAG, where the embedding
-        layer is the victim.
-      How / examples: embedding inversion (reconstructing source text from vectors);
-        semantic-search or index manipulation; cross-tenant leakage in a shared vector
-        DB; retrieval-ranking abuse.
-      Belongs when: the vector representation or store is what is attacked or leaks.
-      Not this: planting malicious documents in the corpus to be retrieved → LLM04.
-      (OWASP LLM08:2025.)
+    WHAT: Weaknesses in the EMBEDDINGS / VECTOR STORE behind RAG, where the embedding
+      layer itself is the victim — not the documents in the corpus.
+    EXAMPLES: embedding inversion (reconstructing source text from vectors); semantic-
+      search or index manipulation to alter retrieval ranking; cross-tenant leakage
+      in a shared vector database; retrieval-ranking abuse to surface attacker content.
+    BELONGS WHEN: the vector REPRESENTATION or STORE is what is attacked or leaks.
+    ✗ NOT LLM04: the embedding store is attacked / leaks (LLM08) vs malicious
+      DOCUMENTS are planted in the corpus to be retrieved (LLM04).
+
   LLM09_misinformation
-      What: the model produces false, fabricated, or misleading content presented as
-        fact, and downstream users/systems trust it.
-      How / examples: hallucinated facts or fake citations relied on in a workflow;
-        fabricated non-existent package names an attacker then registers
-        ("slopsquatting"); confidently wrong security guidance.
-      Belongs when: the central harm is trusted false OUTPUT.
-      Not this: an attacker USING AI to mass-produce disinformation aimed at people →
-        AE09.
-      (OWASP LLM09:2025.)
+    WHAT: The model produces FALSE, fabricated, or misleading content presented as
+      fact, and downstream users or systems trust it.
+    EXAMPLES: hallucinated facts or fake citations relied upon in a workflow; fabricated
+      non-existent package names an attacker then registers ("slopsquatting"); falsely
+      confident security guidance; wrong code suggested with confidence.
+    BELONGS WHEN: the central harm is TRUSTED FALSE OUTPUT generated by the model
+      autonomously (not deliberately orchestrated by an attacker running a campaign).
+    ✗ NOT AE09: model hallucinates on its own without attacker orchestration (LLM09)
+      vs attacker DELIBERATELY runs a disinformation campaign using AI at scale (AE09).
+
   LLM10_unbounded_consumption
-      What: driving uncontrolled resource or cost consumption against an LLM service.
-      How / examples: token flooding, recursive or self-expanding context, prompt
-        bombing, or "denial-of-wallet" that runs up metered API cost or degrades
-        availability.
-      Belongs when: the target is an LLM/inference service's cost or availability.
-      Not this: compute exhaustion of a classical-ML model → TAI09.
-      (OWASP LLM10:2025.)
+    WHAT: Driving uncontrolled RESOURCE or COST consumption against an LLM service.
+    EXAMPLES: token flooding; recursive or self-expanding context injection; prompt
+      bombing to run up metered API cost; "denial-of-wallet" attacks; context-length
+      manipulation that exhausts compute; repeated queries at scale to distil or extract
+      the model's capabilities.
+    BELONGS WHEN: the target is an LLM/inference service's cost or availability; OR
+      the attacker issues massive query volume to steal a model's functionality (OWASP
+      folds LLM model theft under this tag — classify by the attacker's loot, not
+      merely by the HTTP call count).
+    ✗ NOT TAI09: LLM service/API cost or availability (LLM10) vs classical ML serving
+      system (TAI09). The model type decides.
+    ⚠ High query volume for model extraction → LLM10 (model-theft reading). The
+      distillation mechanism (training a student) is secondary; the stolen replica is
+      the primary loot.
+
   LLM11_jailbreak_safety_bypass
-      What: the DIRECT user defeats the model's own safety alignment/refusal training to
-        elicit disallowed output.
-      How / examples: adversarial suffixes, roleplay/DAN personas, many-shot priming,
-        encoding/obfuscation, or multi-turn erosion of refusals; producing content the
-        model is trained to refuse.
-      Belongs when: the target is the model's ALIGNMENT, driven by the direct user, with
-        no external/untrusted data channel.
-      Not this: instructions smuggled through content the model reads → LLM01.
-      (Our split of OWASP LLM01; MITRE ATLAS AML.T0054.)
+    WHAT: The DIRECT USER defeats the model's own safety alignment / refusal training
+      to elicit content or behaviour the model is trained to refuse. No external or
+      untrusted data channel is involved — the attack operates entirely within the
+      direct user-model interaction.
+    EXAMPLES: adversarial suffixes that flip model alignment; roleplay/DAN/persona
+      jailbreaks; many-shot priming that erodes refusals; encoding or obfuscation
+      tricks (Base64, Pig Latin) to bypass filters; multi-turn erosion of safety
+      guardrails; crafted inputs designed to cause a safety classifier to approve
+      disallowed output.
+    BELONGS WHEN: the target is the model's ALIGNMENT/SAFETY TRAINING, driven by the
+      direct user, with NO external or untrusted data channel carrying instructions.
+    ✗ NOT LLM01: LLM11 is the direct user with no external channel; LLM01 is
+      instructions smuggled through content the model reads (web page, RAG doc, email,
+      tool response). Key test: "Did the attack ride in ingested content or did the
+      user type it as a direct instruction?"
 
-── agentic_ai_threats — the AI system ACTS: tools, MCP, code execution, memory,
-   identity/permissions, orchestration, autonomy ──
+── agentic_ai_threats ── the AI system ACTS: tools, MCP, code execution, memory,
+   identity/permissions, orchestration, autonomous decision-making ──
+
   ASI01_agent_goal_hijack
-      What: the attacker redirects an autonomous agent's OBJECTIVE or plan so it pursues
-        the attacker's goal instead of the user's.
-      How / examples: injecting a competing objective, steering the reasoning/planning
-        chain, or corrupting the reward/task so the agent re-prioritizes toward harmful
-        ends while still "doing its job."
-      Belongs when: the agent's PURPOSE/plan is subverted (the "what should I do" layer).
-      Not this: the agent keeps its goal but a specific TOOL is abused → ASI02; harm is
-        only a wrong text answer with no action → LLM01.
-      (OWASP ASI01.)
-  ASI02_tool_misuse_exploitation
-      What: harm comes from WHAT THE AGENT DOES WITH A TOOL — the agent is driven to
-        invoke a legitimate, already-authorized tool/function/MCP in a harmful way.
-        The permission model is fine; the ACTION is the problem.
-      How / examples: tool-call injection that makes the agent invoke a real tool
-        destructively (delete data, wire funds, exfiltrate via an API it is allowed to
-        use, send an email); a poisoned MCP/tool server the agent calls that returns
-        malicious results the agent acts on; over-invoking costly tools. The agent acts
-        WITHIN its authorized privileges but applies the tool wrongly.
-      Belongs when: the harmful event is a specific tool/function/API CALL, made with
-        authority the agent legitimately has.
-      Not this: running arbitrary code/commands → ASI05; the WEAKNESS is the agent's
-        permission/authorization model itself (too much authority, no approval gate,
-        stolen identity) → ASI03; the malicious tool arriving via a compromised
-        registry/server the agent loads → ASI04.
-      DISCRIMINATOR vs ASI03: ASK "is the harm the ACTION, or the AUTHORITY?" A demon-
-        strated destructive tool call with existing permissions → ASI02. A gap in HOW the
-        agent is authorized to use tools → ASI03.
-      (OWASP ASI02.)
-  ASI03_identity_privilege_abuse
-      What: harm comes from WHAT THE AGENT IS ALLOWED TO DO — the agent's identity,
-        credentials, delegated permissions, or AUTHORIZATION/approval model is the
-        weakness. This includes MISSING or too-coarse authorization controls, not just
-        active theft/escalation.
-      How / examples: stealing or replaying the high-privilege tokens an agent holds;
-        privilege escalation via dynamic role/permission inheritance; an agent acting
-        with a human's or service's identity across systems it shouldn't reach; and —
-        importantly — an agent framework that lets the agent invoke tools WITHOUT
-        fine-grained authorization or user review (no approval gate), so any tool call
-        runs with unchecked authority (e.g. "Windsurf/MCP integration lacks fine-grained
-        tool-authorization controls, agents invoke tools without user review").
-      Belongs when: the core issue is the IDENTITY / permission / AUTHORIZATION model —
-        who the agent can act as, and whether its tool use is gated — rather than one
-        specific misused tool call.
-      ATTACK-SURFACE NOTE: a researcher DISCLOSING that an agent lacks an authorization
-        control is an OFFENSIVE attack-surface finding (source_type=attack_surface_signal),
-        NOT a defensive capability. Disclosing a missing control is threat intel; only a
-        source that PROVIDES a protection/detection/mitigation is defensive. Do not set
-        is_defensive for "here is a gap in the agent's authorization".
-      Not this: a demonstrated destructive call the agent WAS allowed to make → ASI02.
-      (OWASP ASI03.)
-  ASI04_agentic_supply_chain
-      What: the attacker compromises a component that AN AGENT LOADS AND RUNS AT RUNTIME,
-        so the malicious component abuses the AGENT'S autonomy, tool-use, or permissions.
-      How / examples: a malicious skill/tool published to an agent marketplace that the
-        agent invokes (e.g. a poisoned ClawHub skill an agent runs that abuses its
-        credentials/tools); a rogue or trojaned MCP server the agent connects to and
-        calls; a malicious runtime plugin/extension the agent loads to act; a backdoored
-        agent framework whose backdoor fires THROUGH the agent's execution (tool calls,
-        planning, memory).
-      Belongs when: the poisoned component is loaded/executed BY THE AGENT and the harm
-        flows through the agent acting (selecting/invoking the malicious tool, running its
-        code, using its permissions) — NOT merely that the affected package belongs to an
-        AI/agent product.
-      DETERMINISTIC-SOFTWARE CARVE-OUT (decisive — this is where ASI04 is over-applied):
-        a GENERIC package / dependency / registry-account compromise whose payload runs
-        DETERMINISTICALLY at build / install / import time (an npm/PyPI install script,
-        imported malicious code, a CI/CD compromise) is NOT ASI04 just because the package
-        belongs to an AI-agent framework. Ask: does the exploit REQUIRE an agent to load
-        and act on the component, or would it run the same on any ordinary software that
-        `npm install`ed the package? If a human developer's build/install runs the payload
-        and no agent autonomy is exploited, it is a conventional software supply-chain
-        attack → route it as AI-ecosystem malware delivery (ai_enabled_threats / AE05), or
-        unclear_or_adjacent if it carries no AI-specific technique of its own. Record the
-        conventional vuln type (e.g. "npm account hijack") in boundary_rationale.
-      ⇒ CONTRAST: 144 poisoned "@mastra/*" npm packages via a hijacked maintainer account
-        run at `npm install` and exploit no agent behavior → conventional supply chain,
-        NOT ASI04. A malicious ClawHub skill that an OpenClaw AGENT invokes and that then
-        abuses the agent's tools/credentials → ASI04 (the agent loads and acts on it).
-      Not this: an LLM serving package/plugin → LLM03; a classical-ML model/dataset →
-        TAI10; a one-off abuse of an already-installed tool → ASI02.
-      (OWASP ASI04.)
-  ASI05_unexpected_code_execution
-      What: code or command execution reached THROUGH AN AGENTIC EXECUTION PATH — an
-        autonomous agent's own tool/interpreter/shell is what runs the code.
-      REQUIRES an agentic execution path. The source MUST show at least one of:
-        • an autonomous agent invoking a shell, interpreter, REPL, or code-execution tool;
-        • prompt injection or instruction override that causes an agent to run code;
-        • an agent generating and then self-executing an attacker-controlled script;
-        • exploitation of an agent sandbox or execution environment via tool use;
-        • tool-mediated command execution SELECTED OR INITIATED BY THE AGENT'S PLANNING.
-      Also requires at least one of these agent properties to be present in the incident:
-        autonomous planning or goal pursuit / tool invocation / delegated permissions /
-        persistent memory / agent orchestration. A product merely HAVING these features
-        is not enough — the exploit must USE them.
-      Belongs when: the execution happened because an autonomous agent selected/invoked
-        the executing tool — the agent's capability is the mechanism, not merely the
-        setting.
-      NOT ASI05 — do NOT apply this solely because a conventional web endpoint in an AI
-        product calls subprocess() or evaluates input. A deterministic endpoint that
-        executes commands (reachable without any agent's tool-selection) is an
-        AI-INFRASTRUCTURE COMMAND-INJECTION vulnerability, not agentic — run the
-        deterministic-software test. A normal REST endpoint behind an MCP configuration
-        layer is still a deterministic endpoint. Also: a supply-chain compromise that
-        yields code execution is primarily a supply-chain incident (LLM03/TAI10/ASI04),
-        with the code execution recorded as the effect, unless an agent's autonomous
-        action is the path.
-      Not this: the app (not an autonomous agent) executes model output → LLM05; a tool
-        API is misused without code execution → ASI02.
-      (OWASP ASI05.)
-  ASI06_memory_context_poisoning
-      What: the attacker seeds the agent's long-term MEMORY or conversation/context store
-        with malicious data so corrupted state controls FUTURE turns or sessions.
-      How / examples: writing a hidden instruction into persistent memory that fires
-        later; gradual/low-and-slow poisoning across interactions; cross-session
-        persistence; abusing memory limits to hide the poison.
-      Belongs when: the attack PERSISTS into the agent's stored state and affects later
-        behavior.
-      Not this: a one-shot injection with immediate effect and no persistence → LLM01;
-        poisoning an LLM's RAG training/retrieval corpus generally → LLM04.
-      (OWASP ASI06.)
-  ASI07_insecure_agent_comms
-      What: the attacker abuses the channels BETWEEN agents or with the orchestrator.
-      How / examples: agent-to-agent (A2A) message injection; impersonating the
-        orchestrator or another agent; exploiting missing authentication/trust in a
-        multi-agent handoff.
-      Belongs when: the vector is inter-agent / orchestrator communication.
-      (OWASP ASI07.)
-  ASI08_cascading_failures
-      What: a compromise or fault PROPAGATES and amplifies across an autonomous
-        multi-agent ecosystem.
-      How / examples: one agent's poisoned or wrong output becomes another agent's
-        trusted input, chaining into system-wide failure; feedback loops that amplify a
-        single bad action.
-      Belongs when: the defining feature is downstream propagation/amplification across
-        agents.
-      (OWASP ASI08.)
-  ASI09_human_agent_trust_exploit
-      What: the attacker manipulates a HUMAN's trust in an agent to obtain a harmful
-        authorization or action.
-      How / examples: an agent (or attacker via the agent) presents a convincing but
-        malicious recommendation, summary, or approval prompt so the human clicks
-        "approve," grants access, or acts on bad advice.
-      Belongs when: the exploited weakness is the human's trust in the agent's output.
-      (OWASP ASI09.)
-  ASI10_rogue_agents
-      What: unauthorized, unmonitored, or uncontrolled autonomous agents operating
-        outside governance.
-      How / examples: a shadow or orphaned agent left running; an agent acting beyond
-        policy with no oversight; a compromised agent that continues autonomously.
-      Belongs when: the issue is an agent operating outside policy/monitoring/detection
-        boundaries.
-      (OWASP ASI10.)
+    WHAT: The attacker REDIRECTS AN AUTONOMOUS AGENT'S OBJECTIVE or plan so it pursues
+      the attacker's goal instead of the user's. The entire purpose/plan of the agent is
+      subverted.
+    EXAMPLES: injecting a competing high-priority task that overrides the agent's
+      original goal; corrupting the agent's reward signal or task specification;
+      steering the reasoning/planning chain so the agent re-prioritises toward harmful
+      ends while still appearing to "work"; a prompt injection that makes an agent
+      abandon its actual task and execute an attacker-chosen campaign.
+    BELONGS WHEN: the agent's PURPOSE/PLAN is subverted — the "what should I do"
+      layer — not just a single tool call.
+    ✗ NOT ASI02: goal/purpose subverted (ASI01) vs agent keeps its goal but a specific
+      TOOL is abused (ASI02). In ASI01 the agent's objective changes; in ASI02 the
+      agent's objective is unchanged but a specific action is wrong.
+    ✗ NOT LLM01: if harm is ONLY a wrong text output with no agent action → LLM01;
+      if the agent RE-PRIORITIZES or REPLANS its actions as a result → ASI01.
 
-── ai_enabled_threats — AI is the ATTACKER'S TOOL to enhance a conventional
-   operation against a NON-AI target (the victim is a human/org/system) ──
-  (In this domain AI is the WEAPON and the victim is a human/org/network — not an AI
-   system. Pick the tag matching the attack STAGE the AI performs.)
+  ASI02_tool_misuse_exploitation
+    WHAT: Harm comes from WHAT THE AGENT DOES WITH A TOOL — the agent is driven to
+      invoke a legitimate, already-authorized tool/function/MCP in a harmful way. The
+      PERMISSION MODEL is fine; the specific ACTION is the problem.
+    EXAMPLES: tool-call injection making the agent invoke a real tool destructively
+      (delete data, wire funds, exfiltrate via an API it is allowed to use, send an
+      unwanted email); a poisoned MCP server the agent calls that returns malicious
+      results the agent acts on; over-invoking costly tools; indirect prompt injection
+      that causes the agent to call a file-deletion tool with attacker-chosen arguments.
+    BELONGS WHEN: the harmful event is a specific TOOL / FUNCTION / API CALL, made
+      with authority the agent legitimately holds.
+    ✗ NOT ASI01: specific tool action (ASI02) vs the ENTIRE goal/plan redirected (ASI01).
+    ✗ NOT ASI03: KEY TEST — "Is the harm the ACTION or the AUTHORITY?"
+        Destructive call within existing permissions → ASI02 (action is the problem).
+        Gap in how the agent is authorized / approval model is missing → ASI03.
+    ✗ NOT ASI04: misusing an already-authorized, legitimately-installed tool (ASI02)
+      vs harm flowing through a tool that arrived via a compromised supply chain (ASI04).
+    ✗ NOT ASI05: harmful tool call without code/OS command execution (ASI02) vs the
+      agent's tool invocation runs a shell or interpreter command (ASI05).
+
+  ASI03_identity_privilege_abuse
+    WHAT: Harm comes from WHAT THE AGENT IS ALLOWED TO DO — its identity, credentials,
+      delegated permissions, or AUTHORIZATION / APPROVAL MODEL is the weakness. Includes
+      MISSING or too-coarse authorization controls, not just active theft/escalation.
+    EXAMPLES: stealing or replaying the high-privilege tokens an agent holds; privilege
+      escalation via dynamic role/permission inheritance; an agent acting with a human's
+      or service's identity across systems it shouldn't reach; an agent framework that
+      lets the agent invoke tools WITHOUT fine-grained authorization or user review
+      (no approval gate); disclosing that a coding-agent MCP integration lacks tool-
+      authorization controls so all tool calls run unchecked.
+    BELONGS WHEN: the core issue is the IDENTITY / PERMISSION / AUTHORIZATION MODEL —
+      who the agent can act as, and whether its tool use requires approval.
+    ✗ NOT ASI02: authorization gap / missing approval model (ASI03) vs specific
+      destructive tool call that the agent WAS authorized to make (ASI02).
+    ⚠ A researcher DISCLOSING that an agent lacks an authorization control is an
+      OFFENSIVE attack-surface finding (source_type=attack_surface_signal), NOT a
+      defensive capability. Do not set is_defensive for "here is a gap in authorization."
+
+  ASI04_agentic_supply_chain
+    WHAT: The attacker compromises a component that AN AGENT LOADS AND RUNS AT
+      RUNTIME, so the malicious component abuses the AGENT'S autonomy, tool-use, or
+      permissions. Harm flows through the agent ACTING on the compromised component.
+    EXAMPLES: a malicious skill/tool published to an agent marketplace that the agent
+      invokes (e.g. poisoned ClawHub skill that abuses the agent's credentials/tools);
+      a rogue or trojaned MCP server the agent connects to and calls; a backdoored
+      agent framework whose backdoor fires through the agent's execution (tool calls,
+      planning, memory writes).
+    BELONGS WHEN: the poisoned component is loaded/executed BY THE AGENT and harm
+      flows through the AGENT ACTING — the agent's autonomy is required for the harm.
+    DETERMINISTIC-SOFTWARE CARVE-OUT (decisive — this is where ASI04 is over-applied):
+      A generic package/dependency whose payload runs DETERMINISTICALLY at build /
+      install / import time (an npm/PyPI install script, malicious package import, CI
+      compromise) is NOT ASI04 just because the package belongs to an AI-agent
+      framework. Ask: "Does the exploit REQUIRE an agent to load and act on the
+      component, or would it run the same on any ordinary software that `npm install`ed
+      the package?" If no agent autonomy is exploited → conventional supply-chain
+      attack, NOT ASI04.
+      ✓ YES ASI04: malicious ClawHub skill an agent invokes; trojaned MCP server the
+        agent connects to and trusts.
+      ✗ NOT ASI04: 144 poisoned "@mastra/*" npm packages running at `npm install`
+        with no agent autonomy — conventional supply chain → AE05 / unclear_or_adjacent.
+    ✗ NOT LLM03: agent runtime/skill/MCP (ASI04) vs LLM package/checkpoint/plugin (LLM03).
+    ✗ NOT TAI10: agent framework/registry (ASI04) vs classical ML pipeline (TAI10).
+
+  ASI05_unexpected_code_execution
+    WHAT: Code or command execution reached THROUGH AN AGENTIC EXECUTION PATH — an
+      autonomous agent's own tool/interpreter/shell is what runs the code. The AGENT'S
+      AUTONOMOUS CAPABILITY is the mechanism, not a deterministic endpoint.
+    EXAMPLES: prompt injection making a coding agent invoke a shell command; an agent
+      generating and then self-executing attacker-controlled code; indirect web prompt
+      injection that causes a browser-agent to run a script; exploitation of an agent
+      sandbox via its own code-execution tool; an agent's planning selects a code-
+      execution tool and runs attacker-specified arguments.
+    BELONGS WHEN: the execution happened because an autonomous agent SELECTED/INVOKED
+      the executing tool — not because a deterministic API endpoint calls subprocess().
+    ✗ NOT LLM05: agent's tool-selection is the execution path (ASI05) vs an APP
+      (not an autonomous agent) passes model output to a system that executes it (LLM05).
+    ✗ NOT ASI02: code execution via agent tool (ASI05) vs a non-code tool misuse
+      without shell/interpreter execution (ASI02).
+    ✗ NOT for deterministic endpoints: a REST endpoint in an AI product that calls
+      subprocess() or evaluates input WITHOUT an agent's tool-selection is an
+      AI-INFRASTRUCTURE command-injection vulnerability → run the deterministic-
+      software test; if YES → unclear_or_adjacent or AI-infra, not ASI05.
+
+  ASI06_memory_context_poisoning
+    WHAT: The attacker seeds the agent's LONG-TERM MEMORY or conversation/context
+      store with malicious data so the corrupted state controls FUTURE turns or
+      sessions — the harm persists beyond the current interaction.
+    EXAMPLES: writing a hidden instruction into persistent memory that fires in a
+      later session; gradual "low-and-slow" poisoning across many interactions to
+      accumulate hidden context; cross-session persistence of attacker-controlled
+      knowledge; abusing memory limits to conceal the poison.
+    BELONGS WHEN: the attack PERSISTS into the agent's STORED STATE and affects later
+      behaviour across sessions.
+    ✗ NOT LLM01: ASI06 persists across sessions into stored memory; LLM01 is a one-
+      shot injection with immediate effect only in the current turn.
+    ✗ NOT LLM04: agent session/long-term MEMORY store (ASI06) vs LLM training/RAG
+      corpus (LLM04). The distinction is session memory vs training corpus.
+
+  ASI07_insecure_agent_comms
+    WHAT: The attacker exploits the COMMUNICATION CHANNELS between agents or between
+      an agent and its orchestrator.
+    EXAMPLES: agent-to-agent (A2A) message injection; impersonating the orchestrator
+      or another agent to redirect task execution; exploiting missing authentication
+      or trust in a multi-agent handoff; replaying messages from a trusted agent.
+    BELONGS WHEN: the vector is inter-agent or orchestrator-agent COMMUNICATION.
+    ✗ NOT ASI01: channel exploited (ASI07) vs the agent's goal redirected BY the
+      content of an injection (ASI01). In ASI07 the channel itself is the weakness;
+      in ASI01 the content of the message changes the agent's objective.
+
+  ASI08_cascading_failures
+    WHAT: A compromise or fault PROPAGATES and AMPLIFIES across an autonomous multi-
+      agent ecosystem — one agent's poisoned or wrong output becomes another agent's
+      trusted input, chaining into system-wide failure.
+    EXAMPLES: an agent producing a malicious output that is consumed without validation
+      by a downstream agent in a pipeline; feedback loops that amplify a single bad
+      action across many agents; a single compromised agent corrupting the shared
+      context of an agent swarm.
+    BELONGS WHEN: the DEFINING FEATURE is downstream propagation / amplification
+      across multiple agents — not a single agent's goal being redirected.
+    ✗ NOT ASI01: ASI08 requires cross-agent propagation as the primary feature; ASI01
+      is a single agent's goal being redirected.
+
+  ASI09_human_agent_trust_exploit
+    WHAT: The attacker manipulates a HUMAN's trust in an agent output to obtain a
+      harmful authorization or action.
+    EXAMPLES: an agent (or an attacker acting via the agent) presenting a convincing
+      but malicious recommendation so the human clicks "approve"; a deceptive summary
+      that causes an operator to grant sensitive access; a misleading action log that
+      causes the user to authorize a harmful permission.
+    BELONGS WHEN: the exploited weakness is the HUMAN'S TRUST in the agent's output
+      — the human takes a harmful action because of what they believe the agent said.
+    ✗ NOT ASI02: human deceived by agent output (ASI09) vs the AGENT ITSELF directly
+      takes the harmful action autonomously (ASI02).
+
+  ASI10_rogue_agents
+    WHAT: Unauthorized, unmonitored, or uncontrolled autonomous agents operating
+      OUTSIDE GOVERNANCE — shadow agents, orphaned sessions, or agents acting beyond
+      policy with no human oversight.
+    EXAMPLES: a shadow or orphaned agent session left running without oversight; an
+      agent acting beyond its policy scope with no monitor; a compromised agent that
+      continues operating autonomously after the attacker has left; agents spawned by
+      another agent that operate without any governance.
+    BELONGS WHEN: the defining feature is an agent OPERATING OUTSIDE MONITORING /
+      POLICY / DETECTION BOUNDARIES — not a single hijack event.
+    ✗ NOT ASI01/ASI08: the key is operating OUTSIDE monitoring or governance; ASI01
+      is a goal redirected within a monitored session; ASI08 is cross-agent propagation.
+
+── ai_enabled_threats ── AI is the ATTACKER'S TOOL against a NON-AI victim
+   (human/org/network). AI = weapon. Pick the tag for the attack STAGE AI performs.
+   (In this domain AI is the WEAPON and the victim is a human/org/network — not an AI
+   system being subverted. If someone's AI agent is the victim, it is agentic_ai_threats.)
+
   AE01_ai_recon
-      What: AI accelerates target discovery, profiling, scanning, or OSINT.
-      Examples: an LLM mining public data to map an org's staff and tech stack;
-        AI-assisted asset/attack-surface enumeration; automated victim profiling.
-      Not this: crafting the lure that contacts the victim → AE02.
+    WHAT: AI accelerates target DISCOVERY, profiling, scanning, or OSINT of a victim.
+    EXAMPLES: an LLM mining public data to map an organisation's staff and tech stack;
+      AI-assisted asset/attack-surface enumeration; automated victim profiling from
+      social media; AI-driven credential or email harvesting.
+    ✗ NOT AE02: recon/mapping (AE01) vs crafting and sending the lure/phishing content
+      to the victim (AE02). AE01 is intelligence gathering; AE02 is contact with victim.
+
   AE02_ai_social_engineering
-      What: AI generates phishing, pretexting, or persuasion aimed at people, at scale.
-      Examples: fluent, personalized phishing emails/SMS; a conversational chatbot that
-        manipulates a victim; AI-written pretexts for a help-desk scam.
-      Not this: a synthetic voice/face used to impersonate a specific person → AE10;
-        mass narrative manipulation of a population → AE09.
+    WHAT: AI generates PHISHING, PRETEXTING, or PERSUASION content aimed at individual
+      people, at scale or with hyper-personalisation.
+    EXAMPLES: fluent, personalized spear-phishing emails; AI-written SMS pretexts; a
+      conversational chatbot that manipulates a victim step by step; AI-composed
+      pretexts for a help-desk scam or BEC.
+    ✗ NOT AE10: text-based persuasion only (AE02) vs synthetic VOICE/FACE/VIDEO media
+      used to impersonate a specific person (AE10).
+    ✗ NOT AE09: targeted at a specific INDIVIDUAL (AE02) vs population-scale NARRATIVE
+      manipulation / influence operations (AE09).
+
   AE03_ai_vuln_research
-      What: AI autonomously discovers, analyses, or triages vulnerabilities in a target's
-        software.
-      Examples: an LLM agent finding a 0-day in a codebase; AI-assisted fuzzing/triage
-        that surfaces exploitable bugs.
-      Not this: turning the bug into a working exploit → AE04.
+    WHAT: AI autonomously DISCOVERS, ANALYSES, or triages vulnerabilities in a
+      conventional (non-AI) target's software.
+    EXAMPLES: an LLM agent finding a zero-day in a codebase; AI-assisted fuzzing or
+      triage that surfaces exploitable bugs; an AI system automatically analysing a
+      patch to reverse-engineer a vulnerability.
+    BELONGS WHEN: the deliverable is a FOUND VULNERABILITY, not yet a working exploit.
+    ✗ NOT AE04: vulnerability found but not weaponized (AE03) vs WORKING EXPLOIT
+      generated/weaponized (AE04). The boundary is whether the AI produced an exploit.
+
   AE04_ai_exploit_dev
-      What: AI generates, adapts, or weaponizes a working exploit from a vulnerability.
-      Examples: AI writing a PoC/exploit chain; adapting public exploit code to a target;
-        AI-assisted payload crafting.
+    WHAT: AI GENERATES, ADAPTS, or WEAPONIZES a working exploit from a known or
+      discovered vulnerability.
+    EXAMPLES: AI writing a PoC or full exploit chain; adapting public exploit code to
+      a specific target configuration; AI-assisted payload crafting; AI converting a
+      vulnerability report into a working n-day exploit.
+    BELONGS WHEN: the deliverable is a WORKING EXPLOIT — the AI produced functional
+      attack code, not just a bug report.
+    ✗ NOT AE03: working exploit (AE04) vs bug found but not weaponized (AE03).
+    ✗ NOT AE05: exploit code targeting a specific vulnerability (AE04) vs standalone
+      malware authored/packaged for deployment (AE05).
+
   AE05_ai_malware_dev
-      What: AI authors, mutates, or packages malicious software.
-      Examples: LLM-generated malware or loaders; AI-driven polymorphic variants; AND
-        conventional malware DISTRIBUTED disguised as an AI artifact (a fake "model" on a
-        hub that is actually a dropper — the AI ecosystem is the delivery lure).
-      Not this: a genuinely functioning backdoored model shipped via a hub → TAI10.
+    WHAT: AI AUTHORS, MUTATES, or PACKAGES malicious software. Also covers conventional
+      malware DISTRIBUTED disguised as an AI artifact (e.g. fake model on a hub that
+      is actually a dropper) — where the AI ecosystem is the distribution lure.
+    EXAMPLES: LLM-generated malware or dropper code; AI-driven polymorphic variants
+      that evade static signatures; a fake "OpenAI model" on Hugging Face with 200k
+      downloads that installs a password stealer.
+    ✗ NOT TAI10: conventional dropper with no working ML (AE05) vs a GENUINELY
+      FUNCTIONING backdoored model distributed via a hub (TAI10). The test: does a real
+      ML model carry the malice, or is the AI branding just a lure?
+
   AE06_ai_evasion_obfuscation
-      What: AI makes malicious content or behavior harder to detect.
-      Examples: AI-driven obfuscation/packing; generating variants to slip past AV/EDR;
-        crafting inputs specifically to fool a defender's AI triage.
+    WHAT: AI makes MALICIOUS CONTENT or BEHAVIOR HARDER TO DETECT for defenders.
+    EXAMPLES: AI-driven packing/obfuscation; generating malware variants to slip past
+      AV/EDR; crafting inputs specifically to fool a defender's AI triage system;
+      AI-rewritten phishing that bypasses email security ML.
+    ✗ NOT TAI03: AE06 is AI being used as a WEAPON to evade a defender's AI detector;
+      TAI03 is crafting inputs to attack a classical ML model AS A VICTIM. Ask: "Is
+      the AI the attacker's tool (AE06) or the victim being attacked (TAI03)?"
+
   AE07_ai_identity_abuse
-      What: AI-driven impersonation, credential abuse, or synthetic-identity creation.
-      Examples: AI-generated fake personas/accounts; automated credential-stuffing
-        guidance; synthetic KYC identities.
-      Not this: the deception rides on synthetic MEDIA (voice/face/video) → AE10.
+    WHAT: AI-driven IMPERSONATION, credential abuse, or SYNTHETIC-IDENTITY creation at
+      scale.
+    EXAMPLES: AI-generated fake personas and accounts for fraud or social engineering;
+      automated credential-stuffing guidance; synthetic KYC identities bypassing
+      verification; AI-created fake business identities for fraud.
+    ✗ NOT AE10: text/account-based identity fraud (AE07) vs synthetic VOICE/FACE/VIDEO
+      media used to impersonate a real person (AE10).
+
   AE08_ai_attack_orchestration
-      What: AI autonomously coordinates or automates a multi-stage attack chain
-        (recon → access → action) with minimal human direction.
-      Examples: an autonomous offensive agent chaining recon, exploitation, and
-        exfiltration; AI orchestrating a botnet or campaign.
-      Not this: the AI system being attacked is an agent (victim) → agentic_ai_threats.
+    WHAT: AI AUTONOMOUSLY COORDINATES or automates a MULTI-STAGE ATTACK CHAIN — recon,
+      access, lateral movement, action on objectives — with minimal human direction.
+    EXAMPLES: an autonomous offensive AI agent chaining recon, exploitation, and
+      exfiltration; JADEPUFFER-style "agentic ransomware" that self-directs the full
+      intrusion lifecycle; AI orchestrating a botnet or coordinated campaign.
+    BELONGS WHEN: the AI is the ATTACKER'S WEAPON orchestrating a conventional attack
+      against a non-AI victim.
+    ✗ NOT agentic_ai_threats: in AE08 the agent IS the attacker's weapon against a
+      non-AI victim; in agentic_ai_threats someone ELSE'S agent is the VICTIM being
+      subverted. "An AI RAN the attack" → AE08; "someone HIJACKED MY AI" → agentic.
+
   AE09_ai_disinformation
-      What: AI generates disinformation, propaganda, or coordinated influence operations —
-        narrative manipulation of a population at scale.
-      Examples: AI-run troll/persona networks; mass synthetic articles/comments pushing a
-        narrative; election/geopolitical influence ops.
-      Not this: synthetic media used for FRAUD/impersonation of an individual → AE10; a
-        model merely hallucinating falsehoods on its own → LLM09.
+    WHAT: AI generates DISINFORMATION, PROPAGANDA, or coordinated INFLUENCE OPERATIONS
+      for POPULATION-SCALE narrative manipulation.
+    EXAMPLES: AI-run troll/persona networks; mass synthetic articles/comments pushing a
+      political narrative; election or geopolitical influence operations with AI-generated
+      content; AI-produced astroturfing at scale.
+    ✗ NOT AE02: POPULATION-SCALE narrative manipulation (AE09) vs targeted INDIVIDUAL
+      persuasion (AE02). Scale and intent discriminate.
+    ✗ NOT AE10: narrative manipulation of a population (AE09) vs synthetic media used
+      for individual FRAUD or IMPERSONATION (AE10).
+    ✗ NOT LLM09: attacker DELIBERATELY runs a disinformation operation (AE09) vs a
+      model hallucinates false content on its own without attacker orchestration (LLM09).
+
   AE10_ai_deepfake
-      What: AI-generated synthetic video/audio/image used as the weapon for fraud,
-        impersonation, extortion, or targeted harm.
-      Examples: a deepfaked executive voice authorizing a wire transfer; face-swap video
-        fraud; cloned-voice vishing; non-consensual synthetic imagery.
-      Not this: text-based persuasion with no synthetic media → AE02; population-scale
-        narrative ops → AE09.
+    WHAT: AI-generated SYNTHETIC VIDEO / AUDIO / IMAGE used as the weapon for fraud,
+      impersonation, extortion, or targeted individual harm.
+    EXAMPLES: deepfaked executive voice authorising a fraudulent wire transfer; face-
+      swap video fraud; cloned-voice vishing; non-consensual synthetic imagery used
+      for extortion; synthetic video impersonating a politician in a targeted attack.
+    ✗ NOT AE02: synthetic MEDIA (voice/face/video) for individual fraud (AE10) vs
+      text-based persuasion with no synthetic media (AE02).
+    ✗ NOT AE09: individual fraud / impersonation (AE10) vs POPULATION-SCALE narrative
+      manipulation / influence operations (AE09).
 
 ════════════════════════════════════════════════════════════════════════
 POISONING VS SUPPLY-CHAIN — when both seem to apply, use this split
@@ -1267,6 +1287,23 @@ scope="adjacent_context"  → KEEP as reference; set relevant=false, main_catego
   • a standalone defensive method/detection/hardening framework
   • a landmark survey / SoK of the AI threat landscape
   • a frontier-model release or policy event with material AI-security implications
+  • THREAT LANDSCAPE SYNTHESES: industry reports, vendor threat blogs, or roundups that
+    aggregate MULTIPLE NAMED AI threat developments — named organizations, specific events,
+    concrete dates, traceable claims from ≥2 distinct AI threat domains. These are
+    adjacent_context, NOT off_topic, even though they introduce no new finding of their own.
+    The test: does the source name at least 2 specific real AI threat events with named
+    organizations or CVEs? If yes → adjacent_context. If it only makes vague claims
+    ("AI threats are increasing") → off_topic.
+    EXAMPLES of adjacent_context landscape syntheses:
+    • A vendor blog citing the GTIG AI-generated zero-day + Five Eyes statement + Mandiant
+      negative time-to-exploit data → adjacent_context (names real events, multiple domains)
+    • A quarterly threat report synthesizing AI phishing trends + LLM jailbreak incidents
+      + agentic abuse cases with named examples → adjacent_context (multi-domain synthesis)
+    MULTI-FINDING HANDLING for landscape syntheses: apply the MULTI-FINDING SOURCES rules.
+    Set primary_tag to the most analytically significant cited finding. Use secondary_tags
+    for every other AI threat domain the synthesis covers. Extract key_entities (the
+    organizations, incidents, CVEs, and research cited). Do NOT leave these empty just
+    because the source is secondary — the cited findings are the intelligence.
 
   CRITICAL — capability research WITH specific measured results is offensive_finding, NOT adjacent_context:
   A paper that reports CONCRETE numbers — specific CVEs exploited, exact timelines ("first exploit in 12 min"), benchmark success rates against real targets, measured exploitation cost — is scope="offensive_finding" in ai_enabled_threats, tagged AE03_ai_vuln_research or AE04_ai_exploit_dev. The "responsible disclosure" or "find-AND-fix" framing is irrelevant; if the deliverable is a measured AI attack capability, it is an offensive finding. Examples:
@@ -1276,7 +1313,8 @@ scope="adjacent_context"  → KEEP as reference; set relevant=false, main_catego
   Contrast: "We showed that LLMs can help with vulnerability research" (no specific numbers, no specific CVEs) → adjacent_context
 
 scope="off_topic"  → DISCARD; relevant=false. NOT AI-cyber-security, or pure noise:
-  ✗ "top N AI threats" / "AI security trends" editorial roundups with no new finding
+  ✗ "top N AI threats" / "AI security trends" editorials with NO named specific events,
+    no named organizations, no traceable AI threat claims (pure vague commentary)
   ✗ AI adoption / workforce / productivity pieces with no documented attack or vuln
   ✗ pure legal/regulatory/compliance about AI unless it documents a threat technique
   ✗ ransomware/APT/phishing/malware stories with NO documented AI use by the attacker
@@ -1450,7 +1488,7 @@ WORKED BOUNDARY EXAMPLES
         not make the attack agentic).
 
 ════════════════════════════════════════════════════════════════════════
-SUMMARY GENERATION RULES (short_summary and analyst_brief)
+SUMMARY GENERATION RULES (short_summary)
 ════════════════════════════════════════════════════════════════════════
 
 The purpose of a summary is NOT to restate the abstract. It is to preserve:
@@ -1631,9 +1669,7 @@ OUTPUT — return ONLY valid JSON, no markdown
   "source_type": "<one source_type value>",
   "trust_tier": "primary" | "high" | "medium" | "low" | "unknown",
   "short_summary": "<2-4 sentences, <=600 chars: cover the attacked asset, mechanism, violated trust assumption, operational significance (who is exposed and why), and concrete results if stated. One defensive implication if clearly supported by the source. Do NOT paraphrase the abstract or describe the attacker's internal methodology. Follow the SUMMARY GENERATION RULES above.>",
-  "key_entities": ["products, tools, models, packages, CVE IDs, orgs, actors"],
-  "key_terms": ["techniques/concepts, not proper nouns"],
-  "key_numbers": [{"value": "...", "context": "..."}],
+  "key_entities": ["products, tools, models, packages, CVE IDs, orgs, actors — up to 10"],
   "event_date": "YYYY-MM-DD | null",
   "event_date_confidence": "exact" | "approximate" | "unknown",
   "rejection_reason": "<only when relevant=false: why>"
@@ -1651,4 +1687,29 @@ RULES:
   • When main_category="unclear_or_adjacent", set primary_tag=null.
   • Always fill boundary_rationale — it forces you to name the discriminator and is
     used to audit borderline calls.
+```
+
+## User Prompt Template
+
+```
+Classify this source:
+
+TITLE: {{title}}
+PUBLISHER: {{publisher}}
+URL: {{url}}
+DATE: {{date}}
+
+TEXT:
+{{text}}
+
+Return JSON. If this is not an AI cyber threat, set scope accordingly, relevant=false,
+main_category="unclear_or_adjacent", primary_tag=null, and explain in rejection_reason.
+Otherwise:
+  1. Decide main_category — first ask whether the AI is the TARGET or the WEAPON, then
+     which attacked surface — and the single primary_tag that most precisely names the
+     threat. primary_tag MUST belong to main_category. Add secondary_tags only for
+     genuinely distinct additional techniques.
+  2. Give boundary_rationale: ONE sentence naming why THIS category and not the
+     neighbouring one (the discriminator you used).
+  3. Always populate: short_summary (2–4 sentences, ≤600 chars) and up to 10 key_entities.
 ```
