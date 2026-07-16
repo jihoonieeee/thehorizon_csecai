@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
 import { LegendPanel } from "../../components/dashboard/LegendPanel.jsx";
+import { getAdminToken, getAccessLevel, onAuthChange } from "../../auth.js";
 
 const CAT_COLOR = {
   traditional_ai_threats: "#3583C9",
@@ -68,15 +69,6 @@ const sigRank = () => 0;
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-// Admin secret — reuses the same localStorage key as the Generate-Slides page, so
-// the CRON_SECRET is entered once and shared across admin actions. Sent as a Bearer
-// token on the PATCH/DELETE mutation calls (see api/sources.js).
-const SECRET_KEY = "hz_api_secret";
-// Baked-in low-privilege token (same one the Generate page uses). When present,
-// admin edits work with no key typed at all and the admin-secret bar is hidden.
-const BAKED_TOKEN = import.meta.env.VITE_GEN_TOKEN || "";
-const loadSecret = () => { try { return BAKED_TOKEN || localStorage.getItem(SECRET_KEY) || ""; } catch { return BAKED_TOKEN; } };
-const saveSecret = (v) => { try { localStorage.setItem(SECRET_KEY, v); } catch { /* ignore */ } };
 
 function TrustDot({ tier }) {
   const colors = {
@@ -218,7 +210,7 @@ function ReportAnalysis({ ra }) {
 
 // Expanded detail — everything an analyst needs to vet the source without opening it.
 // Also hosts the admin controls: edit the publish date and delete the source.
-function SourceDetail({ s, onUpdateDate, onConfirmDate, onDelete, onSaveClassification, onSaveSummary, knownTags, busy }) {
+function SourceDetail({ s, isAdmin, onUpdateDate, onConfirmDate, onDelete, onSaveClassification, onSaveSummary, knownTags, busy }) {
   const imp  = s.importance || {};
   const mech = s.mechanism || null;
   const full = s.short_summary || s.analyst_brief || s.summary;
@@ -293,8 +285,8 @@ function SourceDetail({ s, onUpdateDate, onConfirmDate, onDelete, onSaveClassifi
         </div>
       )}
 
-      {/* Admin controls — edit classification / publish date + delete (persist to DB). */}
-      <div className="hz-src-admin" onClick={e => e.stopPropagation()}>
+      {/* Admin controls — only shown when accessLevel === 'admin' */}
+      {isAdmin && <div className="hz-src-admin" onClick={e => e.stopPropagation()}>
         <span className="hz-src-detail-k">Edit</span>
 
         {/* Classification: main category + tags */}
@@ -397,7 +389,7 @@ function SourceDetail({ s, onUpdateDate, onConfirmDate, onDelete, onSaveClassifi
             </span>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -420,8 +412,8 @@ export function SourcesPage() {
   const [starredOnly, setStarredOnly] = useState(false);  // filter to starred sources
   const [flaggedOnly, setFlaggedOnly] = useState(false);  // filter to flagged (needs_review) sources
   const [labelFilter, setLabelFilter] = useState(null);   // filter to one importance label
-  const [sortBy,      setSortBy]      = useState("importance"); // "importance" | "date"
-  const [secret,      setSecret]      = useState(loadSecret());   // CRON_SECRET for admin mutations
+  const [sortBy,      setSortBy]      = useState("importance"); // "importance" | "date" | "ingested"
+  const [accessLevel, setAccessLevel] = useState(getAccessLevel);
   const [busyId,      setBusyId]      = useState(null);   // id of the source mid-mutation
   const [adminMsg,    setAdminMsg]    = useState(null);   // { ok, text } feedback
 
@@ -447,13 +439,16 @@ export function SourcesPage() {
   }, [period]);
 
   useEffect(() => { loadSources(); }, [loadSources]);
+  useEffect(() => onAuthChange(() => setAccessLevel(getAccessLevel())), []);
 
   // ── Admin mutations (persist to DB via api/sources.js PATCH/DELETE) ──────────
-  const authHeaders = () => ({
-    "Content-Type": "application/json",
-    ...(secret ? { Authorization: `Bearer ${secret}` } : {}),
-  });
-
+  const authHeaders = () => {
+    const tok = getAdminToken();
+    return {
+      "Content-Type": "application/json",
+      ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
+    };
+  };
   const updateDate = useCallback((s, date) => {
     if (!date) return;
     setBusyId(s.id); setAdminMsg(null);
@@ -471,7 +466,7 @@ export function SourcesPage() {
       })
       .catch(e => setAdminMsg({ ok: false, text: `Date update failed: ${e.message}` }))
       .finally(() => setBusyId(null));
-  }, [secret]);
+  }, []);
 
   // Confirm the EXISTING date as authoritative without changing its value:
   // re-sends the current date so the server marks date_confidence="exact" and
@@ -494,7 +489,7 @@ export function SourcesPage() {
       })
       .catch(e => setAdminMsg({ ok: false, text: `Delete failed: ${e.message}` }))
       .finally(() => setBusyId(null));
-  }, [secret]);
+  }, []);
 
   // Save classification (main_category + tags) — persists to DB; optimistic local
   // update with revert on failure. Gated by the admin secret like the others.
@@ -513,7 +508,7 @@ export function SourcesPage() {
         setAdminMsg({ ok: false, text: `Classification update failed: ${err.message}` });
       })
       .finally(() => setBusyId(null));
-  }, [secret]);
+  }, []);
 
   const saveSummary = useCallback((s, summary) => {
     const prev = s.short_summary;
@@ -530,7 +525,7 @@ export function SourcesPage() {
         setAdminMsg({ ok: false, text: `Summary update failed: ${err.message}` });
       })
       .finally(() => setBusyId(null));
-  }, [secret]);
+  }, []);
 
   // Star toggle — persists starred to the DB; optimistic local update. No admin
   // secret required to READ starred, but the mutation is gated like the others.
@@ -547,7 +542,7 @@ export function SourcesPage() {
         setSources(prev => prev.map(x => x.id === s.id ? { ...x, starred: s.starred } : x));   // revert
         setAdminMsg({ ok: false, text: `Star failed: ${err.message}` });
       });
-  }, [secret]);
+  }, []);
 
   // Flag toggle — marks a source needs_review (distinct from starring). Same
   // persist-with-revert pattern. 🚩 = "come back to this / mis-classified", vs
@@ -565,7 +560,7 @@ export function SourcesPage() {
         setSources(prev => prev.map(x => x.id === s.id ? { ...x, needs_review: s.needs_review } : x));   // revert
         setAdminMsg({ ok: false, text: `Flag failed: ${err.message}` });
       });
-  }, [secret]);
+  }, []);
 
   // Reset tags/tier/expansion when tab changes
   useEffect(() => { setActiveTags([]); setTierFilter(null); setExpandedId(null); setPage(1); }, [activeTab]);
@@ -624,6 +619,8 @@ export function SourcesPage() {
         if (sb !== sa) return sb - sa;
         return (b.date_published || "").localeCompare(a.date_published || "");
       });
+    } else if (sortBy === "ingested") {
+      rows.sort((a, b) => (b.date_collected || "").localeCompare(a.date_collected || ""));
     }
     return rows; // already date-desc from the API when sortBy === "date"
   }, [sources, predicates, sortBy]);
@@ -845,6 +842,8 @@ export function SourcesPage() {
             onClick={() => { setSortBy("importance"); setPage(1); }}>Importance</button>
           <button className={`hz-seg-btn${sortBy === "date" ? " active" : ""}`}
             onClick={() => { setSortBy("date"); setPage(1); }}>Newest</button>
+          <button className={`hz-seg-btn${sortBy === "ingested" ? " active" : ""}`}
+            onClick={() => { setSortBy("ingested"); setPage(1); }}>Ingested</button>
         </div>
         <span className="hz-sources-count">
           {loading ? "Loading…" : `${filtered.length.toLocaleString()} source${filtered.length !== 1 ? "s" : ""}`}
@@ -854,24 +853,7 @@ export function SourcesPage() {
         </span>
       </div>
 
-      {/* Admin bar — hidden when a token is baked in (edits just work). Only the
-          manual-secret fallback shows the input. */}
-      {!BAKED_TOKEN && (
-        <div className="hz-sources-admin-bar">
-          <input
-            className="hz-admin-secret"
-            type="password"
-            placeholder="Admin secret (CRON_SECRET) — to edit dates / delete"
-            value={secret}
-            onChange={e => { setSecret(e.target.value); saveSecret(e.target.value); }}
-          />
-          <span className="hz-admin-hint">Expand a source to edit its date or delete it.</span>
-          {adminMsg && (
-            <span className={`hz-admin-msg ${adminMsg.ok ? "ok" : "err"}`}>{adminMsg.text}</span>
-          )}
-        </div>
-      )}
-      {BAKED_TOKEN && adminMsg && (
+      {adminMsg && (
         <div className="hz-sources-admin-bar">
           <span className={`hz-admin-msg ${adminMsg.ok ? "ok" : "err"}`}>{adminMsg.text}</span>
         </div>
@@ -1030,12 +1012,19 @@ export function SourcesPage() {
                             )}
                           </>
                         )}
+                        {s.date_collected && (
+                          <div className="hz-src-date-collected" title="Date ingested into the system">
+                            {s.date_collected.slice(0, 10)}
+                            <span className="hz-src-date-ingest-label">ingested</span>
+                          </div>
+                        )}
                       </td>
                     </tr>
                     {open && (
                       <tr className="hz-src-detail-row">
                         <td colSpan={colSpan}>
                           <SourceDetail s={s} busy={busyId === s.id}
+                            isAdmin={accessLevel === "admin"}
                             knownTags={knownTags}
                             onUpdateDate={updateDate} onConfirmDate={confirmDate} onDelete={deleteSource}
                             onSaveClassification={saveClassification}

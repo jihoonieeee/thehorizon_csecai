@@ -15,9 +15,8 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
-import { computeImportance } from "../lib/pipeline/scoring/importance.js";
-import { labelOf } from "../lib/pipeline/scoring/sourceLabel.js";
 import { maturityOf } from "../lib/pipeline/scoring/maturityLevel.js";
+import { readingValueOf } from "../lib/pipeline/scoring/sourceSignal.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -61,18 +60,14 @@ function periodWindow(period) {
   };
 }
 
-// Mutation auth: admin actions (edit date / delete) require the CRON_SECRET as a
-// Bearer token — same gate as the other mutation endpoints. When CRON_SECRET is
-// unset (local dev) the gate is open, matching the rest of the app.
+// Mutation auth: only CRON_SECRET (admin) may edit or delete sources.
+// GEN_TOKEN (guest tier) is intentionally excluded — guests can generate
+// reports but cannot modify the source corpus.
 function authorized(req) {
   const secret = process.env.CRON_SECRET;
   if (!secret) return true;
   const auth = req.headers.authorization || "";
-  // GEN_TOKEN: the same low-privilege, baked-in token used by the Generate page,
-  // so the Sources page never needs the CRON_SECRET typed in. It unlocks the
-  // per-source edits here; CRON_SECRET still works too.
-  const genToken = process.env.GEN_TOKEN;
-  return auth === `Bearer ${secret}` || (genToken && auth === `Bearer ${genToken}`);
+  return auth === `Bearer ${secret}`;
 }
 
 export default async function handler(req, res) {
@@ -160,7 +155,7 @@ export default async function handler(req, res) {
     // `starred` is included only when the column exists (migration 013) — the flag
     // flips off automatically on the first "column does not exist" error so the
     // page keeps working before the migration is applied.
-    const SELECT_BASE = "id,title,url,publisher,author,date_published,date_discovered,date_confidence,main_category,trust_tier,tags,source_type,short_summary,summary,analyst_brief,validation_status,ai_specificity_score,intelligence,is_digest,parent_source_id,needs_review";
+    const SELECT_BASE = "id,title,url,publisher,author,date_published,date_collected,date_discovered,date_confidence,main_category,trust_tier,tags,source_type,short_summary,summary,analyst_brief,validation_status,ai_specificity_score,intelligence,is_digest,parent_source_id,needs_review";
     const buildQuery = (from, to) => {
       let q = supabase
         .from("sources")
@@ -208,29 +203,23 @@ export default async function handler(req, res) {
       },
       count: data?.length || 0,
       sources: (data || []).map(s => {
-        // Vetting fields — everything an analyst needs to judge a source WITHOUT
-        // opening it: full brief, importance tier, and WHY it got its taxonomy.
-        const imp  = computeImportance(s);                 // deterministic, live
         const mech = s.intelligence?.mechanism_classification || null;
         const { intelligence, ...rest } = s;               // drop the heavy jsonb blob
         return {
           ...rest,
-          short_summary: s.short_summary || s.analyst_brief || s.summary || null,
-          analyst_brief: s.analyst_brief || null,
-          importance:    { tier: imp.tier, reality: imp.reality, posture: imp.posture },
-          // Evidence-maturity rung — SAME vocabulary the dashboard uses
-          // (research→demonstrated→disclosed→observed→operational) so the two
-          // pages agree. Reads intelligence.maturity_level, else deterministic.
-          maturity:      maturityOf(s),        // research|demonstrated|disclosed|observed|operational
-          label:         labelOf(s),          // critical | important | supporting | archive
-          is_report:     s.is_digest === true, // a fanned-out landscape report (container)
-          finding_count: s.intelligence?.digest_item_count || null,
-          // Advisory significance overlay for research sources — ranks WITHIN a
-          // tier (landmark > routine) without changing the deterministic tier.
-          significance:  s.intelligence?.significance
+          short_summary:  s.short_summary || s.analyst_brief || s.summary || null,
+          analyst_brief:  s.analyst_brief || null,
+          // Editorial audience fit — set by Layer 3 LLM.
+          reading_value:  readingValueOf(s) ?? null,       // essential|recommended|analyst|background
+          // Threat lifecycle — set by Layer 4 / maturity scorer.
+          maturity:       maturityOf(s),                   // research|demonstrated|disclosed|observed|operational
+          is_report:      s.is_digest === true,
+          finding_count:  s.intelligence?.digest_item_count || null,
+          // Research novelty overlay — ranks within maturity tier (research sources only).
+          significance:   s.intelligence?.significance
             ? { level: s.intelligence.significance.level, novelty: s.intelligence.significance.novelty, reason: s.intelligence.significance.reason || null }
             : null,
-          is_defensive:  s.intelligence?.is_defensive === true,
+          is_defensive:   s.intelligence?.is_defensive === true,
           starred:       s.starred === true,
           needs_review:  s.needs_review === true,
           report_analysis: s.intelligence?.report_analysis ? {
