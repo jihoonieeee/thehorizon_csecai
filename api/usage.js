@@ -23,9 +23,11 @@ const PROVIDER_LABELS = {
 const CONTEXT_LABELS = {
   agent:                     "Chatbot (Agent)",
   pipeline:                  "Ingestion Pipeline",
-  source_relevance:          "Ingestion — L3 Relevance",
-  source_relevance_qa:       "Ingestion — L3 QA",
-  source_quality_gate:       "Ingestion — Quality Gate",
+  layer3_validation:         "Ingestion — L3 Unified",
+  // legacy task names kept for historical cost records
+  source_relevance:          "Ingestion — L3 Relevance (legacy)",
+  source_relevance_qa:       "Ingestion — L3 QA (legacy)",
+  source_quality_gate:       "Ingestion — Quality Gate (legacy)",
   source_understanding:      "Enrichment — L4 Taxonomy",
   evidence_extraction:       "Synthesis — L5 Evidence",
   category_synthesis:        "Synthesis — L6 Category",

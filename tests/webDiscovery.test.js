@@ -354,7 +354,7 @@ await test("rejected web candidates are archived but NOT sent to Layer 4", async
   assert.equal(r.accepted_count, 0, "buzzword candidate must not be accepted");
   assert.ok(r.audit.some((c) => c.route === "reject"), "rejected candidate retained in audit");
   // Confirm it never becomes a pipeline source.
-  const sources = candidatesToSources(r.accepted);
+  const sources = await candidatesToSources(r.accepted);
   assert.equal(sources.length, 0);
 });
 
@@ -372,7 +372,7 @@ await test("accepted web candidates enter the Layer 2/3 normal path as sources",
   });
   const r = await runWebDiscovery({ missions: ["new_tool_or_mcp_abuse"], skipLlm: true, useCache: false, searchFn });
   assert.ok(r.accepted_count >= 1, "should accept the grounded research PoC");
-  const sources = candidatesToSources(r.accepted);
+  const sources = await candidatesToSources(r.accepted);
   assert.ok(sources.length >= 1);
   const s = sources[0];
   assert.equal(s.source_origin, "web_discovery");
@@ -458,7 +458,7 @@ await test("router prefers a forced provider and reports availability", () => {
 
 // ── Body-text enrichment (F20) ────────────────────────────────────────────────
 
-await test("Tavily candidate carries full page_text used as full_text", () => {
+await test("Tavily candidate carries full page_text used as full_text", async () => {
   const data = { results: [{
     url: "https://hiddenlayer.com/research/x",
     title: "New model extraction attack",
@@ -470,15 +470,14 @@ await test("Tavily candidate carries full page_text used as full_text", () => {
     return null;
   }) || {};
   // Drive through the provider with an injected fetch returning our payload.
-  return runTavilyQuery(
+  const res = await runTavilyQuery(
     { mission: "m", query: "q", family: "seed" },
     { fetchImpl: async () => ({ ok: true, status: 200, json: async () => data }) }
-  ).then((res) => {
-    const c = res.candidates[0];
-    assert.ok(c.page_text && c.page_text.length > 200, "page_text preserved");
-    const [src] = candidatesToSources([normalizeCandidate(c, { mission: "m", groundedUrlSet: new Set(), groundedQuotes: [], now: NOW })]);
-    assert.ok(src.full_text.length > 200, "full_text uses page_text, not just a quote");
-  });
+  );
+  const c = res.candidates[0];
+  assert.ok(c.page_text && c.page_text.length > 200, "page_text preserved");
+  const [src] = await candidatesToSources([normalizeCandidate(c, { mission: "m", groundedUrlSet: new Set(), groundedQuotes: [], now: NOW })]);
+  assert.ok(src.full_text.length > 200, "full_text uses page_text, not just a quote");
 });
 
 const PROSE = "Researchers disclosed a prompt injection attack against an AI coding agent. " +

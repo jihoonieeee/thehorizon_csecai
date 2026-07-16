@@ -33,8 +33,6 @@ const SIGNAL = /npm|pypi|package|registry|maintainer|contributor account|hijack|
 
 const { createClient } = await import("@supabase/supabase-js");
 const { understandSource } = await import("../lib/pipeline/understand/understandSource.js");
-const { computeImportance } = await import("../lib/pipeline/scoring/importance.js");
-const { isGenericNoiseCve } = await import("../lib/pipeline/ingest/genericCveGate.js");
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const SEL = "id,title,url,publisher,date_published,main_category,tags,source_type,trust_tier,short_summary,analyst_brief,full_text,intelligence,validation_status";
@@ -89,14 +87,13 @@ async function main() {
     console.log(`  [${i+1}/${rows.length}] ${moveOut?"→":"="} ${to.padEnd(22)} [${tagsOnly(r.primary_tags).join(",")}]  ${(src.title||"").slice(0,42)}`);
 
     if (PERSIST && moveOut) {
-      const keep = r.keep && !isGenericNoiseCve(r);
+      const keep = r.keep;
       const isAdjacent = r.disposition === "adjacent" || to === "unclear_or_adjacent";
       const status = keep ? (r.disposition === "offensive" ? "pass" : "review") : "review";
       const intel = {
         ...(src.intelligence || {}),
         is_defensive: r.is_defensive || false,
         mechanism_classification: r.mechanism_classification || null,
-        importance: { ...computeImportance(r), scored_at: new Date().toISOString() },
         asi04_supplychain_sweep_at: TODAY,
       };
       const row = {

@@ -2704,6 +2704,42 @@ a:hover { text-decoration: underline; }
 .hz-sources-table-vet .hz-src-detail-row td { background: #f6f8fb; padding: 0 16px 16px 40px; border-bottom: 1px solid var(--border); }
 .hz-sources-table-vet .hz-src-detail-row:hover td { background: #f6f8fb; }
 
+/* ── Child sources (digest fanout findings) ─────────────────────────────────── */
+/* Child rows are visually grouped with their parent: indented, lighter background,
+   left border to show the parent–child relationship. */
+.hz-sources-table-vet .hz-src-row-child td { background: #f8fafc; }
+.hz-sources-table-vet .hz-src-row-child td:nth-child(3) {
+  border-left: 2px solid #c7d7f0;
+  padding-left: 8px;
+}
+.hz-sources-table-vet .hz-src-row-child:last-of-type td { border-bottom: 2px solid #c7d7f0; }
+
+/* The ↳ marker shown instead of the trust dot for child rows */
+.hz-src-child-marker {
+  flex-shrink: 0;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  margin-right: 4px;
+  margin-top: 1px;
+  user-select: none;
+}
+
+/* The specific finding name — this is the "sub-title", shown prominent */
+.hz-src-child-finding {
+  font-weight: 500;
+  color: var(--text-primary, #1e293b);
+}
+
+/* "from: [Parent Report Title]" attribution line under the finding title */
+.hz-src-child-parent-ref {
+  font-size: 0.72rem;
+  color: var(--text-tertiary, #94a3b8);
+  margin-top: 1px;
+}
+.hz-src-child-parent-ref span {
+  font-style: italic;
+}
+
 .hz-src-caret {
   color: var(--text-tertiary);
   font-size: 0.7rem;

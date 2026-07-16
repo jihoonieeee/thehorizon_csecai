@@ -3,7 +3,7 @@
  * generateDeck.js — Comprehensive signal-weighted source coverage → strategic synthesis → deck.
  *
  * Source strategy: ALL validated sources are included in the briefing, weighted by signal.
- * No source is hard-excluded except pure NVD CVEs (single-line advisories with no narrative).
+ * All sources passing the scoring threshold are eligible for the deck.
  * Priority sources (starred, primary trust, realized incidents, notable/landmark research)
  * lead the briefing; everything else provides supporting context.
  *
@@ -93,13 +93,6 @@ function summaryText(s) {
   return (s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "").trim();
 }
 
-// Pure NVD CVE with no strategic narrative — the only hard exclusion.
-// Named CVEs in research papers, threat intel reports, etc. are NOT excluded.
-function isPureCveNoise(s) {
-  return s.source_type === "vulnerability"
-    && (s.publisher === "NVD" || s.publisher === "National Vulnerability Database")
-    && summaryText(s).length < 100;  // a CVE with a real analyst_brief stays in
-}
 
 // ── Intelligence accessors ────────────────────────────────────────────────────
 // The analyst-level framing that the L5/L6 pipeline already produced lives in the
@@ -134,7 +127,7 @@ function buildCategoryBriefing(cat, srcList, evBySource) {
   // This keeps the briefing size manageable while preserving all high-value intelligence.
   const MAX_SOURCES = 60;
   const priority = s => {
-    const reality = s._imp?.reality || "";
+    const reality = s._maturity || "";
     if (s.starred || s.trust_tier === "primary" || reality === "realized") return 2;
     if (reality === "proven" || s._sig >= 2) return 1;
     return 0;
@@ -396,8 +389,10 @@ async function main() {
     await import("../lib/pipeline/scoring/sourceSignal.js");
   const { significanceRank } =
     await import("../lib/pipeline/scoring/researchSignificance.js");
-  const { computeImportance } =
-    await import("../lib/pipeline/scoring/importance.js");
+  const { maturityOf, MATURITY_RANK } =
+    await import("../lib/pipeline/scoring/maturityLevel.js");
+  const { readingValueOf } =
+    await import("../lib/pipeline/scoring/sourceSignal.js");
   const { loadPrompt } =
     await import("../lib/prompts/promptLoader.js");
 
@@ -407,14 +402,13 @@ async function main() {
 
   const scored = allRows.map(r => ({
     ...r,
-    _score: sourceSignalScore(r),
-    _imp:   computeImportance(r),
-    _sig:   significanceRank(r),
+    _score:    sourceSignalScore(r),
+    _maturity: maturityOf(r),
+    _rv:       readingValueOf(r) ?? "background",
+    _sig:      significanceRank(r),
   }));
 
-  // Remove pure NVD CVEs (no narrative, no analyst_brief) — everything else stays
-  const pureCveCount  = scored.filter(isPureCveNoise).length;
-  const usable        = scored.filter(r => !isPureCveNoise(r)).sort(bySignalThenRecency);
+  const usable = scored.sort(bySignalThenRecency);
 
   // Per-category source lists
   const catSources = {};
@@ -423,10 +417,10 @@ async function main() {
   }
 
   const totalUsable = usable.length;
-  console.log(`  ${allRows.length} sources | ${pureCveCount} pure CVEs excluded | ${totalUsable} used`);
+  console.log(`  ${allRows.length} sources | ${totalUsable} used`);
   for (const cat of CATEGORIES) {
     const srcs  = catSources[cat.key];
-    const leads = srcs.filter(r => r.starred || r.trust_tier === "primary" || r._imp.reality === "realized" || r._sig >= 2);
+    const leads = srcs.filter(r => r.starred || r.trust_tier === "primary" || ["operational","observed"].includes(r._maturity) || r._sig >= 2);
     console.log(`  ${cat.label}: ${srcs.length} sources (${leads.length} priority)`);
   }
 
@@ -482,8 +476,8 @@ async function main() {
         entities:       Array.isArray(e.entities) ? e.entities : [],
         is_cluster_rep: e.specificity === "high",
         specificity:    e.specificity || "medium",
-        importance_tier: src?._imp?.tier || null,
-        starred:        src?.starred || src?.trust_tier === "primary" || src?._imp?.reality === "realized",
+        importance_tier: src?._rv || null,
+        starred:        src?.starred || src?.trust_tier === "primary" || src?._maturity === "realized",
       };
       evidenceItems.push(item);
       evidenceIndex[e.evidence_id] = item;
@@ -574,7 +568,7 @@ async function main() {
     if (!csSrc || isRoundupSource(csSrc)) {
       csSrc = srcs.find(s =>
         !isRoundupSource(s) &&
-        (s._imp?.reality === "realized" || s.source_type === "incident") &&
+        (["operational","observed"].includes(s._maturity) || s.source_type === "incident") &&
         (evBySource.get(s.id) || []).length >= 2
       ) || null;
       csSrcId = csSrc?.id || null;
@@ -634,7 +628,7 @@ async function main() {
   // operational) — the leading indicators of what attackers can do next. Pull the
   // strongest research signals across all categories.
   const emergingSignals = usable
-    .filter(s => s._sig >= 2 && (s._imp?.reality === "research" || s._imp?.reality === "proven"))
+    .filter(s => s._sig >= 2 && (s._maturity === "research" || s._maturity === "proven"))
     .sort((a, b) => b._sig - a._sig)
     .slice(0, 18)
     .map(s => {
@@ -730,14 +724,14 @@ async function main() {
   console.log(`\n${"═".repeat(66)}`);
   console.log(`  Done in ${((Date.now()-t0)/1000).toFixed(0)}s`);
   console.log(`  Output: ${outPath}`);
-  console.log(`  Sources: ${totalUsable} (${pureCveCount} pure CVEs excluded)`);
+  console.log(`  Sources: ${totalUsable}`);
   console.log(`  Insights: ${totalJudgments} across ${categoryAnalyses.filter(c=>c.approved_judgment_count>0).length} categories`);
   console.log(`  Slides: ${slides.length}`);
   console.log("═".repeat(66) + "\n");
 
   fs.writeFileSync(outPath.replace(".pptx",".json"), JSON.stringify({
     generated_at: new Date().toISOString(), window: windowLabel,
-    sources: { total: allRows.length, pure_cve_excluded: pureCveCount, used: totalUsable },
+    sources: { total: allRows.length, used: totalUsable },
     insights_per_category: Object.fromEntries(categoryAnalyses.map(ca=>[ca.category, ca.approved_judgment_count])),
     slide_count: slides.length, qa_issues: qa_issues?.length || 0,
   }, null, 2));

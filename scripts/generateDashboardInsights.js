@@ -40,8 +40,8 @@ import {
   maturityShortLine,
 } from "../lib/dashboard/evidenceMaturity.js";
 import { persistCallCost, setCurrentRunId } from "../lib/llm/usagePersistence.js";
-import { computeImportance } from "../lib/pipeline/scoring/importance.js";
-import { sourceSignalScore, isNoiseSource, bySignalThenRecency, partitionBySignal } from "../lib/pipeline/scoring/sourceSignal.js";
+import { sourceSignalScore, isNoiseSource, bySignalThenRecency, partitionBySignal, readingValueOf } from "../lib/pipeline/scoring/sourceSignal.js";
+import { maturityOf, MATURITY_RANK } from "../lib/pipeline/scoring/maturityLevel.js";
 import { significanceRank } from "../lib/pipeline/scoring/researchSignificance.js";
 import { loadPrompt } from "../lib/prompts/promptLoader.js";
 
@@ -494,7 +494,12 @@ function composeCategoryFindings(catRows, evItems = [], cap = 40) {
   // a realized real-world incident, a proven/demonstrated exploit, or LANDMARK
   // research (a field-first / new-surface result). Notable/routine research and
   // plain disclosures are background context; noise is excluded entirely upstream.
-  const isLead = (row) => row && (["realized", "proven"].includes(computeImportance(row).reality) || significanceRank(row) >= 3);
+  // A source "leads" when it's essential/recommended reading OR landmark research.
+  const isLead = (row) => row && (
+    ["essential", "recommended"].includes(readingValueOf(row)) ||
+    ["operational", "observed", "disclosed"].includes(maturityOf(row)) ||
+    significanceRank(row) >= 3
+  );
 
   // Overcounting guard: a landscape report's many findings are ONE report's
   // evidence, not many independent corroborations. Cap findings per effective
@@ -876,10 +881,9 @@ export async function attributeSources(insights, catSources, windowLabel, catLab
         publisher:   s.publisher || null,
         date:        s.date_published?.slice(0, 10) || null,
         source_type: s.source_type || null,
-        // Contribution signal so the UI can show WHY this source was cited: its
-        // importance tier and (for research) how significant it is.
-        importance:   computeImportance(s).tier,
-        significance: s.intelligence?.significance?.level || null,
+        reading_value: readingValueOf(s) ?? null,
+        maturity:      maturityOf(s) || null,
+        significance:  s.intelligence?.significance?.level || null,
       });
     }
     return { ...p, sources: srcs };
@@ -990,11 +994,15 @@ export async function selectTopSources(windowRows, windowLabel, n = 10) {
   // ranked by combined signal. Admits realized/proven incidents AND landmark/notable
   // research (a first-of-kind paper is a legitimate top source even though its
   // reality is only "research") — the significance overlay is what lets it in.
-  const REAL = { realized: 3, proven: 2 };
   const candidates = windowRows
-    .map(s => ({ ...s, _imp: computeImportance(s), _tier: computeImportance(s).tier }))
-    .filter(s => s.url && s._imp.posture === "offensive" && summaryText(s).length > 20 &&
-      (REAL[s._imp.reality] || significanceRank(s) >= 2))   // realized/proven OR landmark/notable research
+    .filter(s => s.url && s.main_category && s.main_category !== "unclear_or_adjacent" && summaryText(s).length > 20)
+    .filter(s => {
+      const rv = readingValueOf(s);
+      const m  = maturityOf(s);
+      return ["essential","recommended","analyst"].includes(rv) ||
+             ["operational","observed","disclosed","demonstrated"].includes(m) ||
+             significanceRank(s) >= 2;
+    })
     .sort((a, b) => sourceSignalScore(b) - sourceSignalScore(a) || (b.date_published || "").localeCompare(a.date_published || ""))
     .slice(0, 40);
   if (candidates.length < 3) return null;

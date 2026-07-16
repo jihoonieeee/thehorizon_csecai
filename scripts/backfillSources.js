@@ -6,19 +6,17 @@
  * Run /api/refresh to pull what is currently in feeds.
  *
  * API connectors with historical date-range support:
- *   arxiv   — arXiv papers (operationally filtered queries)
- *   nvd     — NVD CVEs matching AI/ML keyword list
- *   ghsa    — GitHub Advisory Database: AI/ML package CVEs (LangChain, transformers, gradio…)
+ *   arxiv    — arXiv papers (operationally filtered queries)
  *   cisa_kev — CISA Known Exploited Vulnerabilities (AI-relevant subset)
  *
  * Usage:
  *   node scripts/backfillSources.js [start] [end] [connectors] [--gap=N]
  *   node scripts/backfillSources.js 2025-07-01 2026-06-24
  *   node scripts/backfillSources.js 2025-07-01 2026-06-24 arxiv
- *   node scripts/backfillSources.js 2025-07-01 2026-06-24 nvd,ghsa,cisa_kev
+ *   node scripts/backfillSources.js 2025-07-01 2026-06-24 cisa_kev
  *   node scripts/backfillSources.js --feeds-only   # single RSS pull, no date range needed
  *
- * Connectors: arxiv | nvd | ghsa | cisa_kev | all (default: all)
+ * Connectors: arxiv | cisa_kev | all (default: all)
  * Defaults to Jan 1 of current year → today.
  *
  * --gap=N: override inter-chunk pause (seconds). Defaults: 90s for arxiv-only
@@ -152,7 +150,7 @@ const chunks = weekChunks(startUtc, endUtc);
 
 const connectorLabel = connectorFilter
   ? connectorFilter.map(k => connectorOptions[k]?.queryGroups?.length ? `${k}:${connectorOptions[k].queryGroups.join("+")}` : k).join("+")
-  : "nvd+arxiv+ghsa+cisa_kev";
+  : "arxiv+cisa_kev";
 
 console.log(`\n${"═".repeat(60)}`);
 console.log(` Horizon Backfill: ${startArg} → ${endArg}`);

@@ -3,20 +3,16 @@
  * debugTaxonomyReport.js — read-only taxonomy diagnostics (no API, no writes).
  *
  * Per-source: original_category, tags, mechanism fields, map-vs-LLM conflict.
- * Per-tag:    kept/defense/benchmark/conflict counts + missing_landmark_topics.
- * Also lists the map-vs-LLM conflict rows (the audit view) and the targeted
- * search directives for landmark gaps.
+ * Per-tag:    kept/defense/benchmark/conflict counts.
  *
  * Usage:
  *   node scripts/debugTaxonomyReport.js                 # summary
  *   node scripts/debugTaxonomyReport.js --conflicts     # only map/LLM conflicts
- *   node scripts/debugTaxonomyReport.js --gaps          # landmark gaps + directives
  *   node scripts/debugTaxonomyReport.js --tag=LLM01_prompt_injection
  *   node scripts/debugTaxonomyReport.js --json
  */
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
-import { LANDMARK_TOPICS, detectAllLandmarkGaps, buildSearchDirectives } from "../lib/pipeline/scoring/landmarkGaps.js";
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const argv = process.argv.slice(2);
@@ -59,9 +55,8 @@ function sourceRow(s) {
 async function main() {
   const all = await fetchAll();
   const rows = all.map(sourceRow);
-  const gaps = detectAllLandmarkGaps(all);
 
-  // ── Conflicts view ────────────────────────────────────────────────────────────
+  // ── Conflicts view ─────────────────────────────────────────────────────────
   if (flag("conflicts")) {
     const conflicts = rows.filter(r => r.conflict);
     console.log(`\nMAP vs LLM CONFLICTS: ${conflicts.length}\n${"─".repeat(60)}`);
@@ -73,22 +68,7 @@ async function main() {
     return;
   }
 
-  // ── Landmark gaps + directives ─────────────────────────────────────────────────
-  if (flag("gaps")) {
-    const directives = buildSearchDirectives(gaps);
-    console.log(`\nLANDMARK GAPS (missing topics) + TARGETED DIRECTIVES\n${"─".repeat(60)}`);
-    for (const [tag, missing] of Object.entries(gaps)) {
-      if (missing.length) console.log(`  ${tag}: ${missing.length} missing → ${missing.join(", ")}`);
-    }
-    console.log(`\n${directives.length} search directives (deduped):`);
-    for (const d of directives.slice(0, flag("json") ? directives.length : 40)) {
-      console.log(`  [${d.provider}] ${d.query}   → ${d.target_source_types.join("/")}`);
-    }
-    if (flag("json")) console.log(JSON.stringify(directives, null, 2));
-    return;
-  }
-
-  // ── Single-tag drilldown ────────────────────────────────────────────────────────
+  // ── Single-tag drilldown ───────────────────────────────────────────────────
   const tagFilter = val("tag");
   if (tagFilter) {
     const tagRows = rows.filter(r => r.tags.includes(tagFilter));
@@ -96,23 +76,20 @@ async function main() {
     for (const r of tagRows.slice(0, 60)) {
       console.log(`  ${r.mapped_tag || "(no mech)"} ${r.conflict ? "⚠conflict" : ""} ${r.is_defensive ? "🛡" : ""}  ${r.title}`);
     }
-    console.log(`\n  missing_landmark_topics: ${(gaps[tagFilter] || []).join(", ") || "none"}`);
     return;
   }
 
-  // ── Per-tag metrics (default) ────────────────────────────────────────────────────
+  // ── Per-tag metrics (default) ──────────────────────────────────────────────
   const metrics = {};
-  for (const tag of Object.keys(LANDMARK_TOPICS)) {
-    metrics[tag] = { kept_count: 0, defense_count: 0, benchmark_count: 0, conflict_count: 0, missing_landmark_topics: gaps[tag] || [] };
-  }
   const catCounts = {};
   let withMech = 0, conflicts = 0;
+
   for (const r of rows) {
     catCounts[r.original_category] = (catCounts[r.original_category] || 0) + 1;
     if (r.primary_exploit_mechanism) withMech++;
     if (r.conflict) conflicts++;
     for (const tag of r.tags) {
-      if (!metrics[tag]) continue;
+      if (!metrics[tag]) metrics[tag] = { kept_count: 0, defense_count: 0, benchmark_count: 0, conflict_count: 0 };
       metrics[tag].kept_count++;
       if (r.is_defensive) metrics[tag].defense_count++;
       if (r.evidence_role === "benchmark") metrics[tag].benchmark_count++;
@@ -123,16 +100,17 @@ async function main() {
   console.log(`\n═══ TAXONOMY REPORT ═══  ${all.length} sources`);
   console.log(`  with mechanism_classification: ${withMech}  |  map/LLM conflicts: ${conflicts}\n`);
   console.log("  category distribution:");
-  for (const [c, n] of Object.entries(catCounts).sort((a, b) => b[1] - a[1])) console.log(`    ${String(n).padStart(5)}  ${c}`);
-
-  console.log(`\n  per-tag  (count / def / bench / conflict / #missing-landmarks):`);
-  for (const [tag, m] of Object.entries(metrics)) {
-    if (m.kept_count === 0 && m.missing_landmark_topics.length === 0) continue;
-    console.log(`    ${tag.padEnd(34)} ${String(m.kept_count).padStart(4)} /${String(m.defense_count).padStart(3)} /${String(m.benchmark_count).padStart(3)} /${String(m.conflict_count).padStart(3)} /${String(m.missing_landmark_topics.length).padStart(3)}`);
+  for (const [c, n] of Object.entries(catCounts).sort((a, b) => b[1] - a[1])) {
+    console.log(`    ${String(n).padStart(5)}  ${c}`);
   }
 
-  const totalMissing = Object.values(gaps).reduce((a, g) => a + g.length, 0);
-  console.log(`\n  total missing landmark topics: ${totalMissing}  (run --gaps for targeted directives)`);
-  if (flag("json")) console.log("\n" + JSON.stringify({ metrics, catCounts, gaps }, null, 2));
+  console.log(`\n  per-tag  (count / defensive / benchmark / conflict):`);
+  for (const [tag, m] of Object.entries(metrics).sort((a, b) => b[1].kept_count - a[1].kept_count)) {
+    if (m.kept_count === 0) continue;
+    console.log(`    ${tag.padEnd(34)} ${String(m.kept_count).padStart(4)} /${String(m.defense_count).padStart(3)} /${String(m.benchmark_count).padStart(3)} /${String(m.conflict_count).padStart(3)}`);
+  }
+
+  if (flag("json")) console.log("\n" + JSON.stringify({ metrics, catCounts }, null, 2));
 }
+
 main().catch(e => { console.error("FATAL:", e.message); process.exit(1); });

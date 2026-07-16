@@ -26,19 +26,20 @@ import { computeEvidenceMaturity, deriveConfidence } from "../lib/dashboard/evid
 import { truncateAtWord } from "../lib/utils/truncate.js";
 import { maturityOf, MATURITY_RANK } from "../lib/pipeline/scoring/maturityLevel.js";
 
-// Maturity-first ranking for "top sources". Uses the unified 5-level ladder.
-// operational > observed > disclosed > demonstrated > research, then trust tier, then recency.
-const TRUST_ORDER = { primary: 4, high: 3, curated: 3, medium: 2, low: 1, unknown: 0 };
-function importanceRank(s) {
+// Maturity-first ranking for "top sources" — operational > observed > disclosed > demonstrated > research,
+// then trust tier, then recency.
+const TRUST_ORDER = { primary: 4, high: 3, medium: 2, low: 1, unknown: 0 };
+const READING_ORDER = { essential: 40, recommended: 30, analyst: 20, background: 10 };
+function rankSource(s) {
   const level = maturityOf(s);
+  const rv = s.reading_value ?? s.intelligence?.reading_value ?? "background";
   return {
     ...s,
-    _imp: { tier: level, reality: level, posture: "offensive" }, // compat shim for existing code
     _maturity: level,
-    _rank: (MATURITY_RANK[level] || 0) * 100 + (TRUST_ORDER[s.trust_tier] || 0) * 10,
+    _rank: (MATURITY_RANK[level] || 0) * 100 + (READING_ORDER[rv] || 0) + (TRUST_ORDER[s.trust_tier] || 0),
   };
 }
-function byImportanceThenRecency(a, b) {
+function byRankThenRecency(a, b) {
   if (b._rank !== a._rank) return b._rank - a._rank;
   return (b.date_published || "").localeCompare(a.date_published || "");
 }
@@ -289,7 +290,7 @@ export default async function handler(req, res) {
       .order("date_published", { ascending: false }));
 
     const total      = all.length;
-    const highTrust  = all.filter(s => ["primary","high","curated"].includes(s.trust_tier)).length;
+    const highTrust  = all.filter(s => ["primary","high"].includes(s.trust_tier)).length;
 
     // ── 2. Per-category stats + top sources ────────────────────────────────────
     const catMap = {};
@@ -300,15 +301,15 @@ export default async function handler(req, res) {
 
     const categories = CATEGORIES.map(c => {
       const srcs = catMap[c.key];
-      const top  = srcs.map(importanceRank).sort(byImportanceThenRecency).slice(0, 5).map(s => ({
+      const top  = srcs.map(rankSource).sort(byRankThenRecency).slice(0, 5).map(s => ({
         title:     cleanTitle(s.title),
         url:       s.url,
         publisher: s.publisher,
         date:      s.date_published?.slice(0, 10),
-        importance: s._imp.tier,
+        maturity: s._maturity,
         // Full summary — the stored short_summary/analyst_brief is already a tight
         // 1-2 sentence brief; show it whole rather than re-truncating.
-        summary:   (s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "").trim() || null,
+        summary:   (s.short_summary || s.analyst_brief || s.intelligence?.source_summary || "").trim() || null,
       }));
 
       // Evidence maturity + confidence computed LIVE over the same source set the
@@ -318,7 +319,7 @@ export default async function handler(req, res) {
       const cd         = categoryData[c.key] || null;
 
       // Per-maturity-level source lists for drilldown (capped at 30 per level).
-      const ranked = srcs.map(importanceRank).sort(byImportanceThenRecency);
+      const ranked = srcs.map(rankSource).sort(byRankThenRecency);
       const maturitySources = {};
       for (const s of ranked) {
         const level = s._maturity || "research";
@@ -331,7 +332,7 @@ export default async function handler(req, res) {
             date:       s.date_published?.slice(0, 10),
             trust_tier: s.trust_tier,
             maturity:   level,
-            summary:    (s.analyst_brief || s.short_summary || "").trim().slice(0, 300) || null,
+            summary:    (s.short_summary || s.analyst_brief || "").trim().slice(0, 300) || null,
           });
         }
       }
@@ -427,19 +428,19 @@ export default async function handler(req, res) {
       ? periodMeta.top_sources.map(s => ({
           title: cleanTitle(s.title), url: s.url, publisher: s.publisher, date: s.date,
           category: s.category, trust_tier: s.trust_tier || "unknown",
-          importance: s.importance, reality: s.reality,
+          maturity: s.maturity ?? s._maturity ?? null,
           why: s.why || null,          // ← the editor's justification
           summary: s.summary || null,
         }))
       : all
-          .map(importanceRank)
+          .map(rankSource)
           .filter(s => s._rank > 0 && s.main_category && s.main_category !== "unclear_or_adjacent")
-          .sort(byImportanceThenRecency)
+          .sort(byRankThenRecency)
           .slice(0, 12)
           .map(s => ({
             title: cleanTitle(s.title), url: s.url, publisher: s.publisher,
             date: s.date_published?.slice(0, 10), category: s.main_category,
-            trust_tier: s.trust_tier, importance: s._maturity, reality: s._maturity,
+            trust_tier: s.trust_tier, maturity: s._maturity,
             why: null,
             summary: (s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "").trim() || null,
           }));

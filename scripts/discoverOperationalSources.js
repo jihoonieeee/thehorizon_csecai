@@ -36,7 +36,7 @@ import { createHash } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { runWebDiscovery } from "../lib/pipeline/discovery/runWebDiscovery.js";
 import { runDiscoveryQuery } from "../lib/pipeline/discovery/webDiscoverySearch.js";
-import { runDiscoverySearch } from "../lib/pipeline/discovery/discoverySearchRouter.js";
+import { runDiscoverySearch, hasAnyDiscoveryProvider } from "../lib/pipeline/discovery/discoverySearchRouter.js";
 import { candidatesToSources } from "../lib/pipeline/discovery/candidateToSource.js";
 import { normalizeSource } from "../lib/pipeline/ingest/normalizeSource.js";
 import { validateAndTypeSource } from "../lib/pipeline/validation/validateAndTypeSource.js";
@@ -50,13 +50,17 @@ const DOMAINS_SET = new Set(DOMAINS.filter(d => d !== "unclear_or_adjacent"));
 const args   = process.argv.slice(2);
 const getArg  = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i + 1] ? args[i + 1] : d; };
 const hasFlag = (f) => args.includes(f);
-const DRY      = hasFlag("--dry-run");
-const LIMIT    = parseInt(getArg("--limit", "9999"), 10);
-const MAXQ     = parseInt(getArg("--max-queries", "6"), 10);
-const CONC     = parseInt(getArg("--concurrency", "3"), 10);
+const DRY             = hasFlag("--dry-run");
+const LIMIT           = parseInt(getArg("--limit", "9999"), 10);
+const MAXQ            = parseInt(getArg("--max-queries", "6"), 10);
+const CONC            = parseInt(getArg("--concurrency", "3"), 10);
 // --provider tavily|serpapi|anthropic — default keeps Anthropic web_search.
 // Use tavily/serpapi when Anthropic web_search is rate-limited/unavailable.
-const PROVIDER = (getArg("--provider", "") || "").trim().toLowerCase();
+const PROVIDER        = (getArg("--provider", "") || "").trim().toLowerCase();
+// --include-archived: also send archive_only triage candidates through L3
+// validation. Useful for novelty/horizon-scanning missions where the triage
+// may be too conservative and L3 should make the final relevance call.
+const INCLUDE_ARCHIVED = hasFlag("--include-archived");
 
 // The four operational missions — the buckets the corpus is missing.
 const DEFAULT_MISSIONS = [
@@ -78,22 +82,30 @@ console.log(`  Missions: ${MISSIONS.join(", ")}`);
 console.log(`  Max queries/mission: ${MAXQ}   Concurrency: ${CONC}`);
 console.log("════════════════════════════════════════════════════════════\n");
 
-if (!PROVIDER && !process.env.ANTHROPIC_API_KEY) {
-  console.error("ANTHROPIC_API_KEY required (web_search). Aborting. (Or pass --provider tavily|serpapi.)");
-  process.exit(2);
+// ── Stage 1-4: discovery + triage + quotas (existing Layer 1B/1C infra) ───────
+// Default: use the mission-based provider router (runDiscoverySearch). Each
+// mission's preferred_provider field in discoveryMissions.js determines whether
+// Exa, Tavily, SerpAPI, or Anthropic runs for that query.
+//
+// --provider anthropic  → force Anthropic web_search (LLM-grounded, higher quality,
+//                         slower and more expensive). The original default path.
+// --provider tavily|exa|serpapi → force that provider for all queries.
+// No --provider flag    → router selects per-mission (normal operation).
+process.env.WEB_DISCOVERY_ENABLED = "1";
+let searchFn = runDiscoverySearch;   // mission-based router (default)
+if (PROVIDER === "anthropic") {
+  searchFn = runDiscoveryQuery;      // force Anthropic web_search for all queries
+  console.log(`  Search provider: anthropic web_search (forced)\n`);
+} else if (PROVIDER) {
+  process.env.WEB_DISCOVERY_PROVIDER = PROVIDER;
+  console.log(`  Search provider: ${PROVIDER} (forced for all queries)\n`);
+} else {
+  console.log(`  Search provider: router (mission-based: Exa/Tavily/SerpAPI per mission)\n`);
 }
 
-// ── Stage 1-4: discovery + triage + quotas (existing Layer 1B/1C infra) ───────
-// Default: force the Anthropic web_search path (LLM-grounded URLs).
-// --provider tavily|serpapi routes through the provider router instead — used
-// when Anthropic web_search is rate-limited/hanging. The QA gauntlet downstream
-// (triage + Layer-3 validation) is identical regardless of search provider.
-process.env.WEB_DISCOVERY_ENABLED = "1";
-let searchFn = runDiscoveryQuery;
-if (PROVIDER) {
-  process.env.WEB_DISCOVERY_PROVIDER = PROVIDER;
-  searchFn = runDiscoverySearch;
-  console.log(`  Search provider: ${PROVIDER} (via router)\n`);
+if (!hasAnyDiscoveryProvider() && searchFn !== runDiscoveryQuery) {
+  console.error("No search provider configured. Set TAVILY_API_KEY, EVA_API_KEY, SERPAPI_API_KEY, or ANTHROPIC_API_KEY.");
+  process.exit(2);
 }
 const discovery = await runWebDiscovery({
   missions: MISSIONS,
@@ -105,7 +117,29 @@ const discovery = await runWebDiscovery({
 console.log(`Discovery: ${discovery.candidates_total} candidates → ${discovery.accepted_count} accepted, ` +
   `${discovery.rejected_count} rejected, ${discovery.candidates_total - discovery.accepted_count - discovery.rejected_count} archived\n`);
 
-const acceptedSources = candidatesToSources(discovery.accepted).slice(0, LIMIT);
+// For novelty/horizon-scanning missions, triage is conservative and may route
+// valuable first-reporter content to archive_only. --include-archived pulls
+// those candidates back into the validation pool so L3 makes the final call.
+// --include-archived rescues candidates that conservative triage routed to
+// archive_only so the L3 relevance gate makes the final call. It deliberately
+// EXCLUDES candidates demoted to archive_only by source-class quota enforcement
+// (route_reason: source_class_quota_exceeded) — those were archived because a
+// source class was over-represented, not because the content was borderline.
+// Re-admitting quota-demoted candidates would defeat the diversity enforcement.
+const archivedToValidate = INCLUDE_ARCHIVED
+  ? (discovery.audit || []).filter((c) =>
+      c.route === "archive_only" &&
+      !(c.candidate_route_reasons || []).includes("source_class_quota_exceeded")
+    )
+  : [];
+if (archivedToValidate.length > 0) {
+  console.log(`--include-archived: adding ${archivedToValidate.length} archive_only candidates (excl. quota-demoted) to validation pool\n`);
+}
+
+const acceptedSources = (await candidatesToSources([
+  ...discovery.accepted,
+  ...archivedToValidate,
+])).slice(0, LIMIT);
 if (acceptedSources.length === 0) {
   console.log("No accepted candidates to validate. (Check ANTHROPIC_API_KEY / web_search availability.)");
   process.exit(0);
@@ -161,7 +195,12 @@ async function processOne(src) {
     const v = await validateAndTypeSource(row, { runQa: true });
     tally[v.validation_status] = (tally[v.validation_status] || 0) + 1;
 
-    const keep = v.validation_status === "pass" || v.validation_status === "review";
+    // Drop sources that pass L3 but are classified as background reading_value —
+    // these are evergreen educational/overview pages (e.g. "What Is Prompt
+    // Injection? Guide for 2026"), not new intelligence. Discovery should add
+    // new findings, not re-ingest reference material already well-indexed elsewhere.
+    const isBackground = v.reading_value === "background";
+    const keep = (v.validation_status === "pass" || v.validation_status === "review") && !isBackground;
     if (keep && !DRY) {
       // v2 understand-layer classification so discovered sources are born with a
       // v2 main_category + tags + defensive flag (legacy validateAndTypeSource does
@@ -219,7 +258,7 @@ async function processOne(src) {
       process.stdout.write(`  ${v.validation_status.padEnd(6)} ${(DRY ? "would-save" : "saved").padEnd(10)} ${catMark.padEnd(12)}${defMark} ${(row.publisher || "").slice(0, 18).padEnd(18)} ${(row.title || "").slice(0, 42)}\n`);
       return;
     }
-    const mark = keep ? (DRY ? "would-save" : "saved") : "drop";
+    const mark = keep ? (DRY ? "would-save" : "saved") : (isBackground ? "background" : "drop");
     process.stdout.write(`  ${v.validation_status.padEnd(6)} ${mark.padEnd(10)} ${(row.publisher || "").slice(0, 20).padEnd(20)} ${(row.title || "").slice(0, 46)}\n`);
   } catch (e) {
     tally.errored++;

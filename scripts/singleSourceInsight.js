@@ -13,7 +13,8 @@
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { loadPrompt } from "../lib/prompts/promptLoader.js";
-import { computeImportance } from "../lib/pipeline/scoring/importance.js";
+import { maturityOf } from "../lib/pipeline/scoring/maturityLevel.js";
+import { readingValueOf } from "../lib/pipeline/scoring/sourceSignal.js";
 
 const args   = process.argv.slice(2);
 const getArg = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i+1] ? args[i+1] : d; };
@@ -84,7 +85,7 @@ ${finding}`;
     sources: [{
       title: s.title, url: s.url, publisher: s.publisher || null,
       date: s.date_published?.slice(0, 10) || null, source_type: s.source_type || null,
-      importance: computeImportance(s).tier, significance: s.intelligence?.significance?.level || null,
+      maturity: maturityOf(s), reading_value: readingValueOf(s), significance: s.intelligence?.significance?.level || null,
     }],
   };
 

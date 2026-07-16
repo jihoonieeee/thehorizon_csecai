@@ -37,8 +37,6 @@ const TODAY   = new Date().toISOString().slice(0, 10);
 
 const { createClient } = await import("@supabase/supabase-js");
 const { understandSource } = await import("../lib/pipeline/understand/understandSource.js");
-const { computeImportance } = await import("../lib/pipeline/scoring/importance.js");
-const { isGenericNoiseCve } = await import("../lib/pipeline/ingest/genericCveGate.js");
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const SEL = "id,title,url,publisher,date_published,main_category,tags,source_type,trust_tier,short_summary,analyst_brief,full_text,intelligence,validation_status";
@@ -95,7 +93,7 @@ async function main() {
     console.log(`  [${i+1}/${rows.length}] ${to === from ? "=" : "→"} ${to.padEnd(22)} [${tagsOnly(r.primary_tags).join(",")}]${flag}  ${(src.title||"").slice(0,52)}`);
 
     if (PERSIST) {
-      const keep = r.keep && !isGenericNoiseCve(r);
+      const keep = r.keep;
       const isAdjacent = r.disposition === "adjacent";
       // Never hard-reject curated sources — downgrade to review instead.
       const curatedGuard = src.trust_tier === "curated";
@@ -117,7 +115,6 @@ async function main() {
           defended_category: r.defended_category || null,
           defensive_techniques: r.defensive_techniques || [],
           mechanism_classification: r.mechanism_classification || null,
-          importance: { ...computeImportance(r), scored_at: new Date().toISOString() },
           resorted_v2_at: new Date().toISOString().slice(0, 10),
         },
       };

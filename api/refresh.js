@@ -66,8 +66,9 @@ export default async function handler(req, res) {
     runId = await startIngestionRun();
 
     // Collect-only: Layer 1–3 (RSS feeds, APIs, validation).
-    // Classification (Layer 4), QA, and digest fanout run in GitHub Actions
-    // (scripts/dailyClassify.js) 30 min after this cron completes.
+    // Classification (Layer 4) runs via dailyClassify.js in GitHub Actions.
+    // This endpoint is available for ad-hoc manual ingest; scheduled ingest
+    // now runs entirely through daily-classify.yml (--ingest flag).
     const result = await collectRawSources(customWindow);
 
     const snapshot = {

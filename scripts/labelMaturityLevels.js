@@ -139,15 +139,16 @@ async function main() {
       counts[result.level] = (counts[result.level] || 0) + 1;
 
       if (DRY_RUN) {
-        console.log(`[${result.method.slice(0,3)}] ${result.level.padEnd(13)} ${src.title?.slice(0,70)}`);
+        console.log(`[${result.method.slice(0,3)}] ${result.level.padEnd(13)} (${result.confidence}) ${src.title?.slice(0,70)}`);
         console.log(`       ${result.reason}`);
       } else {
         const newIntel = {
           ...(src.intelligence || {}),
-          maturity_level:  result.level,
-          maturity_reason: result.reason,
-          maturity_method: result.method,
-          maturity_at:     new Date().toISOString(),
+          maturity_level:      result.level,
+          maturity_confidence: result.confidence,
+          maturity_reason:     result.reason,
+          maturity_method:     result.method,
+          maturity_at:         new Date().toISOString(),
         };
         const { error: writeErr } = await supabase
           .from("sources")

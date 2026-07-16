@@ -55,7 +55,8 @@ function canonicalType(t) {
 function evidenceQuality(u, src) {
   const claims = (u.main_claims || []).length;
   const len = (src.full_text || src.clean_text || src.summary || "").length;
-  if (u.relevant === false) return "irrelevant";
+  if (!u.keep) return "irrelevant";          // off_topic: truly irrelevant
+  if (u.disposition === "adjacent") return "adjacent_context"; // kept as reference
   if (claims >= 2 && len >= 500) return "strong";
   if (claims >= 1 && len >= 200) return "usable";
   return "thin";
@@ -119,7 +120,8 @@ async function main() {
       const quality = evidenceQuality(u, src);
       qualityTally[quality] = (qualityTally[quality] || 0) + 1;
 
-      if (u.relevant === false) {
+      if (!u.keep) {
+        // Truly off_topic — demote to reject.
         demote.push(src.id);
         continue;
       }
@@ -154,7 +156,7 @@ async function main() {
             ...(u.covered_period_end   ? { covered_period_end:   u.covered_period_end   } : {}),
           } : {}),
         },
-        claim_extraction_status: "success",
+        claim_extraction_status: u.disposition === "adjacent" ? "adjacent_context" : "success",
       });
     }
 
@@ -168,6 +170,8 @@ async function main() {
           .update({ validation_status: "reject", claim_extraction_status: "irrelevant" })
           .in("id", demote);
       }
+      // Note: adjacent sources are handled inside updates[] with claim_extraction_status="adjacent_context"
+      // and retain their existing validation_status (pass or review). They are NOT demoted.
     }
     demoted += demote.length;
     processed += batch.length;

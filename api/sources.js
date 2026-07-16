@@ -155,7 +155,7 @@ export default async function handler(req, res) {
     // `starred` is included only when the column exists (migration 013) — the flag
     // flips off automatically on the first "column does not exist" error so the
     // page keeps working before the migration is applied.
-    const SELECT_BASE = "id,title,url,publisher,author,date_published,date_collected,date_discovered,date_confidence,main_category,trust_tier,tags,source_type,short_summary,summary,analyst_brief,validation_status,ai_specificity_score,intelligence,is_digest,parent_source_id,needs_review";
+    const SELECT_BASE = "id,title,parent_title,url,publisher,author,date_published,date_collected,date_discovered,date_confidence,main_category,trust_tier,tags,source_type,short_summary,summary,analyst_brief,validation_status,ai_specificity_score,intelligence,is_digest,parent_source_id,needs_review";
     const buildQuery = (from, to) => {
       let q = supabase
         .from("sources")
@@ -215,6 +215,13 @@ export default async function handler(req, res) {
           maturity:       maturityOf(s),                   // research|demonstrated|disclosed|observed|operational
           is_report:      s.is_digest === true,
           finding_count:  s.intelligence?.digest_item_count || null,
+          // Child-source fields (parent_source_id is already in SELECT_BASE).
+          // finding_title = the sub-title of this specific finding within the report.
+          // parent_title  = the full title of the parent report (for clean citations),
+          //                 stored as a top-level column since migration 018.
+          is_child_source: !!s.parent_source_id,
+          finding_title:  s.intelligence?.report_finding?.finding_title || null,
+          parent_title:   s.parent_title || null,
           // Research novelty overlay — ranks within maturity tier (research sources only).
           significance:   s.intelligence?.significance
             ? { level: s.intelligence.significance.level, novelty: s.intelligence.significance.novelty, reason: s.intelligence.significance.reason || null }

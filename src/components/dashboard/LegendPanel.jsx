@@ -37,23 +37,26 @@ const CATEGORIES = [
     desc: "AI as the attacker's tool — AI-generated malware, deepfake fraud, AI-assisted phishing, LLM-as-C2, nation-state AI tradecraft." },
 ];
 
-// Priority label — a SEPARATE axis from maturity. Maturity says "how real is the
-// threat"; the priority label says "how much should an analyst prioritise reading
-// this". LLM-validated (lib/pipeline/scoring/assessSourceLabel.js), stored as
-// source_label; deterministic fallback in sourceLabel.js.
+// Reading value — who should read this, and where should it be promoted?
+// Set by Layer 3 LLM (lib/prompts/validation/layer3.md), stored as reading_value.
+// Independent of threat severity, maturity, and publisher prestige.
 const PRIORITY = [
-  { key: "critical",   color: "#b91c1c", label: "Critical",
-    desc: "Must-read. Adversaries were CONFIRMED to use this technique/tool in a real operation, OR it is the FIRST public disclosure of a genuinely new attack surface / threat class.",
-    signals: "Confirmed in-the-wild adversary use; a named campaign; a field-first disclosure; a CVE marked actively exploited by CISA/the vendor." },
-  { key: "important",  color: "#c2410c", label: "Important",
-    desc: "A working exploit or capability was DEMONSTRATED (PoC, red-team, vendor lab test) with no confirmed real-world use yet, OR a clearly novel technique within a known attack surface.",
-    signals: "Public PoC; researcher demonstrated against a real product; a notable new method; landmark research." },
-  { key: "supporting", color: "#475569", label: "Supporting",
-    desc: "Corroborating detail on a known technique, a routine vendor advisory, a CVE with no exploitation evidence, or a 2nd/3rd source on a topic already covered by a critical/important item.",
-    signals: "\"Adversaries are increasingly…\" with no incident; routine advisory; CVE disclosure only; duplicate coverage." },
-  { key: "archive",    color: "#94a3b8", label: "Archive",
-    desc: "Background context, defensive guidance, governance/policy, or content that turned out not to be an offensive AI-security threat.",
-    signals: "Defensive/how-to-protect content; policy/governance; off-topic despite passing the keyword gate." },
+  { key: "essential",   color: "#b91c1c", label: "Essential",
+    desc: "Changes the threat model or establishes something the field had not seen before. Includes: first confirmed adversary operationalisation of a major AI capability, landmark frameworks leadership will repeatedly reference, and named multi-government advisories declaring a strategic posture shift.",
+    examples: "GTIG's first confirmed AI-generated zero-day in a real operation; OWASP LLM Top 10 initial release; Five Eyes statement on frontier AI cyber risk.",
+    distribution: "Dashboard + Newsletter + Library" },
+  { key: "recommended", color: "#c2410c", label: "Recommended",
+    desc: "Materially changes prioritisation within a known attack surface. Includes: new variants with concrete evidence, confirmed adversary adoption, strong multi-incident syntheses, and reusable case studies with named actors and measurable impact.",
+    examples: "GTIG quarterly AI threat report with new adversary TTPs; CrowdStrike on first observed AI-generated phishing at scale; HiddenLayer HuggingFace malware incident.",
+    distribution: "Dashboard + Newsletter (when readable without technical context) + Library" },
+  { key: "analyst",     color: "#475569", label: "Analyst",
+    desc: "Technically useful for practitioners but does not change strategic posture. Includes: implementation mechanics, thin-text advisories, incremental research, exploit details, and sources where leadership hears the summary rather than reading the source directly.",
+    examples: "Vulnerability advisory for a vLLM SSRF; arXiv paper with only an abstract available; third journalist writeup of a known incident.",
+    distribution: "Library only" },
+  { key: "background",  color: "#94a3b8", label: "Background",
+    desc: "Adjacent guidance, policy context, defensive advice, or generic commentary with no distinct offensive intelligence. Sources that add nothing beyond stronger existing coverage.",
+    examples: "Generic 'AI threats are rising' editorial; AWS implementation guide for multi-tenant agents; defensive IR playbook with no new offensive findings.",
+    distribution: "Not actively promoted" },
 ];
 
 function Section({ title, note, children }) {
@@ -114,10 +117,10 @@ export function LegendPanel({ onClose }) {
         </ul>
       </Section>
 
-      {/* Priority label — the second axis */}
+      {/* Reading value */}
       <Section
-        title="Priority Label (Critical / Important / Supporting)"
-        note="A SEPARATE axis from maturity. Maturity answers 'how real is the threat?'; the priority label answers 'how much should an analyst prioritise reading this?'. A source can be high-maturity but low-priority (a routine advisory for an old, well-covered technique) or the reverse (a field-first research paper). Assigned by an LLM (Haiku) — prompt in lib/pipeline/scoring/assessSourceLabel.js — stored as source_label."
+        title="Reading Value"
+        note="Who should read this source, and where should it appear? Assigned by Layer 3 LLM from lib/prompts/validation/layer3.md — independent of threat severity, maturity level, and publisher prestige. A theoretical first-of-kind paper can be Essential while a confirmed real-world CVE is Analyst."
       >
         {PRIORITY.map(p => (
           <div key={p.key} className="hz-legend-maturity-row">
@@ -127,10 +130,27 @@ export function LegendPanel({ onClose }) {
             </div>
             <div className="hz-legend-maturity-body">
               <div className="hz-legend-maturity-desc">{p.desc}</div>
-              <div className="hz-legend-derivation">Signals: {p.signals}</div>
+              <div className="hz-legend-derivation">Examples: {p.examples}</div>
+              <div className="hz-legend-derivation">Surfaces: {p.distribution}</div>
             </div>
           </div>
         ))}
+      </Section>
+
+      {/* Distribution */}
+      <Section title="Surface Routing">
+        <p className="hz-legend-note">
+          Each source also carries a <code>distribution_recommendation</code> with three independent flags
+          that control which surfaces actively promote it:
+        </p>
+        <ul className="hz-legend-steps">
+          <li><strong>Overview Dashboard</strong> — Essential sources always; Recommended when timely, not duplicate, and represents a distinct development in a major category. Never analyst, background, thin-text, or defensive-primary sources.</li>
+          <li><strong>Email Newsletter</strong> — Essential or Recommended sources readable without engineering background. Never PoC mechanics, benchmarks, thin-text, or implementation guides. A CISO should be able to forward it to their team without a technical briefing first.</li>
+          <li><strong>Analyst Library</strong> — All substantive sources (Essential, Recommended, Analyst). Background sources are excluded unless they are canonical reference frameworks.</li>
+        </ul>
+        <p className="hz-legend-note">
+          The <code>recommendation_reason</code> field contains one sentence explaining the specific, distinct intelligence value of the source — what it adds that no other source covers better.
+        </p>
       </Section>
 
       {/* Threat categories */}

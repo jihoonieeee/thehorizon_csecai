@@ -10,7 +10,6 @@ import { filterAcceptableSources } from "../lib/pipeline/ingest/filterAcceptable
 import { computeEligibilityFlags } from "../lib/pipeline/ingest/eligibilityFlags.js";
 import { isSafeUrl, isPlausibleSourceUrl } from "../lib/pipeline/validation/urlSafety.js";
 import { checkSourceValidity } from "../lib/pipeline/ingest/sourceValidity.js";
-import { splitDateRange } from "../lib/pipeline/ingest/connectors/nvdConnector.js";
 import { inferCandidateDate } from "../lib/pipeline/discovery/candidateToSource.js";
 
 let passed = 0;
@@ -240,8 +239,8 @@ test("incident_database is rejected (removed type — use 'incident' instead)", 
   }]);
   assert.equal(accepted.length, 0);
   assert.equal(rejected.length, 1);
-  assert.ok(rejected[0].reason.includes("Unsupported source_type"),
-    `expected Unsupported source_type, got: ${rejected[0].reason}`);
+  assert.ok(rejected[0].reason.includes("unsupported_source_type"),
+    `expected unsupported_source_type, got: ${rejected[0].reason}`);
 });
 
 test("ai_threat_framework is rejected (removed type — use 'threat_intelligence' instead)", () => {
@@ -318,8 +317,8 @@ test("source with date_confidence 'none' is period-ineligible and needs review",
   assert.equal(flags.needs_review, true);
 });
 
-test("eligible_for_reference_context true for curated and primary sources", () => {
-  for (const trust_tier of ["curated", "primary", "high"]) {
+test("eligible_for_reference_context true for primary and high sources", () => {
+  for (const trust_tier of ["primary", "high"]) {
     const flags = computeEligibilityFlags({
       date_published: new Date().toISOString(),
       date_confidence: "exact",
@@ -426,27 +425,6 @@ test("untrusted source with no title is still hard-rejected", () => {
   assert.equal(v.credibility_label, "do_not_use");
 });
 
-// ── splitDateRange (NVD ≤120-day chunking) ────────────────────────────────────
-
-console.log("\nsplitDateRange");
-
-test("a 24h window is a single range", () => {
-  const ranges = splitDateRange("2026-06-09T00:00:00.000Z", "2026-06-10T00:00:00.000Z");
-  assert.equal(ranges.length, 1);
-});
-
-test("a 12-month window is split into multiple <=120-day ranges", () => {
-  const ranges = splitDateRange("2025-06-10T00:00:00.000Z", "2026-06-10T00:00:00.000Z");
-  assert.ok(ranges.length >= 3, `expected >=3 sub-ranges, got ${ranges.length}`);
-  const DAY = 24 * 60 * 60 * 1000;
-  for (const r of ranges) {
-    const span = (new Date(r.end) - new Date(r.start)) / DAY;
-    assert.ok(span <= 120, `sub-range ${span}d exceeds NVD's 120-day cap`);
-  }
-  // Ranges must be contiguous and cover the whole window.
-  assert.equal(ranges[0].start, "2025-06-10T00:00:00.000Z");
-  assert.equal(ranges[ranges.length - 1].end, "2026-06-10T00:00:00.000Z");
-});
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 

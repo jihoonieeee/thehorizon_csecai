@@ -41,7 +41,6 @@ const SIGNAL = new RegExp(
 
 const { createClient } = await import("@supabase/supabase-js");
 const { understandSource } = await import("../lib/pipeline/understand/understandSource.js");
-const { computeImportance } = await import("../lib/pipeline/scoring/importance.js");
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const SEL = "id,title,url,publisher,date_published,main_category,tags,source_type,trust_tier,short_summary,analyst_brief,full_text,intelligence,validation_status";
@@ -101,7 +100,6 @@ async function main() {
         ...(src.intelligence || {}),
         is_defensive: r.is_defensive || false,
         mechanism_classification: r.mechanism_classification || null,
-        importance: { ...computeImportance(r), scored_at: new Date().toISOString() },
         agentic_attacker_sweep_at: TODAY,
       };
       const { error: upErr } = await supabase.from("sources").update({

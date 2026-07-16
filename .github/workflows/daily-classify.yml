@@ -1,19 +1,47 @@
 name: Daily classify
 
+# Full L1–L4 pipeline, self-contained on GitHub Actions.
+# Vercel cron is no longer used for ingest (removed from vercel.json).
+#
+# Layer sequence per run:
+#   L1  collectRawSources     — connectors (arXiv, RSS, CISA KEV, GHSA, …)
+#   L2  clean                 — text normalisation, IOC extraction (inside collectors)
+#   L3  validate              — LLM relevance + source typing + trust tier
+#   L4a understandAllSources  — Haiku classify (taxonomy, category, summary)
+#   L4b qaClassificationLLM   — cross-model QA, flags misclassifications
+#   L4c digestFanout          — splits multi-topic reports into child sources
+#   L4d assessSignificance    — research/benchmark novelty overlay (Haiku)
+#
+# Schedule (all UTC):
+#   22:00 daily   — 3-day ingest window  (catches new sources each day)
+#   22:00 Monday  — 7-day ingest window  (weekly sweep, wider net)
+#   22:00 1st     — 30-day ingest window (monthly sweep, maximum coverage)
+#
+# Weekly and monthly schedules overlap with the daily one on those days.
+# Deduplication by URL-derived ID means re-ingesting the same source is a
+# harmless no-op upsert.
+
 on:
   schedule:
-    # 22:30 UTC daily — 30 min after Vercel collects sources at 22:00 UTC
-    - cron: '30 22 * * *'
+    - cron: '0 22 * * *'      # daily   — 3-day window
+    - cron: '0 22 * * 1'      # Monday  — 7-day window
+    - cron: '0 22 1 * *'      # 1st     — 30-day window
   workflow_dispatch:
     inputs:
+      days:
+        description: 'Ingest window in days (3 / 7 / 30)'
+        default: '3'
       since_hours:
         description: 'Look back N hours for unclassified sources (default 3)'
         default: '3'
+      sig_limit:
+        description: 'Max research significance calls (default 100)'
+        default: '100'
 
 jobs:
   classify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -24,11 +52,31 @@ jobs:
 
       - run: npm ci
 
-      - name: Classify + QA + digest fanout
-        run: node scripts/dailyClassify.js --since-hours ${{ github.event.inputs.since_hours || '3' }}
+      - name: Determine ingest window
+        id: window
+        run: |
+          if [ -n "${{ github.event.inputs.days }}" ]; then
+            echo "days=${{ github.event.inputs.days }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 22 1 * *" ]; then
+            echo "days=30" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 22 * * 1" ]; then
+            echo "days=7" >> "$GITHUB_OUTPUT"
+          else
+            echo "days=3" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: L1–L3 ingest + L4a–d classify
+        run: |
+          node scripts/dailyClassify.js \
+            --ingest \
+            --days ${{ steps.window.outputs.days }} \
+            --since-hours ${{ github.event.inputs.since_hours || '3' }} \
+            --sig-limit ${{ github.event.inputs.sig_limit || '100' }}
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BLOB_READ_WRITE_TOKEN:     ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          CRON_SECRET:               ${{ secrets.CRON_SECRET }}

@@ -2,9 +2,9 @@ name: Pipeline — Understand & Synthesize
 
 # Schedule logic (all times UTC, SGT = UTC+8):
 #
-#   22:30 UTC daily   → Understand only (30 min after Vercel ingest at 22:00 UTC)
-#   01:00 UTC Monday  → Understand + Synthesize 90d (1h after Vercel weekly ingest at 00:00 UTC)
-#   01:00 UTC 1st     → Understand + Synthesize 365d (1h after Vercel monthly ingest at 00:00 UTC)
+#   22:30 UTC daily   → Understand only (30 min after daily-classify.yml at 22:00 UTC)
+#   01:00 UTC Monday  → Understand + Synthesize 90d (3h after Monday classify at 22:00 UTC)
+#   01:00 UTC 1st     → Understand + Synthesize 365d (3h after monthly classify at 22:00 UTC)
 #
 # Manual dispatch lets you run either step on demand with custom parameters.
 

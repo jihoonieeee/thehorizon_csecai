@@ -22,7 +22,8 @@
  *   aiid     — AI Incident Database (GraphQL API, strict quality gates)
  *   sitemap  — Key operational blogs via XML sitemap crawl:
  *              DFIR Report, Red Canary, Huntress, Volexity, WithSecure, Lumen
- *   all      — both (default)
+ *   kev      — CISA Known Exploited Vulnerabilities (AI-relevant subset)
+ *   all      — all of the above (default)
  *
  * Usage:
  *   node scripts/backfillOperational.js [start] [end] [connectors]
@@ -45,7 +46,6 @@ import { collectRawSources }    from "../lib/pipeline/ingest/collectRawSources.j
 import { saveSnapshotToDatabase } from "../lib/storage/snapshotDatabase.js";
 import { aiidConnector }        from "../lib/pipeline/ingest/connectors/aiidConnector.js";
 import { sitemapConnector }     from "../lib/pipeline/ingest/connectors/sitemapConnector.js";
-import { githubAdvisoryConnector } from "../lib/pipeline/ingest/connectors/githubAdvisoryConnector.js";
 import { cisaKevConnector }     from "../lib/pipeline/ingest/connectors/cisaKevConnector.js";
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -55,7 +55,6 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 // Connectors:
 //   aiid    — AI Incident Database (GraphQL, strict quality gates)
 //   sitemap — Operational security blogs (DFIR Report, Red Canary, Huntress, Volexity)
-//   ghsa    — GitHub Advisory Database (AI/ML package CVEs)
 //   kev     — CISA Known Exploited Vulnerabilities (AI-relevant subset)
 //   all     — all of the above (default)
 
@@ -65,7 +64,6 @@ const connectorArg = (process.argv[4] || "all").toLowerCase();
 
 const runAiid    = connectorArg === "all" || connectorArg.includes("aiid");
 const runSitemap = connectorArg === "all" || connectorArg.includes("sitemap");
-const runGhsa    = connectorArg === "all" || connectorArg.includes("ghsa");
 const runKev     = connectorArg === "all" || connectorArg.includes("kev");
 
 // ── Monthly chunks ────────────────────────────────────────────────────────────
@@ -99,10 +97,9 @@ function monthChunks(startStr, endStr) {
 const chunks = monthChunks(startArg, endArg);
 
 const activeConnectors = [
-  ...(runAiid    ? [aiidConnector]           : []),
-  ...(runSitemap ? [sitemapConnector]         : []),
-  ...(runGhsa    ? [githubAdvisoryConnector]  : []),
-  ...(runKev     ? [cisaKevConnector]         : []),
+  ...(runAiid    ? [aiidConnector]    : []),
+  ...(runSitemap ? [sitemapConnector] : []),
+  ...(runKev     ? [cisaKevConnector] : []),
 ];
 
 console.log(`\n${"═".repeat(64)}`);

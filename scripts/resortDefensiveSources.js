@@ -24,7 +24,6 @@
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { routedLLM } from "../lib/llm/llmRouter.js";
-import { computeImportance } from "../lib/pipeline/scoring/importance.js";
 
 const args  = process.argv.slice(2);
 const LIVE  = args.includes("--live");
@@ -96,12 +95,11 @@ async function main() {
     console.log(`  → [${inf.defended_category}] ${(s.title || "").slice(0, 60)}  (${inf.via})`);
 
     if (LIVE) {
-      const imp = { ...computeImportance({ source_type: s.source_type, is_defensive: true, trust_tier: s.trust_tier, main_category: inf.defended_category }), scored_at: scoredAt };
       const { error } = await sb.from("sources").update({
         main_category: inf.defended_category,
         tags: [...new Set([...(s.tags || []), "defensive"])],
         validation_status: "pass", layer3_status: "pass", relevance_tier: "adjacent",
-        intelligence: { ...(s.intelligence || {}), is_defensive: true, defended_category: inf.defended_category, importance: imp },
+        intelligence: { ...(s.intelligence || {}), is_defensive: true, defended_category: inf.defended_category },
       }).eq("id", s.id);
       if (error) console.log(`     ! write: ${error.message.slice(0, 60)}`);
     }

@@ -35,8 +35,6 @@ const TODAY   = new Date().toISOString().slice(0, 10);
 
 const { createClient } = await import("@supabase/supabase-js");
 const { understandSource } = await import("../lib/pipeline/understand/understandSource.js");
-const { computeImportance } = await import("../lib/pipeline/scoring/importance.js");
-const { isGenericNoiseCve } = await import("../lib/pipeline/ingest/genericCveGate.js");
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const SEL = "id,title,url,publisher,date_published,main_category,tags,source_type,trust_tier,short_summary,analyst_brief,full_text,intelligence,validation_status";
@@ -86,7 +84,7 @@ async function main() {
     if (degraded) { console.log(`  [${i+1}/${rows.length}] SKIP (LLM failed 3x) — ${(src.title||"").slice(0,46)}`); failed++; continue; }
 
     const to = r.category || "unclear_or_adjacent";
-    const isOffensive = OFFENSIVE.has(to) && r.disposition === "offensive" && r.keep && !isGenericNoiseCve(r);
+    const isOffensive = OFFENSIVE.has(to) && r.disposition === "offensive" && r.keep;
 
     if (isOffensive) { promoted++; dest[to] = (dest[to]||0)+1; }
     else stayed++;
@@ -99,7 +97,6 @@ async function main() {
         ...(src.intelligence || {}),
         is_defensive: r.is_defensive || false,
         mechanism_classification: r.mechanism_classification || null,
-        importance: { ...computeImportance(r), scored_at: new Date().toISOString() },
         unclear_review_sweep_at: TODAY,
       };
       const { error: upErr } = await supabase.from("sources").update({

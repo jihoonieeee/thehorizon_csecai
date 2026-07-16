@@ -1,14 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-
-// ── Shared helpers ────────────────────────────────────────────────────────────
-
-const SECRET_KEY = "hz_api_secret";
-// Baked-in generation token (separate from CRON_SECRET) — set VITE_GEN_TOKEN at
-// build time so the field auto-fills and no secret typing is ever needed. Falls
-// back to the per-browser saved secret when the token isn't baked in.
-const BAKED_TOKEN = import.meta.env.VITE_GEN_TOKEN || "";
-function loadSecret() { try { return BAKED_TOKEN || localStorage.getItem(SECRET_KEY) || ""; } catch { return BAKED_TOKEN; } }
-function saveSecret(v) { try { localStorage.setItem(SECRET_KEY, v); } catch {} }
+import { getBestToken, getAccessLevel, onAuthChange } from "../../auth.js";
 
 function Spinner() {
   return (
@@ -39,46 +30,6 @@ function CheckIcon() {
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="20 6 9 17 4 12"/>
     </svg>
-  );
-}
-
-// ── Shared secret input ───────────────────────────────────────────────────────
-
-function SecretInput({ value, onChange, disabled }) {
-  const [show, setShow] = useState(false);
-  return (
-    <div>
-      <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
-        API secret
-      </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <input
-          type={show ? "text" : "password"}
-          placeholder="CRON_SECRET from .env"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          disabled={disabled}
-          style={{
-            flex: 1, background: "var(--surface-2)", border: "1px solid var(--border)",
-            borderRadius: 6, padding: "8px 12px", fontSize: "0.82rem",
-            color: "var(--text-primary)", outline: "none",
-          }}
-        />
-        <button
-          onClick={() => setShow(v => !v)}
-          style={{
-            padding: "8px 14px", borderRadius: 6, border: "1px solid var(--border)",
-            background: "transparent", color: "var(--text-secondary)",
-            fontSize: "0.78rem", cursor: "pointer",
-          }}
-        >
-          {show ? "Hide" : "Show"}
-        </button>
-      </div>
-      <div style={{ marginTop: 5, fontSize: "0.72rem", color: "var(--text-tertiary)" }}>
-        Saved in your browser. Shared across both tools.
-      </div>
-    </div>
   );
 }
 
@@ -420,10 +371,12 @@ const TABS = [
 ];
 
 export function GeneratePage() {
-  const [tab,    setTab]    = useState("slides");
-  const [secret, setSecret] = useState(loadSecret);
+  const [tab,   setTab]   = useState("slides");
+  const [level, setLevel] = useState(getAccessLevel);
 
-  function handleSecretChange(v) { setSecret(v); saveSecret(v); }
+  useEffect(() => onAuthChange(() => setLevel(getAccessLevel())), []);
+
+  const token = getBestToken();
 
   return (
     <div style={{ maxWidth: 620, margin: "0 auto", padding: "48px 24px" }}>
@@ -443,41 +396,43 @@ export function GeneratePage() {
         </p>
       </div>
 
-      {/* Card */}
-      <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
-
-        {/* Tab bar */}
-        <div style={{ display: "flex", borderBottom: "1px solid var(--border)" }}>
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              flex: 1, padding: "12px 20px",
-              border: "none", borderBottom: tab === t.id ? "2px solid var(--accent)" : "2px solid transparent",
-              background: "transparent",
-              fontSize: "0.84rem", fontWeight: tab === t.id ? 700 : 500,
-              color: tab === t.id ? "var(--accent)" : "var(--text-secondary)",
-              cursor: "pointer", marginBottom: -1,
-            }}>
-              {t.label}
-            </button>
-          ))}
+      {level === "public" ? (
+        <div style={{
+          padding: "40px 24px", textAlign: "center",
+          border: "1px dashed var(--border)", borderRadius: 12,
+          color: "var(--text-tertiary)", fontSize: "0.88rem", lineHeight: 1.7,
+        }}>
+          <div style={{ fontSize: "1.4rem", marginBottom: 12 }}>🔒</div>
+          <div style={{ fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>Access required</div>
+          Enter a guest or admin code via the lock icon in the nav to generate reports.
         </div>
+      ) : (
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
 
-        {/* Panel content */}
-        <div style={{ padding: "24px 24px" }}>
-          {tab === "slides"
-            ? <SlidesPanel secret={secret} />
-            : <NewsletterPanel secret={secret} />}
-        </div>
-
-        {/* Shared secret input — hidden when a generation token is baked in */}
-        {!BAKED_TOKEN && (
-          <div style={{ padding: "0 24px 24px" }}>
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: 20 }}>
-              <SecretInput value={secret} onChange={handleSecretChange} />
-            </div>
+          {/* Tab bar */}
+          <div style={{ display: "flex", borderBottom: "1px solid var(--border)" }}>
+            {TABS.map(t => (
+              <button key={t.id} onClick={() => setTab(t.id)} style={{
+                flex: 1, padding: "12px 20px",
+                border: "none", borderBottom: tab === t.id ? "2px solid var(--accent)" : "2px solid transparent",
+                background: "transparent",
+                fontSize: "0.84rem", fontWeight: tab === t.id ? 700 : 500,
+                color: tab === t.id ? "var(--accent)" : "var(--text-secondary)",
+                cursor: "pointer", marginBottom: -1,
+              }}>
+                {t.label}
+              </button>
+            ))}
           </div>
-        )}
-      </div>
+
+          {/* Panel content */}
+          <div style={{ padding: "24px 24px" }}>
+            {tab === "slides"
+              ? <SlidesPanel secret={token} />
+              : <NewsletterPanel secret={token} />}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

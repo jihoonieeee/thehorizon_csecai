@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 
 import {
-  assessAiRelevance, hasAiSignal, runRelevanceLlm, runRelevanceQa, deriveRelevanceFromFocus,
+  assessAiRelevance, hasAiSignal, deriveRelevanceFromFocus,
 } from "../lib/pipeline/validation/aiRelevance.js";
 import {
   validateAndTypeSource, validateAndTypeSources, VALIDATION_VERSION,
@@ -36,35 +36,42 @@ function mkSource(over = {}) {
   };
 }
 
-// LLM stub: returns whatever the per-task scripts dictate. The content-quality
-// gate (source_quality_gate) fails CLOSED to thin_content when its LLM is
-// unavailable, so model an available gate returning `quality` (default substantive)
-// — otherwise every central/adjacent source would be forced to review.
-function mkLlm({ relevance, qa, quality = { content_quality: "substantive", reason: "stub" } } = {}) {
-  return async (sys, user, opts) => {
-    if (opts.task === "source_relevance") {
-      return { result: relevance, llm_metadata: { llm_used: true } };
-    }
-    if (opts.task === "source_relevance_qa") {
-      return { result: qa, llm_metadata: { llm_used: true } };
-    }
-    if (opts.task === "source_quality_gate") {
-      return { result: quality, llm_metadata: { llm_used: true } };
+// ── Unified LLM stub ────────────────────────────────────────────────────────
+// The Layer 3 unified call uses task "layer3_validation" and returns a single
+// structured object. mkLlm wraps a full L3 result for injection via opts.llmFn.
+function mkLlm(l3Result) {
+  return async (_sys, _user, opts) => {
+    if (opts.task === "layer3_validation") {
+      return { result: l3Result, llm_metadata: { llm_used: true } };
     }
     return { result: null, llm_metadata: { llm_used: false } };
   };
 }
 
-const CENTRAL = {
-  summary: "Researchers show an indirect prompt injection that hijacks an LLM agent over MCP to exfiltrate data. The exploit works against a production assistant.",
-  ai_threat_focus: "central", is_ai_threat: true, candidate_domain: "agentic_ai_threats",
-  source_type: "research_finding", source_type_confidence: "high", confidence: "high",
-  reasoning: "Centrally about an agentic LLM injection attack.",
-};
-const QA_OK = {
-  verdict_correct: true, summary_grounded: true,
-  corrected_ai_threat_focus: "central", corrected_is_ai_threat: true,
-  corrected_source_type: "research_finding", issues: "",
+// Default "central pass" L3 result — a genuine offensive finding.
+const CENTRAL_L3 = {
+  verdict:           "pass",
+  rejection_reason:  null,
+  ai_threat_focus:   "central",
+  ai_materiality:    "material",
+  content_quality:   "substantive",
+  evidence_origin:   "original_research",
+  evidence_quality:  "strong",
+  claim_support:     "direct",
+  publisher_role:    "researcher",
+  reading_value:     "recommended",
+  distribution_recommendation: { overview_dashboard: true, email_newsletter: true, analyst_library: true },
+  recommendation_reason: "First demonstrated MCP tool-poisoning technique with working PoC against a production assistant.",
+  trust_tier:        "high",
+  trust_tier_reason: "Adversa AI is a known AI-security research firm publishing original research.",
+  source_type:       "research_finding",
+  candidate_domain:  "agentic_ai_threats",
+  secondary_domain:  null,
+  affected_ai_layer: "agent_autonomy",
+  boundary_rationale: "Exploits delegated autonomy — the MCP tool call is the attack vector.",
+  summary:           "Researchers show an indirect prompt injection that hijacks an LLM agent over MCP to exfiltrate data. The exploit works against a production assistant.",
+  confidence:        "high",
+  reasoning:         "Centrally about an agentic LLM injection attack.",
 };
 
 // ── Deterministic pre-gate ────────────────────────────────────────────────────
@@ -88,82 +95,118 @@ await test("real AI terms trip the signal", () => {
   assert.equal(hasAiSignal({ full_text: "A prompt injection attack on the LLM agent." }).has_ai_signal, true);
 });
 
-// ── LLM relevance path ────────────────────────────────────────────────────────
-console.log("\nLLM relevance + QA path");
+// ── LLM path (single unified call) ───────────────────────────────────────────
+console.log("\nLLM unified call path");
 
 await test("central source is accepted with summary, type, domain", async () => {
-  const r = await validateAndTypeSource(mkSource(), { llmFn: mkLlm({ relevance: CENTRAL, qa: QA_OK }) });
+  const r = await validateAndTypeSource(mkSource(), { llmFn: mkLlm(CENTRAL_L3) });
   assert.notEqual(r.validation_status, "reject");
   assert.equal(r.ai_threat_focus, "central");
   assert.equal(r.source_type, "research_finding");
   assert.equal(r.candidate_domain, "agentic_ai_threats");
   assert.equal(r.validation_relevance_method, "llm");
-  assert.equal(r.validation_qa_status, "confirmed");
+  assert.equal(r.validation_qa_status, "unified");
   assert.ok(r.validation_summary && r.validation_summary.length > 20, "summary present");
   assert.equal(r.validation_version, VALIDATION_VERSION);
 });
 
 await test("passing (incidental) mention is rejected and domain cleared", async () => {
-  const relevance = {
-    summary: "A ransomware breach at a hospital; the vendor mentions AI tooling in passing.",
-    ai_threat_focus: "passing", is_ai_threat: false, candidate_domain: "unclear_or_adjacent",
-    source_type: "incident", confidence: "high",
+  const l3 = {
+    verdict: "reject", rejection_reason: "no_ai_threat",
+    ai_threat_focus: "passing", content_quality: "substantive",
+    trust_tier: "medium", trust_tier_reason: "stub",
+    source_type: "incident", candidate_domain: "unclear_or_adjacent",
+    summary: "A ransomware breach; the vendor mentions AI in passing.",
+    confidence: "high", reasoning: "AI is incidental.",
   };
-  const qa = { verdict_correct: true, summary_grounded: true, corrected_ai_threat_focus: "passing", corrected_is_ai_threat: false, corrected_source_type: "incident", issues: "" };
   const src = mkSource({ trust_tier: "medium", full_text: "A ransomware gang breached a hospital. The vendor said it may use AI internally. ".repeat(8) });
-  const r = await validateAndTypeSource(src, { llmFn: mkLlm({ relevance, qa }) });
+  const r = await validateAndTypeSource(src, { llmFn: mkLlm(l3) });
   assert.equal(r.validation_status, "reject");
   assert.equal(r.relevance_tier, "off_topic");
   assert.equal(r.candidate_domain, "unclear_or_adjacent");
 });
 
-await test("adjacent (landmark reference) source is KEPT as context, not rejected", async () => {
-  // DARPA AIxCC-style dual-use capability milestone: centrally about AI cyber-security
-  // but not itself an offensive finding. Must be kept (pass) as unclear_or_adjacent
-  // context, off the offensive counts — not rejected, not stuck in review.
-  const relevance = {
-    summary: "DARPA's AI Cyber Challenge fielded autonomous systems that find and patch vulnerabilities in real codebases, a dual-use capability milestone.",
-    ai_threat_focus: "adjacent", is_ai_threat: false, candidate_domain: "unclear_or_adjacent",
-    source_type: "capability_demonstration", confidence: "high",
+await test("adjacent (landmark reference) source is KEPT, verdict=pass, route=layer4", async () => {
+  // DARPA AIxCC: centrally about AI cyber-security but not an offensive finding.
+  // The unified call returns verdict="pass" for adjacent context with high confidence.
+  const l3 = {
+    verdict: "pass", rejection_reason: null,
+    ai_threat_focus: "adjacent", content_quality: "substantive",
+    trust_tier: "high", trust_tier_reason: "stub",
+    source_type: "capability_demonstration", candidate_domain: "unclear_or_adjacent",
+    summary: "DARPA's AI Cyber Challenge fielded autonomous systems that find and patch vulnerabilities in real codebases.",
+    confidence: "high", reasoning: "Reference context — dual-use capability milestone.",
   };
-  const qa = { verdict_correct: true, summary_grounded: true, corrected_ai_threat_focus: "adjacent", corrected_is_ai_threat: false, corrected_source_type: "capability_demonstration", issues: "" };
   const src = mkSource({ trust_tier: "high", title: "DARPA AIxCC final results",
-    full_text: "Autonomous cyber reasoning systems built on an LLM agent found and patched vulnerabilities across real open-source codebases in the AI Cyber Challenge finals. ".repeat(6) });
-  const r = await validateAndTypeSource(src, { llmFn: mkLlm({ relevance, qa }), skipUrlCheck: true });
+    full_text: "Autonomous cyber reasoning systems built on an LLM agent found and patched vulnerabilities across real open-source codebases. ".repeat(6) });
+  const r = await validateAndTypeSource(src, { llmFn: mkLlm(l3), skipUrlCheck: true });
   assert.equal(r.validation_status, "pass", "adjacent context is kept, not rejected or reviewed");
   assert.equal(r.ai_threat_focus, "adjacent");
   assert.equal(r.relevance_tier, "adjacent");
-  assert.equal(r.is_ai_threat ?? false, false, "adjacent is not an offensive finding");
   assert.equal(r.candidate_domain, "unclear_or_adjacent");
   assert.equal(r.downstream_route, "layer4");
   assert.ok((r.route_reason_codes || []).includes("adjacent_context_keep"));
 });
 
-await test("QA can correct central → adjacent and the source is still kept", async () => {
-  const relevance = { ...CENTRAL };                // call #1 over-claims an offensive finding
-  const qa = {                                     // QA: it's really a framework/reference
-    verdict_correct: false, summary_grounded: true,
-    corrected_ai_threat_focus: "adjacent", corrected_is_ai_threat: false,
-    corrected_source_type: "governance_signal", issues: "Standards taxonomy, not a new attack.",
+await test("LLM returns adjacent → source kept with adjacent routing", async () => {
+  // If LLM returns verdict=review for adjacent, gate respects it.
+  const l3 = {
+    verdict: "review", rejection_reason: null,
+    ai_threat_focus: "adjacent", content_quality: "substantive",
+    trust_tier: "high", trust_tier_reason: "stub",
+    source_type: "governance_signal", candidate_domain: "unclear_or_adjacent",
+    summary: "OWASP LLM Top 10 framework — reference context for the pipeline.",
+    confidence: "high", reasoning: "Landmark reference, not an offensive finding.",
   };
-  const r = await validateAndTypeSource(mkSource({ trust_tier: "high" }), { llmFn: mkLlm({ relevance, qa }), skipUrlCheck: true });
+  const r = await validateAndTypeSource(mkSource({ trust_tier: "high" }), { llmFn: mkLlm(l3), skipUrlCheck: true });
   assert.equal(r.ai_threat_focus, "adjacent");
-  assert.equal(r.validation_status, "pass");
-  assert.equal(r.candidate_domain, "unclear_or_adjacent", "domain cleared for adjacent");
+  assert.equal(r.validation_status, "review");
+  assert.equal(r.candidate_domain, "unclear_or_adjacent");
 });
 
-await test("QA corrects a wrong verdict (central → passing) and flips to reject", async () => {
-  const relevance = { ...CENTRAL };              // call #1 says central
-  const qa = {                                    // QA disagrees: it's a passing mention
-    verdict_correct: false, summary_grounded: true,
-    corrected_ai_threat_focus: "passing", corrected_is_ai_threat: false,
-    corrected_source_type: "incident", issues: "Only mentions AI in passing.",
+await test("LLM returns reject for marketing content — source discarded", async () => {
+  const l3 = {
+    verdict: "reject", rejection_reason: "marketing_content",
+    ai_threat_focus: "passing", content_quality: "marketing",
+    trust_tier: "medium", trust_tier_reason: "stub",
+    source_type: "unknown", candidate_domain: "unclear_or_adjacent",
+    summary: "Vendor announces its AI security platform.",
+    confidence: "high", reasoning: "Marketing content, not a threat finding.",
   };
-  const r = await validateAndTypeSource(mkSource({ trust_tier: "medium" }), { llmFn: mkLlm({ relevance, qa }) });
-  assert.equal(r.validation_qa_status, "corrected");
-  assert.equal(r.ai_threat_focus, "passing");
+  const r = await validateAndTypeSource(mkSource({ trust_tier: "medium" }), { llmFn: mkLlm(l3), skipUrlCheck: true });
   assert.equal(r.validation_status, "reject");
-  assert.equal(r.source_type, "incident", "QA-corrected source_type applied");
+  assert.ok(r.final_validity_reason.includes("marketing"), `unexpected reason: ${r.final_validity_reason}`);
+});
+
+await test("marketing source from medium-trust publisher is rejected", async () => {
+  const l3 = {
+    verdict: "reject", rejection_reason: "marketing_content",
+    ai_threat_focus: "passing", content_quality: "marketing",
+    trust_tier: "medium", trust_tier_reason: "stub",
+    source_type: "unknown", candidate_domain: "unclear_or_adjacent",
+    summary: "Vendor announcement.",
+    confidence: "high", reasoning: "Marketing content.",
+  };
+  const src = mkSource({ trust_tier: "medium", full_text: "Announcing our new AI security platform for enterprise customers. ".repeat(8) });
+  const r = await validateAndTypeSource(src, { llmFn: mkLlm(l3), skipUrlCheck: true });
+  assert.equal(r.validation_status, "reject");
+});
+
+await test("LLM can downgrade trust tier based on content (not upgrade it)", async () => {
+  // Source arrives with trust_tier="high" from connector; LLM sees it's a low-trust blog.
+  const l3 = { ...CENTRAL_L3, trust_tier: "low", trust_tier_reason: "No verifiable authorship." };
+  const src = mkSource({ trust_tier: "high" });
+  const r = await validateAndTypeSource(src, { llmFn: mkLlm(l3) });
+  assert.equal(r.trust_tier, "low", "LLM downgrade applied when more restrictive");
+  assert.ok(r.trust_tier_reason.includes("llm_downgrade"), `unexpected reason: ${r.trust_tier_reason}`);
+});
+
+await test("LLM cannot upgrade trust tier above connector value", async () => {
+  // Source arrives with trust_tier="medium"; LLM incorrectly returns "primary".
+  const l3 = { ...CENTRAL_L3, trust_tier: "primary", trust_tier_reason: "Looks authoritative." };
+  const src = mkSource({ trust_tier: "medium" });
+  const r = await validateAndTypeSource(src, { llmFn: mkLlm(l3) });
+  assert.equal(r.trust_tier, "medium", "LLM cannot upgrade trust above connector value");
 });
 
 // ── Deterministic discard (no LLM call spent) ──────────────────────────────────
@@ -171,7 +214,7 @@ console.log("\ndeterministic discard");
 
 await test("no-signal source is pre-gate discarded without an LLM call", async () => {
   let called = false;
-  const spy = async () => { called = true; return { result: CENTRAL, llm_metadata: { llm_used: true } }; };
+  const spy = async () => { called = true; return { result: CENTRAL_L3, llm_metadata: { llm_used: true } }; };
   const src = mkSource({ title: "Quarterly earnings up for retailer", trust_tier: "medium",
     full_text: "The retailer reported strong quarterly earnings from holiday sales and logistics. ".repeat(8) });
   const r = await validateAndTypeSource(src, { llmFn: spy });
@@ -180,12 +223,11 @@ await test("no-signal source is pre-gate discarded without an LLM call", async (
   assert.equal(r.validation_status, "reject");
 });
 
-await test("curated no-signal source is routed to review, never hard-rejected", async () => {
-  const src = mkSource({ trust_tier: "curated", title: "Annual logistics retailer report",
+await test("no-signal source with medium trust is rejected", async () => {
+  const src = mkSource({ trust_tier: "medium", title: "Annual logistics retailer report",
     full_text: "The retailer reported steady revenue across regions and improved logistics. ".repeat(8) });
-  const r = await validateAndTypeSource(src, { skipLlm: true, llmFn: mkLlm({ relevance: CENTRAL }) });
-  // No AI signal → pre-gate discard tier off_topic, but curated → review (not reject).
-  assert.equal(r.validation_status, "review");
+  const r = await validateAndTypeSource(src, { skipLlm: true });
+  assert.equal(r.validation_status, "reject");
 });
 
 // ── skipLlm fallback ───────────────────────────────────────────────────────────
@@ -204,6 +246,99 @@ await test("LLM-unavailable (llm_used:false) falls back deterministically", asyn
   assert.equal(r.validation_relevance_method, "deterministic_fallback");
 });
 
+// ── Source typing via the unified call ────────────────────────────────────────
+console.log("\nsource typing via unified call");
+
+await test("source_type from unified L3 call flows to output", async () => {
+  const l3 = { ...CENTRAL_L3, source_type: "exploit_disclosure" };
+  const r = await validateAndTypeSource(mkSource(), { llmFn: mkLlm(l3) });
+  assert.equal(r.source_type, "exploit_disclosure");
+  assert.equal(r.source_type_reason, "layer3_llm");
+});
+
+await test("unknown source_type from LLM is stored as 'unknown'", async () => {
+  const l3 = { ...CENTRAL_L3, source_type: "invalid_type_xyz" };
+  const r = await validateAndTypeSource(mkSource(), { llmFn: mkLlm(l3) });
+  assert.equal(r.source_type, "unknown", "unknown type normalised to unknown");
+});
+
+// ── Evidence + taxonomy fields ────────────────────────────────────────────────
+console.log("\nevidence + taxonomy fields");
+
+await test("new evidence fields flow from unified L3 call to enriched output", async () => {
+  const r = await validateAndTypeSource(mkSource(), { llmFn: mkLlm(CENTRAL_L3), skipUrlCheck: true });
+  assert.equal(r.ai_materiality,    "material");
+  assert.equal(r.evidence_origin,   "original_research");
+  assert.equal(r.evidence_quality,  "strong");
+  assert.equal(r.claim_support,     "direct");
+  assert.equal(r.publisher_role,    "researcher");
+  assert.equal(r.affected_ai_layer, "agent_autonomy");
+  assert.ok(r.boundary_rationale && r.boundary_rationale.length > 5, "boundary_rationale populated");
+  assert.equal(r.secondary_domain,  null);
+});
+
+await test("secondary_domain flows through when valid and different from candidate_domain", async () => {
+  const l3 = { ...CENTRAL_L3, secondary_domain: "llm_threats" };
+  const r = await validateAndTypeSource(mkSource(), { llmFn: mkLlm(l3), skipUrlCheck: true });
+  assert.equal(r.secondary_domain, "llm_threats");
+});
+
+await test("secondary_domain is null when same as candidate_domain", async () => {
+  const l3 = { ...CENTRAL_L3, secondary_domain: "agentic_ai_threats" }; // same as candidate_domain
+  const r = await validateAndTypeSource(mkSource(), { llmFn: mkLlm(l3), skipUrlCheck: true });
+  assert.equal(r.secondary_domain, null, "secondary_domain must differ from candidate_domain");
+});
+
+await test("aggregation content quality routes to review (not reject) when links present", async () => {
+  const l3 = {
+    ...CENTRAL_L3,
+    verdict: "review",
+    content_quality: "aggregation",
+    evidence_origin: "aggregation",
+    evidence_quality: "weak",
+    rejection_reason: null,
+  };
+  const r = await validateAndTypeSource(mkSource(), { llmFn: mkLlm(l3), skipUrlCheck: true });
+  assert.equal(r.validation_status, "review");
+  assert.equal(r.content_quality, "aggregation");
+});
+
+await test("new fields are null on skipLlm path (deterministic)", async () => {
+  const r = await validateAndTypeSource(mkSource(), { skipLlm: true });
+  assert.equal(r.evidence_origin,          null, "evidence_origin null on deterministic path");
+  assert.equal(r.evidence_quality,         null, "evidence_quality null on deterministic path");
+  assert.equal(r.ai_materiality,           null, "ai_materiality null on deterministic path");
+  assert.equal(r.reading_value,            null, "reading_value null on deterministic path");
+  assert.equal(r.distribution_recommendation, null, "distribution_recommendation null on deterministic path");
+  assert.equal(r.recommendation_reason,   null, "recommendation_reason null on deterministic path");
+});
+
+await test("distribution_recommendation flows from unified L3 call to enriched output", async () => {
+  const r = await validateAndTypeSource(mkSource(), { llmFn: mkLlm(CENTRAL_L3), skipUrlCheck: true });
+  assert.deepEqual(r.distribution_recommendation, { overview_dashboard: true, email_newsletter: true, analyst_library: true });
+  assert.ok(typeof r.recommendation_reason === "string" && r.recommendation_reason.length > 5, "recommendation_reason populated");
+});
+
+await test("distribution_recommendation defaults derived from reading_value when LLM omits the field", async () => {
+  const l3 = { ...CENTRAL_L3 };
+  delete l3.distribution_recommendation;
+  l3.reading_value = "analyst";
+  const r = await validateAndTypeSource(mkSource(), { llmFn: mkLlm(l3), skipUrlCheck: true });
+  // analyst → no dashboard/newsletter, but analyst_library
+  assert.equal(r.distribution_recommendation?.overview_dashboard, false);
+  assert.equal(r.distribution_recommendation?.email_newsletter,   false);
+  assert.equal(r.distribution_recommendation?.analyst_library,    true);
+});
+
+await test("background reading_value yields all-false distribution when LLM omits field", async () => {
+  const l3 = { ...CENTRAL_L3, reading_value: "background", verdict: "review", ai_threat_focus: "adjacent" };
+  delete l3.distribution_recommendation;
+  const r = await validateAndTypeSource(mkSource(), { llmFn: mkLlm(l3), skipUrlCheck: true });
+  assert.equal(r.distribution_recommendation?.overview_dashboard, false);
+  assert.equal(r.distribution_recommendation?.email_newsletter,   false);
+  assert.equal(r.distribution_recommendation?.analyst_library,    false);
+});
+
 // ── Batch + helpers ────────────────────────────────────────────────────────────
 console.log("\nbatch + mapping helpers");
 
@@ -218,7 +353,7 @@ await test("batch splits accepted vs rejected and reports stats", async () => {
   const accepted = mkSource({ id: "ok" });
   const discarded = mkSource({ id: "no", title: "Retailer earnings", trust_tier: "medium",
     full_text: "The retailer reported earnings and logistics improvements. ".repeat(8) });
-  const out = await validateAndTypeSources([accepted, discarded], { llmFn: mkLlm({ relevance: CENTRAL, qa: QA_OK }), concurrency: 2 });
+  const out = await validateAndTypeSources([accepted, discarded], { llmFn: mkLlm(CENTRAL_L3), concurrency: 2 });
   assert.equal(out.stats.total, 2);
   assert.equal(out.accepted.length, 1);
   assert.equal(out.rejected.length, 1);
@@ -298,7 +433,7 @@ await test("unknown publisher does not break the pipeline", () => {
 await test("source context fields flow through full validateAndTypeSource", async () => {
   const r = await validateAndTypeSource(
     mkSource({ publisher: "CISA", trust_tier: "primary", source_type: "governance_signal" }),
-    { llmFn: mkLlm({ relevance: CENTRAL, qa: QA_OK }) }
+    { llmFn: mkLlm(CENTRAL_L3) }
   );
   assert.equal(r.publisher_class,        "primary_authority");
   assert.equal(r.evidence_strength_hint, "strong");
@@ -344,10 +479,12 @@ await test("one canonical classifier; each module maps it consistently", () => {
 
 // ── finalGate: primary tier unconditional review pass (F20) ──────────────────
 
-await test("primary tier off-topic source routes to review, never reject", async () => {
-  // NVD CVE about an AI toolkit — title uses product name, no generic threat keywords.
-  // Before the fix: ai_specificity_score=0 → off_topic_trusted_no_ai_signal → reject.
-  // After the fix: primary tier gets unconditional review like curated.
+await test("known AI product + CVE is recognized as relevant via the entity/cyber pre-gate", async () => {
+  // NVD CVE about an AI inference server — the title names the product (LMDeploy)
+  // and a concrete cyber technique (path traversal / arbitrary file write) but no
+  // explicit "AI attack" phrase. The expanded pre-gate pairs the known AI entity
+  // with the high-signal cyber term and admits it as a genuine AI-security source
+  // (previously it scored 0 and only survived via the trusted-tier review rescue).
   const src = mkSource({
     trust_tier:  "primary",
     publisher:   "NVD",
@@ -355,10 +492,10 @@ await test("primary tier off-topic source routes to review, never reject", async
     title:       "CVE-2026-99999: LMDeploy path traversal allows arbitrary file write",
     full_text:   "CVE-2026-99999 is a path traversal vulnerability in the REST API server of the LMDeploy tool. An unauthenticated attacker can issue crafted requests to overwrite arbitrary files on the target system. CVSS score: 9.1 Critical. Upgrade to version 0.6.3 or later. No workaround available. ".repeat(4),
   });
+  assert.equal(hasAiSignal(src).has_ai_signal, true, "entity+cyber pair must clear the pre-gate");
   const r = await validateAndTypeSource(src, { skipLlm: true });
-  assert.equal(r.validation_status, "review",  "primary tier must never be hard-rejected");
-  assert.equal(r.downstream_route, "layer4_with_review");
-  assert.ok(r.final_validity_reason.startsWith("off_topic_but_primary"), `unexpected reason: ${r.final_validity_reason}`);
+  assert.notEqual(r.validation_status, "reject", "recognized AI-security source must not be rejected");
+  assert.notEqual(r.relevance_tier, "off_topic", "entity+cyber pair scores it above off_topic");
 });
 
 await test("high tier off-topic with no signal is still rejected", async () => {
@@ -378,7 +515,7 @@ await test("high tier off-topic with no signal is still rejected", async () => {
 
 await test("relevance_path is non-null after LLM triage confirms relevance", async () => {
   const src = mkSource(); // default source has AI signal keywords
-  const r = await validateAndTypeSource(src, { llmFn: mkLlm({ relevance: CENTRAL, qa: QA_OK }) });
+  const r = await validateAndTypeSource(src, { llmFn: mkLlm(CENTRAL_L3) });
   assert.notEqual(r.relevance_path, null, "relevance_path must not be null after LLM triage");
   assert.ok(
     ["known_signal", "novelty_signal", "both", "none"].includes(r.relevance_path),

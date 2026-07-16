@@ -264,7 +264,7 @@ async function main() {
         supabase,
       ).catch(() => {});
 
-      fanoutCount += childRows.length;
+      fanoutCount += children.length;
     } catch (err) {
       console.warn(`  [fanout] ${digestSrc.id} failed: ${err.message.slice(0, 80)}`);
       fallbackSingles.push(digestSrc);

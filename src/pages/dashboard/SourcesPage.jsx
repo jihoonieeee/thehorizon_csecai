@@ -650,8 +650,34 @@ export function SourcesPage() {
   const starredCount = useMemo(() => rowsExcept("starred").filter(s => s.starred).length, [rowsExcept]);
   const flaggedCount = useMemo(() => rowsExcept("flagged").filter(s => s.needs_review).length, [rowsExcept]);
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  // Group child sources immediately after their parent so digest findings are
+  // always adjacent to the report they came from. Children whose parent is not
+  // in the current filtered set appear in place (they match a filter the parent
+  // doesn't, e.g. a specific category tab).
+  const grouped = useMemo(() => {
+    const childMap = new Map();
+    for (const s of filtered) {
+      if (s.parent_source_id) {
+        if (!childMap.has(s.parent_source_id)) childMap.set(s.parent_source_id, []);
+        childMap.get(s.parent_source_id).push(s);
+      }
+    }
+    const result = [];
+    const placed = new Set();
+    for (const s of filtered) {
+      if (placed.has(s.id)) continue;
+      result.push(s);
+      placed.add(s.id);
+      // If this is a parent source, slot its children right below it.
+      for (const child of (childMap.get(s.id) || [])) {
+        if (!placed.has(child.id)) { result.push(child); placed.add(child.id); }
+      }
+    }
+    return result;
+  }, [filtered]);
+
+  const totalPages = Math.ceil(grouped.length / PAGE_SIZE);
+  const paged = grouped.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   // All distinct tags across the corpus, most-common first — feeds the tag editor's
   // autocomplete so manual tagging reuses the existing controlled vocabulary.
@@ -907,7 +933,7 @@ export function SourcesPage() {
                 return (
                   <Fragment key={id}>
                     <tr
-                      className={`hz-src-row${open ? " open" : ""}`}
+                      className={`hz-src-row${open ? " open" : ""}${s.is_child_source ? " hz-src-row-child" : ""}`}
                       onClick={() => setExpandedId(open ? null : id)}
                     >
                       <td className="hz-src-caret">{open ? "▾" : "▸"}</td>
@@ -931,15 +957,40 @@ export function SourcesPage() {
                       </td>
                       <td>
                         <div className="hz-src-title-cell">
-                          <TrustDot tier={s.trust_tier} />
+                          {s.is_child_source
+                            ? <span className="hz-src-child-marker" title="Sub-finding from a longer report">↳</span>
+                            : <TrustDot tier={s.trust_tier} />
+                          }
                           <div>
-                            {s.url
-                              ? <a href={s.url} target="_blank" rel="noopener noreferrer" className="hz-src-link"
-                                   onClick={e => e.stopPropagation()}>
-                                  {s.title || "(no title)"}
-                                </a>
-                              : <span className="hz-src-link-plain">{s.title || "(no title)"}</span>
-                            }
+                            {s.is_child_source ? (
+                              <>
+                                {/* Sub-finding title — the specific finding within the parent report */}
+                                {s.url
+                                  ? <a href={s.url} target="_blank" rel="noopener noreferrer"
+                                       className="hz-src-link hz-src-child-finding"
+                                       onClick={e => e.stopPropagation()}>
+                                      {s.finding_title || s.title}
+                                    </a>
+                                  : <span className="hz-src-link-plain hz-src-child-finding">
+                                      {s.finding_title || s.title}
+                                    </span>
+                                }
+                                {/* Parent report attribution */}
+                                <div className="hz-src-child-parent-ref">
+                                  from: <span>{s.parent_title || s.title.split(" [")[0]}</span>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                {s.url
+                                  ? <a href={s.url} target="_blank" rel="noopener noreferrer" className="hz-src-link"
+                                       onClick={e => e.stopPropagation()}>
+                                      {s.title || "(no title)"}
+                                    </a>
+                                  : <span className="hz-src-link-plain">{s.title || "(no title)"}</span>
+                                }
+                              </>
+                            )}
                             {(s.short_summary || s.summary) && (
                               <div className="hz-src-summary">
                                 {(s.short_summary || s.summary).slice(0, 150)}
@@ -1053,7 +1104,7 @@ export function SourcesPage() {
           <span className="hz-page-info">
             {page} / {totalPages}
             <span className="hz-page-info-range">
-              &nbsp;({(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length})
+              &nbsp;({(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, grouped.length)} of {grouped.length})
             </span>
           </span>
           <button
