@@ -289,14 +289,14 @@ async function main() {
     ...allChildren,
   ];
 
-  const { relevant, adjacent, discarded, counts } = await understandAllSources(
+  const { relevant, discarded, counts } = await understandAllSources(
     toClassify,
     { skipLlm: false, supabase, concurrency: 4 },
   );
-  console.log(`  Classified: ${relevant.length} relevant / ${(adjacent||[]).length} adjacent / ${discarded.length} discarded`);
+  console.log(`  Classified: ${relevant.length} relevant / ${discarded.length} discarded`);
 
   // Collect IDs of newly classified research sources for significance scoring.
-  const newResearchIds = [...relevant, ...(adjacent || [])]
+  const newResearchIds = relevant
     .filter(s => !s._from_cache && isSignificanceEligible(s))
     .map(s => s.id);
 
@@ -305,7 +305,7 @@ async function main() {
   // Standalone threat intelligence sources that are long enough need the same
   // Sonnet deep-extraction pass (isEligibleForReportExtraction now accepts them).
   // Fire-and-forget — does not block classification QA.
-  const longThreatIntel = [...relevant, ...(adjacent || [])].filter(
+  const longThreatIntel = relevant.filter(
     s => !s._from_cache && s.source_type === "threat_intelligence",
   );
   if (longThreatIntel.length) {
@@ -320,7 +320,7 @@ async function main() {
   const { report } = await qaClassificationLLM(relevant, {
     skipLlm: false, full: true, concurrency: 3, supabase,
   });
-  console.log(`  QA: ${report.agreed}/${report.checked} agreed, ${report.fixed} auto-fixed (${(report.agreement_rate * 100).toFixed(0)}%)`);
+  console.log(`  QA: ${report.agreed}/${report.checked} agreed, ${report.fixed} auto-fixed (${report.agreement_rate.toFixed(0)}%)`);
 
   // ── L4d: Research significance ────────────────────────────────────────────
   await runSignificance(newResearchIds);

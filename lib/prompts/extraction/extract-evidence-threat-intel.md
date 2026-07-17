@@ -49,9 +49,17 @@ reproduce that hedge in the fact text. Do NOT harden hedged language into fact.
   Good: "Mandiant assesses with moderate confidence that APT41 compromised the LLM provider."
 
 QUOTE DISCIPLINE
-- "quote" must be exact verbatim text from the source — no paraphrasing, no ellipsis in middle.
-- For analyst judgments, quote the judgment sentence verbatim, including the hedge.
-- Every number must appear verbatim in the source text.
+- "quote" must be a SINGLE contiguous verbatim span copied character-for-character from the source text — no paraphrasing, no ellipsis in middle, no merging of sentences from different paragraphs.
+- For analyst judgments, quote the single judgment sentence verbatim, including the hedge.
+- For expert_assessment items: pick one representative sentence as the quote — do NOT construct a synthetic quote that combines text from different parts of the source.
+- Set quote_grounded=false only if you cannot find the exact text in the source.
+- Every number in "numbers" must appear verbatim in the source text.
+
+TECHNIQUE TAGS
+- technique_tags must contain ONLY valid taxonomy tag IDs — the pattern is TAI0X_, LLM0X_, ASI0X_, or AE0X_ followed by an underscore and the tag name.
+- Start from the TAGS field above (the source's assigned taxonomy). You may use a subset or add a cross-domain secondary tag only when the evidence clearly demonstrates that specific technique.
+- NEVER copy example values from the schema — "TAI01_data_poisoning" in the schema is a placeholder, not a default to use.
+- If a technique tag is not applicable for a specific item, use an empty array [].
 
 AI-RELEVANCE FILTER
 Extract only items where AI directly features: attacks on AI systems, AI-enabled TTPs,
@@ -68,7 +76,7 @@ Return ONLY valid JSON:
       "evidence_type": "incident|threat_actor_activity|capability_demonstration|vulnerability|research_finding|statistical_measurement|expert_assessment",
       "specificity": "high|medium|low",
       "numbers": [{"value": "string", "context": "string"}],
-      "technique_tags": ["TAI01_data_poisoning", ...],
+      "technique_tags": [],
       "entities": ["APT41", "Gemini", "CVE-2026-XXXX", ...],
       "event_date": "YYYY-MM-DD or YYYY-MM or null",
       "time_basis": "event_date|publication_date|unknown",

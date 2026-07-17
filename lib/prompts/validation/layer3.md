@@ -663,26 +663,25 @@ REJECT — discard without further processing:
     deliverable (e.g. a red-team report that discovers a new attack class), it is NOT
     marketing — set content_quality="substantive" or "aggregation" instead.
   • content_quality is "thin_content" AND source_type is NOT one of: vulnerability,
-    exploit_disclosure, incident, advisory, patch_note, cve, alert
+    exploit_disclosure, incident, governance_signal
     (Thin content is only acceptable for naturally brief structured records. A thin blog
     post, news teaser, or paywall stub — even from a reputable publisher — has no
     extractable intelligence. Trust tier does NOT rescue thin non-structured content.)
   • evidence_quality is "unverifiable" AND trust_tier is "low" or "unknown"
-  • content_quality is "aggregation" AND no usable primary source links (any trust level)
+  • content_quality is "aggregation" (all aggregations are rejected — no link-discovery exception)
 
-REVIEW — keep for human attention (genuine uncertainty only):
+REVIEW — flag for borderline cases that cannot be definitively resolved:
   • evidence_quality is "weak" or evidence_origin is "unclear" AND ai_threat_focus is
     "central" AND content is otherwise substantive (needs human verification of claims)
   • claim_support is "speculative" but source is high/primary trust (may have watch-list value)
-  • content_quality is "aggregation" WITH usable primary source links (link discovery value)
   • trust_tier is "low" AND content_quality is "substantive" AND focus is "central"
     (genuine original offensive evidence from low-trust source — needs human assessment)
-  Do NOT use REVIEW for adjacent, defensive, or background sources — use REJECT.
+  Do NOT use REVIEW for adjacent, defensive, background, or aggregation sources — use REJECT.
 
 PASS — proceed to full classification:
   • ai_threat_focus is "central"
   • content_quality is "substantive" OR ("thin_content" for naturally brief types:
-    vulnerability, exploit_disclosure, incident — brevity ≠ thinness for structured advisories)
+    vulnerability, exploit_disclosure, incident, governance_signal — brevity ≠ thinness for structured advisories)
   • trust_tier is "medium", "high", or "primary"
   • evidence_quality is "strong" or "adequate"
   • reading_value is "essential", "recommended", or "analyst" (NOT "background")

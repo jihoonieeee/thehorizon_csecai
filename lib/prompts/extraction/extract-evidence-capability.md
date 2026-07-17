@@ -89,14 +89,16 @@ Return ONLY valid JSON:
       "claim_epistemic_type": "observed_fact|marketing_claim|inference|author_analysis|forecast",
       "landscape_change": true|false,
       "numbers": [{"value": "string", "context": "string"}],
-      "technique_tags": ["AE01_ai_enhanced_recon", ...],
-      "entities": ["GPT-5 [model]", "OpenAI [org]", "real-time audio API [API]", ...],
+      "technique_tags": [],
+      "entities": ["GPT-5 [model]", "OpenAI [org]", "real-time audio API [API]"],
       "event_date": "YYYY-MM-DD or YYYY-MM or null",
       "time_basis": "event_date|publication_date|unknown",
       "within_reporting_window": true|false|null
     }
   ]
 }
+
+TECHNIQUE TAGS: technique_tags must contain ONLY valid taxonomy tag IDs (TAI0X_, LLM0X_, ASI0X_, AE0X_ pattern). Start from the TAGS field in the user prompt. Use [] if none apply. NEVER invent IDs or copy the [] placeholder literally.
 
 Set landscape_change: true on any item that directly answers the central question (a genuine
 "this is new/accessible/affordable now" finding). Set false for supporting context items

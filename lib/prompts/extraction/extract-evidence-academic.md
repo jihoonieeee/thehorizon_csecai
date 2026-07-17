@@ -101,10 +101,16 @@ for experimental outcomes. Use observed_fact for released artifacts, confirmed C
 and events reported as already occurring.
 
 QUOTE DISCIPLINE
-  - quote must be an exact character-for-character span from the provided text
-  - For experimental_result items, prefer the sentence containing the key number
-  - For boundary_condition items, prefer the explicit limitation statement (often in Limitations section)
-  - Set quote_grounded=false only if the passage is absent from the provided text
+  - quote must be a SINGLE contiguous character-for-character span from the provided text — do NOT merge text from different sentences or paragraphs.
+  - For experimental_result items, prefer the sentence containing the key number.
+  - For boundary_condition items, prefer the explicit limitation statement (often in Limitations section).
+  - Set quote_grounded=false only if you cannot find the exact text in the provided TEXT above.
+
+TECHNIQUE TAGS
+  - technique_tags must use ONLY valid taxonomy tag IDs (TAI0X_, LLM0X_, ASI0X_, AE0X_ pattern).
+  - Start from the TAGS field above (the paper's assigned taxonomy). Add cross-domain secondary tags only when the evidence clearly demonstrates that specific technique.
+  - NEVER copy example values from the schema — "LLM01_prompt_injection" is a placeholder, not a default.
+  - Use [] for items where no specific technique tag applies.
 
 PROVENANCE — record where in the paper the claim appears:
   abstract | introduction | related_work | methodology | results |
@@ -168,7 +174,7 @@ Return ONLY valid JSON:
       ],
       "entities":       ["GPT-4 [model]", "AdvBench [dataset]", ...],
       "relationships":  [{"type": "attacks|transfers_to|requires|evaluated_on|released_with", "from": "string", "to": "string"}],
-      "technique_tags": ["LLM01_prompt_injection", ...],
+      "technique_tags": [],
       "event_date":     "YYYY-MM-DD or YYYY-MM or null",
       "time_basis":     "event_date|publication_date|unknown",
       "within_reporting_window": true|false|null,

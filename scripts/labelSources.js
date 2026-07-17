@@ -2,9 +2,10 @@
 /**
  * labelSources.js — backfill reading_value for existing corpus sources.
  *
- * reading_value is now set by Layer 3 (layer3.md) at ingest. This script
- * backfills the field for sources ingested before reading_value was added,
- * by re-running Layer 3 validation on them.
+ * reading_value is set by Layer 3 (layer3.md) at ingest via LLM judgment.
+ * This script backfills the field for sources that went through the v2 understand
+ * path (understandAllSources) which does not yet set reading_value, by re-running
+ * the Layer 3 validation call on them.
  *
  * Idempotent: skips sources that already have reading_value. Use --force to re-assess.
  *
@@ -31,13 +32,13 @@ async function main() {
   const since = new Date(Date.now() - DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   console.log(`\n${"═".repeat(60)}`);
-  console.log(`  reading_value backfill`);
+  console.log(`  reading_value backfill (LLM)`);
   console.log(`  Window: last ${DAYS} days  |  limit: ${LIMIT}  |  force: ${FORCE}  |  dry-run: ${DRY_RUN}`);
   console.log(`${"═".repeat(60)}\n`);
 
   let query = supabase
     .from("sources")
-    .select("id, title, url, publisher, source_type, trust_tier, full_text, summary, short_summary, date_published, validation_status, reading_value")
+    .select("id, title, url, publisher, source_type, trust_tier, full_text, summary, short_summary, date_published, validation_status, reading_value, intelligence")
     .in("validation_status", ["pass", "review"])
     .gte("date_published", since)
     .order("date_published", { ascending: false })
@@ -87,7 +88,7 @@ async function main() {
 
   process.stdout.write("\n");
   console.log(`\n${"─".repeat(60)}`);
-  console.log(`  Assessed: ${assessed}  |  Skipped/failed: ${skipped + failed}  |  Errors: ${failed}`);
+  console.log(`  Assessed: ${assessed}  |  Skipped/no-rv: ${skipped}  |  Errors: ${failed}`);
   console.log(`  Reading values:  essential:${counts.essential}  recommended:${counts.recommended}  analyst:${counts.analyst}  background:${counts.background}`);
   if (DRY_RUN) console.log(`\n  (dry-run — no writes performed)`);
 }

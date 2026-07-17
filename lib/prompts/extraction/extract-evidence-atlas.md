@@ -104,7 +104,7 @@ For each item:
 - "evidence_type": incident | capability_demonstration | threat_actor_activity | research_finding
 - "specificity": high (named anchor + measurable detail) | medium (named entity/technique) | low
 - "numbers": [{"value": "...", "context": "..."}] — only values verbatim in the quote/source
-- "technique_tags": relevant taxonomy tag IDs from the Horizon taxonomy (e.g. "TAI01_data_poisoning")
+- "technique_tags": array of valid taxonomy tag IDs (TAI0X_, LLM0X_, ASI0X_, AE0X_ pattern). Start from the TAGS field above. Use [] if none apply. NEVER invent tag IDs or copy examples.
 - "entities": named entities (actor names, model names, organisation names, ATLAS IDs, CVE IDs)
 - "event_date": ISO date (YYYY-MM-DD or YYYY-MM) — use INCIDENT DATE, not publication date
 - "time_basis": "incident_date" | "publication_date" | "unknown"

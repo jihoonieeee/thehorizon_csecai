@@ -52,6 +52,12 @@ CLAIM ORIGIN — record where in the document the claim came from:
   expert_comment        — community discussion, forum comment, expert quote, HN/Reddit thread
   analyst_interpretation — an implication you are drawing; not explicitly stated in the text
 
+TECHNIQUE TAGS
+  - technique_tags must use ONLY valid taxonomy tag IDs (TAI0X_, LLM0X_, ASI0X_, AE0X_ pattern).
+  - Start from the TAGS field in the user prompt (the source's assigned taxonomy). Use a subset, or add a cross-domain tag only when the evidence clearly demonstrates a distinct different technique.
+  - NEVER copy example values from the schema — "<taxonomy-tag-id>" is a placeholder.
+  - Use [] for items where no specific technique tag applies (background context, policy items).
+
 For aggregation pages (Hacker News, Reddit, newsletters, link roundups):
   - Prefer evidence traceable to the linked primary source
   - Claims from discussion comments → evidence_type: expert_assessment, claim_origin: expert_comment
@@ -153,7 +159,7 @@ Return ONLY valid JSON. No markdown, no commentary.
       "evidence_type": "incident|vulnerability|threat_actor_activity|capability_demonstration|research_finding|statistical_measurement|policy_or_standard|expert_assessment",
       "specificity":   "high|medium|low",
       "numbers":       [{"value": "string", "context": "string"}],
-      "technique_tags": ["LLM01_prompt_injection", ...],
+      "technique_tags": [],
       "entities":      ["CVE-2026-1234", "GPT-4o", "UNC3944", ...],
       "event_date":    "YYYY-MM-DD or YYYY-MM or null — when the event OCCURRED, not when the article was published",
       "time_basis":    "event_date|publication_date|unknown",
