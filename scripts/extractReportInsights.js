@@ -3,14 +3,17 @@
  * extractReportInsights.js — backfill deep-extraction for ALL eligible long reports.
  *
  * Queries ALL sources that are eligible for report extraction:
- *   - is_digest = true  (multi-topic landscape reports)
+ *   - is_digest = true  (multi-topic landscape reports), OR
+ *   - source_type = threat_intelligence  (single-focus campaign/actor reports)
  *   - trust_tier IN (primary, high, curated)
  *   - full_text length >= 3000 chars
  *   - no existing intelligence.report_analysis (unless --all)
  *
  * The extraction logic lives in lib/pipeline/ingest/extractLongReportInsights.js
- * and is also wired into api/refresh.js so future long reports are auto-processed
- * on ingestion.
+ * and is also wired into dailyClassify.js so future long reports are auto-processed.
+ * Output (intelligence.report_analysis) is consumed by extractEvidence.js in Layer 5
+ * as the pre-computed fast path — converting walkthroughs/insights/trends to evidence
+ * items without a second LLM call.
  *
  * Usage:
  *   node scripts/extractReportInsights.js [--dry-run] [--id <sourceId>] [--limit N]
@@ -39,12 +42,12 @@ async function getTargets() {
     return data || [];
   }
 
-  // All eligible digests: is_digest=true, authoritative trust tier, sufficient text.
+  // Two eligible classes: multi-story digests AND standalone long threat intel reports.
   // The isEligibleForReportExtraction() check further enforces the 3000-char floor.
   const { data, error } = await supabase
     .from("sources")
     .select("*")
-    .eq("is_digest", true)
+    .or("is_digest.eq.true,source_type.eq.threat_intelligence")
     .in("trust_tier", ["primary", "high", "curated"])
     .order("date_published", { ascending: false })
     .limit(LIMIT);

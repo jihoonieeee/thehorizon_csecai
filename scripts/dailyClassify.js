@@ -99,7 +99,7 @@ async function runIngest() {
   let runId;
   try {
     runId = await startIngestionRun();
-    const result = await collectRawSources(window);
+    const result = await collectRawSources(window, { enrichArxivFullText: true });
 
     const snapshot = {
       generated_at:   new Date().toISOString(),
@@ -299,6 +299,21 @@ async function main() {
   const newResearchIds = [...relevant, ...(adjacent || [])]
     .filter(s => !s._from_cache && isSignificanceEligible(s))
     .map(s => s.id);
+
+  // ── L4b-post: Deep extraction for long threat intel reports ─────────────────
+  // Digests had extractAndSaveReportInsights fired during fanout (above).
+  // Standalone threat intelligence sources that are long enough need the same
+  // Sonnet deep-extraction pass (isEligibleForReportExtraction now accepts them).
+  // Fire-and-forget — does not block classification QA.
+  const longThreatIntel = [...relevant, ...(adjacent || [])].filter(
+    s => !s._from_cache && s.source_type === "threat_intelligence",
+  );
+  if (longThreatIntel.length) {
+    console.log(`  [report-insights] queuing ${longThreatIntel.length} threat intel source(s) for deep extraction`);
+    for (const s of longThreatIntel) {
+      extractAndSaveReportInsights(s, supabase).catch(() => {});
+    }
+  }
 
   // ── L4c: QA verifier ──────────────────────────────────────────────────────
   console.log("\n── L4c: Classification QA ─────────────────────────────────────");
