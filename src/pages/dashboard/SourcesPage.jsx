@@ -56,7 +56,7 @@ const TIER_META = {
 };
 const TIER_ORDER = ["operational", "observed", "disclosed", "demonstrated", "research"];
 
-// Reading value label — new system replacing source_label (critical/important/…).
+// Reading value — essential/recommended/analyst/background.
 // Null until scripts/labelSources.js backfill runs on the corpus.
 const LABEL_META = {
   essential:   { short: "Essential",   color: "#b91c1c", bg: "#fee2e2" },

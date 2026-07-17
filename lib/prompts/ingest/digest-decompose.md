@@ -45,11 +45,7 @@ For EACH item also extract, when present in the text:
   item_title (short, specific), item_summary (2-3 self-contained sentences that stand on their own without the rest of the report),
   named_incidents, named_cves (CVE-IDs), named_products, actor (threat group),
   timeframe (date/period), supporting_quote (a verbatim span from the document that backs the finding — copy it exactly, do not paraphrase),
-  section_ref (the heading/page/locating phrase where this matter appears), and importance_label — one of:
-    critical  — a confirmed real-world incident, actively-exploited vuln, or first public report of a technique
-    important — a significant new technique, disclosure, or well-evidenced trend
-    supporting — corroborating detail or a minor finding
-    archive   — background / already-known context
+  section_ref (the heading/page/locating phrase where this matter appears).
 
 HOW MANY
 - A landscape/threat report can hold MANY AI matters (often 10-40) — extract each distinct one; do not collapse them.
