@@ -25,19 +25,23 @@ const MATURITY = [
     signals: '"ongoing campaign", "attributed to [named group]", "multiple victims", threat intelligence spanning weeks or months.' },
 ];
 
-const SOURCE_LABELS = [
-  { key: "critical",   color: "#b91c1c", bg: "#fee2e2",  label: "Critical",
-    desc: "Confirmed real-world incidents, landmark research establishing a new attack surface, or authoritative multi-finding threat intelligence reports. Changes the threat model or documents the first adversary operationalisation of a major capability.",
-    examples: "Named APT group confirmed using AI-generated malware at scale. MITRE ATLAS incident with confirmed victim impact. GTIG/CrowdStrike campaign report attributing AI-enabled attacks." },
-  { key: "important",  color: "#c2410c", bg: "#ffedd5",  label: "Important",
-    desc: "Working exploits, notable research on a known attack surface, or single confirmed incidents. Materially changes prioritisation within a known threat area without establishing a wholly new one.",
-    examples: "CVE with public PoC for a production LLM framework. Notable arXiv paper demonstrating model extraction against a live API. Single confirmed AI-assisted phishing campaign." },
-  { key: "supporting", color: "#475569", bg: "#e2e8f0",  label: "Supporting",
-    desc: "Corroborating coverage, incremental research, or thin-text advisories. Technically useful but does not change strategic posture. Practitioners read it; leadership sees the summary.",
-    examples: "Vulnerability advisory with no exploit code. Routine arXiv paper extending prior work. Third journalist writeup of a known incident." },
-  { key: "archive",    color: "#94a3b8", bg: "#f1f5f9",  label: "Archive",
-    desc: "Adjacent guidance, generic commentary, defensive-primary content, or sources that add no distinct intelligence beyond stronger existing coverage. Not actively surfaced.",
-    examples: "Generic \"AI threats are rising\" editorial. AWS implementation guide for multi-tenant agents. Defensive IR playbook with no new offensive findings." },
+const READING_VALUE = [
+  { key: "essential",   color: "#b91c1c", bg: "#fee2e2",  label: "Essential",
+    desc: "Changes the threat model or establishes something the field had not seen before. First confirmed adversary operationalisation of a major AI capability, landmark frameworks leadership will repeatedly reference, named multi-government advisories declaring a strategic posture shift.",
+    examples: "GTIG's first confirmed AI-generated zero-day in a real operation. OWASP LLM Top 10 initial release. Five Eyes statement on frontier AI cyber risk.",
+    surfaces: "Dashboard + Newsletter + Library" },
+  { key: "recommended", color: "#c2410c", bg: "#ffedd5",  label: "Recommended",
+    desc: "Materially changes prioritisation within a known attack surface. New variants with concrete evidence, confirmed adversary adoption, strong multi-incident syntheses, and reusable case studies with named actors and measurable impact.",
+    examples: "GTIG quarterly AI threat report with new adversary TTPs. CrowdStrike on first observed AI-generated phishing at scale. HiddenLayer HuggingFace malware incident.",
+    surfaces: "Dashboard + Newsletter (when readable without technical context) + Library" },
+  { key: "analyst",     color: "#475569", bg: "#e2e8f0",  label: "Analyst",
+    desc: "Technically useful for practitioners but does not change strategic posture. Implementation mechanics, thin-text advisories, incremental research, exploit details. Leadership sees the summary rather than reading the source directly.",
+    examples: "Vulnerability advisory for a vLLM SSRF. arXiv paper with only an abstract available. Third journalist writeup of a known incident.",
+    surfaces: "Library only" },
+  { key: "background",  color: "#94a3b8", bg: "#f1f5f9",  label: "Background",
+    desc: "Adjacent guidance, policy context, defensive advice, or generic commentary with no distinct offensive intelligence. Sources that add nothing beyond stronger existing coverage.",
+    examples: "Generic \"AI threats are rising\" editorial. AWS implementation guide for multi-tenant agents. Defensive IR playbook with no new offensive findings.",
+    surfaces: "Not actively promoted" },
 ];
 
 const TAG_GROUPS = [
@@ -116,12 +120,12 @@ export function LegendPanel({ onClose }) {
         <button className="hz-legend-close" onClick={onClose} title="Close">✕</button>
       </div>
 
-      {/* Source label — critical/important/supporting/archive */}
+      {/* Reading value — essential/recommended/analyst/background */}
       <Section
-        title="Source Label"
-        note="Deterministic importance label derived from source type, trust tier, and threat maturity. Drives the Label filter on the Sources page and controls which sources surface in the dashboard and newsletter."
+        title="Reading Value"
+        note="Who should read this source, and where should it appear? Assigned by Layer 3 LLM — independent of threat severity, maturity level, and publisher prestige. A theoretical first-of-kind paper can be Essential while a confirmed real-world CVE is Analyst. Populated by scripts/labelSources.js."
       >
-        {SOURCE_LABELS.map(l => (
+        {READING_VALUE.map(l => (
           <div key={l.key} className="hz-legend-maturity-row">
             <div className="hz-legend-maturity-left">
               <span className="hz-imp-badge" style={{ color: l.color, background: l.bg, fontSize: "0.68rem", fontWeight: 700 }}>{l.label}</span>
@@ -129,6 +133,7 @@ export function LegendPanel({ onClose }) {
             <div className="hz-legend-maturity-body">
               <div className="hz-legend-maturity-desc">{l.desc}</div>
               <div className="hz-legend-derivation">Examples: {l.examples}</div>
+              <div className="hz-legend-derivation">Surfaces: {l.surfaces}</div>
             </div>
           </div>
         ))}

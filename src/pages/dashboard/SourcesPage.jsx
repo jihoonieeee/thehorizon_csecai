@@ -56,14 +56,15 @@ const TIER_META = {
 };
 const TIER_ORDER = ["operational", "observed", "disclosed", "demonstrated", "research"];
 
-// Categorical importance label (critical/important/supporting/archive) from the API.
+// Reading value label — new system replacing source_label (critical/important/…).
+// Null until scripts/labelSources.js backfill runs on the corpus.
 const LABEL_META = {
-  critical:   { short: "Critical",   color: "#b91c1c", bg: "#fee2e2" },
-  important:  { short: "Important",  color: "#c2410c", bg: "#ffedd5" },
-  supporting: { short: "Supporting", color: "#475569", bg: "#e2e8f0" },
-  archive:    { short: "Archive",    color: "#94a3b8", bg: "#f1f5f9" },
+  essential:   { short: "Essential",   color: "#b91c1c", bg: "#fee2e2" },
+  recommended: { short: "Recommended", color: "#c2410c", bg: "#ffedd5" },
+  analyst:     { short: "Analyst",     color: "#475569", bg: "#e2e8f0" },
+  background:  { short: "Background",  color: "#94a3b8", bg: "#f1f5f9" },
 };
-const LABEL_ORDER = ["critical", "important", "supporting", "archive"];
+const LABEL_ORDER = ["essential", "recommended", "analyst", "background"];
 
 const sigRank = () => 0;
 
