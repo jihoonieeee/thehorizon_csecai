@@ -12,10 +12,12 @@ const TAG_LABEL = new Map(
   TAXONOMY_GROUPS.flatMap(g => g.tags.map(t => [t.id, t.label]))
 );
 
-// Format any tag ID for display: use the taxonomy label if known,
-// otherwise clean up underscores and capitalise.
+// Format any tag ID for display: "ASI02 Tool Misuse" — code + human label, no underscores.
 function tagLabel(id) {
-  if (TAG_LABEL.has(id)) return TAG_LABEL.get(id);
+  const code  = id.match(/^([A-Z]+\d+)/)?.[1] ?? "";
+  const label = TAG_LABEL.get(id);
+  if (label) return code ? `${code} ${label}` : label;
+  // Fallback for meta-tags (defensive, adjacent_context): clean underscores only.
   return id.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 
