@@ -4,8 +4,20 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
-import { LegendPanel, TaxonomyPanel } from "../../components/dashboard/LegendPanel.jsx";
+import { LegendPanel, TaxonomyPanel, TAXONOMY_GROUPS } from "../../components/dashboard/LegendPanel.jsx";
 import { getAdminToken, getAccessLevel, onAuthChange } from "../../auth.js";
+
+// Build a flat id → label map from the taxonomy so tags render as human-readable names.
+const TAG_LABEL = new Map(
+  TAXONOMY_GROUPS.flatMap(g => g.tags.map(t => [t.id, t.label]))
+);
+
+// Format any tag ID for display: use the taxonomy label if known,
+// otherwise clean up underscores and capitalise.
+function tagLabel(id) {
+  if (TAG_LABEL.has(id)) return TAG_LABEL.get(id);
+  return id.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
 
 const CAT_COLOR = {
   traditional_ai_threats: "#3583C9",
@@ -428,7 +440,7 @@ function SourceDetail({ s, isAdmin, onUpdateDate, onConfirmDate, onDelete, onSav
           <span className="hz-src-detail-k">Taxonomy</span>
           <span className="hz-src-detail-tags">
             {(s.tags || []).map(t => (
-              <span key={t} className={`hz-src-detail-tag${domainTag(t) ? " domain" : ""}`}>{t}</span>
+              <span key={t} title={t} className={`hz-src-detail-tag${domainTag(t) ? " domain" : ""}`}>{tagLabel(t)}</span>
             ))}
           </span>
         </div>
@@ -940,7 +952,7 @@ export function SourcesPage() {
                   style={on ? { background: tabColor, borderColor: tabColor, color: "#fff" } : {}}
                   onClick={() => toggleTag(tag)}
                 >
-                  {tag}
+                  {tagLabel(tag)}
                   <span className="hz-tag-pill-count">{count}</span>
                 </button>
               );
@@ -1200,12 +1212,13 @@ export function SourcesPage() {
                           {(s.tags || []).slice(0, 3).map(t => (
                             <button key={t}
                               className={`hz-src-tag${activeTags.includes(t) ? " active" : ""}`}
+                              title={t}
                               onClick={e => { e.stopPropagation(); activeTab !== "all" && toggleTag(t); }}
                               style={{
                                 cursor: activeTab !== "all" ? "pointer" : "default",
                                 ...(activeTags.includes(t) ? { background: tabColor, borderColor: tabColor, color: "#fff" } : {}),
                               }}>
-                              {t}
+                              {tagLabel(t)}
                             </button>
                           ))}
                           {(s.tags || []).length > 3 && (

@@ -216,9 +216,7 @@ export function TaxonomyPanel({ onClose }) {
         <button className="hz-legend-close" onClick={onClose} title="Close">✕</button>
       </div>
       <p className="hz-legend-note" style={{ padding: "8px 20px 0" }}>
-        Each source carries one or more taxonomy tags identifying the specific technique or threat class.
-        Tags use a four-prefix system matching the four offensive categories.
-        Filter by tag within each category tab on the Sources page.
+        Each source carries one or more tags identifying the specific technique or threat class.
       </p>
       {TAXONOMY_GROUPS.map(g => (
         <div key={g.prefix} className="hz-legend-section">
@@ -231,7 +229,7 @@ export function TaxonomyPanel({ onClose }) {
             {g.tags.map(t => (
               <div key={t.id} className="hz-legend-tag-row">
                 <div className="hz-legend-tag-left">
-                  <code className="hz-legend-tag-code">{t.id}</code>
+                  <code className="hz-legend-tag-code" title={t.id}>{t.id.split("_")[0]}</code>
                   <span className="hz-legend-tag-label">{t.label}</span>
                 </div>
                 <span className="hz-legend-tag-desc">{t.desc}</span>
