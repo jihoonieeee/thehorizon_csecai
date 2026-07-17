@@ -4520,13 +4520,13 @@ details[open] .hz-gen-advanced-toggle::before { content: "▾ "; }
 .hz-legend-steps code { font-size: 0.72rem; background: var(--surface-2); padding: 1px 4px; border-radius: 3px; }
 
 .hz-legend-tag-group {
-  margin-bottom: 14px;
+  margin-bottom: 20px;
 }
 .hz-legend-tag-group-header {
   display: flex;
   align-items: center;
   gap: 7px;
-  margin-bottom: 5px;
+  margin-bottom: 8px;
   font-size: 0.82rem;
 }
 .hz-legend-tag-group-desc {
@@ -4534,35 +4534,51 @@ details[open] .hz-gen-advanced-toggle::before { content: "▾ "; }
   font-size: 0.78rem;
 }
 .hz-legend-tag-list {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding-left: 8px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
   border-left: 2px solid var(--border);
+  margin-left: 4px;
 }
 .hz-legend-tag-row {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
+  display: grid;
+  /* Left col: fixed width for code + label; right col: description fills remainder */
+  grid-template-columns: 320px 1fr;
+  align-items: start;
+  gap: 0 16px;
+  padding: 5px 0 5px 12px;
   font-size: 0.76rem;
   line-height: 1.5;
+  border-bottom: 1px solid var(--border);
+}
+.hz-legend-tag-row:last-child {
+  border-bottom: none;
+}
+.hz-legend-tag-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 8px;
 }
 .hz-legend-tag-code {
-  flex-shrink: 0;
   font-family: monospace;
-  font-size: 0.68rem;
+  font-size: 0.67rem;
   background: var(--surface-2);
   padding: 1px 5px;
   border-radius: 3px;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
+  width: fit-content;
 }
 .hz-legend-tag-label {
   font-weight: 600;
+  font-size: 0.78rem;
   color: var(--text-primary);
-  white-space: nowrap;
 }
 .hz-legend-tag-desc {
-  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  padding-top: 1px;
 }
 
 .hz-legend-compare {
