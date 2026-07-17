@@ -365,26 +365,26 @@ const MATURITY_DEFS = [
     signals: '"ongoing campaign", "attributed to [named group]", "multiple victims", threat intelligence spanning weeks or months, GTIG/CrowdStrike campaign reporting.' },
 ];
 
-const PRIORITY_DEFS = [
-  { key: "critical",   color: "#b91c1c", label: "Critical",
-    desc: "Must-read. Adversaries were CONFIRMED to use this technique/tool in a real operation, OR it is the FIRST public disclosure of a genuinely new attack surface / threat class.",
-    signals: "Confirmed in-the-wild adversary use; a named campaign; a field-first disclosure; a CVE marked actively exploited by CISA/the vendor." },
-  { key: "important",  color: "#c2410c", label: "Important",
-    desc: "A working exploit or capability was DEMONSTRATED (PoC, red-team, vendor lab test) with no confirmed real-world use yet, OR a clearly novel technique within a known attack surface.",
-    signals: "Public PoC; researcher demonstrated against a real product; a notable new method; landmark research." },
-  { key: "supporting", color: "#475569", label: "Supporting",
-    desc: "Corroborating detail on a known technique, a routine vendor advisory, a CVE with no exploitation evidence, or a 2nd/3rd source on a topic already covered by a critical/important item.",
-    signals: '"Adversaries are increasingly…" with no incident; routine advisory; CVE disclosure only; duplicate coverage.' },
-  { key: "archive",    color: "#94a3b8", label: "Archive",
-    desc: "Background context, defensive guidance, governance/policy, or content that turned out not to be an offensive AI-security threat.",
-    signals: "Defensive/how-to-protect content; policy/governance; off-topic despite passing the keyword gate." },
+const READING_VALUE_DEFS = [
+  { key: "essential",   color: "#b91c1c", label: "Essential",
+    desc: "Changes the threat model or establishes something the field had not seen before. First confirmed adversary operationalisation of a major AI capability, landmark frameworks leadership will repeatedly reference, named multi-government advisories declaring a strategic posture shift.",
+    signals: "First confirmed in-the-wild AI technique; a named campaign establishing a new attack class; field-first framework (OWASP LLM Top 10 launch); Five Eyes / CISA strategic advisory." },
+  { key: "recommended", color: "#c2410c", label: "Recommended",
+    desc: "Materially changes prioritisation within a known attack surface. New variants with concrete evidence, confirmed adversary adoption, strong multi-incident syntheses, and reusable case studies with named actors and measurable impact.",
+    signals: "Quarterly TI report with new adversary TTPs; first observed AI-generated phishing at scale; HuggingFace malware incident; vendor advisory with active exploitation." },
+  { key: "analyst",     color: "#475569", label: "Analyst",
+    desc: "Technically useful for practitioners but does not change strategic posture. Implementation mechanics, incremental research, exploit details, thin-text advisories. Leadership sees the summary rather than reading the source directly.",
+    signals: "Advisory with no exploit; routine arXiv paper; 2nd/3rd writeup of a known incident; CVE disclosure without active exploitation." },
+  { key: "background",  color: "#94a3b8", label: "Background",
+    desc: "Adjacent guidance, policy context, defensive advice, or generic commentary with no distinct offensive intelligence. Sources that add nothing beyond stronger existing coverage.",
+    signals: "Defensive/hardening content; policy/governance without offensive findings; off-topic despite passing the keyword gate; generic editorial." },
 ];
 
 function ThreatLegend({ open, onToggle }) {
   return (
     <div className="hz-threat-legend">
       <button className="hz-threat-legend-toggle" onClick={onToggle}>
-        <span className="hz-threat-legend-toggle-title">Threat Maturity &amp; Priority Reference</span>
+        <span className="hz-threat-legend-toggle-title">Threat Maturity &amp; Reading Value Reference</span>
         <span className="hz-threat-legend-toggle-chevron">{open ? "▲" : "▼"}</span>
       </button>
       {open && (
@@ -419,11 +419,11 @@ function ThreatLegend({ open, onToggle }) {
             </div>
           </div>
           <div className="hz-threat-legend-col">
-            <div className="hz-threat-legend-col-title">Priority Label</div>
+            <div className="hz-threat-legend-col-title">Reading Value</div>
             <p className="hz-threat-legend-note">
-              A separate axis from maturity. Maturity answers "how real is the threat?"; priority answers "how much should an analyst prioritise reading this?". A source can be high-maturity but low-priority (routine advisory for an old technique) or the reverse (a field-first research paper).
+              A separate axis from maturity. Maturity answers "how real is the threat?"; reading value answers "who should read this, and where should it surface?". A source can be high-maturity but analyst-only (routine advisory on a known technique) or the reverse (a field-first research paper at research maturity).
             </p>
-            {PRIORITY_DEFS.map(p => (
+            {READING_VALUE_DEFS.map(p => (
               <div key={p.key} className="hz-threat-legend-row">
                 <div className="hz-threat-legend-row-head">
                   <span className="hz-threat-legend-dot" style={{ background: p.color }} />

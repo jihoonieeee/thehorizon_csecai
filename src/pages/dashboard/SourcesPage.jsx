@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
-import { LegendPanel } from "../../components/dashboard/LegendPanel.jsx";
+import { LegendPanel, TaxonomyPanel } from "../../components/dashboard/LegendPanel.jsx";
 import { getAdminToken, getAccessLevel, onAuthChange } from "../../auth.js";
 
 const CAT_COLOR = {
@@ -557,7 +557,8 @@ function SourceDetail({ s, isAdmin, onUpdateDate, onConfirmDate, onDelete, onSav
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function SourcesPage() {
-  const [showLegend,  setShowLegend]  = useState(false);
+  const [showLegend,    setShowLegend]    = useState(false);
+  const [showTaxonomy,  setShowTaxonomy]  = useState(false);
   const [period,      setPeriod]      = useState("all-time");
   const [activeTab,   setActiveTab]   = useState("all");
   const [activeTags,  setActiveTags]  = useState([]);
@@ -867,8 +868,11 @@ export function SourcesPage() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button className="hz-legend-btn" onClick={() => setShowLegend(true)} title="What do the labels mean?">
+          <button className="hz-legend-btn" onClick={() => setShowLegend(true)} title="Labels, maturity, and reading value">
             ⓘ Legend
+          </button>
+          <button className="hz-legend-btn" onClick={() => setShowTaxonomy(true)} title="Taxonomy tag reference">
+            ⓘ Taxonomy
           </button>
           {/* Period pill switcher */}
           <div className="hz-seg-group">
@@ -885,7 +889,8 @@ export function SourcesPage() {
         </div>
       </div>
 
-      {showLegend && <LegendPanel onClose={() => setShowLegend(false)} />}
+      {showLegend    && <LegendPanel    onClose={() => setShowLegend(false)} />}
+      {showTaxonomy  && <TaxonomyPanel  onClose={() => setShowTaxonomy(false)} />}
 
       {/* Category tabs */}
       <div className="hz-cat-tabs">

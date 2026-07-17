@@ -1,5 +1,6 @@
 /**
- * LegendPanel — inline glossary for every label, badge, and colour in the dashboard.
+ * LegendPanel — glossary for labels, maturity, and reading value.
+ * TaxonomyPanel — separate panel explaining all taxonomy tag codes.
  */
 
 const MATURITY = [
@@ -35,60 +36,13 @@ const READING_VALUE = [
     examples: "GTIG quarterly AI threat report with new adversary TTPs. CrowdStrike on first observed AI-generated phishing at scale. HiddenLayer HuggingFace malware incident.",
     surfaces: "Dashboard + Newsletter (when readable without technical context) + Library" },
   { key: "analyst",     color: "#475569", bg: "#e2e8f0",  label: "Analyst",
-    desc: "Technically useful for practitioners but does not change strategic posture. Implementation mechanics, thin-text advisories, incremental research, exploit details. Leadership sees the summary rather than reading the source directly.",
+    desc: "Technically useful for practitioners but does not change strategic posture. Implementation mechanics, incremental research, exploit details, thin-text advisories. Leadership sees the summary rather than reading the source directly.",
     examples: "Vulnerability advisory for a vLLM SSRF. arXiv paper with only an abstract available. Third journalist writeup of a known incident.",
     surfaces: "Library only" },
   { key: "background",  color: "#94a3b8", bg: "#f1f5f9",  label: "Background",
     desc: "Adjacent guidance, policy context, defensive advice, or generic commentary with no distinct offensive intelligence. Sources that add nothing beyond stronger existing coverage.",
-    examples: "Generic \"AI threats are rising\" editorial. AWS implementation guide for multi-tenant agents. Defensive IR playbook with no new offensive findings.",
+    examples: 'Generic "AI threats are rising" editorial. AWS implementation guide for multi-tenant agents. Defensive IR playbook with no new offensive findings.',
     surfaces: "Not actively promoted" },
-];
-
-const TAG_GROUPS = [
-  { prefix: "TAI", color: "#3583C9", label: "Traditional AI (TAI)",
-    desc: "Attacks on ML models themselves.",
-    tags: [
-      { id: "TAI01_data_poisoning",         label: "Data Poisoning",          desc: "Corrupting training data to degrade accuracy or embed backdoors." },
-      { id: "TAI02_model_poisoning",        label: "Model Poisoning",         desc: "Directly modifying model weights or parameters post-training." },
-      { id: "TAI03_adversarial_evasion",    label: "Adversarial Evasion",     desc: "Crafting inputs that cause misclassification at inference time." },
-      { id: "TAI05_model_extraction",       label: "Model Extraction",        desc: "Stealing model weights or decision logic via repeated queries." },
-      { id: "TAI07_membership_inference",   label: "Membership Inference",    desc: "Determining whether a specific record was in the training set." },
-      { id: "TAI10_ai_supply_chain_compromise", label: "AI Supply Chain",     desc: "Compromising model repos, datasets, or ML dependencies upstream." },
-    ],
-  },
-  { prefix: "LLM", color: "#9C62A7", label: "LLM Threats (LLM)",
-    desc: "LLM-specific attack techniques.",
-    tags: [
-      { id: "LLM01_prompt_injection",       label: "Prompt Injection",        desc: "Hijacking model behaviour via malicious input in direct or indirect prompts." },
-      { id: "LLM02_sensitive_info_disclosure", label: "Info Disclosure",      desc: "Leaking training data, system prompts, or in-context secrets." },
-      { id: "LLM03_llm_supply_chain",       label: "LLM Supply Chain",        desc: "Poisoned models, plugins, or inference infrastructure." },
-      { id: "LLM04_data_model_poisoning",   label: "RAG/Data Poisoning",      desc: "Injecting malicious content into retrieval corpora or fine-tune datasets." },
-      { id: "LLM07_system_prompt_leakage",  label: "Prompt Leakage",          desc: "Extracting confidential system prompt instructions from a deployed model." },
-      { id: "LLM11_jailbreak_safety_bypass", label: "Jailbreak",             desc: "Bypassing safety filters, RLHF alignment, or content policies." },
-    ],
-  },
-  { prefix: "ASI", color: "#19BC9D", label: "Agentic AI (ASI)",
-    desc: "Attacks exploiting AI agent autonomy.",
-    tags: [
-      { id: "ASI01_agent_goal_hijack",      label: "Goal Hijack",             desc: "Redirecting agent objectives via prompt injection or malicious tool output." },
-      { id: "ASI02_tool_misuse_exploitation", label: "Tool Misuse",           desc: "Exploiting agent tool-call capabilities to execute unintended actions." },
-      { id: "ASI03_identity_privilege_abuse", label: "Privilege Abuse",       desc: "Abusing elevated permissions granted to an agent." },
-      { id: "ASI04_agentic_supply_chain",   label: "Agentic Supply Chain",    desc: "Compromising MCP servers, plugins, or agent-published tool registries." },
-      { id: "ASI05_unexpected_code_execution", label: "Code Execution",       desc: "Agents executing attacker-controlled code via tool calls or generated scripts." },
-      { id: "ASI06_memory_context_poisoning", label: "Memory Poisoning",      desc: "Corrupting agent memory, context window, or persistent state." },
-    ],
-  },
-  { prefix: "AE", color: "#FFAA22", label: "AI-Enabled (AE)",
-    desc: "AI as the attacker's tool.",
-    tags: [
-      { id: "AE01_ai_recon",                label: "AI Recon",                desc: "Using AI to automate target profiling, OSINT, or attack surface mapping." },
-      { id: "AE02_ai_social_engineering",   label: "AI Social Engineering",   desc: "AI-generated phishing, deepfake audio/video, or synthetic persona campaigns." },
-      { id: "AE03_ai_vuln_research",        label: "AI Vuln Research",        desc: "Using AI to discover or automate vulnerability research and zero-day hunting." },
-      { id: "AE04_ai_exploit_dev",          label: "AI Exploit Dev",          desc: "AI-assisted writing or mutating of exploit code and payloads." },
-      { id: "AE05_ai_malware_dev",          label: "AI Malware Dev",          desc: "AI-generated or AI-mutated malware, including polymorphic or evasive variants." },
-      { id: "AE08_ai_attack_orchestration", label: "AI Orchestration",        desc: "Using AI agents to autonomously plan and coordinate multi-stage attack chains." },
-    ],
-  },
 ];
 
 const CATEGORIES = [
@@ -100,6 +54,70 @@ const CATEGORIES = [
     desc: "Attacks exploiting AI agent autonomy — malicious plugins, MCP tool-call abuse, agent supply-chain poisoning, hijacking agent reasoning." },
   { color: "#FFAA22", name: "AI-Enabled Threats",
     desc: "AI as the attacker's tool — AI-generated malware, deepfake fraud, AI-assisted phishing, LLM-as-C2, nation-state AI tradecraft." },
+];
+
+// ── Full taxonomy tag reference ───────────────────────────────────────────────
+
+export const TAXONOMY_GROUPS = [
+  { prefix: "TAI", color: "#3583C9", label: "Traditional AI (TAI)",
+    desc: "Attacks directly against ML models, training pipelines, or inference systems.",
+    tags: [
+      { id: "TAI01_data_poisoning",            label: "Data Poisoning",           desc: "Injecting malicious examples into training data to degrade accuracy or embed hidden behaviours." },
+      { id: "TAI02_model_poisoning",           label: "Model Poisoning",          desc: "Directly modifying weights, checkpoints, or serialised model files after training to alter model behaviour." },
+      { id: "TAI03_adversarial_evasion",       label: "Adversarial Evasion",      desc: "Crafting perturbed inputs that cause misclassification or unexpected outputs at inference time." },
+      { id: "TAI05_model_extraction",          label: "Model Extraction",         desc: "Stealing model weights, architecture, or decision logic by repeatedly querying the model API." },
+      { id: "TAI06_model_inversion",           label: "Model Inversion",          desc: "Reconstructing sensitive training examples by probing model outputs (e.g. recovering faces from a face-recognition model)." },
+      { id: "TAI07_membership_inference",      label: "Membership Inference",     desc: "Determining whether a specific record was used in training, leaking dataset membership and potentially PII." },
+      { id: "TAI08_inference_api_abuse",       label: "Inference API Abuse",      desc: "Exploiting public model APIs to extract information, enumerate capabilities, or stage downstream attacks." },
+      { id: "TAI10_ai_supply_chain_compromise",label: "AI Supply Chain",          desc: "Compromising pre-trained models, datasets, ML libraries, or model repositories (e.g. Hugging Face) upstream of deployment." },
+    ],
+  },
+  { prefix: "LLM", color: "#9C62A7", label: "LLM Threats (LLM)",
+    desc: "Attacks specific to large language models, their context, outputs, and surrounding infrastructure.",
+    tags: [
+      { id: "LLM01_prompt_injection",          label: "Prompt Injection",         desc: "Hijacking model behaviour by embedding adversarial instructions in direct user input or indirect third-party content." },
+      { id: "LLM02_sensitive_info_disclosure", label: "Sensitive Info Disclosure", desc: "Extracting training data, system prompts, conversation history, or in-context secrets from a deployed model." },
+      { id: "LLM03_llm_supply_chain",          label: "LLM Supply Chain",         desc: "Compromising the model, its fine-tune dataset, plugins, retrieval sources, or inference infrastructure before it reaches users." },
+      { id: "LLM04_data_model_poisoning",      label: "RAG / Data Poisoning",     desc: "Injecting adversarial content into retrieval corpora, vector stores, or fine-tune datasets to corrupt model responses." },
+      { id: "LLM05_improper_output_handling",  label: "Output Handling Flaw",     desc: "Downstream systems blindly trusting or executing model output — SQL injection via LLM response, unsafe code eval, etc." },
+      { id: "LLM06_excessive_agency",          label: "Excessive Agency",         desc: "Model granted more permissions than needed, enabling over-reach: deleting files, sending emails, or making API calls beyond scope." },
+      { id: "LLM07_system_prompt_leakage",     label: "System Prompt Leakage",    desc: "Extracting confidential operator instructions, personas, or tool definitions from a deployed model's system prompt." },
+      { id: "LLM08_vector_embedding_weakness", label: "Embedding Weakness",       desc: "Attacking the vector representations used for semantic search — poisoning embeddings or exploiting similarity collisions." },
+      { id: "LLM09_misinformation",            label: "Misinformation / Hallucination", desc: "Model generates false, misleading, or fabricated content in a context where accuracy is critical and errors cause harm." },
+      { id: "LLM10_unbounded_consumption",     label: "Unbounded Consumption",    desc: "DoS or cost-exhaustion by triggering excessive token generation, recursive loops, or repeated expensive tool calls." },
+      { id: "LLM11_jailbreak_safety_bypass",   label: "Jailbreak / Safety Bypass", desc: "Bypassing RLHF alignment, content filters, or policy guardrails to elicit refused outputs, harmful content, or restricted capabilities." },
+    ],
+  },
+  { prefix: "ASI", color: "#19BC9D", label: "Agentic AI (ASI)",
+    desc: "Attacks exploiting the autonomy, tool access, and multi-step reasoning of AI agents.",
+    tags: [
+      { id: "ASI01_agent_goal_hijack",         label: "Goal Hijack",              desc: "Redirecting an agent's objectives mid-task via malicious prompt injection, tool output manipulation, or adversarial environment content." },
+      { id: "ASI02_tool_misuse_exploitation",  label: "Tool Misuse",              desc: "Abusing legitimate agent tool-call capabilities (code execution, web browsing, file I/O) to perform unintended or harmful actions." },
+      { id: "ASI03_identity_privilege_abuse",  label: "Identity / Privilege Abuse", desc: "Exploiting elevated permissions granted to an agent to act beyond scope — reading secrets, impersonating users, or accessing restricted resources." },
+      { id: "ASI04_agentic_supply_chain",      label: "Agentic Supply Chain",     desc: "Compromising MCP servers, plugin registries, tool manifests, or published agent skills to insert malicious capabilities before deployment." },
+      { id: "ASI05_unexpected_code_execution", label: "Unexpected Code Execution", desc: "An agent executes attacker-controlled code via tool calls, generated scripts, or eval of model output outside its intended scope." },
+      { id: "ASI06_memory_context_poisoning",  label: "Memory / Context Poisoning", desc: "Corrupting an agent's persistent memory, context window, or external state store to manipulate future reasoning or actions." },
+      { id: "ASI07_insecure_agent_comms",      label: "Insecure Agent Comms",     desc: "Intercepting, tampering with, or replaying messages between agents or between agent and orchestrator in multi-agent architectures." },
+      { id: "ASI08_cascading_failures",        label: "Cascading Failures",       desc: "An attack or error in one agent propagates through a pipeline, compounding into system-wide failure or unintended large-scale action." },
+      { id: "ASI09_human_agent_trust_exploit", label: "Human-Agent Trust Exploit", desc: "Exploiting user over-trust in AI agents to authorise harmful actions, bypass review gates, or accept false outputs without verification." },
+      { id: "ASI10_rogue_agents",              label: "Rogue Agents",             desc: "An AI agent acts autonomously in ways that are misaligned with operator intent, potentially causing harm without explicit adversary involvement." },
+    ],
+  },
+  { prefix: "AE", color: "#FFAA22", label: "AI-Enabled Threats (AE)",
+    desc: "AI used as an offensive tool to enhance attacker capabilities across the kill chain.",
+    tags: [
+      { id: "AE01_ai_recon",                   label: "AI Recon",                 desc: "Using AI to automate OSINT, target profiling, attack surface mapping, or network enumeration at speed and scale." },
+      { id: "AE02_ai_social_engineering",      label: "AI Social Engineering",    desc: "AI-generated spear-phishing emails, voice cloning, synthetic personas, or deepfake video used to deceive targets." },
+      { id: "AE03_ai_vuln_research",           label: "AI Vuln Research",         desc: "Using AI to discover, triage, or exploit vulnerabilities — automated fuzzing, patch diffing, zero-day hunting, or code analysis." },
+      { id: "AE04_ai_exploit_dev",             label: "AI Exploit Dev",           desc: "AI-assisted writing, mutation, or optimisation of exploit code, shellcode, payloads, or post-exploitation tooling." },
+      { id: "AE05_ai_malware_dev",             label: "AI Malware Dev",           desc: "AI-generated or AI-mutated malware — polymorphic variants, evasion logic, or novel malware families authored with LLM assistance." },
+      { id: "AE06_ai_evasion_obfuscation",     label: "AI Evasion / Obfuscation", desc: "Using AI to rewrite, obfuscate, or morph malicious code or traffic to evade AV, EDR, IDS, or ML-based detection systems." },
+      { id: "AE07_ai_identity_abuse",          label: "AI Identity Abuse",        desc: "Using AI-generated synthetic identities, cloned credentials, or deepfake biometrics to bypass KYC, authentication, or identity verification." },
+      { id: "AE08_ai_attack_orchestration",    label: "AI Attack Orchestration",  desc: "Using AI agents to autonomously plan, coordinate, adapt, and execute multi-stage attack chains with minimal human direction." },
+      { id: "AE09_ai_disinformation",          label: "AI Disinformation",        desc: "AI-generated influence operations, synthetic media campaigns, or coordinated inauthentic behaviour at scale." },
+      { id: "AE10_ai_deepfake",                label: "AI Deepfake",              desc: "Synthetic audio, video, or image generation used to impersonate individuals, fabricate evidence, or enable fraud." },
+    ],
+  },
 ];
 
 function Section({ title, note, children }) {
@@ -120,10 +138,10 @@ export function LegendPanel({ onClose }) {
         <button className="hz-legend-close" onClick={onClose} title="Close">✕</button>
       </div>
 
-      {/* Reading value — essential/recommended/analyst/background */}
+      {/* Reading value */}
       <Section
         title="Reading Value"
-        note="Who should read this source, and where should it appear? Assigned by Layer 3 LLM — independent of threat severity, maturity level, and publisher prestige. A theoretical first-of-kind paper can be Essential while a confirmed real-world CVE is Analyst. Populated by scripts/labelSources.js."
+        note="Who should read this source, and where should it appear? Assigned by Layer 3 LLM — independent of threat severity, maturity level, and publisher prestige. Populated by scripts/labelSources.js."
       >
         {READING_VALUE.map(l => (
           <div key={l.key} className="hz-legend-maturity-row">
@@ -142,7 +160,7 @@ export function LegendPanel({ onClose }) {
       {/* Maturity ladder */}
       <Section
         title="Threat Maturity Ladder"
-        note="How far along the adversary lifecycle is this threat technique? Assigned by an LLM reading the source's title, summary, and key claims. Drives the Importance filter and category bars."
+        note="How far along the adversary lifecycle is this threat technique? Assigned by LLM from source content. Drives the Importance filter and category bars."
       >
         {MATURITY.map(m => (
           <div key={m.key} className="hz-legend-maturity-row">
@@ -165,34 +183,6 @@ export function LegendPanel({ onClose }) {
         </ul>
       </Section>
 
-      {/* Taxonomy tags */}
-      <Section
-        title="Taxonomy Tags"
-        note="Each source carries one or more taxonomy tags identifying the specific technique or threat class. Tags use a four-prefix system matching the four offensive threat categories. Appear as filter pills within each category tab."
-      >
-        {TAG_GROUPS.map(g => (
-          <div key={g.prefix} className="hz-legend-tag-group">
-            <div className="hz-legend-tag-group-header">
-              <span className="hz-legend-cat-badge" style={{ background: g.color, fontSize: "0.62rem" }}>{g.prefix}</span>
-              <strong>{g.label}</strong>
-              <span className="hz-legend-tag-group-desc"> — {g.desc}</span>
-            </div>
-            <div className="hz-legend-tag-list">
-              {g.tags.map(t => (
-                <div key={t.id} className="hz-legend-tag-row">
-                  <code className="hz-legend-tag-code">{t.id}</code>
-                  <span className="hz-legend-tag-label">{t.label}</span>
-                  <span className="hz-legend-tag-desc"> — {t.desc}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-        <p className="hz-legend-note" style={{ marginTop: 8 }}>
-          Tags <code>defensive</code> and <code>adjacent_context</code> are meta-tags, not taxonomy IDs — they flag sources that are primarily defensive or contextually adjacent rather than directly offensive.
-        </p>
-      </Section>
-
       {/* Threat categories */}
       <Section title="Threat Categories">
         {CATEGORIES.map(c => (
@@ -208,9 +198,47 @@ export function LegendPanel({ onClose }) {
           </div>
         ))}
         <p className="hz-legend-note" style={{ marginTop: 8 }}>
-          Sources that are defensive-primary, policy-only, or do not map to one of the four offensive categories are filed under <strong>Other / Adjacent</strong> and excluded from threat scoring.
+          Sources that are defensive-primary or do not map to one of the four offensive categories are filed under <strong>Other / Adjacent</strong>.
         </p>
       </Section>
+    </div>
+  );
+}
+
+export function TaxonomyPanel({ onClose }) {
+  return (
+    <div className="hz-legend-panel">
+      <div className="hz-legend-header">
+        <span className="hz-legend-title">Taxonomy Tags</span>
+        <button className="hz-legend-close" onClick={onClose} title="Close">✕</button>
+      </div>
+      <p className="hz-legend-note" style={{ padding: "8px 20px 0" }}>
+        Each source carries one or more taxonomy tags identifying the specific technique or threat class.
+        Tags use a four-prefix system matching the four offensive categories.
+        Filter by tag within each category tab on the Sources page.
+      </p>
+      {TAXONOMY_GROUPS.map(g => (
+        <div key={g.prefix} className="hz-legend-section">
+          <div className="hz-legend-tag-group-header" style={{ marginBottom: 6 }}>
+            <span className="hz-legend-cat-badge" style={{ background: g.color, fontSize: "0.62rem" }}>{g.prefix}</span>
+            <strong style={{ fontSize: "0.88rem" }}>{g.label}</strong>
+            <span className="hz-legend-tag-group-desc"> — {g.desc}</span>
+          </div>
+          <div className="hz-legend-tag-list">
+            {g.tags.map(t => (
+              <div key={t.id} className="hz-legend-tag-row">
+                <code className="hz-legend-tag-code">{t.id}</code>
+                <span className="hz-legend-tag-label">{t.label}</span>
+                <span className="hz-legend-tag-desc"> — {t.desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      <p className="hz-legend-note" style={{ padding: "4px 20px 16px" }}>
+        Tags <code>defensive</code> and <code>adjacent_context</code> are meta-tags, not taxonomy IDs —
+        they flag sources that are primarily defensive or contextually adjacent rather than directly offensive.
+      </p>
     </div>
   );
 }
