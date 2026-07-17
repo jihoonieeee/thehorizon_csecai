@@ -73,8 +73,9 @@ plumbing, not prose to tune. Config-driven blocks (`buildMechanismPromptBlock`,
 
 | Prompt | What it does |
 |---|---|
-| `discovery/web-search` | Find fresh AI-threat sources for a mission/query. |
-| `discovery/triage` | Triage a discovered web source (anti-hallucination routing). |
+| `discovery/query-planning` | **Phase 1 — query planner.** Given a mission definition, craft targeted search queries across four lanes (known threats, named entities, emerging signals, exploratory) with recency anchoring. Runs once per mission before any search. |
+| `discovery/web-search` | **Phase 2 — search execution.** Instructs the Anthropic `web_search` tool how to evaluate pages it opens and what structured candidate JSON to return. Runs once per query. |
+| `discovery/triage` | **Phase 3 — candidate triage.** Anti-hallucination routing for each discovered candidate (accept / reject). Reason codes in candidate_route_reasons[] carry nuance (e.g. single_anchor_novelty, requires_entailment_qa). |
 
 ## slides — deck generation
 
@@ -94,8 +95,9 @@ plumbing, not prose to tune. Config-driven blocks (`buildMechanismPromptBlock`,
 
 | Prompt | What it does |
 |---|---|
-| `ingest/pdf-extract` | Extract threat-intel findings from a PDF document. |
-| `ingest/digest-decompose` | Split a multi-topic report into per-item findings (mechanism block injected). |
+| `ingest/pdf-extract` | Extract threat-intel findings from a PDF document (used by `pdfConnector.js`). Strips boilerplate and returns plain prose the pipeline can classify. |
+| `ingest/digest-decompose` | Split a multi-topic report (e.g. a threat roundup) into one self-contained item per distinct AI-security matter (used by `digestFanout.js`). Each item is classified independently. |
+| `ingest/report-insights` | Extract structured intelligence from a long-form report into `attack_walkthroughs`, `critical_insights`, and `trends` JSON (used by `extractLongReportInsights.js`). Feeds the evidence extraction pipeline. |
 
 ## scripts — dev / ops tooling
 

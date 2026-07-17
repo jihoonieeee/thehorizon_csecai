@@ -191,9 +191,49 @@ Imports manually-provided PDF reports (e.g. annual threat reports, government wh
 
 ---
 
-### 10. LLM Discovery Connector (`connectors/llmDiscoveryConnector.js`)
+### 10. Open-Web Discovery (Layers 1B/1C — `lib/pipeline/discovery/`)
 
-Generates candidate source URLs using an LLM (Anthropic/Gemini) given a discovery mission prompt. Used by the optional Layer 1B/1C web-discovery branch. Dates are `estimated` or `none` since LLMs infer publication context rather than reading it from structured metadata.
+Opt-in open-web source discovery that finds articles, preprints, advisories, and
+exploit releases not covered by feeds or APIs. Enabled via `WEB_DISCOVERY_ENABLED=1`.
+Entry point: `scripts/discoverOperationalSources.js`.
+
+Discovery runs in three phases per mission:
+
+**Phase 1 — LLM query planning (`craftLlmQueries.js`)**
+Before any search runs, a cheap LLM call (Gemini Flash-Lite, `discovery_query_planning` task)
+reads the mission definition and generates targeted, recency-anchored queries across four lanes:
+
+| Lane | Share | What it hunts |
+|------|-------|---------------|
+| `known_threats` | ~40% | Named techniques and actors from the mission's taxonomy |
+| `named_entities` | ~25% | Specific CVEs, tools, actor groups, named campaigns |
+| `emerging_signals` | ~20% | Newly coined terminology, fresh campaign names, early disclosures |
+| `exploratory` | ~15% | Unknown-unknowns: mechanism-first queries for threats not yet in any taxonomy |
+
+Every query is recency-anchored to the current month/year. Missions with
+`seed_queries_only: true` (e.g. `novel_ai_attack_techniques`) skip this phase — their
+hand-written seeds already cover the novelty-scanning objective.
+
+Prompt: `lib/prompts/discovery/query-planning.md`
+
+**Phase 2 — Search execution (`discoverySearchRouter.js`)**
+Each LLM-crafted query is submitted to a search provider (Tavily / SerpAPI / Anthropic
+`web_search`). The Anthropic path opens pages with the `web_search` tool and returns
+structured candidate JSON (URL, title, verbatim quote, source class, candidate claim).
+
+Prompt (Anthropic path): `lib/prompts/discovery/web-search.md`
+
+**Phase 3 — Candidate triage (`triageCandidates.js`)**
+Each candidate receives a cheap-LLM triage verdict routing it to
+`accept` / `accept_with_review` / `archive_only` / `reject`.
+Accepted candidates pass to `candidateToSource.js` and enter Layer 2 as normal sources.
+
+Prompt: `lib/prompts/discovery/triage.md`
+
+Dates from web discovery are `estimated` or `none` — LLMs and search snippets
+infer publication context rather than reading authoritative structured metadata.
+These sources are flagged `needs_review = true` and are period-ineligible until
+an analyst confirms the date.
 
 ---
 
@@ -215,6 +255,9 @@ node scripts/backfillSources.js [start] [end] [connectors]
 node scripts/dailyClassify.js [--since-hours 48] [--limit 200]
 
 # Step 3 — (optional) open-web source discovery
+# Phase 1: LLM crafts targeted queries per mission (query-planning.md)
+# Phase 2: queries submitted to Tavily / SerpAPI / Anthropic web_search
+# Phase 3: candidates triaged and accepted sources ingested
 node scripts/discoverOperationalSources.js
 node scripts/ingestOperational.js
 

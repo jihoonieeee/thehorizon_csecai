@@ -13,14 +13,14 @@
  * QA gauntlet (a candidate must survive ALL of it to be saved):
  *   1. web_search grounding     — URL must come from a real search result (webDiscoverySearch)
  *   2. deterministic gates      — URL/domain/quote grounding (candidateGates via triage)
- *   3. anti-hallucination triage— categorical route accept / accept_with_review / reject
+ *   3. anti-hallucination triage— binary route: accept or reject
  *   4. source-class quotas       — caps any single source class (no monoculture)
  *   5. corpus dedup              — skip URLs already in the DB (sha256 id)
  *   6. text floor                — >=200 chars of real page text
  *   7. Layer 3 validation gate   — validateAndTypeSource: validity + AI-relevance LLM +
  *                                  relevance QA + content-quality gate + final gate
  *                                  (incl. the P1 operational AI-nexus pass)
- *   8. persist                   — only pass/review reach the DB; reject is logged, not saved
+ *   8. persist                   — only accepted sources reach the DB; rejected are logged, not saved
  *
  * Requires ANTHROPIC_API_KEY (web_search). Forces the LLM provider regardless of
  * Tavily/SerpAPI availability, per the "use an LLM with web search" requirement.
@@ -57,10 +57,6 @@ const CONC            = parseInt(getArg("--concurrency", "3"), 10);
 // --provider tavily|serpapi|anthropic — default keeps Anthropic web_search.
 // Use tavily/serpapi when Anthropic web_search is rate-limited/unavailable.
 const PROVIDER        = (getArg("--provider", "") || "").trim().toLowerCase();
-// --include-archived: also send archive_only triage candidates through L3
-// validation. Useful for novelty/horizon-scanning missions where the triage
-// may be too conservative and L3 should make the final relevance call.
-const INCLUDE_ARCHIVED = hasFlag("--include-archived");
 
 // The four operational missions — the buckets the corpus is missing.
 const DEFAULT_MISSIONS = [
@@ -107,39 +103,29 @@ if (!hasAnyDiscoveryProvider() && searchFn !== runDiscoveryQuery) {
   console.error("No search provider configured. Set TAVILY_API_KEY, EVA_API_KEY, SERPAPI_API_KEY, or ANTHROPIC_API_KEY.");
   process.exit(2);
 }
+// Fetch recent source titles so the LLM query planner can avoid re-finding
+// articles already in the corpus. 7-day window balances freshness against
+// the LLM's context budget (200 titles ≈ ~1.5k tokens).
+const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const { data: recentRows } = await sb.from("sources")
+  .select("title")
+  .gte("date_published", sevenDaysAgo)
+  .not("title", "is", null)
+  .limit(200);
+const recentTitles = (recentRows || []).map((r) => r.title).filter(Boolean);
+if (recentTitles.length) console.log(`  Context: ${recentTitles.length} recent titles passed to query planner\n`);
+
 const discovery = await runWebDiscovery({
   missions: MISSIONS,
   maxQueriesPerMission: MAXQ,
+  recentTitles,
   searchFn,
   useCache: false,
 });
 
-console.log(`Discovery: ${discovery.candidates_total} candidates → ${discovery.accepted_count} accepted, ` +
-  `${discovery.rejected_count} rejected, ${discovery.candidates_total - discovery.accepted_count - discovery.rejected_count} archived\n`);
+console.log(`Discovery: ${discovery.candidates_total} candidates → ${discovery.accepted_count} accepted, ${discovery.rejected_count} rejected\n`);
 
-// For novelty/horizon-scanning missions, triage is conservative and may route
-// valuable first-reporter content to archive_only. --include-archived pulls
-// those candidates back into the validation pool so L3 makes the final call.
-// --include-archived rescues candidates that conservative triage routed to
-// archive_only so the L3 relevance gate makes the final call. It deliberately
-// EXCLUDES candidates demoted to archive_only by source-class quota enforcement
-// (route_reason: source_class_quota_exceeded) — those were archived because a
-// source class was over-represented, not because the content was borderline.
-// Re-admitting quota-demoted candidates would defeat the diversity enforcement.
-const archivedToValidate = INCLUDE_ARCHIVED
-  ? (discovery.audit || []).filter((c) =>
-      c.route === "archive_only" &&
-      !(c.candidate_route_reasons || []).includes("source_class_quota_exceeded")
-    )
-  : [];
-if (archivedToValidate.length > 0) {
-  console.log(`--include-archived: adding ${archivedToValidate.length} archive_only candidates (excl. quota-demoted) to validation pool\n`);
-}
-
-const acceptedSources = (await candidatesToSources([
-  ...discovery.accepted,
-  ...archivedToValidate,
-])).slice(0, LIMIT);
+const acceptedSources = (await candidatesToSources(discovery.accepted)).slice(0, LIMIT);
 if (acceptedSources.length === 0) {
   console.log("No accepted candidates to validate. (Check ANTHROPIC_API_KEY / web_search availability.)");
   process.exit(0);
