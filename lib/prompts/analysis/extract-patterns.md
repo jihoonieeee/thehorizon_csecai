@@ -43,3 +43,16 @@ technique_tags[]: pick from the taxonomy tags already on the evidence items.
 Output ≤5 patterns. If fewer than 2 evidence items share a coherent thread, output 0 patterns.
 Return ONLY valid JSON: { "patterns": [ ... ] }
 ```
+
+## User Prompt Template
+
+```
+Category: {{category}}
+Total evidence items shown: {{total_items}} ({{strong_count}} strong, {{usable_count}} usable)
+
+EVIDENCE:
+{{evidence_block}}
+
+Identify up to 5 recurring patterns across these evidence items.
+Return: { "patterns": [ { "pattern_label", "pattern_type", "description", "technique_tags", "evidence_ids", "recency_signal", "strength" } ] }
+```

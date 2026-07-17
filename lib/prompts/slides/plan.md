@@ -75,3 +75,22 @@ Write visual_rationale explaining the choice (or "none — narrative slide").
 
 Return ONLY valid JSON.
 ```
+
+## User Prompt Template
+
+```
+Plan the slide deck for this AI threat intelligence briefing.
+
+ANALYTICAL MODEL:
+{{context}}
+
+Instructions:
+- Assign each development, insight, and case study to a slide slot
+- Write a deck_narrative (2-3 sentences: the through-line the deck argues)
+- Assign visual_type per analytical slide (see rules above)
+- Write the argument as a falsifiable claim, not a topic label
+- For overall_developments and overall_insights arrays, list the IDs in rank order
+- Mark deterministic: true for cover/scope/evidence_snapshot/section_intro/early_signals/references
+
+Return: { "deck_narrative", "overall_developments": [...ids], "overall_insights": [...ids], "slides": [...] }
+```

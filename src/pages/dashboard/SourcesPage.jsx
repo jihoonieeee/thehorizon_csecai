@@ -208,6 +208,164 @@ function ReportAnalysis({ ra }) {
   );
 }
 
+// ── MITRE ATLAS chain panel ───────────────────────────────────────────────────
+
+function mermaidInkUrl(dsl) {
+  try {
+    const b64 = btoa(unescape(encodeURIComponent(dsl)));
+    return `https://mermaid.ink/img/${b64}?type=png&bgColor=F8FAFC&width=900`;
+  } catch {
+    return null;
+  }
+}
+
+function AtlasChainPanel({ atlas }) {
+  const [showDiagram, setShowDiagram] = useState(false);
+  const [imgError,    setImgError]    = useState(false);
+  if (!atlas) return null;
+
+  const { atlas_id, atlas_type, actor_type, incident_date, publication_date,
+          chain = [], chain_analysis, references = [], mermaid } = atlas;
+  const diagramUrl = mermaid && !imgError ? mermaidInkUrl(mermaid) : null;
+
+  // Compute readable lag between incident and publication
+  const dateLag = (() => {
+    if (!incident_date || !publication_date) return null;
+    const months = Math.round(
+      (new Date(publication_date) - new Date(incident_date)) / (1000 * 60 * 60 * 24 * 30)
+    );
+    if (months <= 0) return null;
+    return months === 1 ? "1 month after incident" : `${months} months after incident`;
+  })();
+
+  return (
+    <div className="hz-atlas-panel">
+      <div className="hz-ra-header">
+        <span className="hz-ra-title">MITRE ATLAS Case Study</span>
+        <span className="hz-ra-counts">
+          <span>{atlas_id}</span>
+          {atlas_type && <span>{atlas_type}</span>}
+          {actor_type && <span>{actor_type}</span>}
+        </span>
+      </div>
+
+      {/* Date provenance */}
+      {(incident_date || publication_date) && (
+        <div className="hz-atlas-dates">
+          {incident_date && (
+            <span className="hz-atlas-date-item">
+              <span className="hz-atlas-date-k">Incident</span>
+              <span className="hz-atlas-date-v">{incident_date}</span>
+            </span>
+          )}
+          {publication_date && (
+            <span className="hz-atlas-date-item">
+              <span className="hz-atlas-date-k">Documented</span>
+              <span className="hz-atlas-date-v">{publication_date}{dateLag ? ` (${dateLag})` : ""}</span>
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Chain structural analysis */}
+      {chain_analysis && (chain_analysis.trust_boundary_crossings?.length > 0 ||
+                          chain_analysis.kill_chain_compressed ||
+                          chain_analysis.has_unusual_ordering) && (
+        <div className="hz-ra-section">
+          <div className="hz-ra-section-label">Chain Analysis</div>
+          <div className="hz-atlas-chain-analysis">
+            {chain_analysis.trust_boundary_crossings?.length > 0 && (
+              <span className="hz-atlas-ca-tag" title="Attack crosses component trust boundaries">
+                ⛓ {chain_analysis.trust_boundary_crossings.join(", ")}
+              </span>
+            )}
+            {chain_analysis.kill_chain_compressed && (
+              <span className="hz-atlas-ca-tag" title="Compressed kill chain — few tactic phases for step count">
+                ⚡ Compressed chain ({chain_analysis.tactic_phases_covered} phases / {chain_analysis.step_count} steps)
+              </span>
+            )}
+            {chain_analysis.has_unusual_ordering && (
+              <span className="hz-atlas-ca-tag" title="Techniques executed out of canonical ATLAS tactic order">
+                ↺ Non-linear tactic ordering
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Attack chain steps */}
+      {chain.length > 0 && (
+        <div className="hz-ra-section">
+          <div className="hz-ra-section-label">Attack Chain ({chain.length} steps)</div>
+          <div className="hz-atlas-chain">
+            {chain.map((step, i) => (
+              <div key={step.order ?? i} className="hz-atlas-step">
+                <span className="hz-atlas-step-n">{step.order ?? i + 1}</span>
+                <div className="hz-atlas-step-body">
+                  <div className="hz-atlas-step-header">
+                    <span className="hz-atlas-tech-id">{step.technique_id}</span>
+                    <span className="hz-atlas-tech-name">{step.technique_name}</span>
+                  </div>
+                  {step.description && (
+                    <p className="hz-atlas-step-desc">{step.description}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Attack chain diagram */}
+      {mermaid && (
+        <div className="hz-ra-section">
+          <div className="hz-ra-section-label">
+            Attack Flow Diagram
+            <button
+              className="hz-atlas-diagram-toggle"
+              onClick={() => { setShowDiagram(v => !v); setImgError(false); }}
+            >
+              {showDiagram ? "Hide" : "Show"}
+            </button>
+          </div>
+          {showDiagram && diagramUrl && !imgError && (
+            <img
+              className="hz-atlas-diagram"
+              src={diagramUrl}
+              alt={`Attack flow diagram for ${atlas_id}`}
+              onError={() => setImgError(true)}
+            />
+          )}
+          {showDiagram && imgError && (
+            <p className="hz-atlas-diagram-error">
+              Diagram could not be rendered. Mermaid source is stored and available.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Reference sources */}
+      {references.length > 0 && (
+        <div className="hz-ra-section">
+          <div className="hz-ra-section-label">References ({references.length})</div>
+          <div className="hz-atlas-refs">
+            {references.map((ref, i) => (
+              <div key={i} className="hz-atlas-ref">
+                {ref.reference_type && ref.reference_type !== "report" && (
+                  <span className="hz-atlas-ref-type">{ref.reference_type}</span>
+                )}
+                <a href={ref.url} target="_blank" rel="noopener noreferrer" className="hz-atlas-ref-link">
+                  {ref.title || ref.url}
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Expanded detail — everything an analyst needs to vet the source without opening it.
 // Also hosts the admin controls: edit the publish date and delete the source.
 function SourceDetail({ s, isAdmin, onUpdateDate, onConfirmDate, onDelete, onSaveClassification, onSaveSummary, knownTags, busy }) {
@@ -238,6 +396,7 @@ function SourceDetail({ s, isAdmin, onUpdateDate, onConfirmDate, onDelete, onSav
       {full && <p className="hz-src-detail-summary">{full}</p>}
 
       <ReportAnalysis ra={s.report_analysis} />
+      <AtlasChainPanel atlas={s.atlas} />
 
       <div className="hz-src-detail-grid">
         <div className="hz-src-detail-field">

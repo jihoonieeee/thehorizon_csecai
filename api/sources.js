@@ -155,7 +155,7 @@ export default async function handler(req, res) {
     // `starred` is included only when the column exists (migration 013) — the flag
     // flips off automatically on the first "column does not exist" error so the
     // page keeps working before the migration is applied.
-    const SELECT_BASE = "id,title,parent_title,url,publisher,author,date_published,date_collected,date_discovered,date_confidence,main_category,trust_tier,tags,source_type,short_summary,summary,analyst_brief,validation_status,ai_specificity_score,intelligence,is_digest,parent_source_id,needs_review";
+    const SELECT_BASE = "id,title,parent_title,url,publisher,author,date_published,collected_date,date_discovered,date_confidence,main_category,trust_tier,tags,source_type,short_summary,summary,analyst_brief,validation_status,ai_specificity_score,intelligence,is_digest,parent_source_id,needs_review";
     const buildQuery = (from, to) => {
       let q = supabase
         .from("sources")
@@ -204,9 +204,10 @@ export default async function handler(req, res) {
       count: data?.length || 0,
       sources: (data || []).map(s => {
         const mech = s.intelligence?.mechanism_classification || null;
-        const { intelligence, ...rest } = s;               // drop the heavy jsonb blob
+        const { intelligence, collected_date, ...rest } = s;  // drop heavy blob; alias date
         return {
           ...rest,
+          date_collected: collected_date || null,            // frontend uses date_collected
           short_summary:  s.short_summary || s.analyst_brief || s.summary || null,
           analyst_brief:  s.analyst_brief || null,
           // Editorial audience fit — set by Layer 3 LLM.
@@ -234,6 +235,21 @@ export default async function handler(req, res) {
             attack_walkthroughs: s.intelligence.report_analysis.attack_walkthroughs || [],
             critical_insights:   s.intelligence.report_analysis.critical_insights   || [],
             trends:              s.intelligence.report_analysis.trends               || [],
+          } : null,
+          // MITRE ATLAS case study fields (null for non-ATLAS sources)
+          atlas: s.intelligence?.atlas_id ? {
+            atlas_id:           s.intelligence.atlas_id,
+            atlas_type:         s.intelligence.atlas_type        || null,
+            actor_type:         s.intelligence.actor_type        || null,
+            date_granularity:   s.intelligence.date_granularity  || null,
+            // Separated dates — incident_date is when the attack occurred,
+            // publication_date is when MITRE documented it (often months later).
+            incident_date:      s.intelligence.atlas_incident_date    || null,
+            publication_date:   s.intelligence.atlas_publication_date || null,
+            chain:              s.intelligence.atlas_chain            || [],
+            chain_analysis:     s.intelligence.atlas_chain_analysis   || null,
+            references:         s.intelligence.atlas_references       || [],
+            mermaid:            s.intelligence.atlas_mermaid          || null,
           } : null,
           mechanism: mech ? {
             exploit:     mech.primary_exploit_mechanism || null,

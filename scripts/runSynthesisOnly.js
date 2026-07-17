@@ -104,7 +104,7 @@ async function main() {
   console.log(`  Loaded ${sources.length} enriched sources from DB (+${elapsed1}s)\n`);
 
   // ── L5: Extract evidence ───────────────────────────────────────────────────
-  const { extractAllEvidence } = await import("../lib/pipeline/analysis/extractEvidence.js");
+  const { extractAllEvidence } = await import("../lib/pipeline/extraction/extractEvidence.js");
   const { buildCorpusSummary, buildEvidenceGraph } = await import("../lib/pipeline/analysis/corpusSummary.js");
   const { synthesizeAllCategories, synthesizeCrossCategory } = await import("../lib/pipeline/analysis/synthesizeCategory.js");
   const { selectAllCaseStudies } = await import("../lib/pipeline/analysis/selectCaseStudies.js");

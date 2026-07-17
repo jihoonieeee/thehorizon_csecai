@@ -20,3 +20,15 @@ CONFIDENCE: match to evidence_maturity provided.
 Return 3 distinct cross-cutting insights.
 Return ONLY valid JSON: { "insights": [{ "insight", "broken_assumption", "causal_mechanism", "categories_spanned" }] }
 ```
+
+## User Prompt Template
+
+```
+Generate 3 CROSS-CUTTING overall insights from the per-category insights below.
+Each insight must span ≥2 categories and teach a single strategic lesson.
+
+PER-CATEGORY INSIGHTS:
+{{insights_block}}
+
+Return: { "insights": [{ "insight": "...", "broken_assumption": "...", "causal_mechanism": "...", "categories_spanned": ["cat1","cat2"] }] }
+```

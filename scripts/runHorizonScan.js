@@ -499,7 +499,7 @@ async function main() {
   if (!NO_PERSIST && !CLASSIFY_ONLY && supabase) {
     console.log("\nEvidence backfill (corpus-wide)...");
     try {
-      const { extractAllEvidence } = await import("../lib/pipeline/analysis/extractEvidence.js");
+      const { extractAllEvidence } = await import("../lib/pipeline/extraction/extractEvidence.js");
       const { getEvidenceHashes, contentHashOf, loadEvidence, saveSourceEvidence } = await import("../lib/storage/evidenceStore.js");
 
       // Load all pass sources (paginated)
@@ -530,7 +530,7 @@ async function main() {
         for (let i = 0; i < batch.length; i += 4) {
           const chunk = batch.slice(i, i + 4);
           await Promise.all(chunk.map(async s => {
-            const { extractEvidence } = await import("../lib/pipeline/analysis/extractEvidence.js");
+            const { extractEvidence } = await import("../lib/pipeline/extraction/extractEvidence.js");
             const items = await extractEvidence(s);
             await saveSourceEvidence(supabase, s.id, contentHashOf(s.full_text || ""), items);
           }));

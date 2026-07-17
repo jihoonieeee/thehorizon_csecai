@@ -320,7 +320,9 @@ await test("distribution_recommendation flows from unified L3 call to enriched o
 });
 
 await test("distribution_recommendation defaults derived from reading_value when LLM omits the field", async () => {
-  const l3 = { ...CENTRAL_L3 };
+  // Use source_type=incident so the research-gate hard reject does not apply.
+  // The test verifies the distribution defaults logic for analyst reading_value.
+  const l3 = { ...CENTRAL_L3, source_type: "incident" };
   delete l3.distribution_recommendation;
   l3.reading_value = "analyst";
   const r = await validateAndTypeSource(mkSource(), { llmFn: mkLlm(l3), skipUrlCheck: true });

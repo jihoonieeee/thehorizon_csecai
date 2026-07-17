@@ -23,3 +23,14 @@ STRICT RULES:
 
 Return JSON only. No commentary outside the JSON object.
 ```
+
+## User Prompt Template
+
+```
+THREAT CATEGORY: {{category}}
+
+{{judgments_block}}
+
+Verify each judgment [J0], [J1], … against its evidence. Return:
+{ "verdicts": [ { "index": 0, "verdict": "supported"|"needs_caveat"|"unsupported", "reason": "...", "caveat": "..."|null }, ... ] }
+```

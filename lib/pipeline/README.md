@@ -1,8 +1,93 @@
-# `lib/pipeline/` — the horizon-scan pipeline
+# Pipeline Architecture
 
-All pipeline business logic. Organised by **pipeline layer and function**: raw
-sources flow left-to-right through the folders below, each layer enriching the
-source and gating what proceeds.
+The pipeline has four sequential layers followed by two independent output branches.
+No layer skips ahead; no branch feeds back upstream.
+
+```
+INGEST  →  UNDERSTAND  →  EXTRACTION  →  ANALYSIS
+                                              │
+                              ┌───────────────┴───────────────┐
+                              │                               │
+                           SLIDES                        DASHBOARD
+                      (slides/)                   (dashboard.js +
+                                             scripts/generateDashboardInsights.js)
+```
+
+---
+
+## Layers
+
+### `ingest/` — Layer 1
+Collects raw sources from RSS feeds, APIs, PDFs, sitemaps, and the web discovery
+branch. Normalises to the canonical source shape, deduplicates by URL hash,
+gates on eligibility, and fans out digest reports into child sources.
+
+### `understand/` — Layers 2–4
+Classifies each source into a threat category, assigns taxonomy tags, extracts
+key entities, and determines evidence maturity. Includes an LLM QA checkpoint
+(`qaClassification.js`) that verifies a stratified sample of classifications.
+
+### `extraction/` — Layer 5
+Turns individual classified sources into atomic, quote-grounded evidence items.
+One LLM call per eligible source. No cross-source reasoning.
+MITRE ATLAS case studies get a specialised branch (`extractAtlasEvidence.js`).
+Output is cached per content-hash so re-runs only re-extract changed sources.
+
+### `analysis/` — Layers 5.5–6
+Takes the evidence pool and produces grounded strategic output — patterns,
+judgments, developments, insights, case studies, outlooks. All judgments pass
+two-pass QA (deterministic gates + second-model verification) before leaving.
+
+---
+
+## Output branches (consume analysis output; do not feed back upstream)
+
+### `slides/` — Layers 7–8
+Receives the full analysis result and produces a PPTX deck.
+`planSlides.js` → `buildPresentation.js` → `qaBulletEntailment.js` → `renderDeckPptx.js`
+
+### Dashboard — two paths
+- **`dashboard.js`** (fast, precomputed): called at end of every pipeline run;
+  assembles the Overview page from the same result object the slides branch uses.
+  Also provides `queryDashboard()` for chatbot queries.
+- **`scripts/generateDashboardInsights.js`** (independent schedule): reads directly
+  from Supabase; produces structured per-category insight objects for dashboard widgets.
+
+---
+
+## Prompt locations
+
+Every LLM system and user prompt lives in `lib/prompts/<layer>/`.
+Dynamic values are injected via `interpolate(template, { key: value })`.
+No prompt should be a raw string literal in application code.
+
+| Layer | Prompt directory |
+|---|---|
+| Ingest | `lib/prompts/ingest/` |
+| Understand | `lib/prompts/understand/` |
+| Discovery | `lib/prompts/discovery/` |
+| Extraction | `lib/prompts/extraction/` |
+| Analysis | `lib/prompts/analysis/` |
+| Slides | `lib/prompts/slides/` |
+| Dashboard (query) | `lib/prompts/dashboard/` |
+| Dashboard insights (widgets) | `lib/prompts/insights/` |
+| Agent / chatbot | `lib/prompts/agent/` |
+| Newsletter | `lib/prompts/newsletter/` |
+
+---
+
+## Orchestrators
+
+| Script | Layers run |
+|---|---|
+| `scripts/dailyClassify.js` | Ingest → Understand (L1–L4) |
+| `scripts/extractEvidenceBatch.js` | Extraction only (L5), incremental |
+| `scripts/runSynthesisOnly.js` | Extraction + Analysis + Slides |
+| `scripts/runHorizonScan.js` | Full pipeline + both branches |
+| `lib/pipeline/runPipeline.js` | Core orchestrator (called by above) |
+| `scripts/generateDashboardInsights.js` | Dashboard insights (independent) |
+
+---
 
 ## Data flow
 

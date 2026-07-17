@@ -1,25 +1,31 @@
-# `analysis/` — Layers 5–6: evidence, synthesis, insights
+# `analysis/` — Layers 5.5–6: patterns, synthesis, insights, QA
 
-Turns a window of classified sources into grounded strategic output. Never goes
-sources → insights directly: sources → evidence/findings → themes → insights,
-with QA gates and evidence-maturity calibration at each step.
+Turns evidence items (from `extraction/`) into grounded strategic output.
+Never goes evidence → insights directly: evidence → patterns → judgments →
+insights/developments/outlooks, with QA gates at each step.
 
-| File | What it does |
-|------|--------------|
-| `extractEvidence.js` | Extracts atomic evidence facts (with quotes/specificity) from source text. |
-| `extractPatterns.js` | Clusters evidence into named attack patterns (≥2 evidence items — never from a single source). |
-| `synthesizeCategory.js` | Per-category synthesis: evidence → strategic judgments with a reasoning chain. |
-| `generateInsights.js` | Derives Insight objects from approved judgments; overall cross-category insights. |
-| `generateDevelopments.js` | Per-category "what changed" developments. |
-| `generateOutlook.js` | Three-tier 6-month outlook (likely / plausible / watchlist) with falsifiability gate. |
-| `selectCaseStudies.js` | Picks representative case-study sources for the deck. |
-| `corpusComposition.js` | Corpus-composition audit (publisher/type/category balance) to blunt single-source inflation. |
-| `corpusSummary.js` | High-level corpus rollup for the period. |
-| `qaJudgments.js` | QA on strategic judgments (maturity ceilings, grounding). |
-| `qaBulletEntailment.js` | Checks slide/insight bullets are entailed by their evidence. |
-| `analyticalQualityQa.js` | Blocks summary-only / descriptive (non-analytical) output. |
-| `statisticalClaimQa.js` | Validates numeric claims against source numbers. |
+**Source-level evidence extraction has moved to `lib/pipeline/extraction/`.**
 
-**Note:** the dashboard's own insight generator lives in
-`scripts/generateDashboardInsights.js` (a two-stage findings→themes→insights
-script); this folder holds the deck/pipeline analysis modules.
+| File | Layer | What it does |
+|------|-------|--------------|
+| `extractPatterns.js` | 5.5 | Clusters evidence items into named attack patterns (≥2 items, ≥2 sources). |
+| `synthesizeCategory.js` | 6 | Per-category synthesis: patterns + evidence → strategic judgments with reasoning chain. |
+| `generateDevelopments.js` | 6.1 | Per-category "what changed" — derived deterministically from approved judgments. |
+| `generateInsights.js` | 6.2 | Insight objects from approved judgments; cross-category LLM call for ecosystem insights. |
+| `selectCaseStudies.js` | 6.3 | Picks representative case-study sources for the deck (LLM-guided). |
+| `generateOutlook.js` | 6.5 | Three-tier 6-month outlook (likely / plausible / watchlist) with falsifiability gate. |
+| `corpusSummary.js` | — | High-level corpus rollup (counts, type distribution) for the reporting period. |
+| `corpusComposition.js` | — | Corpus-composition audit against diversity targets; blunts single-source inflation. |
+| `qaJudgments.js` | QA | Two-pass QA on strategic judgments: deterministic gates + second-model verification. |
+| `qaBulletEntailment.js` | QA | LLM entailment check: slide/insight bullets must be supported by cited evidence. |
+| `analyticalQualityQa.js` | QA | Blocks summary-only / descriptive (non-analytical) output. |
+| `statisticalClaimQa.js` | QA | Validates numeric claims are grounded in source evidence. |
+
+The two shim files (`extractEvidence.js`, `extractAtlasEvidence.js`) re-export
+from `extraction/` for backwards compatibility — update any stale imports.
+
+**Other pipelines that look similar but are separate:**
+- Dashboard widgets → `scripts/generateDashboardInsights.js` + `lib/prompts/insights/`
+  (independent run; different output schema; not part of runPipeline.js)
+- Chatbot → `lib/agent/` + `lib/prompts/agent/` (retrieval-first; not synthesis)
+- Newsletter → `scripts/generateNewsletter.js` + `lib/prompts/newsletter/`

@@ -216,7 +216,7 @@ async function main() {
   console.log(`  [DB] Mapped ${sources.length} sources (+${elapsed1}s)\n`);
 
   // ── Import pipeline modules ────────────────────────────────────────────────
-  const { extractAllEvidence }                         = await import("../lib/pipeline/analysis/extractEvidence.js");
+  const { extractAllEvidence }                         = await import("../lib/pipeline/extraction/extractEvidence.js");
   const { buildCorpusSummary, buildEvidenceGraph }     = await import("../lib/pipeline/analysis/corpusSummary.js");
   const { synthesizeAllCategories, synthesizeCrossCategory } = await import("../lib/pipeline/analysis/synthesizeCategory.js");
   const { buildPresentation }                          = await import("../lib/pipeline/slides/buildPresentation.js");

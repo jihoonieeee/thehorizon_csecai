@@ -3135,6 +3135,183 @@ a:hover { text-decoration: underline; }
 .hz-ra-trend-text { color: var(--text-primary); flex: 1; line-height: 1.4; }
 .hz-ra-trend-time { flex-shrink: 0; font-size: 0.68rem; color: var(--text-tertiary); white-space: nowrap; }
 
+/* ── MITRE ATLAS chain panel ─────────────────────────────────────────────── */
+
+.hz-atlas-panel {
+  margin-top: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.hz-atlas-chain {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.hz-atlas-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  position: relative;
+}
+.hz-atlas-step:last-child { border-bottom: none; }
+
+.hz-atlas-step-n {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.hz-atlas-step-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.hz-atlas-step-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.hz-atlas-tech-id {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #1d4ed8;
+  background: #dbeafe;
+  padding: 1px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.hz-atlas-tech-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.hz-atlas-step-desc {
+  margin: 3px 0 0;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* Diagram */
+.hz-atlas-diagram-toggle {
+  margin-left: 8px;
+  padding: 1px 7px;
+  font-size: 0.66rem;
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #3730a3;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.hz-atlas-diagram-toggle:hover { background: #e0e7ff; }
+
+.hz-atlas-diagram {
+  display: block;
+  max-width: 100%;
+  margin-top: 8px;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.hz-atlas-diagram-error {
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  margin: 6px 0 0;
+  font-style: italic;
+}
+
+/* References */
+.hz-atlas-refs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hz-atlas-ref {
+  font-size: 0.72rem;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.hz-atlas-ref-type {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.hz-atlas-ref-link {
+  color: #2563eb;
+  text-decoration: none;
+  word-break: break-all;
+}
+.hz-atlas-ref-link:hover { text-decoration: underline; }
+
+/* Date provenance row */
+.hz-atlas-dates {
+  display: flex;
+  gap: 16px;
+  padding: 6px 0 8px;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 2px;
+}
+.hz-atlas-date-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+}
+.hz-atlas-date-k {
+  font-weight: 600;
+  color: #64748b;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.hz-atlas-date-v { color: #1e293b; }
+
+/* Chain structural analysis tags */
+.hz-atlas-chain-analysis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0;
+}
+.hz-atlas-ca-tag {
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #f0f9ff;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+  font-weight: 500;
+}
+
 .hz-src-conflict {
   display: inline-block;
   font-size: 0.7rem;
