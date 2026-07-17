@@ -155,7 +155,7 @@ export default async function handler(req, res) {
     // `starred` is included only when the column exists (migration 013) — the flag
     // flips off automatically on the first "column does not exist" error so the
     // page keeps working before the migration is applied.
-    const SELECT_BASE = "id,title,parent_title,url,publisher,author,date_published,collected_date,date_discovered,date_confidence,main_category,trust_tier,tags,source_type,short_summary,summary,analyst_brief,validation_status,ai_specificity_score,intelligence,is_digest,parent_source_id,needs_review";
+    const SELECT_BASE = "id,title,parent_title,url,publisher,author,date_published,collected_date,date_discovered,date_confidence,main_category,trust_tier,tags,source_type,short_summary,summary,analyst_brief,validation_status,ai_specificity_score,intelligence,is_digest,parent_source_id,needs_review,source_label";
     const buildQuery = (from, to) => {
       let q = supabase
         .from("sources")
@@ -204,10 +204,11 @@ export default async function handler(req, res) {
       count: data?.length || 0,
       sources: (data || []).map(s => {
         const mech = s.intelligence?.mechanism_classification || null;
-        const { intelligence, collected_date, ...rest } = s;  // drop heavy blob; alias date
+        const { intelligence, collected_date, source_label, ...rest } = s;
         return {
           ...rest,
           date_collected: collected_date || null,            // frontend uses date_collected
+          label:          source_label   || null,            // frontend uses s.label
           short_summary:  s.short_summary || s.analyst_brief || s.summary || null,
           analyst_brief:  s.analyst_brief || null,
           // Editorial audience fit — set by Layer 3 LLM.

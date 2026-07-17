@@ -4519,6 +4519,52 @@ details[open] .hz-gen-advanced-toggle::before { content: "▾ "; }
 .hz-legend-steps li { margin-bottom: 2px; }
 .hz-legend-steps code { font-size: 0.72rem; background: var(--surface-2); padding: 1px 4px; border-radius: 3px; }
 
+.hz-legend-tag-group {
+  margin-bottom: 14px;
+}
+.hz-legend-tag-group-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 5px;
+  font-size: 0.82rem;
+}
+.hz-legend-tag-group-desc {
+  color: var(--text-tertiary);
+  font-size: 0.78rem;
+}
+.hz-legend-tag-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+}
+.hz-legend-tag-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+.hz-legend-tag-code {
+  flex-shrink: 0;
+  font-family: monospace;
+  font-size: 0.68rem;
+  background: var(--surface-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--text-secondary);
+}
+.hz-legend-tag-label {
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.hz-legend-tag-desc {
+  color: var(--text-tertiary);
+}
+
 .hz-legend-compare {
   display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 4px;
 }
