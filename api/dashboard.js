@@ -135,46 +135,53 @@ function weekLabel(weekEndDate) {
   return weekEndDate.toLocaleDateString("en-SG", { month: "short", day: "numeric" });
 }
 
-// ── Cached dashboard insights (per window, refresh every 30 min) ──────────────
-const _insightCache = new Map(); // win → { data, at }
+// ── Cached insight lookup — 30 min TTL ───────────────────────────────────────
+const _insightCache = new Map();
 const INSIGHT_TTL_MS = 30 * 60 * 1000;
 
-// Looks up the LLM bullet insights for an exact completed-period key. If that
-// period was never generated, falls back to the most recent prior period of the
-// same window type and reports the period the bullets actually describe, so the
-// page can label them honestly instead of pretending they cover the current one.
-async function getWindowInsights(win, key) {
-  const cacheKey = `${win}:${key}`;
+// ── Shape exposed to the frontend ────────────────────────────────────────────
+// Strips internal analytical fields. The frontend only needs what it renders.
+function shapeInsight(ins) {
+  return {
+    insight_id:          ins.insight_id,
+    title:               ins.title,
+    // Point-form explanation shown in the drilldown panel.
+    // explanation_summary: one bold lead sentence
+    // explanation_points:  3–5 tight bullets, each ≤25 words
+    explanation_summary: ins.explanation_summary || null,
+    explanation_points:  ins.explanation_points  || [],
+    evidence_maturity:   ins.evidence_maturity,
+    technique_tags:      ins.technique_tags || [],
+    monitoring_signal:   ins.monitoring_signal || null,
+    cited_sources: (ins.cited_sources || []).map(cs => ({
+      source_title:     cs.source_title,
+      source_url:       cs.source_url,
+      publisher:        cs.publisher,
+      trust_tier:       cs.trust_tier,
+      quote:            cs.quote            || null,
+      evidence_summary: cs.evidence_summary || null,
+    })),
+    // Deliberately omitted — internal pipeline fields, not for the frontend:
+    // what_changed, mechanism, implication, confidence, caveats, blocked, qa_issues
+  };
+}
+
+// ── Primary: category_insights table (from scripts/generateInsights.js) ──────
+// Falls back to the most recent prior period of the same window type.
+async function getCategoryInsights(win, windowKey) {
+  const cacheKey = `cat:${win}:${windowKey}`;
   const cached = _insightCache.get(cacheKey);
   if (cached && Date.now() - cached.at < INSIGHT_TTL_MS) return cached.data;
 
-  const empty = { categories: {}, meta: null, fromLabel: null, stale: false };
-
-  // Normalise a stored `points` payload into structured insight objects.
-  // v2 rows store an object { insights[], assessment, confidence, ... }.
-  // Legacy rows store a bare string[] — wrap each into a minimal insight.
-  const normaliseCategory = (points) => {
-    if (Array.isArray(points)) {
-      return { insights: points.map(s => ({ insight: s })), assessment: null, confidence: null, confidence_reason: null };
-    }
-    if (points && Array.isArray(points.insights)) {
-      return {
-        insights:          points.insights,
-        assessment:        points.assessment || null,
-        confidence:        points.confidence || null,
-        confidence_reason: points.confidence_reason || null,
-        evidence_maturity: points.evidence_maturity || null,
-      };
-    }
-    return null;
-  };
+  const empty = { byCategory: {}, fromLabel: null, stale: false };
 
   try {
-    // Try exact window_key first
-    let { data: rows } = await supabase
-      .from("dashboard_insights")
-      .select("category,points,window_label,source_count,created_at")
-      .eq("window_key", key);
+    let { data: rows, error } = await supabase
+      .from("category_insights")
+      .select("category,assessment_status,insights,coverage_gaps,window_label,source_count,created_at")
+      .eq("window_key", windowKey);
+
+    if (error) throw error;
 
     let fromLabel = null;
     let stale = false;
@@ -182,18 +189,17 @@ async function getWindowInsights(win, key) {
     // Fallback: most recent prior period of the same window type
     if (!rows?.length) {
       const { data: prior } = await supabase
-        .from("dashboard_insights")
-        .select("category,points,window_label,source_count,window_key,created_at")
-        .eq("win", win)
+        .from("category_insights")
+        .select("category,assessment_status,insights,coverage_gaps,window_label,window_key,created_at")
+        .eq("window_type", win)
         .order("created_at", { ascending: false })
-        .limit(30); // 5 categories × ≤3 fallback periods, plus meta rows
+        .limit(8); // 4 categories × up to 2 fallback periods
 
       if (prior?.length) {
-        // Keep only rows from the single most recent prior window_key.
         const recentKey = prior[0].window_key;
         rows = prior.filter(r => r.window_key === recentKey);
         fromLabel = prior[0]?.window_label || null;
-        stale = true; // insights are from an older period than the one displayed
+        stale = true;
       }
     }
 
@@ -202,18 +208,103 @@ async function getWindowInsights(win, key) {
       return empty;
     }
 
-    const categories = {};
-    let meta = null;
+    const byCategory = {};
     for (const row of rows) {
-      if (row.category === META_CATEGORY) {
-        meta = row.points && !Array.isArray(row.points) ? row.points : null;
-        continue;
-      }
-      const norm = normaliseCategory(row.points);
-      if (norm && norm.insights.length) categories[row.category] = norm;
+      const approved = (row.insights || []).filter(i => !i.blocked);
+      byCategory[row.category] = {
+        assessment_status: row.assessment_status,
+        insights:          approved.map(shapeInsight),
+        coverage_gaps:     row.coverage_gaps || [],
+      };
     }
 
-    const result = { categories, meta, fromLabel, stale };
+    const result = { byCategory, fromLabel, stale };
+    _insightCache.set(cacheKey, { data: result, at: Date.now() });
+    return result;
+  } catch (err) {
+    process.stdout.write(`[dashboard] getCategoryInsights error: ${err.message}\n`);
+    return empty;
+  }
+}
+
+// ── Legacy fallback: dashboard_insights table ─────────────────────────────────
+// Used when no category_insights exist for a window. Returns the old bullet format
+// shaped as minimal insight objects so the card headline still renders.
+async function getLegacyInsights(win, windowKey) {
+  const cacheKey = `legacy:${win}:${windowKey}`;
+  const cached = _insightCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < INSIGHT_TTL_MS) return cached.data;
+
+  const empty = { byCategory: {}, fromLabel: null, stale: false };
+
+  try {
+    let { data: rows } = await supabase
+      .from("dashboard_insights")
+      .select("category,points,window_label,created_at")
+      .eq("window_key", windowKey);
+
+    let fromLabel = null;
+    let stale = false;
+
+    if (!rows?.length) {
+      const { data: prior } = await supabase
+        .from("dashboard_insights")
+        .select("category,points,window_label,window_key,created_at")
+        .eq("win", win)
+        .order("created_at", { ascending: false })
+        .limit(30);
+
+      if (prior?.length) {
+        const recentKey = prior[0].window_key;
+        rows = prior.filter(r => r.window_key === recentKey);
+        fromLabel = prior[0]?.window_label || null;
+        stale = true;
+      }
+    }
+
+    if (!rows?.length) {
+      _insightCache.set(cacheKey, { data: empty, at: Date.now() });
+      return empty;
+    }
+
+    const byCategory = {};
+    for (const row of rows) {
+      if (row.category === META_CATEGORY) continue;
+      const points = row.points;
+      // v2 object format
+      if (points && Array.isArray(points.insights) && points.insights.length) {
+        byCategory[row.category] = {
+          assessment_status: null,
+          insights: points.insights.slice(0, 3).map((ins, i) => ({
+            insight_id:        `legacy-${row.category}-${i}`,
+            title:             typeof ins === "string" ? ins : (ins.insight || ""),
+            explanation:       null,
+            evidence_maturity: points.evidence_maturity || null,
+            technique_tags:    [],
+            monitoring_signal: null,
+            cited_sources:     [],
+          })),
+          coverage_gaps: [],
+        };
+      // Legacy bare string array
+      } else if (Array.isArray(points) && points.length) {
+        byCategory[row.category] = {
+          assessment_status: null,
+          insights: points.slice(0, 3).map((s, i) => ({
+            insight_id:        `legacy-${row.category}-${i}`,
+            title:             String(s).slice(0, 120),
+            explanation:       null,
+            evidence_maturity: null,
+            technique_tags:    [],
+            monitoring_signal: null,
+            cited_sources:     [],
+          })),
+          coverage_gaps: [],
+        };
+      }
+    }
+
+    const result = { byCategory, fromLabel, stale };
     _insightCache.set(cacheKey, { data: result, at: Date.now() });
     return result;
   } catch {
@@ -269,14 +360,25 @@ export default async function handler(req, res) {
     const period = getCompletedPeriodWindow(win);
     const { key: windowKey, label: windowLabel, date_from: from, date_to: to } = period;
 
-    // Load timeframe-scoped insights (cached 30 min per window). The key matches
-    // the period the live stats below describe, so bullets and numbers align.
-    const {
-      categories: categoryData,
-      meta: periodMeta,
-      fromLabel: insightFromLabel,
-      stale: insightsStale,
-    } = await getWindowInsights(win, windowKey);
+    // Load structured insights from category_insights (primary) with legacy fallback.
+    // Both return { byCategory, fromLabel, stale }.
+    let insightData = await getCategoryInsights(win, windowKey);
+    if (!Object.keys(insightData.byCategory).length) {
+      insightData = await getLegacyInsights(win, windowKey);
+    }
+    const { byCategory: categoryInsightData, fromLabel: insightFromLabel, stale: insightsStale } = insightData;
+
+    // Legacy periodMeta (comparison block) — still read from dashboard_insights _period_meta row
+    let periodMeta = null;
+    try {
+      const { data: metaRows } = await supabase
+        .from("dashboard_insights")
+        .select("points")
+        .eq("window_key", windowKey)
+        .eq("category", META_CATEGORY)
+        .limit(1);
+      periodMeta = metaRows?.[0]?.points && !Array.isArray(metaRows[0].points) ? metaRows[0].points : null;
+    } catch { /* comparison block is non-critical */ }
 
     // ── 1. Fetch all validated sources in window ──────────────────────────────
     // Paginated: annual windows exceed PostgREST's 1000-row cap, which otherwise
@@ -312,11 +414,9 @@ export default async function handler(req, res) {
         summary:   (s.short_summary || s.analyst_brief || s.intelligence?.source_summary || "").trim() || null,
       }));
 
-      // Evidence maturity + confidence computed LIVE over the same source set the
-      // card counts, so the ladder, the count, and the confidence always agree.
-      const maturity   = computeEvidenceMaturity(srcs);
-      const confidence = deriveConfidence(maturity);
-      const cd         = categoryData[c.key] || null;
+      // Evidence maturity computed LIVE over the same source set the card counts.
+      const maturity = computeEvidenceMaturity(srcs);
+      const ci       = categoryInsightData[c.key] || null;  // from category_insights table
 
       // Per-maturity-level source lists for drilldown (capped at 30 per level).
       const ranked = srcs.map(rankSource).sort(byRankThenRecency);
@@ -343,13 +443,18 @@ export default async function handler(req, res) {
         short:             c.short,
         source_count:      srcs.length,
         top_sources:       top,
-        insights:          cd?.insights || null,
-        assessment:        cd?.assessment || null,
-        confidence:        confidence.level,
-        confidence_reason: confidence.reason,
         evidence_maturity: maturity,
         maturity_sources:  maturitySources,
-        insight_from:      cd ? insightFromLabel : null,
+
+        // Structured insights from category_insights table.
+        // insights[]: each has { insight_id, title, explanation, evidence_maturity,
+        //   technique_tags, monitoring_signal, cited_sources[] }
+        // No confidence levels, no QA flags — those are internal pipeline fields.
+        assessment_status: ci?.assessment_status || null,
+        insights:          ci?.insights          || [],
+        coverage_gaps:     ci?.coverage_gaps     || [],
+        insights_from:     ci ? insightFromLabel : null,  // null = current period
+        insights_stale:    ci ? insightsStale    : false,
       };
     });
 
@@ -495,7 +600,6 @@ export default async function handler(req, res) {
       window_label:  windowLabel,
       date_from:     from,
       date_to:       to,
-      insights_stale: insightsStale,   // true when bullets are from an older period
       summary: {
         total,
         high_trust: highTrust,

@@ -34,13 +34,22 @@ Do NOT extract:
 EVIDENCE QUALITY
 ──────────────────────────────────────────────────────
 
-QUOTE — must be an exact character-for-character span from the source. No paraphrasing,
-grammar fixes, joined non-adjacent fragments. The quote must prove the COMPLETE fact:
-if a fact has two parts, find a span covering both or split into two items.
-Set quote_grounded=false only when the supporting passage is absent from the provided text.
+QUOTE — must be a SINGLE contiguous verbatim span from the source. No paraphrasing,
+grammar fixes, or joined non-adjacent fragments. NEVER use ellipsis (...) to bridge
+two passages — if a fact spans two separate sentences, pick the single most probative
+sentence OR split the fact into two items. The quote must prove the COMPLETE fact.
+Set quote_grounded=true if the span is present in the text, even if typographic characters
+differ slightly — these are rendering artifacts, not substantive differences:
+  • curly vs straight apostrophes/quotes (' vs ', " vs ")
+  • markdown escaped underscores (e.g. trust\_remote\_code in text = trust_remote_code in quote)
+  • markdown escaped asterisks or brackets
+Set quote_grounded=false only when the supporting passage is genuinely absent from the text.
 
 NUMBERS — every value in numbers[] must appear verbatim in the quote or the exact
-supporting source span. Do not compute, round, or infer.
+supporting source span. Do not compute, round, convert, or infer. Copy the exact
+form from the text: if the text says "three" use "three" not "3"; if it says
+"1 million" use "1 million" not "1000000". Set grounded: false only if the value
+is genuinely absent from the source text.
 
 GROUNDING HIERARCHY — when the same fact appears at different evidentiary levels,
 prefer: direct observation → authority/vendor confirmation → named-victim statement →

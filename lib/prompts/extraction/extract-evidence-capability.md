@@ -72,6 +72,11 @@ WHAT NOT TO EXTRACT
 - Pure marketing copy with no grounded technical claim
 - Capabilities with no plausible AI security surface expansion or misuse pathway
 - Safeguard claims without the underlying capability they constrain (extract the capability first)
+- "Absence of information" claims — do NOT extract items saying "the announcement does not mention
+  safeguards / access controls / restrictions." If safeguard information is absent, that absence
+  is implicit; there is nothing to cite and no fact to ground.
+- More than ONE inference item per source — one misuse pathway inference is sufficient.
+  Additional inferences with no quote are analyst padding, not intelligence.
 
 ATOMICITY
 One item = one citable proposition. Do not bundle capability + safeguard + misuse into one fact.
@@ -82,8 +87,8 @@ Return ONLY valid JSON:
   "evidence_items": [
     {
       "fact": "string — specific, concrete proposition answering the central question (1-2 sentences)",
-      "quote": "string — exact verbatim span from the text, or empty string if inference",
-      "quote_grounded": true|false,
+      "quote": "string — verbatim span from the text, or empty string if inference",
+      "quote_grounded": true|false,  // true if span is present in text (minor typographic diffs OK: curly quotes, markdown escaped underscores); false if genuinely absent
       "evidence_type": "capability_demonstration|attack_surface_signal|incident|statistical_measurement|expert_assessment",
       "specificity": "high|medium|low",
       "claim_epistemic_type": "observed_fact|marketing_claim|inference|author_analysis|forecast",

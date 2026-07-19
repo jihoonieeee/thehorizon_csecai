@@ -101,10 +101,30 @@ for experimental outcomes. Use observed_fact for released artifacts, confirmed C
 and events reported as already occurring.
 
 QUOTE DISCIPLINE
-  - quote must be a SINGLE contiguous character-for-character span from the provided text — do NOT merge text from different sentences or paragraphs.
+  - quote must be a SINGLE contiguous verbatim span — one unbroken passage from the text.
+    NEVER use ellipsis (...) to bridge two non-adjacent passages, even from the same paragraph.
+    If the fact requires two separate sentences, EITHER pick the single most probative sentence
+    OR split into two separate evidence items. Using "..." in a quote is always wrong here.
   - For experimental_result items, prefer the sentence containing the key number.
   - For boundary_condition items, prefer the explicit limitation statement (often in Limitations section).
-  - Set quote_grounded=false only if you cannot find the exact text in the provided TEXT above.
+  - CITATION MARKERS: Academic papers embed inline citations like "[27]", "[smith2024]", or
+    "Smith et al. (2024)". Do NOT include these in your quote — copy the sentence text around
+    them, omitting the citation bracket. Example: if the text reads "prior work [liu2024] showed
+    that X", quote "prior work showed that X". This ensures the quote matches the stored text,
+    which may render citations differently (e.g. "[27]" vs "[liu2024prompt]").
+  - FORMULA / TABLE PLACEHOLDERS: PDF-to-text conversion often replaces LaTeX math with "[formula]",
+    "[TABLE]", "[CITATION]", or similar tokens. Do NOT substitute these with inferred values.
+    If a key number exists only as "[formula]" in the text, do not include it in numbers[] with
+    grounded: true and do not state it as a specific value in the fact. Instead describe the
+    finding qualitatively (e.g. "achieves a query budget of [formula]% of training samples" or
+    omit the specific value entirely).
+  - RENDERING ARTIFACTS: Set quote_grounded=true if the span appears in the provided text,
+    even if typographic characters differ slightly:
+      • curly vs straight apostrophes/quotes (' vs ', " vs ")
+      • markdown escaped underscores (trust\_remote\_code in text = trust_remote_code in quote)
+      • markdown escaped asterisks or brackets
+    These are rendering artifacts, not substantive differences. Set quote_grounded=false only
+    if the supporting passage is genuinely absent from the provided text.
 
 TECHNIQUE TAGS
   - technique_tags must use ONLY valid taxonomy tag IDs (TAI0X_, LLM0X_, ASI0X_, AE0X_ pattern).
@@ -205,7 +225,8 @@ PUBLICATION_DATE: {{publication_date}}
 TEXT (abstract + available body):
 {{text}}
 
-Extract all independently citable claims — attacks, prerequisites, experimental results,
-released artifacts, boundary conditions, and failure cases. Use claim_id / supports_claim
-to link related items. No item cap: prefer completeness over brevity.
+Extract the most significant independently citable claims. Cap at 8 items total.
+Priority order: (1) capability_demonstration with experimental results, (2) attack_prerequisites,
+(3) boundary_conditions that limit applicability, (4) released_artifacts.
+Use claim_id / supports_claim to link related items.
 ```

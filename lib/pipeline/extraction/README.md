@@ -93,7 +93,7 @@ extracted items per source and only re-runs sources whose `full_text` hash chang
 
 ## Not here
 
-- Pattern clustering → `analysis/extractPatterns.js`
-- Strategic synthesis → `analysis/synthesizeCategory.js`
+- Pattern clustering → `slides/extractPatterns.js` (moved to slides)
+- Strategic synthesis → `analysis/runAnalysis.js`
 - Dashboard insights → `scripts/generateDashboardInsights.js` (separate pipeline)
 - Source family classification → `lib/pipeline/understand/classifySourceFamily.js`

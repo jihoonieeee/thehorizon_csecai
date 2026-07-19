@@ -45,9 +45,10 @@ const PAGE = 1000;
 let data = [];
 for (let from = 0; ; from += PAGE) {
   const { data: page, error } = await sb.from("sources")
-    .select("id, title, url, publisher, source_type, trust_tier, main_category, full_text, clean_text")
+    .select("id, title, url, publisher, source_type, trust_tier, main_category, full_text, clean_text, reading_value, research_gate_maturity")
     .eq("validation_status", "pass")
     .in("main_category", CATS)
+    .in("reading_value", ["essential", "recommended"])
     .order("created_at", { ascending: false })
     .range(from, from + PAGE - 1);
   if (error) { console.error("DB load failed:", error.message); process.exit(1); }

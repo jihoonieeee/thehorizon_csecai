@@ -87,10 +87,20 @@ STRICT RULES (same as standard evidence extraction)
 - AI-RELEVANCE: every item must concern an attack on or using an AI/ML system.
 
 QUOTE DISCIPLINE
-"quote" must be an exact character-for-character copy from the source text. No paraphrase,
-no ellipsis, no joining non-adjacent fragments. ≤200 chars. If the exact supporting span
-exceeds 200 chars, copy the most probative sub-span and set quote_grounded=true only if
-that sub-span alone proves the whole fact.
+"quote" must be a verbatim span from the source text. No paraphrase, no ellipsis,
+no joining non-adjacent fragments. ≤200 chars. If the exact supporting span exceeds
+200 chars, copy the most probative sub-span.
+
+MARKDOWN-FORMATTED TEXT: ATLAS case studies often contain markdown hyperlinks such as
+[EasyEdit](https://github.com/zjunlp/EasyEdit) or [Sliver](https://github.com/BishopFox/sliver).
+When quoting from markdown text, preserve the markdown syntax character-for-character
+(e.g. quote "[EasyEdit](https://github.com/zjunlp/EasyEdit)" not "EasyEdit"). This ensures
+the quote_grounded check passes. Only strip markdown if the text is rendered HTML without
+raw markdown syntax.
+
+Set quote_grounded=true if your quote is a verbatim span (including any markdown syntax)
+present in the provided text. Set quote_grounded=false only if you genuinely cannot
+locate the supporting passage anywhere in the provided text.
 
 HOW MANY
 A typical ATLAS case study yields 3–8 incident-level items:

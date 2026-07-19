@@ -216,12 +216,13 @@ async function main() {
   console.log(`  [DB] Mapped ${sources.length} sources (+${elapsed1}s)\n`);
 
   // ── Import pipeline modules ────────────────────────────────────────────────
-  const { extractAllEvidence }                         = await import("../lib/pipeline/extraction/extractEvidence.js");
-  const { buildCorpusSummary, buildEvidenceGraph }     = await import("../lib/pipeline/analysis/corpusSummary.js");
-  const { synthesizeAllCategories, synthesizeCrossCategory } = await import("../lib/pipeline/analysis/synthesizeCategory.js");
-  const { buildPresentation }                          = await import("../lib/pipeline/slides/buildPresentation.js");
-  const { buildDashboardState }                        = await import("../lib/pipeline/dashboard.js");
-  const { DOMAINS }                                    = await import("../lib/pipeline/understand/taxonomy.js");
+  const { extractAllEvidence }                     = await import("../lib/pipeline/extraction/extractEvidence.js");
+  const { buildCorpusSummary, buildEvidenceGraph } = await import("../lib/pipeline/analysis/corpusSummary.js");
+  const { runAnalysis }                            = await import("../lib/pipeline/analysis/runAnalysis.js");
+  const { synthesizeCrossCategory }               = await import("../lib/pipeline/slides/synthesizeCrossCategory.js");
+  const { buildPresentation }                      = await import("../lib/pipeline/slides/buildPresentation.js");
+  const { buildDashboardState }                    = await import("../lib/pipeline/dashboard.js");
+  const { DOMAINS }                                = await import("../lib/pipeline/understand/taxonomy.js");
 
   const ACTIVE_CATEGORIES = DOMAINS.filter(d => d !== "unclear_or_adjacent");
 
@@ -240,18 +241,23 @@ async function main() {
   const evidence_graph  = buildEvidenceGraph(sources, evidenceItems);
   console.log(`  [CORPUS] ${corpus_summary.date_range || "–"} | ${ACTIVE_CATEGORIES.map(c => `${c.split("_")[0]}:${corpus_summary.source_count_by_category?.[c]||0}`).join(" ")}\n`);
 
-  // ── L6: Synthesis + QA ────────────────────────────────────────────────────
-  console.log(`  [L6] Synthesizing categories...`);
-  const category_analyses = await synthesizeAllCategories(packs, sources, corpus_summary, { skipQa: SKIP_QA });
-
-  const totalJudgments    = category_analyses.reduce((n, ca) => n + (ca.judgments || []).length, 0);
-  const approvedJudgments = category_analyses.reduce((n, ca) => n + (ca.approved_judgment_count || 0), 0);
+  // ── L6: Analysis ─────────────────────────────────────────────────────────
+  console.log(`  [L6] Analysing categories...`);
+  const windowInfo = {
+    type: "testset", key: `testset-${setId}`,
+    label: corpus_summary.date_range || "test set",
+    date_from: "", date_to: "",
+  };
+  const category_analyses = await runAnalysis(
+    sources, evidenceItems, corpus_summary, windowInfo,
+    { skipLlm: SKIP_QA, supabase: null }
+  );
+  const totalInsights  = category_analyses.reduce((n, ca) => n + (ca.insights||[]).filter(i=>!i.blocked).length, 0);
   const elapsed3 = ((Date.now() - t0) / 1000).toFixed(1);
-  console.log(`  [L6] ${totalJudgments} total judgments, ${approvedJudgments} approved (+${elapsed3}s)\n`);
+  console.log(`  [L6] ${totalInsights} approved insights (+${elapsed3}s)\n`);
 
-  console.log(`  [L6] Running cross-category synthesis...`);
-  const cross_category = await synthesizeCrossCategory(category_analyses, {});
-  console.log(`  [L6] ${(cross_category.patterns||[]).length} patterns\n`);
+  const cross_category = await synthesizeCrossCategory(category_analyses, { skipLlm: SKIP_QA });
+  console.log(`  [slides] ${(cross_category.patterns||[]).length} cross-category patterns\n`);
 
   // ── L7-L8: Deck ───────────────────────────────────────────────────────────
   console.log(`  [L7-L8] Building presentation...`);

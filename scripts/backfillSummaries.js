@@ -20,7 +20,7 @@
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { understandSource } from "../lib/pipeline/understand/understandSource.js";
-import { scrubImpliedQuantitatives } from "../lib/pipeline/analysis/statisticalClaimQa.js";
+import { scrubImpliedQuantitatives } from "../lib/utils/scrubQuantitatives.js";
 
 const args        = process.argv.slice(2);
 const DRY_RUN     = args.includes("--dry-run");

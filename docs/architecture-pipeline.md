@@ -37,21 +37,143 @@ Connectors (APIs / RSS / PDFs)
 Sources from Supabase
         │
         ▼
-  L2–L4 UNDERSTAND    merged single call: understandAllSources() handles relevance
-        │               gate + taxonomy + extraction (skips re-L3 for DB sources)
-    ↳ QA              qaClassificationLLM() auto-fix pass
+  L2–L4 UNDERSTAND      understandAllSources() — relevance gate + taxonomy +
+        │                 extraction (skips re-L3 for DB sources)
+    ↳ QA                qaClassificationLLM() — cross-model verifier, auto-fixes
         │
         ▼
-  L5  ANALYSIS        evidence extraction, pattern clustering, category synthesis
+  L5  EXTRACTION        extractAllEvidence() — one LLM call per source (type-specific
+        │                 extractor); Jaccard dedup; assemble category packs
+        │                 (strong / usable / context per category)
+        │
+        ├──────────────► corpusSummary + corpusComposition (deterministic, no LLM)
         │
         ▼
-  L6  SYNTHESIS       strategic judgments, outlook, analytical QA
+  L6  ANALYSIS          runAnalysis() — lib/pipeline/analysis/runAnalysis.js
+        │               4 categories run in parallel:
+        │
+        │   Per category:
+        │     Step 1  selectSourcesForCategory()   two-pass selection
+        │               Pass 1 (deterministic): filter by category/status/!noise; score by
+        │                 sourceSignalScore(); starred always first; cap pool at 60 candidates
+        │               Pass 2 (Haiku, runs when candidates > 25): semantic curation
+        │                 Prompt: lib/prompts/analysis/select-sources.md
+        │                 Criteria applied in order:
+        │                   1. Source quality   — IR reports > advisories > original research >
+        │                                         primary disclosures > secondary/aggregation
+        │                   2. Period relevance — event/incident/disclosure date, not publish date;
+        │                                         retrospectives count as context, not period evidence
+        │                   3. Non-redundancy   — same underlying disclosure = one cluster;
+        │                                         second source only if it adds independent
+        │                                         telemetry, technical depth, or attribution
+        │                   4. Topic diversity  — different techniques, actors, technology layers
+        │                   5. Maturity balance — preserve operational, disclosed, and research
+        │                                         tiers where candidates exist
+        │                 Output: 0–20 source IDs; no forced minimum; validated post-call
+        │                 Fallback: deterministic top-20 if Haiku call fails or returns <5 valid IDs
+        │     Step 2  buildDossier()               package sources into LLM-readable text
+        │               grouped by maturity level; pulls best quote per source from L5 evidence
+        │               returns source_index { [source_id]: metadata } for post-call validation
+        │     Step 3  analyzeCategory()            ONE Sonnet/Opus call → up to 3 insights
+        │               Prompt: lib/prompts/analysis/analyze-category.md
+        │               LLM cites source_ids verbatim from [brackets] in dossier
+        │               Post-call: validates cited IDs; resolves evidence_item_ids from L5 packs
+        │               Retries once if critical fields empty
+        │     Step 4  qaInsights()                 deterministic gate
+        │               Hard block: 0 valid cited sources, or empty mandatory field
+        │               Soft flag: single-source no caveat, vague title, no monitoring signal
+        │
+        │   Output per category: CategoryAnalysis = {
+        │     category, assessment_status,
+        │     selected_source_ids[],
+        │     insights[]: { insight_id, title, what_changed, mechanism, implication,
+        │                   evidence_maturity, confidence, technique_tags[],
+        │                   monitoring_signal, caveats[], blocked, qa_issues[],
+        │                   cited_sources[]: { source_id, source_url, source_title,
+        │                                     publisher, trust_tier, quote,
+        │                                     evidence_summary },
+        │                   evidence_item_ids[] }
+        │     coverage_gaps[]
+        │   }
+        │
+        │   Step 5  generateExplanations()  parallel Haiku calls, one per approved insight
+        │               Prompt: lib/prompts/analysis/explain-insight.md
+        │               Adds to each insight:
+        │                 explanation_summary: one sentence ≤20 words — the lead
+        │                 explanation_points[]: 3–5 bullets ≤25 words each
+        │               Required bullets: (1) what happened, (2) how it works
+        │               Optional bullets: scale, examples, corroboration — only
+        │                 if evidence warrants; no defender advice, no monitoring
+        │               Attack walkthrough, if present, compressed as step→step→outcome
+        │
+        │   Step 6  qaExplanations()         Haiku fidelity check, one call per insight
+        │               Prompt: lib/prompts/analysis/qa-grounding.md
+        │               Checks summary + every bullet clause-by-clause against
+        │               full approved evidence (fact + quote per cited source)
+        │               Verdicts: SUPPORTED / INFERRED (strict) / UNSUPPORTED
+        │               UNSUPPORTED bullets removed; UNSUPPORTED summary cleared
+        │               When uncertain → UNSUPPORTED (conservative default)
+        │               Explicit checks: named entities, numbers, dates, attribution,
+        │                 certainty language, causality, technical detail
+        │               Fallback: if Haiku call fails, all content kept (fail-safe)
+        │
+        │   Persisted to: category_insights table (window_key × category)
+        │   when run via scripts/generateInsights.js
         │
         ▼
-  L7  SLIDE PLANNING  plan slides from synthesis
-        │
-        ▼
-  L8  DECK BUILD      PPTX render + diagrams + QA
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │              CategoryAnalysis[] — the canonical L6 output             │
+  │  Each approved insight carries explanation_summary + explanation_points│
+  │  after Steps 5–6. Internal fields (what_changed, mechanism, implication│
+  │  confidence, caveats, blocked, qa_issues) stay in DB, not sent to UI. │
+  └────────────────────┬─────────────────────────────┬────────────────────┘
+                       │                             │
+          ┌────────────▼────────────┐   ┌────────────▼────────────────────┐
+          │   DASHBOARD PATH        │   │   SLIDES PATH                   │
+          │                         │   │   LLM-heavy, inside             │
+          │  GET /api/dashboard      │   │   buildPresentation()           │
+          │  api/dashboard.js        │   └────────────┬────────────────────┘
+          │                         │                │
+          │  getCategoryInsights()  │                │  Slide-specific steps
+          │    reads category_insights               │  (all inside buildPresentation
+          │    table, 30-min cache  │                │  or called from it):
+          │    falls back to legacy │                │
+          │    dashboard_insights   │                │  synthesizeCrossCategory()
+          │    if no new row exists │                │  selectAllCaseStudies()
+          │                         │                │  generateAllOutlooks()
+          │  shapeInsight() strips  │                │
+          │    internal fields;     │                ▼
+          │    exposes per insight: │        buildPresentation()
+          │      insight_id         │          lib/pipeline/slides/
+          │      title              │          buildPresentation.js
+          │      explanation_summary│          normalises insight→judgment shape
+          │      explanation_points │          then generates slides as before
+          │      evidence_maturity  │                │
+          │      technique_tags     │                ▼
+          │      cited_sources[]    │        renderDeckPptx() → .pptx file
+          │        (url, publisher, │
+          │         quote, summary) │
+          │      coverage_gaps      │
+          │      insights_stale     │
+          │      insights_from      │
+          │                         │
+          │  Live corpus stats       │
+          │  (counts, trend, tags)  │
+          │  always computed fresh  │
+          │  from sources table —   │
+          │  no dependency on       │
+          │  generateInsights.js    │
+          └─────────────────────────┘
+
+─────────────────────────────────────────────────────────────────────────────
+SEPARATE: scripts/generateInsights.js
+  Primary way to run L6 analysis for a specific timeframe.
+  Not called by runPipeline.js (which runs on whatever sources are loaded).
+  Reads sources from Supabase for the given window, runs runAnalysis(),
+  persists results to category_insights table.
+  Flags: --window week|month|quarter, --asof, --date-from/--date-to,
+         --category, --force, --dry-run
+─────────────────────────────────────────────────────────────────────────────
 ```
 
 **Scoring signals** are not a pipeline layer. They are written as part of L4 (maturity inline,
@@ -433,35 +555,278 @@ Backfill script: `scripts/labelSources.js` — re-runs Layer 3 on sources missin
 
 ---
 
-## Layer 5 — Analysis
+## Layer 5 — Evidence Extraction
 
-**Folder:** `lib/pipeline/analysis/`
+**Folder:** `lib/pipeline/extraction/`
 
-Runs on the validated, classified corpus. Produces the analytical content that feeds slide generation.
+One LLM call per eligible source extracts structured evidence items (facts, quotes, technique tags, entities). Output is deduplicated and assembled into per-category packs used by L6.
 
-| File | Responsibility |
-|---|---|
-| `extractEvidence.js` | Extracts structured evidence items (claims, quotes, vectors) from sources |
-| `extractPatterns.js` | Clusters evidence into patterns and themes across sources |
-| `corpusComposition.js` | Corpus-level statistics (category mix, tier distribution, date spread) |
-| `corpusSummary.js` | LLM-generated corpus summary for context injection |
-| `synthesizeCategory.js` | LLM: per-category strategic synthesis — the main analysis prompt |
-| `generateInsights.js` | LLM: key insights and developments |
-| `generateDevelopments.js` | LLM: recent developments narrative |
-| `generateOutlook.js` | LLM: forward-looking threat outlook |
-| `selectCaseStudies.js` | Picks the strongest case studies per category for slides |
-| `analyticalQualityQa.js` | 5-tier analytical quality gate — blocks summary-only / descriptive outputs |
-| `qaJudgments.js` | Cross-checks that claims are grounded in cited evidence |
-| `qaBulletEntailment.js` | Checks each slide bullet is entailed by its cited source |
-| `statisticalClaimQa.js` | Validates that all statistics cited on slides are traceable to sources |
+### Files
 
-System prompts: `lib/prompts/analysis/`
+| File | Prompt | Responsibility |
+|---|---|---|
+| `extractEvidence.js` | (routes to type-specific extractor) | Orchestrator: routes each source to the correct extractor by `source_type`; runs Jaccard dedup; assembles category packs (strong / usable / context) |
+| `extractThreatIntelEvidence.js` | `lib/prompts/extraction/extract-evidence-threat-intel.md` | Threat intel reports, incident write-ups |
+| `extractAcademicEvidence.js` | `lib/prompts/extraction/extract-evidence-academic.md` | arXiv papers and academic research |
+| `extractAtlasEvidence.js` | `lib/prompts/extraction/extract-evidence-atlas.md` | MITRE ATLAS advisories |
+| `extractCapabilityEvidence.js` | `lib/prompts/extraction/extract-evidence-capability.md` | Capability demonstrations, PoC disclosures |
+| `extractCorporateBlogEvidence.js` | `lib/prompts/extraction/extract-evidence-corporate-blog.md` | Vendor and security-team blogs |
+| `extractRoundupEvidence.js` | `lib/prompts/extraction/extract-evidence-roundup.md` | Digest / roundup newsletters (multi-item) |
+| `academicRelevanceGate.js` | — | Deterministic gate: skips academic sources with no AI-threat angle before spending LLM tokens |
+
+### Category packs
+
+After extraction and dedup, `extractEvidence.js` assembles one pack per category:
+
+```
+pack = {
+  category,
+  strong:  evidence_items[]   // quote_grounded=true AND specificity=high
+  usable:  evidence_items[]   // either condition
+  context: evidence_items[]   // neither — low-signal supporting items
+}
+```
+
+Each evidence item carries: `evidence_id`, `fact`, `quote`, `quote_grounded`, `specificity`, `evidence_type`, `technique_tags[]`, `entities[]`, `numbers[]`, `source_id`, `source_url`, `source_title`, `trust_tier`, `source_date`, `is_cluster_rep`, `walkthrough_steps[]` (if applicable), `maturity_level`.
+
+### Corpus summary (no LLM)
+
+`lib/pipeline/analysis/corpusSummary.js` — called alongside L5, builds deterministic corpus stats (source counts by category and type, trust-tier breakdown, date range, tag frequency, top entities, thin-category flags). This object is passed as context into every L6 LLM call.
+
+`lib/pipeline/analysis/corpusComposition.js` — source-diversity audit (research share, top-2 publisher concentration). Warnings are logged but do not block synthesis.
 
 ---
 
-## Layer 6 — Synthesis
+## Layer 6 — Analysis
 
-Aggregates per-category analyses into a cross-category strategic view. `runCrossCategorySynthesis()` in `synthesizeCategory.js` runs an ecosystem-level prompt (Sonnet) that sees all four category analyses at once and produces the overarching narrative, strategic judgments, and threat outlook.
+**Folder:** `lib/pipeline/analysis/`
+
+**Single responsibility:** given a corpus of sources per category and a timeframe, identify up to 3 strategic developments and produce cited, evidence-backed insights. L6 does not know about slides or dashboard widgets — it only produces `CategoryAnalysis[]`.
+
+### Files
+
+| File | LLM | Responsibility |
+|---|---|---|
+| `selectSources.js` | Haiku (optional) | Step 1: two-pass selection — deterministic pre-filter to 60 candidates, then Haiku semantic curation (source quality → period relevance → non-redundancy → diversity → maturity balance). Falls back to deterministic top-20 if Haiku fails. |
+| `buildDossier.js` | none | Step 2: packages selected sources into structured text grouped by maturity level; pulls best quote per source from L5 evidence items; returns `source_index` |
+| `analyzeCategory.js` | Sonnet/Opus | Step 3+4: one LLM call per category → up to 3 insights with `cited_sources[]`; validates cited source IDs; resolves `evidence_item_ids`; retries on empty critical fields |
+| `qaInsights.js` | none | Step 4: hard-blocks insights with 0 valid citations or empty mandatory fields; soft-flags vague titles, missing caveats, no monitoring signal |
+| `runAnalysis.js` | — | Orchestrator: runs steps 1–4 for all 4 categories in parallel; persists to `category_insights` table when `supabase` provided |
+| `corpusSummary.js` | none | Corpus stats (source counts, trust-tier breakdown, date range, tag frequency) — injected as context into every dossier |
+| `corpusComposition.js` | none | Source-diversity audit (research share, top-2 publisher concentration) — warnings logged, does not block analysis |
+
+### What the analysis LLM sees (the dossier)
+
+`buildDossier()` packages selected sources into plain text — the LLM sees **sources**, not individual evidence items. Each entry:
+
+```
+[source-uuid] Source Title [reading_value]
+  Publisher : Publisher Name [trust_tier]
+  Date      : YYYY-MM-DD
+  Summary   : ...
+  Key quote : "verbatim excerpt from source text"
+  Tags      : LLM02, prompt_injection
+```
+
+Sources are grouped by maturity level (OPERATIONAL → RESEARCH), highest fidelity first. The LLM copies `source-uuid` values verbatim into `cited_sources[].source_id`. Post-call, cited IDs are validated against `source_index` and mapped to L5 evidence items by `source_id`.
+
+**Why sources, not evidence items:** Source IDs are stable URL hashes tied to visible titles and publishers — more memorable than opaque `ev-abc123` strings. The selection pass reduces the pool to the most useful 10–20 sources, so the analysis LLM sees a curated, non-redundant dossier rather than a scored-but-unfiltered dump. Evidence items are resolved deterministically after the call by matching `source_id`.
+
+### Analysis prompt design — `analyze-category.md`
+
+The analysis LLM follows a nine-step flow:
+
+1. **Identify the period change** — only surface events, disclosures, or demonstrations that occurred within the stated window; prior-period context may explain significance but may not become the primary claim.
+2. **Group related evidence** — by mechanism and target layer, not taxonomy tag.
+3. **Test independence** — evidence is independent only when it comes from separate primary sources (separate telemetry, separate research, separate victims). Multiple outlets repeating the same vendor disclosure or CVE are one evidence cluster, not corroboration.
+4. **Form the claim** — ≤12 words, falsifiable. A named entity is preferred; a clearly bounded attack class is acceptable when the evidence spans implementations. Escalation language ("growing", "increasing") is never acceptable.
+5. **Assign evidence maturity** — scoped to the specific claim, not the highest-maturity source in the group. An insight about an observed campaign does not inherit a higher maturity from an unrelated research paper in the same dossier.
+6. **Assign confidence** — independent of maturity. Measures evidentiary quality and internal consistency for this specific claim: one authoritative IR report can give high confidence; two outlets citing the same blog give low confidence regardless of count.
+7. **State the mechanism** — if directly stated in a cited source, stated as fact. If analyst-inferred, the field must be prefixed `"Inferred: "` and confidence must be medium or low.
+8. **State the implication** — names the broken defender assumption or new attack surface; not prescriptive mitigation advice.
+9. **Cite and validate** — only IDs from the dossier; quotes must be verbatim and directly support the claim; maturity assignment must be justified by the quote.
+
+**Thin evidence:** when no defensible insight exists, `insights[]` is empty and `coverage_gaps[]` describes specifically what is absent. The prompt does not force a "thin evidence" insight.
+
+### Output type — `CategoryAnalysis`
+
+```
+CategoryAnalysis = {
+  category,
+  assessment_status,            // "assessed" | "thin" | "error"
+  selected_source_ids[],        // sources that went into the dossier
+  insights: Insight[],          // 0–3; empty is valid when evidence is thin
+  coverage_gaps[],
+}
+
+Insight = {
+  insight_id,                   // uuid
+  title,                        // ≤12 words, falsifiable, bounded claim
+
+  // ── User-facing explanation (added by Steps 5–6) ──────────────────────────
+  explanation_summary,          // one sentence ≤20 words — bold lead shown in drilldown
+  explanation_points[],         // 3–5 bullets ≤25 words each — the drilldown body
+  explanation_qa: {             // Step 6 fidelity check result (stored, not shown to users)
+    summary_removed,            // true if summary was UNSUPPORTED and cleared
+    points_removed,             // count of bullets removed
+    grounding_issues[],         // per-item failure reasons
+    needs_regen,                // true if too few bullets survived
+  },
+
+  // ── Internal analytical fields (stored, NOT sent to frontend) ─────────────
+  what_changed,                 // specific event/disclosure/capability in this period
+  mechanism,                    // root cause; prefixed "Inferred: " if not in sources
+  implication,                  // broken defender assumption (not mitigation advice)
+  evidence_maturity,            // scoped to this insight's specific claim
+  confidence,                   // evidentiary quality for this claim, independent of maturity
+  technique_tags[],
+  monitoring_signal,
+  caveats[],
+  blocked,                      // true = failed QA gate, excluded from downstream
+  qa_issues[],
+
+  // ── Attribution ───────────────────────────────────────────────────────────
+  cited_sources: [{
+    source_id,                  // sources.id (URL sha256 hash)
+    source_url,
+    source_title,
+    publisher,
+    trust_tier,
+    quote,                      // verbatim excerpt directly proving the claim
+    evidence_summary,           // one sentence: what this source uniquely contributes
+  }],
+  evidence_item_ids[],          // L5 evidence IDs resolved from cited sources post-call
+}
+```
+
+### DB persistence — `category_insights` table
+
+Migration: `docs/migrations/024_category_insights.sql`
+
+Keyed by `(window_key, category)` — one row per timeframe × category. Written by `scripts/generateInsights.js` and read by `api/dashboard.js`. The full `insights[]` JSONB is stored including all internal analytical fields; the API strips them before sending to the frontend.
+
+### QA stack — full pipeline order
+
+**`qaInsights.js` — deterministic + fact-checks (Step 4)**
+
+| Check | Type | Effect |
+|---|---|---|
+| 0 valid cited sources | hard | blocked = true |
+| empty `title`, `what_changed`, `mechanism`, or `implication` | hard | blocked = true |
+| Quote fuzzy-match: 4-gram overlap between cited quote and source `short_summary` | soft | qa_issues flag |
+| Maturity rule: `operational_campaign` without primary/high-trust source | soft | qa_issues flag |
+| Named CVE in title not found in any cited source text | soft | qa_issues flag |
+| Vague title language (hedge verbs) | soft | qa_issues flag |
+| Single source without caveat | soft | qa_issues flag |
+| `research_demonstration` maturity without caveat | soft | qa_issues flag |
+| No monitoring signal | soft | qa_issues flag |
+
+**`generateExplanations.js` — Haiku explanation generation (Step 5)**
+
+Prompt: `lib/prompts/analysis/explain-insight.md`
+
+Receives per insight: `title`, `what_changed`, `mechanism`, `period_label`, cited source quotes, and any L5 walkthrough evidence for cited sources. Produces `explanation_summary` (lead sentence) and `explanation_points[]` (3–5 bullets). The model is instructed to explain what happened and how it works — not to add defender advice, monitoring guidance, or any analysis beyond what the evidence supports.
+
+**`qaExplanations.js` — Haiku fidelity check (Step 6)**
+
+Prompt: `lib/prompts/analysis/qa-grounding.md`
+
+Checks every item (summary + each bullet) clause-by-clause against the full approved evidence (fact + quote per cited source). Govering principle: verify fidelity to approved evidence, not plausibility.
+
+| Verdict | Definition | Action |
+|---|---|---|
+| SUPPORTED | Every claim traces directly to the approved evidence | Kept |
+| INFERRED | Strictly necessary logical consequence; introduces no new entity, number, date, causality, or technical detail | Kept |
+| UNSUPPORTED | Any claim, detail, or characterisation not in or strictly required by evidence | Removed |
+
+Explicit checks per item: named entities, numbers, dates, attribution accuracy (secondary reporting ≠ primary confirmation), certainty language, causal claims, technical detail. Clause-level: one unsupported clause fails the whole bullet. When uncertain → UNSUPPORTED (conservative default).
+
+Deterministic layer 1 also checks: summary >30 words, any bullet >40 words, <2 points generated.
+
+Fallback: if the Haiku call fails, all content is kept (fail-safe, not fail-strict).
+
+---
+
+## Timeframe-scoped insight generation — `scripts/generateInsights.js`
+
+Standalone script for running L6 analysis over a defined reporting window and persisting results. This is the primary way to produce insights for the dashboard.
+
+```
+node scripts/generateInsights.js --window week|month|quarter
+node scripts/generateInsights.js --date-from 2026-07-01 --date-to 2026-07-18
+node scripts/generateInsights.js --window month --asof 2026-06-15   # historical backfill
+node scripts/generateInsights.js --window week --category llm_threats
+node scripts/generateInsights.js --window month --force             # overwrite existing
+node scripts/generateInsights.js --window month --dry-run           # print, no DB write
+```
+
+Internally: loads sources from `sources` table filtered by `date_published` in the window → loads evidence items → calls `runAnalysis()` → upserts to `category_insights`. Uses `getCompletedPeriodWindow()` from `lib/time/reportingWindow.js` for SGT-anchored week/month/quarter boundaries.
+
+`scripts/generateDashboardInsights.js` — legacy script with its own 3-stage pipeline (themes → insights → QA) writing to `dashboard_insights` table. Kept for backwards compatibility; `generateInsights.js` is preferred for all new runs.
+
+---
+
+## Dashboard API — `api/dashboard.js`
+
+`GET /api/dashboard?window=week|month|quarter|annual`
+
+Returns live corpus statistics merged with structured insights for the selected timeframe. Two data sources are always combined in one response:
+
+**Live corpus stats (always fresh — no dependency on `generateInsights.js`):**
+Computed on every request directly from the `sources` table: source counts by category, trust tier breakdown, weekly/monthly trend buckets, top sources ranked by maturity + reading value, tag matrix (40 tags × 4 categories).
+
+**Structured insights (from `category_insights` table, 30-min cache):**
+
+`getCategoryInsights(win, windowKey)` — primary lookup. Falls back to the most recent prior period of the same `win` type if no row exists for the current window key (e.g. insights haven't been generated yet this month). Sets `insights_stale = true` and `insights_from = period_label` on the affected category so the frontend can label the source period.
+
+`getLegacyInsights(win, windowKey)` — fallback if `category_insights` has no rows at all. Reads from the old `dashboard_insights` table and normalises legacy bullet strings into the same insight shape with null explanations.
+
+**`shapeInsight()` — field stripping before API response:**
+
+Only these fields are sent to the frontend per insight. All internal analytical fields are withheld:
+
+| Field | What it is |
+|---|---|
+| `insight_id` | UUID |
+| `title` | ≤12-word falsifiable claim — shown as card headline |
+| `explanation_summary` | One-sentence lead — bold text at top of drilldown |
+| `explanation_points[]` | 3–5 bullets — the drilldown body |
+| `evidence_maturity` | Badge only (research → operational) |
+| `technique_tags[]` | Taxonomy tags |
+| `cited_sources[]` | `{ source_title, source_url, publisher, trust_tier, quote, evidence_summary }` — rendered as clickable buttons with quote tooltips |
+
+Fields NOT sent: `what_changed`, `mechanism`, `implication`, `confidence`, `caveats`, `blocked`, `qa_issues`, `evidence_item_ids`.
+
+**Per-category response shape:**
+
+```js
+categories[i] = {
+  // Live corpus stats
+  key, label, source_count, top_sources, evidence_maturity, maturity_sources,
+
+  // Structured insights
+  assessment_status,    // "assessed" | "thin" | null
+  insights[],           // shaped as above; only non-blocked insights
+  coverage_gaps[],      // plain text when thin/empty
+  insights_from,        // null = current period; string = stale period label
+  insights_stale,       // boolean
+}
+```
+
+## Dashboard Frontend — `src/pages/dashboard/OverviewPage.jsx`
+
+**Category card:** shows `source_count`, maturity bar, and the insight list. Each insight row (`InsightItem`) shows `title` as the headline; click expands the drilldown.
+
+**Drilldown (expands inline on click):**
+1. `explanation_summary` — bold lead sentence
+2. `explanation_points[]` — bullet list, `▸` prefix coloured by category
+3. `cited_sources[]` — row of `SourceButton` chips, each linking to `source_url`, tooltip shows verbatim `quote`
+
+**Stale state:** when `insights_stale` is true, a small `hz-cat-insights-from` label appears below the maturity bar reading "Analysis from {insights_from}". No alarming banners.
+
+**Empty state:** when `insights[]` is empty and `coverage_gaps[]` is non-empty, the first gap string is shown as the empty-state message. No special "no insights" UI.
+
+**No confidence levels, QA flags, maturity-per-source badges, or monitoring signals** anywhere in the drilldown — all internal pipeline fields.
 
 ---
 
@@ -469,17 +834,29 @@ Aggregates per-category analyses into a cross-category strategic view. `runCross
 
 **Folder:** `lib/pipeline/slides/`
 
-| File | Responsibility |
-|---|---|
-| `planSlides.js` | Dynamic, claim-driven slide plan from synthesis output |
-| `buildPresentation.js` | Builds the slide JSON deck from the plan + evidence |
-| `renderDeckPptx.js` | Renders the JSON deck to PPTX using PptxGenJS on the CSA template masters |
-| `generateDiagrams.js` | Generates Mermaid diagrams (mermaid.ink → base64) |
-| `qaSlides.js` | Per-slide QA: speaker notes, citation resolution, stat grounding |
-| `validateDeckCoherence.js` | Cross-slide consistency checks (no stat contradictions, no unresolved IDs) |
-| `rankSources.js` | Selects top sources per category for the evidence appendix |
+Receives `CategoryAnalysis[]` from L6. `buildPresentation.js` normalises the new insight shape to the internal judgment shape it expects (mapping `insight.title/mechanism/implication` → `j.judgment/causal_mechanism/why_this_matters`), then runs all slide-specific steps internally.
 
-System prompts: `lib/prompts/slides/`
+### Core files
+
+| File | Prompt | Responsibility |
+|---|---|---|
+| `buildPresentation.js` | `lib/prompts/slides/slide-content.md`, `slide-case-study.md`, `slide-category-insights.md`, `slide-theme.md`, `deck-synthesis.md` | L7–L8 orchestrator: normalises L6 output, assembles deck skeleton, generates slide content (one LLM call per slide), validates traceability |
+| `planSlides.js` | `lib/prompts/slides/plan.md` | Optional LLM-driven slide plan — assigns insights/case studies to slots, picks visual type, writes deck narrative |
+| `renderDeckPptx.js` | — | Renders JSON deck to PPTX on CSA template masters via PptxGenJS |
+| `generateDiagrams.js` | `lib/prompts/slides/diagram.md` | Generates Mermaid attack-chain diagrams (mermaid.ink → base64 PNG) |
+| `qaSlides.js` | `lib/prompts/slides/bullet-entailment-qa.md` | Per-slide QA: speaker notes, citation resolution, stat grounding |
+| `validateDeckCoherence.js` | — | Cross-slide consistency: no stat contradictions, no unresolved evidence IDs |
+
+### Slide-specific analysis functions (moved from L6)
+
+These functions are slide concerns — they run inside `buildPresentation.js` or are called by scripts that build slides. L6 does not call them.
+
+| File | Prompt | Responsibility |
+|---|---|---|
+| `synthesizeCrossCategory.js` | `lib/prompts/slides/synthesize-cross-category.md` | One Sonnet call across all 4 categories → convergence patterns for the cross-category slide |
+| `selectCaseStudies.js` | `lib/prompts/slides/select-case-study.md` | Picks one named incident per category with ≥2 attack stages and ≥2 grounded evidence items |
+| `generateOutlook.js` | `lib/prompts/slides/outlook.md` | Three-tier 6-month outlook per category (likely / plausible_uncertain / watchlist) with falsifiability gate |
+| `generateDevelopments.js` | none | Derives Development objects from `CategoryAnalysis[]`; accepts both new insight shape and legacy judgment shape |
 
 ---
 
@@ -487,12 +864,13 @@ System prompts: `lib/prompts/slides/`
 
 | File | Role |
 |---|---|
-| `lib/pipeline/runPipeline.js` | Top-level orchestrator — runs layers in order, manages concurrency |
+| `lib/pipeline/runPipeline.js` | Top-level orchestrator — runs L2-L4, L5, L6, L7-L8 in order |
 | `lib/pipeline/layerQa.js` | Cross-layer invariant checks (defensive flag sync, category consistency) |
-| `lib/pipeline/dashboard.js` | Dashboard query engine for the `/api/dashboard` endpoint |
+| `lib/pipeline/dashboard.js` | `buildDashboardState()` (inline, no LLM) + `queryDashboard()` (on-demand LLM answer) |
+| `scripts/generateInsights.js` | **Primary L6 script** — run analysis for a timeframe, persist to `category_insights` |
 | `scripts/dailyClassify.js` | Runs L4 (understand + scoring) on newly ingested sources |
 | `scripts/runHorizonScan.js` | Full end-to-end pipeline + PPTX deck |
-| `scripts/runSynthesisOnly.js` | Synthesis + slides only (no new ingest) |
+| `scripts/runSynthesisOnly.js` | L6 analysis + slides only (no new ingest); calls `runAnalysis()` then `buildPresentation()` |
 | `api/refresh.js` | Vercel cron entrypoint — runs daily at 22:00 UTC |
 
 ---
@@ -506,8 +884,18 @@ System prompts: `lib/prompts/slides/`
 | **Understand / taxonomy (L4)** | `lib/prompts/understand/classify.md` |
 | **Threat maturity** | `lib/prompts/scoring/maturity.md` |
 | **Research significance** | `lib/prompts/scoring/researchSignificance.md` |
-| **Analysis / synthesis (L5–6)** | `lib/prompts/analysis/` |
-| **Slide planning (L7)** | `lib/prompts/slides/` |
+| **Evidence extraction (L5)** | `lib/prompts/extraction/` — one file per source type (threat-intel, academic, atlas, capability, corporate-blog, roundup) |
+| **L6 source selection (Haiku)** | `lib/prompts/analysis/select-sources.md` — semantic curation; criteria: quality → period relevance → non-redundancy → diversity → maturity balance |
+| **L6 category analysis (Sonnet/Opus)** | `lib/prompts/analysis/analyze-category.md` — nine-step flow; scoped maturity, independent confidence, mechanism basis, verbatim citation |
+| **L6 explanation generation (Haiku)** | `lib/prompts/analysis/explain-insight.md` — lead sentence + 3–5 bullets; what happened + how it works only; no defender advice |
+| **L6 explanation fidelity QA (Haiku)** | `lib/prompts/analysis/qa-grounding.md` — clause-level fidelity; UNSUPPORTED removed; conservative default when uncertain |
+| **L6 insight QA** | `lib/prompts/analysis/bullet-entailment-qa.md` |
+| **Slides — cross-category** | `lib/prompts/slides/synthesize-cross-category.md` |
+| **Slides — case study selection** | `lib/prompts/slides/select-case-study.md` |
+| **Slides — 6-month outlook** | `lib/prompts/slides/outlook.md` |
+| **Slide planning** | `lib/prompts/slides/plan.md` |
+| **Slide content generation** | `lib/prompts/slides/` — slide-content, slide-case-study, slide-category-insights, slide-theme, deck-synthesis, diagram, bullet-entailment-qa |
+| **Dashboard insights (legacy script)** | `lib/prompts/insights/` — themes, insights, insight-qa, statement-qa, assessment-qa, emerging-signals, assessment-changes, attribution, citation-grounding, top-sources |
 | **Newsletter** | `lib/prompts/newsletter/` |
 | **Agent / chatbot** | `lib/prompts/agent/` |
 

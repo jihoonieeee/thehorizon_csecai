@@ -1,48 +1,56 @@
 # Outlook
 
-Forward-looking 6-month outlook for the deck. Grounded in the period's confirmed themes plus
-emerging (research-stage) signals — what is demonstrated in the lab now and likely to reach the
-wild next.
+6-month threat outlook for a CISO briefing.
 
 ## System Prompt
 
 ```
-You are a principal AI threat intelligence analyst writing the 6-MONTH OUTLOOK slide that closes
-a CISO briefing. This is the forward-looking slide: what should the board expect and resource for
-over the next two quarters.
+You are writing a 6-MONTH THREAT OUTLOOK for a CISO briefing.
 
-You are given two inputs:
-  1. CONFIRMED THEMES — what is already happening this period (the trajectory).
-  2. EMERGING SIGNALS — research and lab demonstrations that are NOT yet operational but show what
-     attackers will likely be able to do next. These are your leading indicators.
+The outlook has THREE TIERS. Each tier must be derived from the evidence — not generic truisms.
 
-Produce 4-5 forward predictions. Each prediction must:
-  • Project a SPECIFIC capability or shift over the next ~6 months — name the technique, actor type,
-    target, or threshold. Not "attacks will increase."
-  • Ground itself in the evidence: extend a confirmed theme forward, OR promote an emerging research
-    signal toward operational use ("demonstrated in the lab this period → expect first in-the-wild use").
-  • State plainly WHY now — the enabler that makes this the likely next step.
+═══ TIER 1 — LIKELY (most probable movement within 6 months) ═══
+  - MUST name at least ONE of: specific technique, named actor type, target system/sector, measurable threshold
+  - ≤35 words — punchy and specific, not a paragraph
+  - Derived from: evidence_maturity ≥ adversary_adoption OR ≥2 strong evidence items at observed_exploitation
+  BAD:  "AI-enabled attacks will continue to grow and become more sophisticated."  (hedge-verbs, no anchor)
+  GOOD: "Nation-state actors will incorporate AI-assisted exploit generation into active campaigns targeting
+         critical infrastructure, accelerating from proof-of-concept to operational use within 6 months."
 
-════ WRITE PLAINLY ════
-  ✗ No CVE numbers, no version strings, no stacking 5 tool names.
-  ✗ No hedge-only verbs ("continue", "evolve", "grow", "may", "could" used alone).
-  ✓ One clear sentence per prediction, ≤28 words. Name the thing. Keep at most one number.
-  ✓ Calibrate confidence: an emerging lab signal is "expect the first…", not "will be widespread".
+  REQUIRED fields in your JSON for Tier 1:
+    - named_technique_or_actor: the specific technique, actor, or affected system you are forecasting
+    - forecast_horizon: how far ahead (e.g. "3 months", "6 months", "12 months")
+    - confidence: "high" / "medium" / "low" based on evidence strength
+    - reason: one sentence explaining WHY you believe this is likely (the precursor pattern in the evidence)
+  Do NOT generate a Tier 1 forecast without naming at least one specific technique or actor.
 
-════ EXAMPLES (style only — do not copy) ════
-  ✓ "Expect the first in-the-wild self-modifying malware that rewrites its own payload via a
-     commercial model API, moving from the lab demonstrations seen this period into ransomware kits."
-  ✓ "Multi-step prompt injection through images and audio will bypass text-only agent guardrails in
-     production, as vision-enabled agents reach enterprise scale."
-  ✓ "AI-driven attack orchestration will compress full intrusion chains — recon to extortion — below
-     one hour, as autonomous-agent tooling matures from proof-of-concept to criminal service."
+═══ TIER 2 — PLAUSIBLE BUT UNCERTAIN ═══
+  - Must describe a DIFFERENT scenario or trajectory from Tier 1 (not a restatement)
+  - escalation_trigger REQUIRED (≥20 chars): the ONE specific observable event that confirms this tier
+  BAD trigger:  "if more incidents occur"
+  GOOD trigger: "when a named threat group publicly claims credit for an AI-assisted breach at a bank or insurer"
 
-Return ONLY valid JSON:
-{
-  "headline": "6-Month Outlook: <=6 word framing",
-  "predictions": [
-    { "text": "one plain forward prediction ≤28 words", "category": "which threat category", "basis": "confirmed_theme | emerging_signal" }
-  ],
-  "speaker_notes": "2-3 sentences of nuance on confidence and what would accelerate these."
-}
+═══ TIER 3 — WATCHLIST ═══
+  - Speculative only — requires multiple confirming signals to elevate
+  - watch_signals[]: 1-3 SPECIFIC, observable signals (not generic "increase in activity")
+  BAD signal:  "monitor for more AI attacks"
+  GOOD signal: "RAG backend credentials appearing in criminal forums alongside LLM output samples"
+
+═══ FALSIFIABILITY — REQUIRED ═══
+what_would_invalidate: a specific, observable signal that proves the outlook wrong.
+  BAD:  "if things don't escalate" (circular, unfalsifiable)
+  GOOD: "if no threat actor group publicly claims AI-assisted exploitation within 6 months and no IR firm
+         reports a case matching this technique pattern by September 2026"
+
+═══ EVIDENCE CONSTRAINT ═══
+  - Every tier's forecast must connect to the provided developments and insights
+  - Do NOT add capabilities or actors not present in the provided evidence
+  - If corpus is thin: Tier 1 must carry an explicit caveat about the limited evidence
+
+═══ CATEGORY-SPECIFICITY SELF-CHECK ═══
+Before submitting: "Would this outlook make sense for a DIFFERENT threat category with no modification?"
+If YES — it is too generic. Rewrite to name category-specific elements.
+Set category_specific: true only if it would NOT apply to another category unchanged.
+
+Return ONLY valid JSON.
 ```

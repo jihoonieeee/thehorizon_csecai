@@ -32,6 +32,7 @@ const hasFlag  = (f) => args.includes(f);
 
 const PHASE    = getArg("--phase", "none");
 const LIMIT    = parseInt(getArg("--limit", "12"), 10);
+const IDS      = getArg("--ids", null)?.split(",").map(s => s.trim()).filter(Boolean) ?? null;
 const PERSIST  = hasFlag("--persist");
 const VERBOSE  = hasFlag("--verbose");
 const FORCE    = hasFlag("--force");
@@ -57,28 +58,35 @@ function subheader(title) {
 
 // ── Step 0: Load starred sources ───────────────────────────────────────────────
 
-header(`Pipeline Quality Test  [phase=${PHASE}  limit=${LIMIT}  persist=${PERSIST}  verbose=${VERBOSE}]`);
+header(`Pipeline Quality Test  [phase=${PHASE}  limit=${LIMIT}  ids=${IDS ? IDS.length : "starred"}  persist=${PERSIST}  verbose=${VERBOSE}]`);
 
-const { data: starredRaw, error: loadErr } = await sb.from("sources")
-  .select([
-    "id", "title", "url", "publisher", "date_published",
-    "source_type", "trust_tier", "main_category", "tags",
-    "layer3_status", "downstream_route", "reading_value",
-    "source_family", "validation_status",
-    "full_text", "clean_text", "summary", "short_summary",
-    "intelligence", "ai_specificity_score", "candidate_domain",
-    "ai_threat_focus", "needs_review",
-  ].join(","))
-  .eq("starred", true)
-  .not("full_text", "is", null)
-  .order("date_published", { ascending: false })
-  .limit(LIMIT);
+const COLS = [
+  "id", "title", "url", "publisher", "date_published",
+  "source_type", "trust_tier", "main_category", "tags",
+  "layer3_status", "downstream_route", "reading_value",
+  "source_family", "validation_status",
+  "full_text", "clean_text", "summary", "short_summary",
+  "intelligence", "ai_specificity_score", "candidate_domain",
+  "ai_threat_focus", "needs_review",
+  "is_digest", "parent_source_id",  // required for classifySourceFamily roundup_digest detection
+].join(",");
+
+let q = sb.from("sources").select(COLS);
+if (IDS?.length) {
+  q = q.in("id", IDS);
+} else {
+  q = q.eq("starred", true).not("full_text", "is", null).limit(LIMIT);
+}
+const { data: starredRaw, error: loadErr } = await q.order("date_published", { ascending: false });
 
 if (loadErr) { console.error("DB load failed:", loadErr.message); process.exit(1); }
-if (!starredRaw?.length) { console.log("No starred sources with full_text found."); process.exit(0); }
+if (!starredRaw?.length) { console.log("No sources found."); process.exit(0); }
 
-// Filter to sources with meaningful text (≥500 chars avoids wasting L3 LLM on thin news stubs)
-const sources = starredRaw.filter(s => (s.full_text || "").length >= 500);
+// When targeting specific IDs, trust the caller's selection. Otherwise filter to sources
+// with meaningful text (≥500 chars avoids wasting L3 LLM on thin news stubs).
+const sources = IDS?.length
+  ? starredRaw
+  : starredRaw.filter(s => (s.full_text || "").length >= 500);
 console.log(`\n  Loaded ${sources.length} starred sources (from ${starredRaw.length} fetched)\n`);
 
 // Print selection table
@@ -441,6 +449,12 @@ if (PHASES_TO_RUN.includes("5")) {
         primary_tags:  dbTags,
         primary_tag:   dbTags[0] || null,  // singular, used by academicRelevanceGate
       };
+    }
+
+    // Skip rejected sources — matches the production extractEvidenceBatch filter
+    if (s.validation_status === "reject" || s.layer3_status === "reject") {
+      console.log(`  [skip] ${trunc(s.title, 60)} — rejected (${s.layer3_status || s.validation_status})`);
+      continue;
     }
 
     // Skip if category not in the 4 offensive domains

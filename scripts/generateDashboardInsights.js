@@ -387,7 +387,8 @@ export async function loadWindowSources(from, to) {
     .eq("date_confidence", "exact")
     .gte("date_published", from)
     .lte("date_published", to)
-    .not("main_category", "is", null);
+    .not("main_category", "is", null)
+    .in("reading_value", ["essential", "recommended"]);
   if (error) throw new Error(error.message);
   return data || [];
 }
@@ -1031,8 +1032,8 @@ export async function selectTopSources(windowRows, windowLabel, n = 10) {
       date:       s.date_published?.slice(0, 10) || null,
       category:   s.main_category,
       trust_tier: s.trust_tier || null,
-      importance: s._imp.tier,
-      reality:    s._imp.reality,
+      importance: s.intelligence?.importance?.tier || null,
+      reality:    maturityOf(s) || null,
       significance: s.intelligence?.significance?.level || null,   // landmark|notable|… (research only)
       summary:    summaryText(s).slice(0, 240) || null,
       why:        typeof p.why === "string" ? p.why.trim().slice(0, 220) : null,

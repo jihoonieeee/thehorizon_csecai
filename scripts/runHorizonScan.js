@@ -189,6 +189,7 @@ async function main() {
         const { data, error } = await supabase.from("sources").select("*")
           .eq("main_category", cat)
           .in("validation_status", ["pass", "review"])
+          .in("reading_value", ["essential", "recommended"])
           .order("date_published", { ascending: false })
           .limit(PER_CATEGORY);
         if (error) { console.error(`DB error (${cat}):`, error.message); process.exit(1); }
@@ -199,6 +200,7 @@ async function main() {
       const since = new Date(Date.now() - DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       let query = supabase.from("sources").select("*")
         .gte("date_published", since)
+        .in("reading_value", ["essential", "recommended"])
         .order("date_published", { ascending: false })
         .limit(LIMIT);
       if (CATEGORY) query = query.eq("main_category", CATEGORY);

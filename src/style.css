@@ -857,17 +857,22 @@ a:hover { text-decoration: underline; }
 }
 
 /* ── Structured insight list ──────────────────────────────────────────────── */
-.hz-insight-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+/* ── Insight list ────────────────────────────────────────────────────────── */
+.hz-insight-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
 
-/* Each insight is a clickable card with rounded edges */
+/* Stale label — per-card, small and non-alarming */
+.hz-cat-insights-from {
+  font-size: 0.68rem; color: var(--text-tertiary); margin-bottom: 4px;
+}
+
+/* Each insight row */
 .hz-insight-item {
   display: flex; flex-direction: column;
   padding: 8px 10px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid transparent;
   cursor: default;
   transition: background 0.12s, border-color 0.12s;
-  outline: none;
 }
 .hz-insight-item.expandable {
   cursor: pointer;
@@ -876,123 +881,67 @@ a:hover { text-decoration: underline; }
 }
 .hz-insight-item.expandable:hover {
   background: color-mix(in srgb, var(--cat-color) 9%, transparent);
-  border-color: color-mix(in srgb, var(--cat-color) 35%, transparent);
-}
-/* Small chevron hint on expandable items */
-.hz-insight-item.expandable .hz-insight-headline::after {
-  content: " ›";
-  font-size: 0.7rem;
-  opacity: 0.45;
-  font-weight: 400;
+  border-color: color-mix(in srgb, var(--cat-color) 32%, transparent);
 }
 
-/* Headline: clamp to 3 lines so cards stay visually even at rest; the full
-   insight is revealed when the item is expanded (.open). */
+/* Headline row: title + chevron */
 .hz-insight-headline {
-  font-size: 0.77rem; font-weight: 600; line-height: 1.45; color: var(--text-primary);
-  overflow-wrap: break-word;
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 6px;
+  font-size: 0.8rem; font-weight: 600; line-height: 1.45; color: var(--text-primary);
 }
-.hz-insight-item.open .hz-insight-headline {
-  -webkit-line-clamp: unset; overflow: visible;
-}
-
-/* Detail section — shown when open */
-.hz-insight-detail-inner {
-  display: flex; flex-direction: column; gap: 6px;
-  margin-top: 8px; padding-top: 8px;
-  border-top: 1px solid color-mix(in srgb, var(--cat-color) 20%, transparent);
-}
-.hz-insight-line {
-  font-size: 0.73rem; line-height: 1.5; color: var(--text-secondary);
-  display: grid;
-  /* Fixed left column for the tag so all text starts at the same x position */
-  grid-template-columns: 62px 1fr;
-  gap: 6px;
-  align-items: start;
-}
-.hz-insight-evidence { color: var(--text-tertiary); }
-.hz-insight-evidence-text { color: var(--text-secondary); font-size: 0.82rem; line-height: 1.45; }
-/* "What happened" — the in-depth explanation reads as a proper paragraph. */
-.hz-insight-explanation-text {
-  color: var(--text-primary, #1e293b);
-  font-size: 0.85rem;
-  line-height: 1.6;
-}
-.hz-insight-tag {
-  font-size: 0.58rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.04em; color: var(--cat-color);
-  padding: 2px 6px; border-radius: 4px;
-  background: color-mix(in srgb, var(--cat-color) 12%, transparent);
-  white-space: nowrap; text-align: center;
-  /* Fill the full 62px column so all tags are the same visual width */
-  display: block; width: 100%;
+.hz-insight-chevron {
+  flex-shrink: 0; font-size: 0.6rem; color: var(--text-tertiary);
+  margin-top: 2px; user-select: none;
 }
 
-/* Fact bullets — paragraph split into scannable points */
+/* Drilldown — visible when open */
+.hz-insight-drilldown {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--cat-color) 18%, transparent);
+}
+
+/* Lead sentence — bold summary at top of drilldown */
+.hz-insight-summary {
+  margin: 0;
+  font-size: 0.82rem; font-weight: 600; line-height: 1.5;
+  color: var(--text-primary);
+}
+
+/* Explanation bullets */
 .hz-insight-bullets {
-  margin: 4px 0 2px; padding: 0; list-style: none;
-  display: flex; flex-direction: column; gap: 6px;
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 7px;
 }
 .hz-insight-bullet {
   position: relative; padding-left: 14px;
-  font-size: 0.81rem; color: var(--text-primary); line-height: 1.55;
+  font-size: 0.8rem; color: var(--text-secondary); line-height: 1.55;
 }
 .hz-insight-bullet::before {
   content: "▸"; position: absolute; left: 0; top: 1px;
-  color: var(--cat-color); font-size: 0.6rem;
+  color: var(--cat-color); font-size: 0.62rem;
 }
 
-/* Source chips — compact clickable attribution row */
-.hz-insight-source-chips {
-  display: grid;
-  grid-template-columns: 62px 1fr;
-  gap: 6px; align-items: start;
-  margin-top: 6px;
+/* Source attribution row — buttons below bullets */
+.hz-insight-sources-row {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 2px;
 }
-.hz-insight-chips-row {
-  display: flex; flex-wrap: wrap; gap: 5px;
-}
-.hz-source-chip {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 3px 8px; border-radius: 5px;
-  font-size: 0.69rem; font-weight: 600; text-decoration: none;
-  border: 1px solid #dbe4f0;
-  background: #eef2f8; color: #334155;
+.hz-source-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 6px;
+  font-size: 0.72rem; font-weight: 600; text-decoration: none;
+  border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text-secondary);
   transition: border-color 0.15s, background 0.15s, color 0.15s;
-  max-width: 220px; overflow: hidden;
+  max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.hz-source-chip:hover {
-  border-color: var(--cat-color); background: #fff; color: var(--cat-color);
+.hz-source-btn:hover {
+  border-color: var(--cat-color); background: var(--surface); color: var(--cat-color);
 }
-.hz-source-chip-pub {
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.hz-source-btn-arrow {
+  flex-shrink: 0; font-size: 0.65rem; opacity: 0.6;
 }
-.hz-source-chip-date { color: #94a3b8; font-weight: 400; flex-shrink: 0; }
-.hz-source-chip-badge {
-  background: #052e16; color: #4ade80; border-radius: 3px;
-  padding: 1px 4px; font-size: 0.6rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.04em; flex-shrink: 0;
-}
-
-/* Legacy: Evidence source citations (kept for backward compat) */
-.hz-insight-sources {
-  margin: 0; padding: 0; list-style: none;
-  display: flex; flex-direction: column; gap: 5px;
-}
-.hz-insight-sources li {
-  position: relative; padding-left: 14px;
-  font-size: 0.72rem; line-height: 1.4;
-}
-.hz-insight-sources li::before {
-  content: "→"; position: absolute; left: 0;
-  color: var(--cat-color); font-weight: 700;
-}
-.hz-insight-sources a {
-  color: var(--cat-color); text-decoration: none; font-weight: 600;
-}
-.hz-insight-sources a:hover { text-decoration: underline; }
-.hz-insight-source-meta { color: var(--text-tertiary); font-size: 0.66rem; }
 
 /* ── Historical comparison ───────────────────────────────────────────────── */
 .hz-overview-subtitle {

@@ -19,7 +19,7 @@
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { understandSource } from "../lib/pipeline/understand/understandSource.js";
-import { scrubImpliedQuantitatives } from "../lib/pipeline/analysis/statisticalClaimQa.js";
+import { scrubImpliedQuantitatives } from "../lib/utils/scrubQuantitatives.js";
 import { fanOutDigest } from "../lib/pipeline/ingest/digestFanout.js";
 import { callLLM } from "../lib/llm/callLLM.js";
 import { fetchPageText } from "../lib/pipeline/discovery/fetchCandidateText.js";

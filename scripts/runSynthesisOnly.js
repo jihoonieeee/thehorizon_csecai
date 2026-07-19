@@ -88,11 +88,12 @@ async function main() {
   const since = new Date(Date.now() - DAYS * 86400000).toISOString().slice(0, 10);
   const { data: rows, error } = await supabase
     .from("sources")
-    .select("id,title,url,publisher,date_published,main_category,trust_tier,source_type,full_text,summary,short_summary,analyst_brief,tags,intelligence,validation_status")
+    .select("id,title,url,publisher,date_published,main_category,trust_tier,source_type,full_text,summary,short_summary,analyst_brief,tags,intelligence,validation_status,reading_value,research_gate_maturity")
     .eq("validation_status", "pass")
     .not("needs_review", "is", true)
     .not("main_category", "is", null)
     .not("main_category", "eq", "unclear_or_adjacent")
+    .in("reading_value", ["essential", "recommended"])
     .gte("date_published", since)
     .order("date_published", { ascending: false })
     .limit(LIMIT);
@@ -106,9 +107,10 @@ async function main() {
   // ── L5: Extract evidence ───────────────────────────────────────────────────
   const { extractAllEvidence } = await import("../lib/pipeline/extraction/extractEvidence.js");
   const { buildCorpusSummary, buildEvidenceGraph } = await import("../lib/pipeline/analysis/corpusSummary.js");
-  const { synthesizeAllCategories, synthesizeCrossCategory } = await import("../lib/pipeline/analysis/synthesizeCategory.js");
-  const { selectAllCaseStudies } = await import("../lib/pipeline/analysis/selectCaseStudies.js");
-  const { generateAllOutlooks }  = await import("../lib/pipeline/analysis/generateOutlook.js");
+  const { runAnalysis }          = await import("../lib/pipeline/analysis/runAnalysis.js");
+  const { synthesizeCrossCategory } = await import("../lib/pipeline/slides/synthesizeCrossCategory.js");
+  const { selectAllCaseStudies } = await import("../lib/pipeline/slides/selectCaseStudies.js");
+  const { generateAllOutlooks }  = await import("../lib/pipeline/slides/generateOutlook.js");
   const { buildPresentation }    = await import("../lib/pipeline/slides/buildPresentation.js");
   const { renderDeckPptx }       = await import("../lib/pipeline/slides/renderDeckPptx.js");
   const { buildDashboardState }  = await import("../lib/pipeline/dashboard.js");
@@ -166,39 +168,40 @@ async function main() {
   const evidence_graph = buildEvidenceGraph(sources, evidenceItems);
   console.log(`  [CORPUS] ${corpus_summary.date_range} | ${ACTIVE_CATEGORIES.map(c => `${c.split("_")[0]}:${corpus_summary.source_count_by_category?.[c]||0}`).join(" ")}\n`);
 
-  // ── L6: Synthesis + QA ────────────────────────────────────────────────────
-  console.log(`  [L6] Synthesizing categories (Opus) + second-model QA (Sonnet)...`);
-  const category_analyses = await synthesizeAllCategories(packs, sources, corpus_summary, { skipQa: SKIP_QA });
-
-  const totalJudgments    = category_analyses.reduce((n, ca) => n + (ca.judgments || []).length, 0);
-  const approvedJudgments = category_analyses.reduce((n, ca) => n + (ca.approved_judgment_count || 0), 0);
+  // ── L6: Analysis ─────────────────────────────────────────────────────────
+  console.log(`  [L6] Analysing categories...`);
+  const windowInfo = {
+    type: "synthesis_run", key: `synthesis-${Date.now()}`,
+    label: corpus_summary.date_range || "unknown period",
+    date_from: "", date_to: "",
+  };
+  const category_analyses = await runAnalysis(
+    sources, evidenceItems, corpus_summary, windowInfo,
+    { skipLlm: SKIP_LLM, supabase: null }
+  );
+  const totalInsights  = category_analyses.reduce((n, ca) => n + (ca.insights||[]).filter(i=>!i.blocked).length, 0);
   const elapsed3 = ((Date.now() - t0) / 1000).toFixed(1);
-  console.log(`  [L6] ${totalJudgments} total judgments, ${approvedJudgments} approved after QA (+${elapsed3}s)\n`);
+  console.log(`  [L6] ${totalInsights} approved insights (+${elapsed3}s)\n`);
 
-  console.log(`  [L6] Running cross-category synthesis...`);
-  const cross_category = await synthesizeCrossCategory(category_analyses, {});
-  console.log(`  [L6] ${(cross_category.patterns||[]).length} cross-category patterns\n`);
+  // ── Slide-specific: cross-category, case studies, outlooks ───────────────
+  console.log(`  [slides] Running cross-category synthesis...`);
+  const cross_category = await synthesizeCrossCategory(category_analyses, { skipLlm: SKIP_LLM });
+  console.log(`  [slides] ${(cross_category.patterns||[]).length} cross-category patterns\n`);
 
-  // ── L6.3–L6.5: Case studies + outlooks ───────────────────────────────────
-  const packsMap      = Object.fromEntries(packs.map(p => [p.category, p]));
+  const packsMap       = Object.fromEntries(packs.map(p => [p.category, p]));
   const evidence_index = Object.fromEntries(evidenceItems.map(ei => [ei.evidence_id, ei]));
 
-  console.log(`  [L6.3] Selecting case studies...`);
+  console.log(`  [slides] Selecting case studies...`);
   const case_studies = await selectAllCaseStudies(packsMap, evidence_index, { skipLlm: SKIP_LLM });
 
-  console.log(`  [L6.5] Generating outlooks...`);
-  // Drive outlook generation from category_analyses (which carry outlook_assessment
-  // and evidence_for) rather than separate developments/insights objects that are
-  // only available in the full runPipeline.js path. Pass stub byCategory so the
-  // parallel loop iterates all four categories; the LLM uses the dossier context
-  // and the legacyOutlookFallback from category_analyses for real data.
+  console.log(`  [slides] Generating outlooks...`);
   const stubByCategory = Object.fromEntries(ACTIVE_CATEGORIES.map(c => [c, []]));
   const all_outlooks = await generateAllOutlooks(
     { byCategory: stubByCategory, overall: [] },
     { byCategory: stubByCategory, overall: [] },
     category_analyses, evidenceItems, { skipLlm: SKIP_LLM },
   );
-  console.log(`  [L6.5] ${Object.values(all_outlooks.byCategory||{}).filter(Boolean).length} category outlooks\n`);
+  console.log(`  [slides] ${Object.values(all_outlooks.byCategory||{}).filter(Boolean).length} category outlooks\n`);
 
   // ── L7-L8: Slide generation ───────────────────────────────────────────────
   let deck = null;
@@ -237,7 +240,7 @@ async function main() {
   const outDir = path.join(ROOT, "outputs", "v2", run_id);
   fs.mkdirSync(outDir, { recursive: true });
   console.log(`  Writing outputs → ${outDir}`);
-  save(outDir, "run-summary.json", { run_id, run_date, pipeline_version: "synthesis-only-v1", counts: { sources_input: sources.length, evidence_items: evCounts.after_dedup, evidence_strong: evCounts.strong, judgments_total: totalJudgments, judgments_approved: approvedJudgments, slides: deck?.slides?.length || 0 }, elapsed_seconds: parseFloat(elapsed4), corpus_summary });
+  save(outDir, "run-summary.json", { run_id, run_date, pipeline_version: "synthesis-only-v2", counts: { sources_input: sources.length, evidence_items: evCounts.after_dedup, evidence_strong: evCounts.strong, insights_total: totalInsights, slides: deck?.slides?.length || 0 }, elapsed_seconds: parseFloat(elapsed4), corpus_summary });
   save(outDir, "category-analyses.json", category_analyses);
   save(outDir, "evidence-items.json", evidenceItems.slice(0, 500));
   save(outDir, "evidence-graph.json", evidence_graph);
@@ -260,8 +263,8 @@ async function main() {
   const qaReport = category_analyses.map(ca => ({
     category: ca.category,
     assessment_status: ca.assessment_status,
-    judgments_total: (ca.judgments||[]).length,
-    judgments_approved: ca.approved_judgment_count || 0,
+    insights_total:    (ca.insights||[]).length,
+    insights_approved: (ca.insights||[]).filter(i => !i.blocked).length,
     qa_report: ca.qa_report || null,
   }));
   save(outDir, "qa-report.json", qaReport);
@@ -271,22 +274,16 @@ async function main() {
   if (!NO_PERSIST) {
     console.log(`  Persisting to Supabase...`);
 
-    // Write per-category strategic insights for the dashboard
+    // Write per-category strategic insights for the dashboard (legacy synthesis_insights table)
     try {
       const insightRows = category_analyses
-        .filter(ca => (ca.judgments||[]).some(j => !j.blocked))
+        .filter(ca => (ca.insights||[]).some(i => !i.blocked))
         .map(ca => {
-          const approved = (ca.judgments||[]).filter(j => !j.blocked);
+          const approved = (ca.insights||[]).filter(i => !i.blocked);
           const parts = [];
-          // Primary insight: first approved judgment's core finding
-          if (approved[0]?.judgment?.length > 20) parts.push(approved[0].judgment);
-          // Secondary: why it matters from the second judgment if available
-          if (approved[1]?.why_this_matters?.length > 20) parts.push(approved[1].why_this_matters);
-          else if (approved[0]?.why_this_matters?.length > 20 && parts.length < 2) parts.push(approved[0].why_this_matters);
-          // Tertiary: outlook
-          const obs = ca.outlook_assessment?.observed_basis;
-          if (obs?.length > 20 && parts.length < 3) parts.push(obs);
-
+          if (approved[0]?.title?.length > 10) parts.push(approved[0].title);
+          if (approved[0]?.implication?.length > 20) parts.push(approved[0].implication);
+          if (approved[1]?.title?.length > 10 && parts.length < 3) parts.push(approved[1].title);
           return {
             run_id,
             category:       ca.category,
@@ -313,7 +310,7 @@ async function main() {
         pipeline_version:  "synthesis-only-v1",
         dashboard_state,
         category_analyses,
-        counts: { sources_input: sources.length, evidence_items: evCounts.after_dedup, judgments_total: totalJudgments, judgments_approved: approvedJudgments },
+        counts: { sources_input: sources.length, evidence_items: evCounts.after_dedup, insights_total: totalInsights },
       }, { onConflict: "snapshot_id" });
       console.log(`  Snapshot persisted: ${snapshot_id}`);
     } catch (err) {
@@ -378,7 +375,7 @@ async function main() {
   console.log(`  Done in ${elapsed4}s`);
   console.log(`  Sources:   ${sources.length}`);
   console.log(`  Evidence:  ${evCounts.after_dedup} items (${evCounts.strong} strong)`);
-  console.log(`  Judgments: ${approvedJudgments} approved / ${totalJudgments} total`);
+  console.log(`  Insights:  ${totalInsights} approved`);
   console.log(`  Patterns:  ${(cross_category.patterns||[]).length} cross-category`);
   if (deck) console.log(`  Slides:    ${deck.slides.length} generated (${deck.coherence_issues?.length || 0} coherence issues)`);
 }

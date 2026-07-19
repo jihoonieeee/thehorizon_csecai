@@ -247,90 +247,91 @@ function MaturitySidePanel({ level, category, sources, onClose }) {
   );
 }
 
-// ── Insight item — terse by default, expandable on click ──────────────────────
-// Click an insight to reveal its evidence + the ranked sources it was attributed to.
+// ── Insight item — headline always visible, drilldown expands on click ───────
 
-// Split a paragraph into individual fact bullets.
-// Splits on sentence boundaries (". "), transitional connectives ("Separately,",
-// "Additionally,", etc.), and semicolons. Filters fragments under 20 chars.
-function splitToBullets(text) {
-  if (!text) return [];
-  // Step 1: break on strong transitional words first
-  const CONNECTIVES = /(?<=[.!?])\s+(?=(?:Separately|Additionally|Also|However|Furthermore|Moreover|Meanwhile|In addition|At the same time|Notably|Importantly|Critically|By contrast|Unlike|Because|Worse|Crucially),?\s)/g;
-  let parts = text.split(CONNECTIVES);
-  // Step 2: within each part, split on sentence-ending period + capital letter
-  parts = parts.flatMap(p =>
-    p.split(/(?<=[a-z0-9"')\]])\.\s+(?=[A-Z"'])/)
+// ── Source button ─────────────────────────────────────────────────────────────
+// Renders one cited source as a compact clickable chip with a tooltip showing
+// the verbatim quote used to ground this insight.
+
+function SourceButton({ cs }) {
+  const label = cs.publisher || cs.source_title || cs.source_url;
+  const tip   = cs.quote
+    ? `"${cs.quote.slice(0, 200)}${cs.quote.length > 200 ? "…" : ""}"`
+    : cs.evidence_summary || null;
+
+  return (
+    <a
+      href={cs.source_url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="hz-source-btn"
+      title={tip || label}
+      onClick={e => e.stopPropagation()}
+    >
+      {label}
+      <span className="hz-source-btn-arrow">↗</span>
+    </a>
   );
-  // Step 3: strip leading/trailing whitespace, drop very short fragments
-  return parts.map(s => s.trim()).filter(s => s.length > 25);
 }
 
-function InsightItem({ p }) {
+// ── Insight item ──────────────────────────────────────────────────────────────
+// New shape: { insight_id, title, explanation_summary, explanation_points[],
+//              evidence_maturity, cited_sources[] }
+// Legacy shape (from dashboard_insights fallback): { insight: string }
+// Both are handled so legacy rows still render.
+
+function InsightItem({ insight }) {
   const [open, setOpen] = useState(false);
-  const [clamped, setClamped] = useState(false);
-  const headlineRef = useRef(null);
 
-  const sources = Array.isArray(p.sources) ? p.sources.filter(s => s && s.url) : [];
-  // Preferred: the model now emits explanation_points as a real array of bullets.
-  // Legacy fallback: split a prose `explanation`/`evidence` paragraph into sentences.
-  const points = Array.isArray(p.explanation_points)
-    ? p.explanation_points.map(s => String(s || "").trim()).filter(s => s.length > 3)
+  // Support both new and legacy shapes
+  const title   = insight.title   || insight.insight || "";
+  const summary = insight.explanation_summary || null;
+  const points  = Array.isArray(insight.explanation_points)
+    ? insight.explanation_points.filter(p => p?.length > 3)
     : [];
-  // Bullets come from explanation_points, or a split of the prose `explanation`.
-  // NEVER fall back to `evidence` — it is a terse, semicolon-packed technical
-  // string (e.g. "CVE-…; confirmed side-channel via auto-fetched Markdown images")
-  // that reads as a cryptic wall. When the elaboration was QA-blanked, show the
-  // clean headline (and sources) with no cryptic dropdown text.
-  const bullets  = points.length ? points : splitToBullets((p.explanation || "").trim());
-  const hasDetail = bullets.length > 0 || sources.length > 0;
-  const expandable = hasDetail || clamped;
+  const sources = Array.isArray(insight.cited_sources)
+    ? insight.cited_sources.filter(cs => cs.source_url)
+    : [];
 
-  useEffect(() => {
-    const el = headlineRef.current;
-    if (!el) return;
-    setClamped(el.scrollHeight - el.clientHeight > 1);
-  }, [p.insight]);
+  const hasDetail = summary || points.length > 0 || sources.length > 0;
 
   return (
     <li
-      className={`hz-insight-item${expandable ? " expandable" : ""}${open ? " open" : ""}`}
-      onClick={expandable ? () => setOpen(o => !o) : undefined}
+      className={`hz-insight-item${hasDetail ? " expandable" : ""}${open ? " open" : ""}`}
+      onClick={hasDetail ? () => setOpen(o => !o) : undefined}
     >
-      <div className="hz-insight-headline" ref={headlineRef}>{p.insight}</div>
-      {open && hasDetail && (
-        <div className="hz-insight-detail-inner">
+      {/* Headline — always visible */}
+      <div className="hz-insight-headline">
+        {title}
+        {hasDetail && (
+          <span className="hz-insight-chevron">{open ? "▲" : "▼"}</span>
+        )}
+      </div>
 
-          {/* Fact bullets */}
-          {bullets.length > 0 && (
+      {/* Drilldown — expands on click */}
+      {open && hasDetail && (
+        <div className="hz-insight-drilldown">
+
+          {/* Lead sentence */}
+          {summary && (
+            <p className="hz-insight-summary">{summary}</p>
+          )}
+
+          {/* Explanation bullets */}
+          {points.length > 0 && (
             <ul className="hz-insight-bullets">
-              {bullets.map((b, i) => (
+              {points.map((b, i) => (
                 <li key={i} className="hz-insight-bullet">{b}</li>
               ))}
             </ul>
           )}
 
-          {/* Source chips — one per source, compact, clickable */}
+          {/* Cited source buttons */}
           {sources.length > 0 && (
-            <div className="hz-insight-source-chips">
-              <span className="hz-insight-tag">Sources</span>
-              <div className="hz-insight-chips-row">
-                {sources.map((s, i) => (
-                  <a
-                    key={i}
-                    href={s.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`hz-source-chip hz-source-chip--${s.importance || "research"}`}
-                    onClick={e => e.stopPropagation()}
-                    title={s.title || s.url}
-                  >
-                    <span className="hz-source-chip-pub">{s.publisher || new URL(s.url).hostname.replace("www.", "")}</span>
-                    {s.date && <span className="hz-source-chip-date">{s.date.slice(0, 7)}</span>}
-                    {(s.importance === "operational" || s.importance === "observed") && <span className="hz-source-chip-badge">confirmed</span>}
-                  </a>
-                ))}
-              </div>
+            <div className="hz-insight-sources-row">
+              {sources.map((cs, i) => (
+                <SourceButton key={i} cs={cs} />
+              ))}
             </div>
           )}
 
@@ -474,14 +475,16 @@ function CategoryLegend() {
 // ── Category card ─────────────────────────────────────────────────────────────
 
 function CategoryCard({ cat, trendValues, selectedMaturity, onMaturitySelect }) {
-  const color = CAT_COLOR[cat.key];
-  const count = cat.source_count ?? 0;
-  const insights = cat.insights || [];
+  const color    = CAT_COLOR[cat.key];
+  const count    = cat.source_count ?? 0;
+  const insights = (cat.insights || []).filter(ins => !ins.blocked);
 
   return (
     <div className="hz-cat-card" style={{ "--cat-color": color }}>
       <div className="hz-cat-card-strip" style={{ background: color }} />
       <div className="hz-cat-card-body">
+
+        {/* Header: source count + sparkline */}
         <div className="hz-cat-card-header">
           <div>
             <div className="hz-cat-card-count">{count}</div>
@@ -500,25 +503,31 @@ function CategoryCard({ cat, trendValues, selectedMaturity, onMaturitySelect }) 
           onSelect={level => onMaturitySelect(cat.key, level)}
         />
 
-        {insights.length > 0 && (
-          <div className="hz-cat-card-insight">
-            {cat.insight_from && (
-              <div className="hz-cat-card-insight-from">{cat.insight_from}</div>
-            )}
-            <ul className="hz-insight-list">
-              {insights.slice(0, 2).map((p, i) => (
-                <InsightItem key={i} p={p} />
-              ))}
-            </ul>
-          </div>
+        {/* Stale label — small, non-alarming */}
+        {cat.insights_stale && cat.insights_from && (
+          <div className="hz-cat-insights-from">Analysis from {cat.insights_from}</div>
         )}
 
-        {insights.length === 0 && count > 0 && (
-          <div className="hz-cat-card-empty">No significant developments this period — sources were routine (e.g. lone disclosed CVEs) with no insight-worthy pattern.</div>
+        {/* Insight list */}
+        {insights.length > 0 && (
+          <ul className="hz-insight-list">
+            {insights.map((ins, i) => (
+              <InsightItem key={ins.insight_id || i} insight={ins} />
+            ))}
+          </ul>
+        )}
+
+        {/* Coverage gap — shown when thin but sources exist */}
+        {insights.length === 0 && count > 0 && cat.coverage_gaps?.length > 0 && (
+          <div className="hz-cat-card-empty">{cat.coverage_gaps[0]}</div>
+        )}
+        {insights.length === 0 && count > 0 && !cat.coverage_gaps?.length && (
+          <div className="hz-cat-card-empty">No significant developments identified for this period.</div>
         )}
         {count === 0 && (
           <div className="hz-cat-card-empty">No sources this period.</div>
         )}
+
       </div>
     </div>
   );
@@ -735,11 +744,6 @@ export function OverviewPage() {
                   {" "}· {lastFetch.toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" })}
                 </span>
               )}
-            </p>
-          )}
-          {data && !loading && data.insights_stale && (
-            <p className="hz-overview-stale-note">
-              ⚠ No insights generated for this period yet — showing the most recent available analysis.
             </p>
           )}
           {loading && <p className="hz-page-sub">Loading…</p>}

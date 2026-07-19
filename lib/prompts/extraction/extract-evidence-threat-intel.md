@@ -49,17 +49,31 @@ reproduce that hedge in the fact text. Do NOT harden hedged language into fact.
   Good: "Mandiant assesses with moderate confidence that APT41 compromised the LLM provider."
 
 QUOTE DISCIPLINE
-- "quote" must be a SINGLE contiguous verbatim span copied character-for-character from the source text — no paraphrasing, no ellipsis in middle, no merging of sentences from different paragraphs.
+- "quote" must be a SINGLE contiguous verbatim span from the source — one unbroken passage.
+  NEVER use ellipsis (...) to bridge two non-adjacent passages. If a fact spans two separate
+  sentences, pick the single most probative sentence OR split into two items.
 - For analyst judgments, quote the single judgment sentence verbatim, including the hedge.
 - For expert_assessment items: pick one representative sentence as the quote — do NOT construct a synthetic quote that combines text from different parts of the source.
-- Set quote_grounded=false only if you cannot find the exact text in the source.
-- Every number in "numbers" must appear verbatim in the source text.
+- Set quote_grounded=true if the span is present in the text, even if typographic characters
+  differ slightly — these are rendering artifacts, not substantive differences:
+    • curly vs straight apostrophes/quotes (' vs ', " vs ")
+    • markdown escaped underscores (e.g. trust\_remote\_code in text = trust_remote_code in quote)
+    • markdown escaped asterisks or brackets
+  Set quote_grounded=false only if the supporting passage is genuinely absent from the text.
+- Every number in "numbers" must appear verbatim in the source text. Copy the exact
+  form: if the text says "three" use "three" not "3"; "1 million" not "1000000".
 
 TECHNIQUE TAGS
 - technique_tags must contain ONLY valid taxonomy tag IDs — the pattern is TAI0X_, LLM0X_, ASI0X_, or AE0X_ followed by an underscore and the tag name.
-- Start from the TAGS field above (the source's assigned taxonomy). You may use a subset or add a cross-domain secondary tag only when the evidence clearly demonstrates that specific technique.
+- Start from the TAGS field above (the source's assigned taxonomy). Most items from a source
+  should inherit at least one of the source's tags — use [] only for background context items
+  that are genuinely unrelated to any of the source's assigned techniques (e.g. a general
+  credential theft step in a report tagged for LLM misuse, where AI plays no role in that step).
+- You may add a cross-domain secondary tag only when the evidence clearly demonstrates a
+  distinct different technique not already in the source's TAGS.
 - NEVER copy example values from the schema — "TAI01_data_poisoning" in the schema is a placeholder, not a default to use.
-- If a technique tag is not applicable for a specific item, use an empty array [].
+- Do NOT extract: defensive guidance, mitigations, patch advice, detection rules, or
+  "mitigating factor" items. Skip items where AI is not the attack vector or target.
 
 AI-RELEVANCE FILTER
 Extract only items where AI directly features: attacks on AI systems, AI-enabled TTPs,

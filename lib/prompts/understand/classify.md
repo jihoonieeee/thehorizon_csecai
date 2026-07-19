@@ -906,6 +906,20 @@ out neighbouring tags. Assign the single primary_tag that names the core threat.
       instructions smuggled through content the model reads (web page, RAG doc, email,
       tool response). Key test: "Did the attack ride in ingested content or did the
       user type it as a direct instruction?"
+    CLASSIFY BY ATTACK TECHNIQUE, NOT DOWNSTREAM HARM: When a jailbreak enables
+      generation of harmful content (CSAM, deepfakes, malware), the PRIMARY tag is
+      still LLM11 (the bypass technique). AE10/AE08 may appear as SECONDARY tags
+      for the harm produced, but the main_category is llm_threats.
+    WORKED EXAMPLE — Storm-2139 (Azure OpenAI Guardrail Bypass):
+      Actor built custom "de3u" jailbreak tooling to bypass Azure OpenAI safety
+      filters; operated as a commercial service to generate CSAM and non-consensual
+      intimate images of celebrities.
+      PRIMARY: llm_threats / LLM11_jailbreak_safety_bypass (the attack technique)
+      SECONDARY: AE10_ai_deepfake (the harmful output enabled)
+      ⇒ main_category=llm_threats, tags=[LLM11_jailbreak_safety_bypass, AE10_ai_deepfake]
+      NOT: main_category=ai_enabled_threats — the harm is what the jailbreak produces,
+        not the threat category. The threat analyst tracks "LLM guardrail bypass used
+        commercially at scale" not "deepfakes happened".
 
 ── agentic_ai_threats ── the AI system ACTS: tools, MCP, code execution, memory,
    identity/permissions, orchestration, autonomous decision-making ──
@@ -1131,6 +1145,16 @@ out neighbouring tags. Assign the single primary_tag that names the core threat.
     ✗ NOT TAI10: conventional dropper with no working ML (AE05) vs a GENUINELY
       FUNCTIONING backdoored model distributed via a hub (TAI10). The test: does a real
       ML model carry the malice, or is the AI branding just a lure?
+    SCALE + COORDINATION RULE: A ONE-OFF fake model on HF is AE05. A COORDINATED
+      CAMPAIGN that systematically plants hundreds of malicious models/skills in a
+      major AI repository (Hugging Face, ClawHub, etc.) is TAI10 — the supply chain
+      itself is the target, not just a distribution lure.
+    WORKED CASE — Hugging Face + ClawHub supply chain attack (2026):
+      352K+ unsafe entries on HF; 341 malicious ClawHub skills from one coordinated
+      operator; malicious pickle models execute code on download.
+      ⇒ traditional_ai_threats / TAI10_ai_supply_chain_compromise (NOT AE05 — the
+        scale, coordination, and targeting of AI infrastructure make this supply chain
+        compromise, not just "malware disguised as a model")
 
   AE06_ai_evasion_obfuscation
     WHAT: AI makes MALICIOUS CONTENT or BEHAVIOR HARDER TO DETECT for defenders.
@@ -1313,6 +1337,19 @@ scope="adjacent_context"  → KEEP as reference; set relevant=false, main_catego
   • "Measuring LLMs' impact on N-day exploits" (Anthropic FRT, with specific CVE and timeline data) → offensive_finding, AE04_ai_exploit_dev
   Contrast: "We showed that LLMs can help with vulnerability research" (no specific numbers, no specific CVEs) → adjacent_context
 
+RED TEAM EXERCISES AND ADVERSARIAL ROBUSTNESS PAPERS:
+A red team operation or paper that ATTACKS an AI system or its defenses is OFFENSIVE
+THREAT INTELLIGENCE regardless of who performed it. is_defensive=false.
+  "Red Teaming FOR DEFENSES" = attacking defenses to prove they're breakable → OFFENSIVE
+  "Improving Defenses via Red Teaming" = same thing → OFFENSIVE
+  The deliverable is the ATTACK METHOD, even if the stated purpose is improving security.
+  ✓ Microsoft AI Red Team disrupts Azure using adversarial ML → TAI03 / is_defensive=false
+  ✓ PISmith: RL-based framework that systematically breaks prompt injection defenses
+    → llm_threats / LLM01_prompt_injection / is_defensive=false (attack on defenses)
+  ✓ Any paper titled "Attacking/Breaking/Bypassing X Defense" → offensive / is_defensive=false
+  ✗ is_defensive=true ONLY when the deliverable is a NEW DEFENSE THAT HOLDS (reduces
+    attack success), not when a paper proves existing defenses don't hold.
+
 scope="off_topic"  → DISCARD; relevant=false. NOT AI-cyber-security, or pure noise:
   ✗ "top N AI threats" / "AI security trends" editorials with NO named specific events,
     no named organizations, no traceable AI threat claims (pure vague commentary)
@@ -1334,6 +1371,16 @@ robotics/physical-security/privacy topics. Adversarial ML is in scope ONLY when 
 attacked model lives in the cyber/software domain (e.g. evading a malware or phishing
 classifier, poisoning a fraud model, attacking an ML API or model-hub artifact).
 
+EXCEPTION — CYBER-AUTHENTICATION TARGET: When a camera/biometric attack's GOAL is
+unauthorized access to a cyber system (authentication bypass, identity spoofing for
+digital account access, victim impersonation in a software/API context), the TARGET
+is cyber even though the INPUT is physical. Classify as traditional_ai_threats /
+TAI03_adversarial_evasion.
+  ✓ IN SCOPE: feeding pre-recorded video to a live facial-recognition authentication
+    API to gain access to a privileged digital system (e.g. MITRE ATLAS AML.CS0004)
+  ✗ OUT OF SCOPE: adversarial makeup/patches to fool a surveillance camera without
+    a specific cyber-access goal (physical-domain evasion)
+
 ════════════════════════════════════════════════════════════════════════
 DEFENSIVE CONTENT
 ════════════════════════════════════════════════════════════════════════
@@ -1353,6 +1400,27 @@ the growing risk of LLM-discovered 0-days" is primarily an ATTACK CAPABILITY pap
 (it documents that Claude found 500+ real zero-days) — is_defensive=false, classify as
 offensive_finding in ai_enabled_threats. Only set is_defensive=true if the actual
 content primarily presents a working defense, not if it merely calls for one.
+
+WATCH OUT — "Understanding and Mitigating X" / prevalence measurement papers:
+A paper that MEASURES how prevalent or successful an attack is across real systems —
+even if it also proposes a defense — is primarily an ATTACK MEASUREMENT contribution.
+Ask: "What is the new intelligence a threat analyst would cite this paper for?"
+  • Cited as: "X% of real-world systems are vulnerable to attack Y" → attack prevalence
+    measurement → is_defensive=false, offensive_finding
+  • Cited as: "Defense D reduces attack success from X% to Y%" → defense contribution
+    → is_defensive=true, off_topic
+
+The proposed defense is secondary when the paper's primary discovery is attack prevalence.
+The presence of "Mitigating" in the title or a co-proposed defense NEVER alone triggers
+is_defensive=true — only the actual primary contribution does.
+
+WORKED CASE — "Understanding and Mitigating Prompt Leaking Attacks in Real-World LLM-Based Applications":
+  Primary finding: 80%+ of 1,200 surveyed production LLM apps leak system prompts under
+  realistic adversarial queries; attention drift explains why defenses fail.
+  Secondary contribution: AREA soft-prompt defense.
+  ⇒ is_defensive=false; scope="offensive_finding"; main_category=llm_threats;
+    primary_tag=LLM07_system_prompt_leakage.
+  (An analyst cites this for "how many apps are exposed" — not "here is a new defense.")
 
 WATCH OUT — "auditing", "evaluation", "benchmarking", and "privacy assessment" framing:
 Do NOT classify a paper as defensive solely because it is framed as an audit tool,
@@ -1406,7 +1474,12 @@ SOURCE TYPE — classify by EVIDENCE ROLE (what the source can prove), not forma
     adversary_adoption_signal — evidence adversaries are adopting a technique/tool
   Technical evidence (demonstrated/measured, usually a lab):
     research_finding — a paper analysing/theorising an attack with NO released tool
-    benchmark_evaluation — a dataset/benchmark/measurement study (score, not attack)
+    benchmark_evaluation — a dataset/benchmark/measurement study (score, not attack).
+      NOTE: a paper that benchmarks HOW WELL AI PERFORMS AN ATTACK (exploit generation,
+      jailbreak success rate, malware evasion rate) is NOT defensive — it's offensive
+      capability measurement. Use benchmark_evaluation only for studies measuring
+      defensive performance or neutral task metrics. For AI attack capability measurement
+      use research_finding or capability_demonstration.
     capability_demonstration — first-of-kind proof a NEW capability is possible
     defensive_capability — a defense/mitigation/detection/hardening technique
   Contextual / structural (framing, not a specific finding):
@@ -1464,6 +1537,18 @@ WORKED BOUNDARY EXAMPLES
       → traditional_ai_threats, TAI03_adversarial_evasion; the malware classifier is
         the victim; the LLM is the attacker's tooling (like using a compiler to craft
         shellcode); classify by the attacked system, not by what generated the attack.
+
+  MEASUREMENT PAPERS WITH CO-PROPOSED DEFENSES — examples:
+  • "Understanding and Mitigating Prompt Leaking Attacks in Real-World LLM Apps"
+    — primary finding: 80%+ of 1,200 production apps leak system prompts
+    — secondary: AREA defense proposed
+    ⇒ offensive_finding, llm_threats, LLM07_system_prompt_leakage, is_defensive=false
+  • "Evaluating and Mitigating the Growing Risk of LLM-Discovered 0-days"
+    — primary finding: Claude found 500+ real zero-days
+    ⇒ offensive_finding, ai_enabled_threats, AE03_ai_vuln_research, is_defensive=false
+  • "Certified Robustness to Data Poisoning in Gradient Aggregation"
+    — primary contribution: a certified defense bound
+    ⇒ off_topic (defensive), is_defensive=true
 
   AI INFRASTRUCTURE vs SUPPLY-CHAIN vs BEHAVIORAL — new examples:
   • CVE-2024-XXXX: LiteLLM SQL injection in a legitimate v1.x release
