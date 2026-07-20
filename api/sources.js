@@ -201,7 +201,7 @@ export default async function handler(req, res) {
         start: start ? start.slice(0, 10) : null,
         end:   end   ? end.slice(0, 10)   : null,
       },
-      count: data?.length || 0,
+      count: (data || []).filter(s => !s.parent_source_id).length,
       sources: (data || []).map(s => {
         const mech = s.intelligence?.mechanism_classification || null;
         const { intelligence, collected_date, reading_value: rv, ...rest } = s;

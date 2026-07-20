@@ -583,9 +583,10 @@ export function SourcesPage() {
   const [error,       setError]       = useState(null);
   const [totalCount,  setTotalCount]  = useState(0);
   const [expandedId,  setExpandedId]  = useState(null);   // row open for vetting
-  const [tierFilter,  setTierFilter]  = useState(null);   // filter to one importance tier
-  const [starredOnly, setStarredOnly] = useState(false);  // filter to starred sources
-  const [flaggedOnly, setFlaggedOnly] = useState(false);  // filter to flagged (needs_review) sources
+  const [tierFilter,   setTierFilter]   = useState(null);   // filter to one importance tier
+  const [starredOnly,  setStarredOnly]  = useState(false);  // filter to starred sources
+  const [flaggedOnly,  setFlaggedOnly]  = useState(false);  // filter to flagged (needs_review) sources
+  const [reportsOnly,  setReportsOnly]  = useState(false);  // filter to digest reports + their children
   const [labelFilter, setLabelFilter] = useState(null);   // filter to one importance label
   const [sortBy,      setSortBy]      = useState("importance"); // "importance" | "date" | "ingested"
   const [accessLevel, setAccessLevel] = useState(getAccessLevel);
@@ -771,9 +772,11 @@ export function SourcesPage() {
     tier:     tierFilter ? (s => s.maturity === tierFilter) : null,
     starred:  starredOnly ? (s => s.starred) : null,
     flagged:  flaggedOnly ? (s => s.needs_review) : null,
+    // Reports filter: show digest parent reports AND all their children together.
+    reports:  reportsOnly ? (s => s.is_report || !!s.parent_source_id) : null,
     tags:     activeTags.length ? (s => activeTags.every(t => s.tags?.includes(t))) : null,
     search:   searchPred,
-  }), [activeTab, labelFilter, tierFilter, starredOnly, flaggedOnly, activeTags, searchPred]);
+  }), [activeTab, labelFilter, tierFilter, starredOnly, flaggedOnly, reportsOnly, activeTags, searchPred]);
 
   // Rows passing every predicate EXCEPT the named one (for that facet's counts).
   const rowsExcept = useCallback((exceptKey) => {
@@ -802,7 +805,7 @@ export function SourcesPage() {
 
   // Faceted counts — each computed over rows passing all OTHER active filters.
   const catCountsFaceted = useMemo(() => {
-    const base = rowsExcept("category");
+    const base = rowsExcept("category").filter(s => !s.parent_source_id);
     const c = {};
     for (const s of base) if (s.main_category) c[s.main_category] = (c[s.main_category] || 0) + 1;
     return { counts: c, total: base.length };
@@ -822,8 +825,9 @@ export function SourcesPage() {
     return c;
   }, [rowsExcept]);
 
-  const starredCount = useMemo(() => rowsExcept("starred").filter(s => s.starred).length, [rowsExcept]);
-  const flaggedCount = useMemo(() => rowsExcept("flagged").filter(s => s.needs_review).length, [rowsExcept]);
+  const starredCount  = useMemo(() => rowsExcept("starred").filter(s => s.starred).length, [rowsExcept]);
+  const flaggedCount  = useMemo(() => rowsExcept("flagged").filter(s => s.needs_review).length, [rowsExcept]);
+  const reportsCount  = useMemo(() => rowsExcept("reports").filter(s => s.is_report).length, [rowsExcept]);
 
   // Group child sources immediately after their parent so digest findings are
   // always adjacent to the report they came from. Children whose parent is not
@@ -1030,6 +1034,14 @@ export function SourcesPage() {
           >
             🚩 Flagged{flaggedCount ? <span className="hz-tier-chip-count">{flaggedCount}</span> : null}
           </button>
+          {/* Reports filter — digest parent reports + their child findings. */}
+          <button
+            className={`hz-tier-chip hz-report-chip${reportsOnly ? " active" : ""}`}
+            onClick={() => { setReportsOnly(v => !v); setPage(1); setExpandedId(null); }}
+            title="Show only long reports and their extracted findings"
+          >
+            📄 Reports{reportsCount ? <span className="hz-tier-chip-count">{reportsCount}</span> : null}
+          </button>
         </div>
       </div>
 
@@ -1051,7 +1063,7 @@ export function SourcesPage() {
             onClick={() => { setSortBy("ingested"); setPage(1); }}>Ingested</button>
         </div>
         <span className="hz-sources-count">
-          {loading ? "Loading…" : `${filtered.length.toLocaleString()} source${filtered.length !== 1 ? "s" : ""}`}
+          {loading ? "Loading…" : `${filtered.filter(s => !s.parent_source_id).length.toLocaleString()} source${filtered.filter(s => !s.parent_source_id).length !== 1 ? "s" : ""}`}
           {activeTab !== "all" && (
             <span className="hz-sources-count-cat"> in {CAT_LABEL_FULL[activeTab] || activeTab}</span>
           )}
@@ -1105,14 +1117,33 @@ export function SourcesPage() {
               </tr>
             </thead>
             <tbody>
-              {paged.map(s => {
+              {(() => {
+                // Compute which parent reports in this page have children also in this page,
+                // and which child is the last in each group — used for visual grouping.
+                const pagedIds = new Set(paged.map(s => s.id));
+                const parentsWithChildren = new Set(
+                  paged.filter(s => s.parent_source_id && pagedIds.has(s.parent_source_id))
+                       .map(s => s.parent_source_id)
+                );
+                // Track last child per parent group (overwrite until we reach the last one)
+                const lastChildId = {};
+                for (const s of paged) {
+                  if (s.parent_source_id && parentsWithChildren.has(s.parent_source_id)) {
+                    lastChildId[s.parent_source_id] = s.id;
+                  }
+                }
+                const lastChildIds = new Set(Object.values(lastChildId));
+                return paged.map(s => {
                 const id = s.id || s.url;
                 const open = expandedId === id;
                 const colSpan = activeTab === "all" ? 8 : 7;   // +1 for the star column
+                const isGroupParent = s.is_report && parentsWithChildren.has(s.id);
+                const isGroupChild  = s.is_child_source && parentsWithChildren.has(s.parent_source_id);
+                const isLastChild   = s.is_child_source && lastChildIds.has(s.id);
                 return (
                   <Fragment key={id}>
                     <tr
-                      className={`hz-src-row${open ? " open" : ""}${s.is_child_source ? " hz-src-row-child" : ""}`}
+                      className={`hz-src-row${open ? " open" : ""}${s.is_child_source ? " hz-src-row-child" : ""}${isGroupParent ? " hz-src-row-report-parent" : ""}${isGroupChild ? " hz-src-row-group-child" : ""}${isLastChild ? " hz-src-row-child-last" : ""}`}
                       onClick={() => setExpandedId(open ? null : id)}
                     >
                       <td className="hz-src-caret">{open ? "▾" : "▸"}</td>
@@ -1265,7 +1296,8 @@ export function SourcesPage() {
                     )}
                   </Fragment>
                 );
-              })}
+              });
+              })()}
             </tbody>
           </table>
         </div>

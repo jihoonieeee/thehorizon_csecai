@@ -312,7 +312,7 @@ Reporting date: ${REPORT_DATE} (today). A CVE/date is only "future-dated" if AFT
 Evidence maturity: ${maturityShortLine(maturity)} (total ${maturity.total})
 
 INSIGHTS (headline + its bullets — audit both; a "stapled" second finding often hides in the bullets):
-${insights.map((p, i) => `[${i}] ${p.insight}  (implication: ${p.implication})\n${(p.explanation_points || []).map(b => `    - ${b}`).join("\n")}`).join("\n")}
+${insights.map((p, i) => `[${i}] ${p.insight}\n${(p.explanation_points || []).map(b => `    - ${b}`).join("\n")}`).join("\n")}
 
 Audit each. Return a verdict for every index.`;
 
@@ -359,7 +359,7 @@ function proseToBullets(text) {
 
 // ── Source loading ─────────────────────────────────────────────────────────────
 
-const SRC_SELECT = "id,main_category,short_summary,analyst_brief,intelligence,tags,source_type,trust_tier,title,url,publisher,date_published,parent_source_id,is_digest";
+const SRC_SELECT = "id,main_category,short_summary,analyst_brief,intelligence,tags,source_type,trust_tier,title,url,publisher,date_published,parent_source_id,is_digest,reading_value";
 
 // Some pipeline-enriched sources leave the top-level short_summary/analyst_brief
 // columns empty and stash the prose under intelligence.source_summary. Fall back
@@ -800,7 +800,7 @@ function buildAttributionPrompt(catLabel, windowLabel, insights, sources) {
   ).join("\n");
   const mode = SYNTHESIS_WINDOW
     ? `This is a QUARTER/ANNUAL synthesis: each insight generalises a PATTERN across several sources. Cite EVERY source the insight draws on — every named technique, incident, or measured result in the insight must have its source attributed here (up to 8). Under-citing a synthesis insight is an error.`
-    : `This is a WEEK/MONTH card: bias to the SINGLE source the insight is about; add a 2nd/3rd only for genuine multi-source synthesis (max 3).`;
+    : `This is a WEEK/MONTH card. Cite EVERY source the insight draws on — if the insight synthesises a pattern across multiple sources, attribute all of them (up to 3). Do NOT limit to a single source when the insight is grounded in two or three. Under-citing is an error.`;
   return `Category: ${catLabel}   Period: ${windowLabel}
 Attribution mode: ${mode}
 

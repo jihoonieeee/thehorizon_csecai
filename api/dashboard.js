@@ -143,16 +143,10 @@ const INSIGHT_TTL_MS = 30 * 60 * 1000;
 // Strips internal analytical fields. The frontend only needs what it renders.
 function shapeInsight(ins) {
   return {
-    insight_id:          ins.insight_id,
-    title:               ins.title,
-    // Point-form explanation shown in the drilldown panel.
-    // explanation_summary: one bold lead sentence
-    // explanation_points:  3–5 tight bullets, each ≤25 words
-    explanation_summary: ins.explanation_summary || null,
-    explanation_points:  ins.explanation_points  || [],
-    evidence_maturity:   ins.evidence_maturity,
-    technique_tags:      ins.technique_tags || [],
-    monitoring_signal:   ins.monitoring_signal || null,
+    insight_id:         ins.insight_id,
+    title:              ins.title,
+    explanation_points: ins.explanation_points || [],
+    evidence_maturity:  ins.evidence_maturity,
     cited_sources: (ins.cited_sources || []).map(cs => ({
       source_title:     cs.source_title,
       source_url:       cs.source_url,
@@ -161,8 +155,8 @@ function shapeInsight(ins) {
       quote:            cs.quote            || null,
       evidence_summary: cs.evidence_summary || null,
     })),
-    // Deliberately omitted — internal pipeline fields, not for the frontend:
-    // what_changed, mechanism, implication, confidence, caveats, blocked, qa_issues
+    // Deliberately omitted: implication, watch_next, broken_assumption, confidence,
+    // technique_tags, monitoring_signal, caveats, blocked, qa_issues — internal only.
   };
 }
 
@@ -271,19 +265,31 @@ async function getLegacyInsights(win, windowKey) {
     for (const row of rows) {
       if (row.category === META_CATEGORY) continue;
       const points = row.points;
-      // v2 object format
+      // v2 object format — dashboard_insights.points.insights[]
+      // DB shape: { insight, explanation, explanation_points[], sources[{url,title,publisher}],
+      //             evidence, implication, watch_next, confidence_reason, broken_assumption }
       if (points && Array.isArray(points.insights) && points.insights.length) {
         byCategory[row.category] = {
           assessment_status: null,
-          insights: points.insights.slice(0, 3).map((ins, i) => ({
-            insight_id:        `legacy-${row.category}-${i}`,
-            title:             typeof ins === "string" ? ins : (ins.insight || ""),
-            explanation:       null,
-            evidence_maturity: points.evidence_maturity || null,
-            technique_tags:    [],
-            monitoring_signal: null,
-            cited_sources:     [],
-          })),
+          insights: points.insights.slice(0, 3).map((ins, i) => {
+            const isObj = ins && typeof ins === "object";
+            return {
+              insight_id:         `legacy-${row.category}-${i}`,
+              title:              isObj ? (ins.insight || "") : String(ins),
+              explanation_points: isObj && Array.isArray(ins.explanation_points) ? ins.explanation_points : [],
+              evidence_maturity:  points.evidence_maturity || null,
+              cited_sources:      isObj && Array.isArray(ins.sources)
+                ? ins.sources.map(s => ({
+                    source_url:       s.url,
+                    source_title:     s.title,
+                    publisher:        s.publisher,
+                    trust_tier:       s.importance || null,
+                    quote:            null,
+                    evidence_summary: ins.evidence || null,
+                  }))
+                : [],
+            };
+          }),
           coverage_gaps: [],
         };
       // Legacy bare string array
@@ -291,13 +297,11 @@ async function getLegacyInsights(win, windowKey) {
         byCategory[row.category] = {
           assessment_status: null,
           insights: points.slice(0, 3).map((s, i) => ({
-            insight_id:        `legacy-${row.category}-${i}`,
-            title:             String(s).slice(0, 120),
-            explanation:       null,
-            evidence_maturity: null,
-            technique_tags:    [],
-            monitoring_signal: null,
-            cited_sources:     [],
+            insight_id:         `legacy-${row.category}-${i}`,
+            title:              String(s).slice(0, 120),
+            explanation_points: [],
+            evidence_maturity:  null,
+            cited_sources:      [],
           })),
           coverage_gaps: [],
         };

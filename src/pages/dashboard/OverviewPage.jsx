@@ -254,10 +254,9 @@ function MaturitySidePanel({ level, category, sources, onClose }) {
 // the verbatim quote used to ground this insight.
 
 function SourceButton({ cs }) {
-  const label = cs.publisher || cs.source_title || cs.source_url;
-  const tip   = cs.quote
-    ? `"${cs.quote.slice(0, 200)}${cs.quote.length > 200 ? "…" : ""}"`
-    : cs.evidence_summary || null;
+  const publisher = cs.publisher || null;
+  const title     = cs.source_title || null;
+  const tip       = title || cs.evidence_summary || cs.source_url;
 
   return (
     <a
@@ -265,10 +264,12 @@ function SourceButton({ cs }) {
       target="_blank"
       rel="noopener noreferrer"
       className="hz-source-btn"
-      title={tip || label}
+      title={tip}
       onClick={e => e.stopPropagation()}
     >
-      {label}
+      {publisher && <span className="hz-source-btn-publisher">{publisher}</span>}
+      {title && <span className="hz-source-btn-title">{title.length > 55 ? title.slice(0, 55) + "…" : title}</span>}
+      {!publisher && !title && <span>{cs.source_url}</span>}
       <span className="hz-source-btn-arrow">↗</span>
     </a>
   );
@@ -283,9 +284,7 @@ function SourceButton({ cs }) {
 function InsightItem({ insight }) {
   const [open, setOpen] = useState(false);
 
-  // Support both new and legacy shapes
-  const title   = insight.title   || insight.insight || "";
-  const summary = insight.explanation_summary || null;
+  const title   = insight.title || insight.insight || "";
   const points  = Array.isArray(insight.explanation_points)
     ? insight.explanation_points.filter(p => p?.length > 3)
     : [];
@@ -293,7 +292,7 @@ function InsightItem({ insight }) {
     ? insight.cited_sources.filter(cs => cs.source_url)
     : [];
 
-  const hasDetail = summary || points.length > 0 || sources.length > 0;
+  const hasDetail = points.length > 0 || sources.length > 0;
 
   return (
     <li
@@ -311,11 +310,6 @@ function InsightItem({ insight }) {
       {/* Drilldown — expands on click */}
       {open && hasDetail && (
         <div className="hz-insight-drilldown">
-
-          {/* Lead sentence */}
-          {summary && (
-            <p className="hz-insight-summary">{summary}</p>
-          )}
 
           {/* Explanation bullets */}
           {points.length > 0 && (
