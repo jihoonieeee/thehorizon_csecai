@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { getBestToken, getAccessLevel, onAuthChange } from "../../auth.js";
 
 function Spinner() {
@@ -226,13 +226,14 @@ const NL_WINDOWS = [
 function NewsletterPanel({ secret }) {
   const [win,     setWin]     = useState("week");
   const [status,  setStatus]  = useState("idle");
-  const [text,    setText]    = useState(null);
+  const [html,    setHtml]    = useState(null);
   const [meta,    setMeta]    = useState(null);
   const [error,   setError]   = useState(null);
   const [elapsed, setElapsed] = useState(0);
   const [copied,  setCopied]  = useState(false);
-  const timerRef = useRef(null);
-  const startRef = useRef(null);
+  const timerRef  = useRef(null);
+  const startRef  = useRef(null);
+  const iframeRef = useRef(null);
 
   useEffect(() => {
     if (status === "running") {
@@ -244,9 +245,17 @@ function NewsletterPanel({ secret }) {
     return () => clearInterval(timerRef.current);
   }, [status]);
 
+  // Auto-size the iframe to its content height once it loads.
+  const onIframeLoad = useCallback(() => {
+    try {
+      const doc = iframeRef.current?.contentWindow?.document;
+      if (doc) iframeRef.current.style.height = doc.documentElement.scrollHeight + "px";
+    } catch {}
+  }, []);
+
   async function generate() {
     if (status === "running") return;
-    setStatus("running"); setError(null); setText(null); setMeta(null); setElapsed(0); setCopied(false);
+    setStatus("running"); setError(null); setHtml(null); setMeta(null); setElapsed(0); setCopied(false);
     try {
       const res = await fetch("/api/dashboard", {
         method: "POST",
@@ -259,20 +268,28 @@ function NewsletterPanel({ secret }) {
         throw new Error(msg);
       }
       const data = await res.json();
-      setText(data.text || ""); setMeta(data); setStatus("done");
+      setHtml(data.html || data.text || ""); setMeta(data); setStatus("done");
     } catch (err) {
       setError(err.message); setStatus("error");
     }
   }
 
   async function copy() {
-    if (!text) return;
-    try { await navigator.clipboard.writeText(text); }
-    catch {
-      const ta = Object.assign(document.createElement("textarea"), { value: text, style: "position:fixed;opacity:0" });
+    if (!html) return;
+    try {
+      // Copy as text/html so Gmail/Outlook paste renders the styles, not raw source.
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html":  new Blob([html], { type: "text/html"  }),
+          "text/plain": new Blob([html], { type: "text/plain" }),
+        }),
+      ]);
+    } catch {
+      // Firefox fallback — copies raw HTML (still usable)
+      const ta = Object.assign(document.createElement("textarea"), { value: html, style: "position:fixed;opacity:0" });
       document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
     }
-    setCopied(true); setTimeout(() => setCopied(false), 2000);
+    setCopied(true); setTimeout(() => setCopied(false), 2500);
   }
 
   const isRunning = status === "running";
@@ -281,7 +298,7 @@ function NewsletterPanel({ secret }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-      {/* Window + generate */}
+      {/* Controls row */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: 6 }}>
           {NL_WINDOWS.map(w => (
@@ -306,11 +323,6 @@ function NewsletterPanel({ secret }) {
         }}>
           {isRunning ? <><Spinner /> Generating… {formatElapsed(elapsed)}</> : isDone ? "Regenerate" : "Generate"}
         </button>
-        {isDone && meta && (
-          <span style={{ fontSize: "0.73rem", color: "var(--text-tertiary)", marginLeft: "auto" }}>
-            {meta.sourceCount} sources · {meta.period?.label}
-          </span>
-        )}
       </div>
 
       {/* Error */}
@@ -320,36 +332,41 @@ function NewsletterPanel({ secret }) {
         </div>
       )}
 
-      {/* Text output */}
-      {isDone && text && (
-        <div style={{ position: "relative" }}>
-          <button onClick={copy} style={{
-            position: "absolute", top: 10, right: 10, zIndex: 2,
-            display: "flex", alignItems: "center", gap: 5,
-            padding: "5px 10px", borderRadius: 6,
-            border: "1px solid var(--border)",
-            background: copied ? "#f0fdf4" : "var(--surface)",
-            color: copied ? "#15803d" : "var(--text-secondary)",
-            fontSize: "0.73rem", fontWeight: 600, cursor: "pointer",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.07)",
-          }}>
-            {copied ? <><CheckIcon /> Copied</> : <><CopyIcon /> Copy</>}
-          </button>
-          <textarea
-            readOnly value={text}
-            onClick={e => e.target.select()}
-            style={{
-              width: "100%", minHeight: 520,
-              padding: "16px 16px",
-              border: "1px solid var(--border)", borderRadius: 10,
-              background: "var(--surface)", color: "var(--text-primary)",
-              fontFamily: "'SF Mono','Fira Code',Consolas,monospace",
-              fontSize: "0.77rem", lineHeight: 1.7,
-              resize: "vertical", outline: "none", boxSizing: "border-box",
-            }}
-          />
-          <div style={{ marginTop: 5, fontSize: "0.71rem", color: "var(--text-tertiary)" }}>
-            Click to select all · paste directly into any email client
+      {/* Preview */}
+      {isDone && html && (
+        <div>
+          {/* Toolbar above preview */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <span style={{ fontSize: "0.72rem", color: "var(--text-tertiary)" }}>
+              {meta?.sourceCount} sources &middot; {meta?.period?.label}
+            </span>
+            <button onClick={copy} style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "6px 14px", borderRadius: 7,
+              border: "1px solid var(--border)",
+              background: copied ? "#f0fdf4" : "var(--surface-2)",
+              color: copied ? "#15803d" : "var(--text-secondary)",
+              fontSize: "0.78rem", fontWeight: 600, cursor: "pointer",
+              transition: "background 0.15s,color 0.15s",
+            }}>
+              {copied ? <><CheckIcon /> Copied to clipboard</> : <><CopyIcon /> Copy for email</>}
+            </button>
+          </div>
+
+          {/* Rendered preview in iframe */}
+          <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
+            <iframe
+              ref={iframeRef}
+              srcDoc={html}
+              onLoad={onIframeLoad}
+              sandbox="allow-same-origin"
+              title="Newsletter preview"
+              style={{ width: "100%", minHeight: 400, border: "none", display: "block" }}
+            />
+          </div>
+
+          <div style={{ marginTop: 8, fontSize: "0.71rem", color: "var(--text-tertiary)", textAlign: "center" }}>
+            Click &ldquo;Copy for email&rdquo; then paste into Gmail or Outlook compose
           </div>
         </div>
       )}
