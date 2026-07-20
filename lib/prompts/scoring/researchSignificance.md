@@ -54,6 +54,11 @@ landmark    — reserve for PRIMARY research that does exactly ONE of:
                 • A benchmark is only landmark if it reveals a previously unknown surface (case a),
                   establishes that a theoretical threat is actually prevalent (case c), or shows
                   a capability previously believed infeasible (case b)
+                • A taxonomy or classification framework (L1/L2/L3 attack tiers, named attack
+                  categories, threat ontologies) is at most NOTABLE — never landmark — even if it
+                  introduces new category names or claims theoretical undetectability. Landmark
+                  requires a DEMONSTRATED capability against real deployed systems, not a
+                  classification of hypothetical or synthetic attack variants.
 notable     — primary research introducing a real new technique, attack variant, defense method,
               or measurement WITHIN an already-established surface or capability class. Worth
               analyst attention. Does not require strong novelty_confidence.

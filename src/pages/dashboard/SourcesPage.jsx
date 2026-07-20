@@ -193,9 +193,6 @@ function ReportAnalysis({ ra }) {
             {critical_insights.map((ins, i) => (
               <div key={i} className="hz-ra-insight">
                 <div className="hz-ra-insight-finding">{ins.finding}</div>
-                {ins.taxonomy_hint && (
-                  <span className="hz-src-detail-tag domain" style={{ marginTop: 4, display: "inline-block" }}>{ins.taxonomy_hint}</span>
-                )}
               </div>
             ))}
           </div>
@@ -834,6 +831,10 @@ export function SourcesPage() {
   // in the current filtered set appear in place (they match a filter the parent
   // doesn't, e.g. a specific category tab).
   const grouped = useMemo(() => {
+    // Build an id→source lookup from the full (unfiltered) corpus so we can
+    // inject a parent row even when it doesn't pass the active category filter.
+    const sourceById = new Map(sources.map(s => [s.id, s]));
+
     const childMap = new Map();
     for (const s of filtered) {
       if (s.parent_source_id) {
@@ -845,6 +846,15 @@ export function SourcesPage() {
     const placed = new Set();
     for (const s of filtered) {
       if (placed.has(s.id)) continue;
+      // If this child's parent is NOT already in filtered, inject the parent
+      // row from the full corpus so children are always grouped below their report.
+      if (s.parent_source_id && !placed.has(s.parent_source_id)) {
+        const parent = sourceById.get(s.parent_source_id);
+        if (parent && !placed.has(parent.id)) {
+          result.push({ ...parent, _injected_parent: true });
+          placed.add(parent.id);
+        }
+      }
       result.push(s);
       placed.add(s.id);
       // If this is a parent source, slot its children right below it.
@@ -853,7 +863,7 @@ export function SourcesPage() {
       }
     }
     return result;
-  }, [filtered]);
+  }, [filtered, sources]);
 
   const totalPages = Math.ceil(grouped.length / PAGE_SIZE);
   const paged = grouped.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -1137,13 +1147,14 @@ export function SourcesPage() {
                 const id = s.id || s.url;
                 const open = expandedId === id;
                 const colSpan = activeTab === "all" ? 8 : 7;   // +1 for the star column
-                const isGroupParent = s.is_report && parentsWithChildren.has(s.id);
+                const isGroupParent = (s.is_report || s._injected_parent) && parentsWithChildren.has(s.id);
                 const isGroupChild  = s.is_child_source && parentsWithChildren.has(s.parent_source_id);
                 const isLastChild   = s.is_child_source && lastChildIds.has(s.id);
+                const isInjected    = !!s._injected_parent;  // parent from outside this tab
                 return (
                   <Fragment key={id}>
                     <tr
-                      className={`hz-src-row${open ? " open" : ""}${s.is_child_source ? " hz-src-row-child" : ""}${isGroupParent ? " hz-src-row-report-parent" : ""}${isGroupChild ? " hz-src-row-group-child" : ""}${isLastChild ? " hz-src-row-child-last" : ""}`}
+                      className={`hz-src-row${open ? " open" : ""}${s.is_child_source ? " hz-src-row-child" : ""}${isGroupParent ? " hz-src-row-report-parent" : ""}${isGroupChild ? " hz-src-row-group-child" : ""}${isLastChild ? " hz-src-row-child-last" : ""}${isInjected ? " hz-src-row-injected-parent" : ""}`}
                       onClick={() => setExpandedId(open ? null : id)}
                     >
                       <td className="hz-src-caret">{open ? "▾" : "▸"}</td>

@@ -2694,6 +2694,16 @@ a:hover { text-decoration: underline; }
   padding-left: 8px;
 }
 
+/* Injected parent row — pulled in from another category to give children context */
+.hz-sources-table-vet .hz-src-row-injected-parent td {
+  background: #f5f7fa;
+  opacity: 0.82;
+  border-top: 2px solid #b8cce8;
+}
+.hz-sources-table-vet .hz-src-row-injected-parent td:first-child {
+  border-left: 3px solid #4a7ec7;
+}
+
 /* The ↳ marker shown instead of the trust dot for child rows */
 .hz-src-child-marker {
   flex-shrink: 0;

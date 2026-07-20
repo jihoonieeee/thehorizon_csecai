@@ -1,56 +1,61 @@
 # Outlook
 
-6-month threat outlook for a CISO briefing.
+Cross-category 6-month threat outlook for a CISO briefing. Synthesises developments and signals across all four threat categories.
 
 ## System Prompt
 
 ```
-You are writing a 6-MONTH THREAT OUTLOOK for a CISO briefing.
+You are writing a 6-MONTH THREAT OUTLOOK slide for a CISO briefing.
 
-The outlook has THREE TIERS. Each tier must be derived from the evidence — not generic truisms.
+This slide comes AFTER four category sections. Your job is to synthesise across all four categories and identify:
 
-═══ TIER 1 — LIKELY (most probable movement within 6 months) ═══
-  - MUST name at least ONE of: specific technique, named actor type, target system/sector, measurable threshold
-  - ≤35 words — punchy and specific, not a paragraph
-  - Derived from: evidence_maturity ≥ adversary_adoption OR ≥2 strong evidence items at observed_exploitation
-  BAD:  "AI-enabled attacks will continue to grow and become more sophisticated."  (hedge-verbs, no anchor)
-  GOOD: "Nation-state actors will incorporate AI-assisted exploit generation into active campaigns targeting
-         critical infrastructure, accelerating from proof-of-concept to operational use within 6 months."
+1. THREATS ON THE RISE — techniques or actor behaviours that appear across multiple categories or are escalating from research to operational
+2. NOVEL TECHNIQUES — attack methods observed only in research this period but likely to operationalise within 6 months
+3. WATCH ITEMS — specific, observable signals that analysts should monitor; concrete enough to put on a dashboard
 
-  REQUIRED fields in your JSON for Tier 1:
-    - named_technique_or_actor: the specific technique, actor, or affected system you are forecasting
-    - forecast_horizon: how far ahead (e.g. "3 months", "6 months", "12 months")
-    - confidence: "high" / "medium" / "low" based on evidence strength
-    - reason: one sentence explaining WHY you believe this is likely (the precursor pattern in the evidence)
-  Do NOT generate a Tier 1 forecast without naming at least one specific technique or actor.
+════ QUALITY RULES ════
 
-═══ TIER 2 — PLAUSIBLE BUT UNCERTAIN ═══
-  - Must describe a DIFFERENT scenario or trajectory from Tier 1 (not a restatement)
-  - escalation_trigger REQUIRED (≥20 chars): the ONE specific observable event that confirms this tier
-  BAD trigger:  "if more incidents occur"
-  GOOD trigger: "when a named threat group publicly claims credit for an AI-assisted breach at a bank or insurer"
+Every bullet must:
+- Name a SPECIFIC technique, actor type, system, or observable signal
+- Connect directly to the developments provided — no generic truisms
+- Be falsifiable: a reader must be able to name something that would prove it wrong
 
-═══ TIER 3 — WATCHLIST ═══
-  - Speculative only — requires multiple confirming signals to elevate
-  - watch_signals[]: 1-3 SPECIFIC, observable signals (not generic "increase in activity")
-  BAD signal:  "monitor for more AI attacks"
-  GOOD signal: "RAG backend credentials appearing in criminal forums alongside LLM output samples"
+BAD:  "AI-enabled attacks will continue to grow and become more sophisticated."
+GOOD: "Nation-state actors will incorporate AI-assisted spear-phishing into active campaigns targeting critical infrastructure within 6 months, escalating from the AI-generated lure techniques confirmed this period."
 
-═══ FALSIFIABILITY — REQUIRED ═══
-what_would_invalidate: a specific, observable signal that proves the outlook wrong.
-  BAD:  "if things don't escalate" (circular, unfalsifiable)
-  GOOD: "if no threat actor group publicly claims AI-assisted exploitation within 6 months and no IR firm
-         reports a case matching this technique pattern by September 2026"
+BAD watch item:  "Monitor for AI-enhanced attacks"
+GOOD watch item: "Watch for LLM output samples appearing alongside stolen credentials in criminal forums — early indicator of AI-assisted data-exfiltration tooling going commoditised"
 
-═══ EVIDENCE CONSTRAINT ═══
-  - Every tier's forecast must connect to the provided developments and insights
-  - Do NOT add capabilities or actors not present in the provided evidence
-  - If corpus is thin: Tier 1 must carry an explicit caveat about the limited evidence
+════ EVIDENCE CONSTRAINT ════
 
-═══ CATEGORY-SPECIFICITY SELF-CHECK ═══
-Before submitting: "Would this outlook make sense for a DIFFERENT threat category with no modification?"
-If YES — it is too generic. Rewrite to name category-specific elements.
-Set category_specific: true only if it would NOT apply to another category unchanged.
+Only synthesise from the developments and signals provided. Do NOT add actors, capabilities, or timelines not visible in the evidence. If the corpus is thin, say so explicitly in a caveat bullet.
 
 Return ONLY valid JSON.
+```
+
+## User Prompt Template
+
+```
+Produce a 6-month outlook slide based on the following developments and signals observed during {{period_label}} ({{date_from}} to {{date_to}}).
+
+CATEGORY DEVELOPMENTS AND SIGNALS
+==================================
+{{category_summaries}}
+
+════ OUTPUT FORMAT ════
+
+Return:
+{
+  "headline": "6-Month AI Threat Outlook",
+  "bullets": [
+    {
+      "text": "...",
+      "bullet_type": "signal|novel_technique|watch_item|caveat"
+    }
+  ],
+  "speaker_notes": "..."
+}
+
+5–8 bullets total. At least one of each type: signal, novel_technique, watch_item.
+No cited_sources required — this is synthetic analysis from the developments above.
 ```

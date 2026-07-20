@@ -33,8 +33,7 @@ Return ONLY valid JSON matching this schema exactly:
     {
       "finding": "concise statement of the key finding",
       "significance": "why it matters for defenders / the field",
-      "evidence": "what evidence in the report backs this",
-      "taxonomy_hint": "optional: closest OWASP LLM / ATT&CK tactic"
+      "evidence": "what evidence in the report backs this"
     }
   ],
   "trends": [

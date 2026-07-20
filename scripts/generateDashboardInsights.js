@@ -13,12 +13,11 @@
  *   QA      (Haiku):   reject paper-summaries / claims beyond the evidence maturity
  *   Deterministic:     evidence maturity (from source_type) + confidence cap
  *
- * Each insight is an object: { insight, evidence, implication, broken_assumption,
- *   watch_next, confidence, confidence_reason }.
+ * Each insight is an object: { insight, explanation_points, evidence, confidence,
+ *   confidence_reason, sources[], explanation_qa }.
  *
- * After all categories, a `_period_meta` row stores the snapshot and three
- * lightweight historical-comparison blocks vs the previous period:
- *   whats_changed (growing/stable/declining/new), assessment_changes, emerging_signals.
+ * After all categories, a `_period_meta` row stores the period snapshot and
+ * top_sources (same editorial selection as the newsletter).
  *
  * Storage note: the structured payloads live inside the existing JSONB `points`
  * column (no schema migration required). Category rows hold an object; the
@@ -44,6 +43,7 @@ import { sourceSignalScore, isNoiseSource, bySignalThenRecency, partitionBySigna
 import { maturityOf, MATURITY_RANK } from "../lib/pipeline/scoring/maturityLevel.js";
 import { significanceRank } from "../lib/pipeline/scoring/researchSignificance.js";
 import { loadPrompt } from "../lib/prompts/promptLoader.js";
+import { loadCandidates, selectSourcesWithLlm } from "../lib/newsletter/index.js";
 
 const args     = process.argv.slice(2);
 const getArg   = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i+1] ? args[i+1] : d; };
@@ -283,24 +283,29 @@ Extract findings and cluster into themes, led by the PRIORITY findings.`;
 const INSIGHTS_SYSTEM = loadPrompt("insights/insights").system;
 
 function buildInsightsPrompt(catLabel, windowLabel, themes, maturity, confidence) {
-  const themeLines = themes.map((t, i) =>
-    `Theme ${i + 1}: ${t.theme}\n` + (t.findings || []).slice(0, 8).map(f => `   - ${f}`).join("\n")
-  ).join("\n\n");
+  const themeLines = themes.map((t, i) => {
+    const pf = (t.priority_findings   || t.findings || []).slice(0, 6);
+    const bf = (t.background_findings || []).slice(0, 4);
+    const mechanism = t.shared_mechanism ? `\n   Mechanism: ${t.shared_mechanism}` : "";
+    const pfLines = pf.length ? `\n   Priority evidence:\n${pf.map(f => `     • ${f}`).join("\n")}` : "";
+    const bfLines = bf.length ? `\n   Background corroboration:\n${bf.map(f => `     · ${f}`).join("\n")}` : "";
+    return `Theme ${i + 1}: ${t.theme}${mechanism}${pfLines}${bfLines}`;
+  }).join("\n\n");
   return `Category: ${catLabel}
 Period: ${windowLabel}
 
-EVIDENCE MATURITY (this drives your calibration — do not overclaim beyond it):
+EVIDENCE MATURITY (drives your calibration — do not overclaim beyond it):
   ${maturityShortLine(maturity)}  (total ${maturity.total})
-  Confidence ceiling for this category: ${confidence.level} — ${confidence.reason}
+  Confidence ceiling: ${confidence.level} — ${confidence.reason}
 
-THEMES (synthesise from these patterns, not from individual sources):
+ANALYTICAL THEMES (each theme names a shared mechanism; synthesise from the pattern, not from individual findings):
 
 ${themeLines}
 
 Produce the assessment and structured insights.`;
 }
 
-// ── QA: Haiku rejects paper-summaries / overreach ──────────────────────────────
+// ── QA: publication gate — factual accuracy, citation fidelity, maturity language ──
 
 const QA_SYSTEM = loadPrompt("insights/insight-qa").system;
 
@@ -308,13 +313,13 @@ async function qaInsights(insights, maturity, catLabel, status = {}) {
   status.ran = false;
   if (!process.env.ANTHROPIC_API_KEY) { status.reason = "no_api_key"; return insights; }
   const user = `Category: ${catLabel}
-Reporting date: ${REPORT_DATE} (today). A CVE/date is only "future-dated" if AFTER this date. CVEs from ${REPORT_YEAR} and earlier are current, NOT fabricated by year alone.
+Reporting date: ${REPORT_DATE}. A CVE year is only "future-dated" if AFTER this date. CVEs from ${REPORT_YEAR} and earlier are current.
 Evidence maturity: ${maturityShortLine(maturity)} (total ${maturity.total})
 
-INSIGHTS (headline + its bullets — audit both; a "stapled" second finding often hides in the bullets):
+INSIGHTS (title + explanation bullets):
 ${insights.map((p, i) => `[${i}] ${p.insight}\n${(p.explanation_points || []).map(b => `    - ${b}`).join("\n")}`).join("\n")}
 
-Audit each. Return a verdict for every index.`;
+Run the validation checklist. Return a verdict for every index.`;
 
   let verdicts;
   try {
@@ -493,11 +498,12 @@ function composeCategoryFindings(catRows, evItems = [], cap = 40) {
 
   // A finding "leads" when its source is the genuine headline material this period:
   // a realized real-world incident, a proven/demonstrated exploit, or LANDMARK
-  // research (a field-first / new-surface result). Notable/routine research and
-  // plain disclosures are background context; noise is excluded entirely upstream.
-  // A source "leads" when it's essential/recommended reading OR landmark research.
+  // research. loadWindowSources already gates on reading_value in [essential,
+  // recommended], so checking that here makes ALL sources lead — breaking the
+  // PRIORITY/BACKGROUND distinction. Only "essential" auto-qualifies; "recommended"
+  // sources must earn lead status via maturity or research significance.
   const isLead = (row) => row && (
-    ["essential", "recommended"].includes(readingValueOf(row)) ||
+    readingValueOf(row) === "essential" ||
     ["operational", "observed", "disclosed"].includes(maturityOf(row)) ||
     significanceRank(row) >= 3
   );
@@ -552,8 +558,6 @@ function composeCategoryFindings(catRows, evItems = [], cap = 40) {
 // ── Generic second-model QA for any generated statements ───────────────────────
 // Returns a boolean[] (true = grounded/keep) aligned to `statements`.
 
-const STMT_QA_SYSTEM = loadPrompt("insights/statement-qa").system;
-
 // Assessment QA — calibrated for a ONE-SENTENCE category posture (a generalization),
 // not a factual statement. An assessment is SUPPOSED to be broad; we only reject
 // maturity-overreach or a posture the validated insights don't support.
@@ -589,180 +593,6 @@ Return the verdict.`;
   }
 }
 
-async function qaStatements(statements, evidenceText, kind = "statement", status = {}) {
-  status.ran = false;
-  if (!statements.length) { status.reason = "empty"; return statements.map(() => true); }
-  if (!process.env.ANTHROPIC_API_KEY) { status.reason = "no_api_key"; return statements.map(() => true); }
-  const user = `Type: ${kind}
-Reporting date: ${REPORT_DATE} (today). A CVE or date is only "future-dated" if it is AFTER this date. CVEs from ${REPORT_YEAR} and earlier are NOT future-dated — do not flag them for their year alone.
-
-STATEMENTS:
-${statements.map((s, i) => `[${i}] ${s}`).join("\n")}
-
-EVIDENCE they must be grounded in:
-${evidenceText}
-
-Verdict for every index.`;
-  try {
-    const out = await callAnthropic({
-      system: STMT_QA_SYSTEM, user, task: "dashboard_statement_qa",
-      model: process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
-      maxTokens: 700,
-    });
-    const verdicts = out.verdicts || [];
-    status.ran = true;
-    return statements.map((_, i) => {
-      const v = verdicts.find(v => v.index === i);
-      const keep = !v || v.verdict === "ok";
-      if (!keep) console.log(`  [QA:${kind}] REMOVED [${i}]: ${(v.reason || "").slice(0, 70)}`);
-      return keep;
-    });
-  } catch (err) {
-    status.reason = "error";
-    console.log(`  [QA:${kind}] check failed (${err.message.slice(0, 40)}) — keeping all`);
-    return statements.map(() => true);
-  }
-}
-
-// ── Emerging signals: weak-but-gaining themes, with analysis + explorable sources
-
-function detectEmergingSignals(currTags, prevTags) {
-  const signals = [];
-  for (const id of Object.keys(currTags)) {
-    const curr = currTags[id] || 0;
-    const prev = prevTags[id] || 0;
-    // Weak-but-now-gaining: was a faint signal (1-3), now meaningfully larger.
-    if (prev >= 1 && prev <= 3 && (curr - prev) >= 3) {
-      signals.push({ tag_id: id, signal: tagLabel(id), prev, curr, delta: curr - prev });
-    }
-  }
-  return signals.sort((a, b) => b.delta - a.delta).slice(0, 5);
-}
-
-const SIGNAL_SYSTEM = loadPrompt("insights/emerging-signals").system;
-
-// Deterministic, source-grounded fallbacks so EVERY signal carries elaboration
-// even when the LLM skips one or its analysis fails QA.
-function fallbackAnalysis(sig) {
-  return `Early signal — ${sig.signal} appeared in ${sig.curr} source${sig.curr === 1 ? "" : "s"} this period, ` +
-    `up from ${sig.prev}. Evidence is still thin; treat it as an emerging watch item, not a confirmed trend.`;
-}
-function normalizeWatch(watch, sig) {
-  let pts = Array.isArray(watch)
-    ? watch
-    : (typeof watch === "string" && watch.trim() ? [watch.trim()] : []);
-  pts = pts.map(w => String(w).trim()).filter(Boolean).slice(0, 3);
-  if (!pts.length) {
-    pts = [
-      `Corroboration from a second, independent source type`,
-      `${sig.signal} moving from disclosure to observed exploitation`,
-    ];
-  }
-  return pts;
-}
-
-async function enrichEmergingSignals(signals, currTagSources) {
-  if (!signals.length) return [];
-
-  // Attach explorable source refs (deduped by url/title), cap 8 per signal.
-  for (const sig of signals) {
-    const seen = new Set();
-    sig.sources = (currTagSources[sig.tag_id] || []).filter(s => {
-      const k = s.url || s.title; if (!k || seen.has(k)) return false; seen.add(k); return true;
-    }).slice(0, 8).map(({ summary, ...ref }) => ref); // strip summary from stored refs
-    sig.previous = "Weak signal";
-    sig.current  = "Emerging trend";
-    sig.reason   = `+${sig.delta} sources this period (${sig.prev} → ${sig.curr})`;
-  }
-
-  if (!process.env.ANTHROPIC_API_KEY) return signals;
-
-  // Evidence grounding per signal — built ONCE and shared by the analysis
-  // generator and the QA verifier. They must see the same summaries, otherwise
-  // the QA flags as "overreach" any specific (CVE / product / stat) the analysis
-  // legitimately drew from a source the QA couldn't see.
-  const signalEvidence = signals.map(sig =>
-    (currTagSources[sig.tag_id] || [])
-      .map(s => s.summary).filter(Boolean).slice(0, 6).map(s => s.slice(0, 220))
-  );
-
-  // One LLM call for all signals' analysis, grounded in their summaries.
-  const blocks = signals.map((sig, i) =>
-    `[${i}] Signal: ${sig.signal} (${sig.prev} → ${sig.curr} sources)\n` +
-    signalEvidence[i].map(s => `   - ${s}`).join("\n")
-  ).join("\n\n");
-
-  let analyses = [];
-  try {
-    const out = await callAnthropic({
-      system: SIGNAL_SYSTEM, task: "dashboard_emerging_signals",
-      user: `Write analysis for each emerging signal.\n\n${blocks}`,
-      maxTokens: 1200,
-    });
-    analyses = Array.isArray(out.signals) ? out.signals : [];
-  } catch (err) {
-    console.log(`  [emerging] analysis failed: ${err.message.slice(0, 40)}`);
-    return signals;
-  }
-
-  signals.forEach((sig, i) => {
-    const a = analyses.find(x => x.index === i) || analyses[i];
-    sig.analysis = (a?.analysis || "").trim() || fallbackAnalysis(sig);
-    sig.watch    = normalizeWatch(a?.watch, sig);
-  });
-
-  // Second-model QA on the generated analyses. A failed verdict means the LLM
-  // analysis wasn't grounded — swap in the deterministic fallback (grounded by
-  // construction) rather than blanking the signal, so every card keeps elaboration.
-  const verdicts = await qaStatements(
-    signals.map(s => s.analysis),
-    // Same evidence the analysis was grounded in (signalEvidence), so QA verifies
-    // against what the generator actually saw — not a narrower slice.
-    signals.map((s, i) => `${s.signal}:\n${signalEvidence[i].map(x => `   - ${x}`).join("\n")}`).join("\n\n"),
-    "emerging-signal",
-  );
-  signals.forEach((s, i) => {
-    if (!verdicts[i]) { s.analysis = fallbackAnalysis(s); s.watch = normalizeWatch(null, s); }
-  });
-
-  return signals;
-}
-
-const ASSESS_CHANGE_SYSTEM = loadPrompt("insights/assessment-changes").system;
-
-async function computeAssessmentChanges(currAssess, prevAssess, maturityDeltas) {
-  const cats = Object.keys(currAssess).filter(c => prevAssess[c]);
-  if (!cats.length || !process.env.ANTHROPIC_API_KEY) return [];
-  const user = cats.map(c => {
-    const d = maturityDeltas[c] || {};
-    return `Category: ${c}
-  Previous: ${prevAssess[c]}
-  Current:  ${currAssess[c]}
-  Evidence delta: ${Object.entries(d).map(([k, v]) => `${k} ${v >= 0 ? "+" : ""}${v}`).join(", ") || "n/a"}`;
-  }).join("\n\n");
-  let changes = [];
-  try {
-    const out = await callAnthropic({
-      system: ASSESS_CHANGE_SYSTEM, task: "dashboard_assessment_changes",
-      user: `Compare the periods. Report only material changes, terse.\n\n${user}`,
-      maxTokens: 700,
-    });
-    changes = Array.isArray(out.changes) ? out.changes.slice(0, 5) : [];
-  } catch (err) {
-    console.log(`  [assessment-changes] failed: ${err.message.slice(0, 50)}`);
-    return [];
-  }
-
-  // Second-model QA: each change must be grounded in the assessments + deltas.
-  const evidence = cats.map(c =>
-    `${c}: prev="${prevAssess[c]}" curr="${currAssess[c]}" deltas=${Object.entries(maturityDeltas[c] || {}).map(([k, v]) => `${k}${v >= 0 ? "+" : ""}${v}`).join(",")}`
-  ).join("\n");
-  const verdicts = await qaStatements(
-    changes.map(c => `${c.category}: ${c.from} → ${c.to} (${c.reason})`),
-    evidence, "assessment-change",
-  );
-  return changes.filter((_, i) => verdicts[i]);
-}
 
 // ── Source attribution: tag the critical contributing sources per insight ──────
 // After insights are generated + QA'd, this determines which real sources most
@@ -948,8 +778,8 @@ async function groundExplanationsInCitations(insights, catSources, catLabel) {
     });
     const dropped = bullets.length - good.length;
     if (dropped) {
-      const badReasons = verdicts.filter(v => v.verdict === "reject").map(v => (v.reason || "").slice(0, 55));
-      console.log(`  [QA:citation] "${p.insight.slice(0, 46)}" — dropped ${dropped}/${bullets.length} ungrounded bullet(s): ${badReasons.join(" | ").slice(0, 90)}`);
+      const badReasons = verdicts.filter(v => v.verdict !== "ok").map(v => `[${v.verdict}] ${(v.reason || "").slice(0, 50)}`);
+      console.log(`  [QA:citation] "${p.insight.slice(0, 46)}" — dropped ${dropped}/${bullets.length} bullet(s): ${badReasons.join(" | ").slice(0, 110)}`);
     }
     // Keep the insight as long as a solid GROUNDED CORE survives (>= 3 bullets, or
     // all of them for a short 2-bullet insight). The headline already passed its own
@@ -965,82 +795,32 @@ async function groundExplanationsInCitations(insights, catSources, catLabel) {
   return kept;
 }
 
-// ── Top sources: deterministic filter → LLM semantic rank + justify ────────────
-// The insight pipeline already reads the window's sources; here the same context
-// yields the "top sources" for the period. A deterministic importance filter bounds
-// the candidate pool (real offensive signal only), then one LLM call RANKS them and
-// writes a one-sentence justification per pick. The LLM's judgment also collapses
-// duplicate reports of the same event for free (it won't list an event twice) — which
-// is why no similarity threshold is needed. Falls back to null (→ deterministic order
-// in api/dashboard) when the key is missing or the call fails.
-
-const TOP_SOURCES_SYSTEM = loadPrompt("insights/top-sources").system;
-
-function buildTopSourcesPrompt(windowLabel, candidates, n) {
-  const lines = candidates.map((s, i) =>
-    `${i + 1}. [${s._tier}] (${s.source_type || "?"}) ${titleOf(s.title).slice(0, 110)} — ${summaryText(s).slice(0, 150)} [${s.publisher || "?"}]`
-  ).join("\n");
-  return `Period: ${windowLabel}
-
-Select the TOP ${n} most consequential sources (ranked). Candidates:
-
-${lines}
-
-Return { "top": [ { "n", "why" } ] } with at most ${n} entries, most important first.`;
-}
-
-export async function selectTopSources(windowRows, windowLabel, n = 10) {
+// ── Top sources ────────────────────────────────────────────────────────────────
+// Uses the same candidate loading and editorial selection as the newsletter so the
+// dashboard Overview and the newsletter always surface the same sources for the period.
+async function selectTopSources(supabase, period) {
   if (!process.env.ANTHROPIC_API_KEY) return null;
-  // Deterministic candidate pool: strong offensive signal with a usable summary,
-  // ranked by combined signal. Admits realized/proven incidents AND landmark/notable
-  // research (a first-of-kind paper is a legitimate top source even though its
-  // reality is only "research") — the significance overlay is what lets it in.
-  const candidates = windowRows
-    .filter(s => s.url && s.main_category && s.main_category !== "unclear_or_adjacent" && summaryText(s).length > 20)
-    .filter(s => {
-      const rv = readingValueOf(s);
-      const m  = maturityOf(s);
-      return ["essential","recommended","analyst"].includes(rv) ||
-             ["operational","observed","disclosed","demonstrated"].includes(m) ||
-             significanceRank(s) >= 2;
-    })
-    .sort((a, b) => sourceSignalScore(b) - sourceSignalScore(a) || (b.date_published || "").localeCompare(a.date_published || ""))
-    .slice(0, 40);
-  if (candidates.length < 3) return null;
-
-  let picks = [];
   try {
-    const out = await callAnthropic({
-      system: TOP_SOURCES_SYSTEM, task: "dashboard_top_sources",
-      user: buildTopSourcesPrompt(windowLabel, candidates, n),
-      maxTokens: 900,
-    });
-    picks = Array.isArray(out.top) ? out.top : [];
-  } catch { return null; }
-
-  const seen = new Set(), top = [];
-  for (const p of picks) {
-    const i = Number(p.n);
-    if (!Number.isInteger(i) || i < 1 || i > candidates.length) continue;
-    const s = candidates[i - 1];
-    if (!s || seen.has(s.url)) continue;
-    seen.add(s.url);
-    top.push({
+    const candidates = await loadCandidates(supabase, period.date_from, period.date_to);
+    if (candidates.length < 3) return null;
+    const selected = await selectSourcesWithLlm(candidates, period);
+    if (!selected.length) return null;
+    return selected.map(s => ({
       title:      titleOf(s.title),
       url:        s.url,
       publisher:  s.publisher || null,
       date:       s.date_published?.slice(0, 10) || null,
       category:   s.main_category,
       trust_tier: s.trust_tier || null,
-      importance: s.intelligence?.importance?.tier || null,
-      reality:    maturityOf(s) || null,
-      significance: s.intelligence?.significance?.level || null,   // landmark|notable|… (research only)
+      maturity:   maturityOf(s) || null,
       summary:    summaryText(s).slice(0, 240) || null,
-      why:        typeof p.why === "string" ? p.why.trim().slice(0, 220) : null,
-    });
-    if (top.length >= n) break;
+      why:        s._reason ? String(s._reason).trim().slice(0, 220) : null,
+      story_type: s._story_type || null,
+    }));
+  } catch (err) {
+    console.log(`  [top-sources] failed: ${err.message.slice(0, 60)}`);
+    return null;
   }
-  return top.length ? top : null;
 }
 
 // ── Per-category generation ────────────────────────────────────────────────────
@@ -1092,9 +872,6 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs, leadFl
         explanation_points: points,
         explanation:        explanationStr,
         evidence:           (p.evidence || "").trim(),
-        broken_assumption:  (p.broken_assumption || "").trim(),
-        implication:        (p.implication || "").trim(),
-        watch_next:         (p.watch_next || "").trim(),
         confidence:         confidence.level,                 // deterministic, cannot be overstated
         confidence_reason:  (p.confidence_reason || confidence.reason).trim(),
       };
@@ -1169,14 +946,10 @@ async function main() {
   const now    = NOW;
   const period = getCompletedPeriodWindow(WINDOW, now);
   setCurrentRunId(`dash-${WINDOW}-${period.key}`);   // attribute cost rows to this run
-  // Previous period of the same window type (for comparison): pick a date inside
-  // the current period and ask the helper for the period completed before it.
-  const prevPeriod = getCompletedPeriodWindow(WINDOW, new Date(`${period.date_from}T12:00:00Z`));
 
   console.log(`\n${"═".repeat(60)}`);
   console.log(`  Dashboard Insights v2: ${WINDOW.toUpperCase()} / ${period.key}`);
   console.log(`  Period: ${period.date_from} → ${period.date_to}  (${period.label})`);
-  console.log(`  Compare vs: ${prevPeriod.key} (${prevPeriod.date_from} → ${prevPeriod.date_to})`);
   console.log(`  Mode: ${DRY_RUN ? "DRY RUN" : FORCE ? "FORCE" : "normal (skip existing)"}`);
   console.log(`${"═".repeat(60)}\n`);
 
@@ -1201,7 +974,6 @@ async function main() {
 
   let generated = 0, skipped = 0;
   const currAssess = {};
-  const currMaturity = {};
 
   for (const cat of CATEGORIES) {
     // --only <category> regenerates a single category, leaving the others (and the
@@ -1209,13 +981,11 @@ async function main() {
     if (ONLY && cat.key !== ONLY) {
       const { data: row } = await supabase.from("dashboard_insights").select("points").eq("window_key", period.key).eq("category", cat.key).maybeSingle();
       if (row?.points?.assessment) currAssess[cat.key] = row.points.assessment;
-      currMaturity[cat.key] = computeEvidenceMaturity(curr.catMaturitySrcs[cat.key]);
       skipped++; continue;
     }
     const mSrcs      = curr.catMaturitySrcs[cat.key];
     const maturity   = computeEvidenceMaturity(mSrcs);
     const confidence = deriveConfidence(maturity);
-    currMaturity[cat.key] = maturity;
 
     // Compose findings: evidence facts (round-robin across sources) + summary fallback.
     const catRows = currRows.filter(r => r.main_category === cat.key);
@@ -1283,60 +1053,22 @@ async function main() {
     await new Promise(r => setTimeout(r, 400));
   }
 
-  // ── Period snapshot + historical comparison ──────────────────────────────────
+  // ── Period snapshot + top sources ────────────────────────────────────────────
   if (!DRY_RUN) {
-    console.log(`\n  Building period snapshot + comparison vs ${prevPeriod.key}...`);
-    const prevRows = await loadWindowSources(prevPeriod.date_from, prevPeriod.date_to);
-    const prev     = bucketSources(prevRows);
-
-    // Previous assessments from the stored prev-period category rows (if any).
-    const prevAssess = {};
-    const prevMaturity = {};
-    const { data: prevCatRows } = await supabase
-      .from("dashboard_insights").select("category,points")
-      .eq("window_key", prevPeriod.key).neq("category", META_CATEGORY);
-    for (const r of (prevCatRows || [])) {
-      if (r.points?.assessment) prevAssess[r.category] = r.points.assessment;
-      if (r.points?.evidence_maturity) prevMaturity[r.category] = r.points.evidence_maturity;
-    }
-
-    const emergingSignals = await enrichEmergingSignals(
-      detectEmergingSignals(curr.tagCounts, prev.tagCounts),
-      curr.tagSources,
-    );
-
-    // Maturity deltas per category for the assessment-change reasoning.
-    const maturityDeltas = {};
-    for (const c of CATEGORIES) {
-      const cm = currMaturity[c.key] || {}, pm = prevMaturity[c.key] || {};
-      maturityDeltas[c.key] = {
-        research:      (cm.research || 0)      - (pm.research || 0),
-        vulnerabilities:(cm.vulnerabilities||0)- (pm.vulnerabilities || 0),
-        exploitation:  (cm.exploitation || 0)  - (pm.exploitation || 0),
-        incidents:     (cm.incidents || 0)     - (pm.incidents || 0),
-        operational:   (cm.operational || 0)   - (pm.operational || 0),
-      };
-    }
-    const assessmentChanges = await computeAssessmentChanges(currAssess, prevAssess, maturityDeltas);
-
-    // Editor-selected, justified top sources for the period (LLM semantic rank over
-    // the deterministic importance pool). Null → api/dashboard uses the deterministic order.
-    const topSources = await selectTopSources(currRows, period.label, 10);
-    console.log(`  Top sources: ${topSources ? `${topSources.length} selected + justified` : "none (fallback to deterministic order)"}`);
+    // Top sources: same selection logic as the newsletter so dashboard and newsletter
+    // always surface the same sources. Null → api/dashboard falls back to deterministic order.
+    const topSources = await selectTopSources(supabase, period);
+    console.log(`\n  Top sources: ${topSources ? `${topSources.length} selected + justified` : "none (fallback to deterministic order)"}`);
 
     const meta = {
       schema: "meta-v1",
-      compared_to: prevPeriod.key,
-      compared_to_label: prevPeriod.label,
       snapshot: {
         total:           currRows.length,
         category_counts: curr.catCounts,
         tag_counts:      curr.tagCounts,
         assessments:     currAssess,
       },
-      assessment_changes: assessmentChanges,
-      emerging_signals:   emergingSignals,
-      top_sources:        topSources,   // [{ title,url,publisher,date,category,importance,why }] | null
+      top_sources: topSources,
     };
 
     const { error: metaErr } = await supabase.from("dashboard_insights").upsert({
@@ -1344,8 +1076,6 @@ async function main() {
       category: META_CATEGORY, points: meta, source_count: currRows.length,
     }, { onConflict: "window_key,category" });
     if (metaErr) console.log(`  meta DB FAIL: ${metaErr.message.slice(0, 60)}`);
-
-    console.log(`  Comparison: ${emergingSignals.length} emerging signals, ${assessmentChanges.length} assessment changes`);
   }
 
   console.log(`\n  Done: ${generated} generated, ${skipped} skipped`);
