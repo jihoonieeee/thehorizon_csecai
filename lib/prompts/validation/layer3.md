@@ -330,6 +330,18 @@ demonstrates — do not infer global novelty from internal text alone:
     squatting via LLM hallucination as a deliberate attack vector; first documented tool-
     poisoning method via MCP metadata that forces an agent to invoke a malicious endpoint.
 
+    ACADEMIC PAPER CALIBRATION: Academic papers use "we introduce", "we propose", "novel",
+    "first systematic study" as standard rhetorical framing — this is NOT evidence of
+    first_of_kind on its own. Apply first_of_kind only when the ATTACK CLASS (not the
+    technique) is genuinely new at the literature level — meaning no prior published work
+    describes attacks against this security boundary or using this mechanism. Papers that
+    name a new technique within an ESTABLISHED attack class (prompt injection, memory
+    poisoning, jailbreaks, backdoors, adversarial examples, model extraction, evasion,
+    RAG poisoning) are "new_variant", not "first_of_kind", even when the paper says "we
+    introduce" or names a new technique. A paper that provides the "first empirical study"
+    or "first systematic framework" for a known attack class is also "new_variant" —
+    the measurement methodology is new, not the attack class itself.
+
   "confirmed_first_operational" — the source EXPLICITLY states "first observed", "first
     confirmed", "first documented" real-world use by an adversary of a capability that was
     previously only theoretical or lab-demonstrated. The phrase or equivalent must appear;
@@ -362,7 +374,12 @@ Does this source change how defenders should think or act, or does it only add t
 implementation detail?
   "changes_threat_model"    — invalidates a previously trusted assumption, establishes a new
     attack surface, or documents the first operational use of a capability that leadership
-    needs to account for in posture and investment decisions
+    needs to account for in posture and investment decisions. IMPORTANT: "new deployment
+    context for a known attack" does NOT qualify — showing that prompt injection also works
+    in SIEM logs, resume screening, or coding assistants does not change the threat model if
+    defenders already know prompt injection is possible in AI-powered applications. Use this
+    label only when the finding requires defenders to add an entirely new threat to their model,
+    not merely extend a known threat to another surface.
   "changes_priority"        — does not change the threat model but materially shifts how
     defenders should rank or resource response to a known threat class: new measurement of
     scale/speed/cost, confirmed adversary adoption, a strong multi-incident synthesis
@@ -407,6 +424,24 @@ Publisher reputation modifies confidence in the claim, not the reading_value lab
   Well-known publishers of original AI-threat research (Google GTIG, Mandiant, OpenAI,
   Anthropic, NCSC, CISA, CrowdStrike, Microsoft MSRC, Wiz, Trail of Bits, Hidden Layer,
   peer-reviewed venues) should inform how much you trust the claim — not whether it is promoted.
+
+── RESEARCH-MATURITY CAP ────────────────────────────────────────────────────────────────
+Apply this cap BEFORE assigning reading_value. It is a hard ceiling.
+
+When evidence_maturity is "research_only" (lab-only, no real-world exploitation):
+  • reading_value is capped at "recommended".
+  • Exception: a research_only paper MAY be "essential" ONLY when ALL of:
+    (a) the attack CLASS is genuinely new — no prior published literature describes this
+        security boundary being attacked in this way,
+    (b) the finding requires defenders to add a brand-new threat to their model (not just
+        a new technique within a known class), AND
+    (c) the paper provides a working demonstration (not just theoretical analysis).
+  • Papers that introduce frameworks, taxonomies, benchmarks, or systematic studies of
+    KNOWN attack classes are "analyst" even if well-executed — the classification work
+    has value for practitioners but does not change the strategic threat model.
+  • Academic papers that name a new technique within memory poisoning, prompt injection,
+    jailbreaks, backdoors, model extraction, adversarial examples, or evasion are "analyst"
+    regardless of how many "novel" or "first" claims appear in the abstract.
 
 ── ASSIGN READING VALUE ─────────────────────────────────────────────────────────────────
 
@@ -580,6 +615,33 @@ After assigning reading_value, set the three distribution flags:
   analyst / library only:
     arXiv paper with 150-char abstract — thin-text cap applies; body too short to verify
     novelty regardless of how novel the title sounds.
+
+  analyst / library only:
+    arXiv paper "MemPoison: Uncovering Persistent Memory Threats and Structural Blind
+    Spots in LLM Agents" — says "we introduce a three-tier taxonomy" and "we propose
+    MemPoison, a benchmark for evaluating persistent memory poisoning." Memory poisoning
+    in LLM agents is a known attack class (variant of indirect prompt injection / data
+    poisoning); the contribution is a new taxonomy and benchmark for a known class, not
+    a new attack class. evidence_maturity=research_only. Even if the taxonomy is well-
+    executed, strategic_consequence=adds_technical_detail → analyst.
+
+  analyst / library only:
+    arXiv paper "Context Contamination in LLM Analysis of Network Security Logs: Poison
+    with Passive Prompt Injection" — "first systematic empirical study" of prompt injection
+    in SIEM/SOC log pipelines. Prompt injection is a known attack class; showing it works
+    in log analysis is new_variant (new deployment context), not first_of_kind. Showing it
+    in SIEM logs does not change the threat model (defenders already knew AI-powered log
+    analysis was susceptible). evidence_maturity=research_only → capped at recommended;
+    but without operational data on adversary adoption, strategic_consequence=changes_priority
+    at most → recommended.
+
+  recommended / dashboard + library only:
+    arXiv technical report from Snyk finding 76 confirmed malicious payloads in 3,984
+    real agent skill marketplace listings — this is operational data (malicious content
+    FOUND in live marketplaces), not research_only. Documents the first real-world
+    coordinated malware campaign targeting AI coding agents. Confirmed adversary adoption
+    of a known attack surface → changes_priority → recommended. (If the "first documented
+    coordinated campaign" claim is specific and sourced, could reach essential.)
 
   analyst / library only:
     AWS blog: how to implement token-exchange for multi-tenant Bedrock agents —
