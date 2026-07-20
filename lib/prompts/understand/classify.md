@@ -908,18 +908,30 @@ out neighbouring tags. Assign the single primary_tag that names the core threat.
       user type it as a direct instruction?"
     CLASSIFY BY ATTACK TECHNIQUE, NOT DOWNSTREAM HARM: When a jailbreak enables
       generation of harmful content (CSAM, deepfakes, malware), the PRIMARY tag is
-      still LLM11 (the bypass technique). AE10/AE08 may appear as SECONDARY tags
-      for the harm produced, but the main_category is llm_threats.
+      still LLM11 (the bypass technique). The main_category is llm_threats.
+    AE SECONDARY TAGS — strict rule: only add an AE secondary tag when the source
+      describes a DISTINCT, SEPARATELY SIGNIFICANT AI-as-weapon activity that runs
+      alongside the primary threat AND you set ai_enabled_overlay=true. Do NOT add
+      AE secondary tags merely because the jailbreak OUTPUT happens to be harmful
+      content — the output is the jailbreak's effect, not a co-present threat.
+      ✗ "jailbreak could produce a deepfake" → does NOT earn AE10 secondary
+      ✓ "jailbreak was DEPLOYED AT SCALE as a commercial deepfake-generation service
+         with documented real-world synthetic-media victims" → earns AE10 secondary
+         AND ai_enabled_overlay=true
     WORKED EXAMPLE — Storm-2139 (Azure OpenAI Guardrail Bypass):
       Actor built custom "de3u" jailbreak tooling to bypass Azure OpenAI safety
-      filters; operated as a commercial service to generate CSAM and non-consensual
-      intimate images of celebrities.
+      filters; operated AS A COMMERCIAL SERVICE to generate CSAM and non-consensual
+      intimate images of celebrities at scale (documented real-world AE10 activity).
       PRIMARY: llm_threats / LLM11_jailbreak_safety_bypass (the attack technique)
-      SECONDARY: AE10_ai_deepfake (the harmful output enabled)
+      SECONDARY: AE10_ai_deepfake (the jailbreak was deployed as a deepfake service)
+      ai_enabled_overlay: true  ← required because AE10 is a co-present technique
       ⇒ main_category=llm_threats, tags=[LLM11_jailbreak_safety_bypass, AE10_ai_deepfake]
       NOT: main_category=ai_enabled_threats — the harm is what the jailbreak produces,
         not the threat category. The threat analyst tracks "LLM guardrail bypass used
         commercially at scale" not "deepfakes happened".
+    COUNTER-EXAMPLE — a paper demonstrating that a jailbreak CAN generate malware:
+      The paper shows LLM11 works. Malware was not deployed; AI-as-weapon activity
+      is hypothetical. Do NOT add AE05 secondary. ai_enabled_overlay=false.
 
 ── agentic_ai_threats ── the AI system ACTS: tools, MCP, code execution, memory,
    identity/permissions, orchestration, autonomous decision-making ──
@@ -1749,6 +1761,7 @@ OUTPUT — return ONLY valid JSON, no markdown
   "main_category": "traditional_ai_threats" | "llm_threats" | "agentic_ai_threats" | "ai_enabled_threats" | "unclear_or_adjacent",
   "primary_tag": "<one exact tag ID from the lists above, or null if main_category=unclear_or_adjacent>",
   "secondary_tags": ["<additional exact tag IDs for genuinely distinct techniques>"],
+  "ai_enabled_overlay": boolean,              // true ONLY when a genuine AI-as-weapon technique co-exists alongside the primary threat (e.g. the jailbreak was deployed as a deepfake service; the supply-chain payload also uses AI-generated malware). false for all other cases, including when an AE technique is merely the downstream effect of the primary attack. AE secondary tags are REJECTED by the pipeline unless this is true.
   "boundary_rationale": "<ONE sentence: why THIS category and not the neighbouring one — name the discriminator you used>",
   "is_defensive": boolean,
   "defended_category": "<offensive domain the defense protects, else null>",
@@ -1766,6 +1779,11 @@ RULES:
   • main_category and primary_tag are YOUR judgment — assign them directly from the
     definitions and boundary tests above. primary_tag MUST belong to main_category.
   • Pick the SINGLE best primary_tag; do not enumerate every technique mentioned.
+  • AE secondary tags (AE01–AE10) on non-AE sources are ONLY permitted when
+    ai_enabled_overlay=true. Do NOT add AE secondaries to describe the downstream
+    effect of an attack (e.g. "jailbreak produced a deepfake" → no AE10 secondary
+    unless the jailbreak was deployed as a real deepfake service). The pipeline
+    silently drops AE secondaries when ai_enabled_overlay=false.
   • secondary_tags must reflect techniques the paper INTRODUCES or DEMONSTRATES —
     not techniques mentioned in background, related work, motivation, or comparison
     sections. A paper that introduces a data-poisoning attack and cites prior

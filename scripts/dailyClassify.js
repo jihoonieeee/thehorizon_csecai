@@ -213,7 +213,9 @@ async function main() {
     .from("sources")
     .select("id,title,url,publisher,source_type,trust_tier,full_text,clean_text,summary,main_category,validation_status,layer3_status,candidate_domain,ai_threat_focus,date_published,is_digest,parent_source_id,intelligence")
     .is("main_category", null)
-    .neq("validation_status", "reject")
+    // Postgres neq silently excludes NULLs — use or() so digest children
+    // (written with validation_status=null) are included alongside pass/review.
+    .or("validation_status.neq.reject,validation_status.is.null")
     .gte("created_at", since)
     .order("created_at", { ascending: false })
     .limit(LIMIT);

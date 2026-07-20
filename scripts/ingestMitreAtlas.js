@@ -214,15 +214,20 @@ async function main() {
   const allIds = entries.map(([id]) => makeId(`${ATLAS_BASE}/${id}`));
   const { data: existingRows } = DRY_RUN ? { data: [] } : await supabase
     .from("sources")
-    .select("id,validation_status")
+    .select("id,validation_status,layer3_status,main_category")
     .in("id", allIds);
   const classifiedSet = FORCE
     ? new Set()   // treat everything as unclassified so we re-upsert
     : new Set((existingRows || []).filter(r => r.validation_status !== null).map(r => r.id));
-  // When forcing, keep a map of existing validation_status so we don't accidentally
-  // reset classification on sources that dailyClassify already processed.
-  const existingStatusMap = FORCE
-    ? new Map((existingRows || []).filter(r => r.validation_status !== null).map(r => [r.id, r.validation_status]))
+  // When forcing, preserve full classification state so a --force intelligence-schema
+  // update doesn't strip main_category/layer3_status from already-classified sources
+  // (which would strand them outside dailyClassify's time window).
+  const existingClassificationMap = FORCE
+    ? new Map((existingRows || []).filter(r => r.validation_status !== null).map(r => [r.id, {
+        validation_status: r.validation_status,
+        layer3_status:     r.layer3_status,
+        main_category:     r.main_category,
+      }]))
     : new Map();
 
   for (const [atlasId, cs] of entries) {
@@ -309,10 +314,12 @@ async function main() {
       trust_tier:        "high",
       full_text:         fullText,
       summary:           stripHtml(cs.description).slice(0, 500),
-      main_category:     null,       // let dailyClassify handle
-      // --force: restore existing status so classified sources aren't re-queued
-      validation_status: existingStatusMap.get(sourceId) ?? null,
-      layer3_status:     null,
+      // --force: restore full classification so already-classified sources aren't
+      // stripped of main_category/layer3_status and stranded outside dailyClassify's
+      // time window. New sources get null so dailyClassify classifies them normally.
+      main_category:     existingClassificationMap.get(sourceId)?.main_category     ?? null,
+      validation_status: existingClassificationMap.get(sourceId)?.validation_status ?? null,
+      layer3_status:     existingClassificationMap.get(sourceId)?.layer3_status     ?? null,
       intelligence: {
         atlas_id:              atlasId,
         atlas_type:            cs.type || null,

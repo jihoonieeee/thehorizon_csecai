@@ -102,7 +102,7 @@ export const TAXONOMY_GROUPS = [
       { id: "ASI06_memory_context_poisoning",        label: "Memory Poisoning",          desc: "Seeds an agent's long-term memory or context store with malicious data so corrupted state controls future turns or sessions, persisting beyond the current interaction." },
       { id: "ASI07_insecure_agent_comms",            label: "Insecure Agent Comms",      desc: "Exploits communication channels between agents or between agent and orchestrator via message injection, agent spoofing, or replay attacks on handoff protocols." },
       { id: "ASI08_cascading_failures",              label: "Cascading Failures",        desc: "A compromise or fault propagates and amplifies across a multi-agent ecosystem. One agent's bad output becomes another's trusted input, chaining into system-wide failure." },
-      { id: "ASI09_human_agent_trust_exploitation",  label: "Human-Agent Trust Exploit", desc: "Manipulates a human's trust in agent output to obtain a harmful authorisation via deceptive summaries, misleading recommendations, or falsified action logs." },
+      { id: "ASI09_human_agent_trust_exploit",  label: "Human-Agent Trust Exploit", desc: "Manipulates a human's trust in agent output to obtain a harmful authorisation via deceptive summaries, misleading recommendations, or falsified action logs." },
       { id: "ASI10_rogue_agents",                    label: "Rogue Agents",              desc: "Unauthorised, unmonitored, or uncontrolled autonomous agents operating outside governance: shadow sessions, orphaned agents, or agents spawned without oversight." },
     ],
   },
