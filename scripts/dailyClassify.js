@@ -41,6 +41,10 @@ import {
   assessSignificance,
   isSignificanceEligible,
 } from "../lib/pipeline/scoring/researchSignificance.js";
+import { computeImportance }         from "../lib/pipeline/scoring/importance.js";
+import { classifyMaturityLevel }     from "../lib/pipeline/scoring/maturityLevel.js";
+import { understandSource }          from "../lib/pipeline/understand/understandSource.js";
+import { scrubImpliedQuantitatives } from "../lib/utils/scrubQuantitatives.js";
 import { routedLLM }                 from "../lib/llm/llmRouter.js";
 import { callLLM }                   from "../lib/llm/callLLM.js";
 import { flushCostBuffer }           from "../lib/llm/usagePersistence.js";
@@ -193,6 +197,132 @@ async function runSignificance(newlyScoredIds) {
   console.log(`  Wrote ${written} significance records — ${JSON.stringify(dist)}`);
 }
 
+// ── Step: L4g claim extraction for eligible newly-classified sources ──────────
+const HIGH_RV_EXTRACT = new Set(["essential", "recommended"]);
+const HIGH_ML_EXTRACT = new Set(["operational", "demonstrated", "observed"]);
+
+async function runClaimExtraction(newSources) {
+  console.log("\n── L4g: Claim extraction (eligible new sources) ───────────────");
+
+  const eligible = newSources.filter(s => {
+    if (s.claim_extraction_status) return false; // already done
+    const rv = s.reading_value;
+    const ml = s.intelligence?.maturity_level;
+    return HIGH_RV_EXTRACT.has(rv) || HIGH_ML_EXTRACT.has(ml);
+  });
+
+  if (!eligible.length) { console.log("  No newly eligible sources."); return; }
+  console.log(`  ${eligible.length} eligible (essential/recommended rv OR operational/demonstrated/observed maturity)`);
+
+  const CONC = 3;
+  let pass = 0, failed = 0;
+
+  for (let i = 0; i < eligible.length; i += CONC) {
+    const batch = eligible.slice(i, i + CONC);
+    await Promise.all(batch.map(async (src) => {
+      try {
+        const u = await understandSource(src, { llmFn });
+        if (!u.relevant) {
+          await supabase.from("sources").update({ claim_extraction_status: "irrelevant" }).eq("id", src.id);
+          return;
+        }
+        const rawSummary = u.short_summary || null;
+        const { text: cleanSummary } = rawSummary
+          ? scrubImpliedQuantitatives(rawSummary, src.full_text || src.summary || "")
+          : { text: rawSummary };
+        await supabase.from("sources").update({
+          main_category:           u.category,
+          tags:                    u.primary_tags || [],
+          source_type:             u.source_type  || src.source_type,
+          trust_tier:              u.trust_tier   || src.trust_tier,
+          short_summary:           cleanSummary   || null,
+          claim_extraction_status: "success",
+          intelligence: {
+            ...(src.intelligence || {}),
+            key_entities:  u.key_entities  || [],
+            main_claims:   u.main_claims   || [],
+            key_numbers:   u.key_numbers   || [],
+            event_date:    u.event_date    || null,
+          },
+        }).eq("id", src.id);
+        pass++;
+      } catch (err) {
+        failed++;
+        console.warn(`  ✗ ${src.id.slice(0, 8)}: ${err.message.slice(0, 60)}`);
+      }
+    }));
+  }
+  console.log(`  Extracted: ${pass}  Failed: ${failed}`);
+}
+
+// ── Step: L4e scoring pass (reading_value + importance + maturity upgrade) ───
+async function runScoringPass(sources) {
+  console.log(`\n── L4e: Scoring pass (reading_value / importance / maturity) ─────`);
+  if (!sources.length) { console.log("  Nothing to score."); return; }
+
+  const now = new Date().toISOString();
+  const CONC = 4;
+  let rvCount = 0, impCount = 0, matCount = 0;
+
+  for (let i = 0; i < sources.length; i += CONC) {
+    const batch = sources.slice(i, i + CONC);
+    await Promise.all(batch.map(async (s) => {
+      const updates = {};
+
+      // ── reading_value: deterministic assignment for newly classified sources ──
+      // Do NOT re-run validateAndTypeSource here — L3 re-validation of already-
+      // classified sources causes false rejections (ATLAS case studies, backfill
+      // references) so reading_value comes back null. Derive it from the importance
+      // tier which is computed from the same classification result we already have.
+      // Only set when not already present (preserves L3 value from full-ingest path).
+      if (!s.reading_value) {
+        const imp = computeImportance(s);
+        const rv =
+          imp.tier === "realized"                                    ? "essential"
+          : (imp.tier === "proven" && s.source_type === "threat_intelligence") ? "essential"
+          : imp.tier === "proven"                                    ? "recommended"
+          : imp.tier === "noise"                                     ? "background"
+          : "analyst";
+        updates.reading_value = rv;
+        rvCount++;
+      }
+
+      // ── importance tier: deterministic, no LLM, always overwrite ──────────
+      const imp = computeImportance(s);
+      updates.intelligence = {
+        ...(s.intelligence || {}),
+        importance: imp,
+      };
+      impCount++;
+
+      // ── maturity LLM upgrade: upgrade deterministic fallback with LLM call ─
+      // Only run when the previous write-back used the deterministic fallback.
+      if (s.intelligence?.maturity_method === "deterministic") {
+        try {
+          const m = await classifyMaturityLevel(s, callLLM);
+          updates.intelligence = {
+            ...updates.intelligence,
+            maturity_level:      m.level,
+            maturity_confidence: m.confidence,
+            maturity_reason:     m.reason,
+            maturity_method:     m.method,
+            maturity_at:         now,
+          };
+          matCount++;
+        } catch { /* non-blocking */ }
+      }
+
+      if (Object.keys(updates).length > 0) {
+        supabase.from("sources").update(updates).eq("id", s.id)
+          .then(({ error }) => { if (error) console.warn(`  [L4e] write failed ${s.id.slice(0,8)}: ${error.message}`); })
+          .catch(() => {});
+      }
+    }));
+  }
+
+  console.log(`  reading_value: ${rvCount}  importance: ${impCount}  maturity-upgrade: ${matCount}`);
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
   const since = new Date(Date.now() - SINCE_H * 3600 * 1000).toISOString();
@@ -326,6 +456,67 @@ async function main() {
 
   // ── L4d: Research significance ────────────────────────────────────────────
   await runSignificance(newResearchIds);
+
+  // ── L4e: reading_value, importance tier, LLM maturity upgrade ─────────────
+  // These three fields are NOT set by understandAllSources (L4b classify.md path).
+  // reading_value comes from the L3 layer3.md prompt; importance is deterministic;
+  // maturity LLM upgrade improves on the deterministic fallback written by L4b.
+  if (relevant.length > 0) {
+    await runScoringPass(relevant.filter(s => !s._from_cache));
+  }
+
+  // ── L4f: Rollup all_categories on digest parents ──────────────────────────
+  // Any newly classified children may have updated their main_category — refresh
+  // the parent's intelligence.all_categories so the Sources page shows all covered
+  // categories, and inherit parent date to any children whose date drifted.
+  const affectedParentIds = [...new Set(
+    [...relevant, ...discarded]
+      .map(s => s.parent_source_id)
+      .filter(Boolean),
+  )];
+  if (affectedParentIds.length) {
+    console.log(`\n── L4f: Category rollup (${affectedParentIds.length} digest parents) ─────`);
+    let rolled = 0, dateFixes = 0;
+    for (const pid of affectedParentIds) {
+      const { data: parent } = await supabase
+        .from("sources")
+        .select("id, date_published, date_confidence, intelligence")
+        .eq("id", pid)
+        .single();
+      if (!parent) continue;
+
+      const { data: children } = await supabase
+        .from("sources")
+        .select("id, main_category, date_published")
+        .eq("parent_source_id", pid);
+      if (!children?.length) continue;
+
+      const allCats = [...new Set(children.map(c => c.main_category).filter(Boolean))].sort();
+      await supabase.from("sources").update({
+        intelligence: { ...(parent.intelligence || {}), all_categories: allCats },
+      }).eq("id", pid);
+      rolled++;
+
+      const toFix = children.filter(c =>
+        parent.date_published && c.date_published !== parent.date_published,
+      );
+      if (toFix.length) {
+        await supabase.from("sources")
+          .update({ date_published: parent.date_published, date_confidence: parent.date_confidence || "exact" })
+          .in("id", toFix.map(c => c.id));
+        dateFixes += toFix.length;
+      }
+    }
+    console.log(`  Rolled up ${rolled} parents, fixed ${dateFixes} child dates`);
+  }
+
+  // ── L4g: Claim extraction for newly eligible sources ─────────────────────
+  // Runs understandSource (with full LLM extraction) on newly classified sources
+  // that pass the eligibility gate: reading_value=essential/recommended OR
+  // maturity_level=operational/demonstrated/observed.
+  // This sets claim_extraction_status='success' and enriches short_summary,
+  // analyst_brief, intelligence fields for slide + newsletter generation.
+  await runClaimExtraction(relevant.filter(s => !s._from_cache));
 
   // ── Summary ───────────────────────────────────────────────────────────────
   console.log(`\n${"─".repeat(60)}`);

@@ -16,7 +16,27 @@
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { validateAndTypeSource } from "../lib/pipeline/validation/validateAndTypeSource.js";
+import { computeImportance }     from "../lib/pipeline/scoring/importance.js";
 import { flushCostBuffer } from "../lib/llm/usagePersistence.js";
+
+const OFFENSIVE_CATEGORIES = new Set([
+  "traditional_ai_threats", "llm_threats", "agentic_ai_threats", "ai_enabled_threats",
+]);
+
+/**
+ * Deterministic reading_value for sources that already have main_category set.
+ * Re-running L3 on already-classified sources causes false rejections (ATLAS
+ * case studies, Jina-fetched references, structured backfill sources). Use this
+ * instead of validateAndTypeSource for sources with a confirmed classification.
+ */
+function deterministicReadingValue(source) {
+  const imp = computeImportance(source);
+  if (imp.tier === "noise")    return "background";
+  if (imp.tier === "realized") return "essential";
+  if (imp.tier === "proven")   return source.source_type === "threat_intelligence" ? "essential" : "recommended";
+  if (imp.tier === "research") return "analyst";
+  return "analyst";
+}
 
 const args    = process.argv.slice(2);
 const getArg  = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i+1] ? args[i+1] : d; };
@@ -59,8 +79,18 @@ async function main() {
     const batch = data.slice(i, i + CONC);
     await Promise.all(batch.map(async (source) => {
       try {
-        const result = await validateAndTypeSource(source, { skipUrlCheck: true });
-        const rv = result.reading_value;
+        let rv = null;
+
+        if (source.main_category && OFFENSIVE_CATEGORIES.has(source.main_category)) {
+          // Already classified as offensive — derive deterministically to avoid L3
+          // re-validation false rejections (ATLAS case studies, backfill references).
+          rv = deterministicReadingValue(source);
+        } else {
+          // Not yet classified or unclear — run full L3 validation to get LLM verdict.
+          const result = await validateAndTypeSource(source, { skipUrlCheck: true });
+          rv = result.reading_value || null;
+        }
+
         if (!rv) { skipped++; return; }
 
         counts[rv] = (counts[rv] || 0) + 1;

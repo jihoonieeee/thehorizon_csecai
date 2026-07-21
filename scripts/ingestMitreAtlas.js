@@ -36,7 +36,10 @@ const SINCE     = sinceIdx >= 0 && args[sinceIdx + 1] ? args[sinceIdx + 1] : nul
 const flagIdx   = args.indexOf("--flag-as");
 const FLAG_AS   = flagIdx  >= 0 && args[flagIdx + 1]  ? args[flagIdx + 1]  : null;
 
+// ATLAS-latest.yaml is a pointer that always resolves to the most recent monthly release.
+// It redirects via content (18 bytes = filename), so fetch follows to the actual bundle.
 const ATLAS_URL = "https://raw.githubusercontent.com/mitre-atlas/atlas-data/main/dist/v6/ATLAS-2026.06.yaml";
+// TODO: switch to ATLAS-latest.yaml once GitHub serves it as a redirect rather than a pointer file.
 const ATLAS_BASE = "https://atlas.mitre.org/studies";
 
 const supabase = DRY_RUN ? null : createClient(
