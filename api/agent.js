@@ -369,7 +369,7 @@ async function findDeadUrls(urls, normalizeUrl) {
 
 // Attach a grounded quote to the source it came from (URL match), so evidence
 // stays tied to a [src-N] rather than floating as a standalone citation.
-function buildContextMessage(query, plan, sources, evidence, judgments, trends, cveResults) {
+function buildContextMessage(query, plan, sources, evidence, judgments, trends, cveResults, selectorMissing = []) {
   const norm = (u) => (u || "").replace(/[.,;:!?/]+$/, "").toLowerCase().replace(/^https?:\/\//, "");
   const quoteByUrl = {};
   for (const ev of (evidence || [])) {
@@ -379,19 +379,38 @@ function buildContextMessage(query, plan, sources, evidence, judgments, trends, 
     }
   }
   const srcBlock = sources.map(s => {
-    const q = quoteByUrl[norm(s.url)];
-    const typePart = s.source_type ? ` | type: ${s.source_type}` : "";
+    const q        = quoteByUrl[norm(s.url)];
+    const typePart  = s.source_type ? ` | type: ${s.source_type}` : "";
+    const readPart  = s.reading_value && s.reading_value !== "background" ? ` | reading: ${s.reading_value}` : "";
+    const matPart   = s.maturity ? ` | maturity: ${s.maturity}` : "";
     // Title on the first line so it can't be skimmed past during source selection.
-    return `[${s.ref}] TITLE: ${s.title}\n  ${s.publisher || "?"} — ${s.date || "n.d."} (${s.trust_tier || "unknown"} trust${typePart})\n  ${s.summary || ""}${q ? `\n  quote: "${q}"` : ""}`;
+    return `[${s.ref}] TITLE: ${s.title}\n  ${s.publisher || "?"} — ${s.date || "n.d."} (${s.trust_tier || "unknown"} trust${typePart}${readPart}${matPart})\n  ${s.summary || ""}${q ? `\n  quote: "${q}"` : ""}`;
   }).join("\n\n");
 
   const parts = [
     `Question: ${query}`,
     `Data window: ${plan.temporal.scope_label}${plan.temporal.date_from ? ` (${plan.temporal.date_from} to ${plan.temporal.date_to || "today"})` : ""}`,
-    ``,
-    `RELEVANT SOURCES (cite as [src-N]):`,
-    srcBlock,
   ];
+
+  // When the planner determined the user is asking about WHEN EVENTS OCCURRED
+  // (not when sources were published), tell the synthesiser explicitly so it uses
+  // event_date rather than date_published when describing incident timing.
+  if (plan.temporal?.time_field === "event_date") {
+    parts.push(`TIME FIELD: The user is asking about event dates (when incidents/attacks occurred), NOT the date a source was published. Use the event_date field where sources provide it. Do not conflate publication date with incident date.`);
+  } else if (plan.temporal?.time_field === "disclosure_date") {
+    parts.push(`TIME FIELD: The user is asking about disclosure/advisory dates (when the flaw was disclosed), not publication dates of secondary reporting.`);
+  }
+
+  // Surface must_exclude so the synthesiser respects explicit user constraints
+  // that weren't filterable at the DB level (e.g. "not research papers").
+  if (plan.must_exclude?.length) {
+    const readable = plan.must_exclude.filter(t => !/^[A-Z]{2,4}\d{2}_/.test(t));
+    if (readable.length) {
+      parts.push(`EXCLUSION CONSTRAINT: The user explicitly asked to exclude: ${readable.join(", ")}. Do not cite or feature these in the answer.`);
+    }
+  }
+
+  parts.push(``, `RELEVANT SOURCES (cite as [src-N]):`, srcBlock);
 
   if (judgments?.length) {
     parts.push(``, `ANALYTICAL JUDGMENTS from the latest pipeline run (context — not separately citable):`);
@@ -409,6 +428,14 @@ function buildContextMessage(query, plan, sources, evidence, judgments, trends, 
       if (r.found) parts.push(`• ${r.cve_id}: CVSS ${r.cvss_score ?? "?"} ${r.severity ?? ""} — ${(r.description || "").slice(0, 160)}`);
       else parts.push(`• ${r.cve_id}: ${r.note || "not found in NVD"}`);
     }
+  }
+
+  // Selector-identified gaps: concrete coverage holes detected during source
+  // selection (e.g. "No event_date found for July 2026 incidents"). Surface them
+  // so Sonnet can honestly report limitations rather than silently pad the answer.
+  if (selectorMissing?.length) {
+    parts.push(``, `COVERAGE GAPS (identified during source selection — acknowledge these in the answer if material):`);
+    for (const gap of selectorMissing) parts.push(`• ${gap}`);
   }
 
   parts.push(``, `Write the answer now, citing [src-N]. Cite only sources that genuinely support each sentence.`);
@@ -485,12 +512,12 @@ export default async function handler(req, res) {
     }
 
     // ── 3. Retrieve candidates (broad, date-filtered) ────────────────────────────
-    const ret = await retrieveRelevant(plan, { limit: 25 });
+    const ret = await retrieveRelevant(plan);
 
     // ── 4. Selector (Haiku) — semantic pick from the candidate pool ───────────
     const sel = ret.sources.length
-      ? await selectSources(query, ret.sources)
-      : { selected: [], verdict: "none", usage: { input_tokens: 0, output_tokens: 0 } };
+      ? await selectSources(query, ret.sources, plan)
+      : { selected: [], verdict: "none", coverage: "none", missing: [], usage: { input_tokens: 0, output_tokens: 0 } };
     addHaiku(sel.usage);
 
     const selectedSet = new Set(sel.selected);
@@ -542,7 +569,7 @@ export default async function handler(req, res) {
     const briefAnswer = plan.needs_judgments !== true;
     const system = isGeneral
       ? buildGeneralSystem(query)
-      : buildGroundedSystem(plan.temporal.scope_label, plan.category, ret.verdict === "thin", briefAnswer);
+      : buildGroundedSystem(plan.temporal.scope_label, plan.category, sel.verdict === "thin", briefAnswer);
     // Taxonomy block first: it's large, static, and caches across all requests.
     // The dynamic system prompt is second — it changes per query (category/scope/thin).
     const cachedSystem = [
@@ -552,7 +579,7 @@ export default async function handler(req, res) {
 
     const userContent = isGeneral
       ? query.trim()
-      : buildContextMessage(query, plan, sourceRefs, evidence, judgments, trends, cveResults);
+      : buildContextMessage(query, plan, sourceRefs, evidence, judgments, trends, cveResults, sel.missing);
     const messages = [...historyMessages, { role: "user", content: userContent }];
     // AGENT_SYNTH_MODEL (haiku|sonnet) overrides the synthesis model — used for
     // A/B latency/quality testing and (later) intent-based routing. Defaults to sonnet.
@@ -714,6 +741,10 @@ export default async function handler(req, res) {
         retrieval_verdict:   ret.verdict,
         relevant_source_count: ret.relevant_count,
         planner_method:      plan.planner_method,
+        query_type:          plan.query_type || null,
+        exhaustiveness:      plan.exhaustiveness || null,
+        selector_coverage:   sel.coverage || null,
+        selector_missing:    sel.missing  || [],
         qa_issues:           qaIssues,
         qa_pass:             !blocked,
         qa_blocked:          blocked,
