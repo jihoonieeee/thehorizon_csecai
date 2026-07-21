@@ -1241,14 +1241,31 @@ export function SourcesPage() {
                       <td className="hz-src-publisher">{s.publisher || "—"}</td>
                       {activeTab === "all" && (
                         <td>
-                          <span className="hz-src-cat-badge"
-                            style={{
-                              background: `${CAT_COLOR[s.main_category] || "#94a3b8"}18`,
-                              color: CAT_COLOR[s.main_category] || "#64748b",
-                              borderColor: `${CAT_COLOR[s.main_category] || "#94a3b8"}40`,
-                            }}>
-                            {CAT_LABEL[s.main_category] || s.main_category || "—"}
-                          </span>
+                          {s.is_report && Array.isArray(s.all_categories) && s.all_categories.length > 1
+                            ? (
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                                {s.all_categories.map(cat => (
+                                  <span key={cat} className="hz-src-cat-badge"
+                                    style={{
+                                      background: `${CAT_COLOR[cat] || "#94a3b8"}18`,
+                                      color: CAT_COLOR[cat] || "#64748b",
+                                      borderColor: `${CAT_COLOR[cat] || "#94a3b8"}40`,
+                                    }}>
+                                    {CAT_LABEL[cat] || cat}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="hz-src-cat-badge"
+                                style={{
+                                  background: `${CAT_COLOR[s.main_category] || "#94a3b8"}18`,
+                                  color: CAT_COLOR[s.main_category] || "#64748b",
+                                  borderColor: `${CAT_COLOR[s.main_category] || "#94a3b8"}40`,
+                                }}>
+                                {CAT_LABEL[s.main_category] || s.main_category || "—"}
+                              </span>
+                            )
+                          }
                         </td>
                       )}
                       <td>

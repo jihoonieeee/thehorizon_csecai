@@ -284,8 +284,11 @@ const INSIGHTS_SYSTEM = loadPrompt("insights/insights").system;
 
 function buildInsightsPrompt(catLabel, windowLabel, themes, maturity, confidence) {
   const themeLines = themes.map((t, i) => {
-    const pf = (t.priority_findings   || t.findings || []).slice(0, 6);
-    const bf = (t.background_findings || []).slice(0, 4);
+    // Cap per-theme findings so each insight stays anchored to 3–5 sources.
+    // Wider caps produce insights spanning 10+ sources that attribution cannot
+    // fully cover, causing citation grounding to kill otherwise valid insights.
+    const pf = (t.priority_findings   || t.findings || []).slice(0, 4);
+    const bf = (t.background_findings || []).slice(0, 2);
     const mechanism = t.shared_mechanism ? `\n   Mechanism: ${t.shared_mechanism}` : "";
     const pfLines = pf.length ? `\n   Priority evidence:\n${pf.map(f => `     • ${f}`).join("\n")}` : "";
     const bfLines = bf.length ? `\n   Background corroboration:\n${bf.map(f => `     · ${f}`).join("\n")}` : "";
@@ -316,8 +319,8 @@ async function qaInsights(insights, maturity, catLabel, status = {}) {
 Reporting date: ${REPORT_DATE}. A CVE year is only "future-dated" if AFTER this date. CVEs from ${REPORT_YEAR} and earlier are current.
 Evidence maturity: ${maturityShortLine(maturity)} (total ${maturity.total})
 
-INSIGHTS (title + explanation bullets):
-${insights.map((p, i) => `[${i}] ${p.insight}\n${(p.explanation_points || []).map(b => `    - ${b}`).join("\n")}`).join("\n")}
+INSIGHTS (title + explanation bullets + supporting evidence):
+${insights.map((p, i) => `[${i}] Title: ${p.title || p.insight}\nOpening: ${p.insight}\nEvidence: ${p.evidence || "(none)"}\n${(p.explanation_points || []).map(b => `    - ${b}`).join("\n")}`).join("\n")}
 
 Run the validation checklist. Return a verdict for every index.`;
 
@@ -326,7 +329,7 @@ Run the validation checklist. Return a verdict for every index.`;
     const out = await callAnthropic({
       system: QA_SYSTEM, user, task: "dashboard_insight_qa",
       model: process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
-      maxTokens: 700,
+      maxTokens: 1200,
     });
     verdicts = out.verdicts;
     if (!Array.isArray(verdicts)) throw new Error("no verdicts");
@@ -340,8 +343,23 @@ Run the validation checklist. Return a verdict for every index.`;
   const kept = [];
   insights.forEach((p, i) => {
     const v = verdicts.find(v => v.index === i);
-    if (!v || v.verdict === "ok") kept.push(p);
-    else console.log(`  [QA] REMOVED [${i}] ${v.verdict.toUpperCase()}: ${(v.reason || "").slice(0, 80)}`);
+    if (!v || v.verdict === "ok") {
+      kept.push(p);
+    } else if (v.verdict === "needs_correction") {
+      // Apply corrections in-place; drop bullets flagged by bullets_to_drop
+      const dropSet = new Set(Array.isArray(v.bullets_to_drop) ? v.bullets_to_drop : []);
+      const corrected = {
+        ...p,
+        title:             v.corrected_title   || p.title,
+        insight:           v.corrected_insight || p.insight,
+        explanation_points: (p.explanation_points || []).filter((_, idx) => !dropSet.has(idx)),
+      };
+      console.log(`  [QA] CORRECTED [${i}]: ${(v.reason || "").slice(0, 80)}`);
+      kept.push(corrected);
+    } else {
+      // verdict === "remove"
+      console.log(`  [QA] REMOVED [${i}] ${v.verdict.toUpperCase()}: ${(v.reason || "").slice(0, 80)}`);
+    }
   });
   return kept;
 }
@@ -516,6 +534,15 @@ function composeCategoryFindings(catRows, evItems = [], cap = 40) {
   const parentOf = (row) => row?.parent_source_id || row?.id;
   const perParent = new Map();
 
+  // Signal prefix for findings: [maturity | source_type | publisher]
+  // Gives themes and insights LLMs the data to rank operational evidence above research.
+  const signalPrefix = (row) => {
+    const m = maturityOf(row) || "research";
+    const t = row?.source_type || "unknown";
+    const p = row?.publisher ? row.publisher.split(" ")[0].replace(/[,.]$/, "") : "unknown";
+    return `[${m} | ${t} | ${p}]`;
+  };
+
   const entries = [];   // { text, lead }
   let i = 0, guard = 0;
   const guardMax = cap * (orderedQueues.length + 1) + 20;
@@ -523,23 +550,26 @@ function composeCategoryFindings(catRows, evItems = [], cap = 40) {
     const x = orderedQueues[i++ % orderedQueues.length];
     if (!x.q.length) continue;
     const p = parentOf(x.row);
-    if ((perParent.get(p) || 0) >= MAX_PER_PARENT) { x.q.length = 0; continue; }   // parent capped — drop the queue
+    if ((perParent.get(p) || 0) >= MAX_PER_PARENT) { x.q.length = 0; continue; }
     perParent.set(p, (perParent.get(p) || 0) + 1);
-    entries.push({ text: x.q.shift().fact.trim(), lead: isLead(x.row) });
+    const fact = x.q.shift().fact.trim();
+    entries.push({ text: `${signalPrefix(x.row)} ${fact}`, lead: isLead(x.row) });
   }
   const fromEvidence = entries.length;
   const covered = new Set(bySource.keys());
 
   // Summary fallback for sources with no evidence — signal-ordered too, and pure
-  // noise excluded unless the pool is still thin (so we never starve a sparse
-  // category, but noise never leads).
+  // noise excluded unless the pool is still thin.
   if (entries.length < cap) {
     const { signal, noise } = partitionBySignal(catRows.filter(r => !covered.has(r.id)));
     const fallbackOrder = entries.length + signal.length >= 8 ? signal : [...signal, ...noise];
     for (const r of fallbackOrder) {
       if (entries.length >= cap) break;
       const t = summaryText(r);
-      if (t.length > 20) { entries.push({ text: t, lead: isLead(r) }); covered.add(r.id); }
+      if (t.length > 20) {
+        entries.push({ text: `${signalPrefix(r)} ${t}`, lead: isLead(r) });
+        covered.add(r.id);
+      }
     }
   }
 
@@ -563,10 +593,11 @@ function composeCategoryFindings(catRows, evItems = [], cap = 40) {
 // maturity-overreach or a posture the validated insights don't support.
 const ASSESS_QA_SYSTEM = loadPrompt("insights/assessment-qa").system;
 
+// Returns { keep: boolean, corrected: string|null }
 async function qaAssessment(assessment, insights, maturity, status = {}) {
   status.ran = false;
-  if (!assessment) { status.reason = "empty"; return true; }
-  if (!process.env.ANTHROPIC_API_KEY) { status.reason = "no_api_key"; return true; }
+  if (!assessment) { status.reason = "empty"; return { keep: true, corrected: null }; }
+  if (!process.env.ANTHROPIC_API_KEY) { status.reason = "no_api_key"; return { keep: true, corrected: null }; }
   const user = `Evidence maturity: ${maturityShortLine(maturity)} (total ${maturity.total})
 
 VALIDATED INSIGHTS (already QA-passed — the assessment must be consistent with these):
@@ -584,12 +615,18 @@ Return the verdict.`;
     });
     status.ran = true;
     const verdict = out.verdict || "ok";
-    if (verdict !== "ok") console.log(`     [QA] assessment ${verdict.toUpperCase()}: ${(out.reason || "").slice(0, 70)}`);
-    return verdict === "ok";
+    if (verdict === "ok") return { keep: true, corrected: null };
+    if (verdict === "corrected" && out.corrected_assessment) {
+      console.log(`     [QA] assessment CORRECTED: ${(out.reason || "").slice(0, 70)}`);
+      return { keep: true, corrected: out.corrected_assessment };
+    }
+    // verdict === "remove"
+    console.log(`     [QA] assessment REMOVED: ${(out.reason || "").slice(0, 70)}`);
+    return { keep: false, corrected: null };
   } catch (err) {
     status.reason = "error";
     console.log(`     [QA:assessment] check failed (${err.message.slice(0, 40)}) — keeping`);
-    return true;
+    return { keep: true, corrected: null };
   }
 }
 
@@ -621,7 +658,9 @@ const CITE_GROUND_SYSTEM = loadPrompt("insights/citation-grounding").system;
 // whole cluster (so every named technique's source is present and each bullet grounds),
 // event windows prefer a single source.
 const SYNTHESIS_WINDOW = WINDOW === "quarter" || WINDOW === "annual";
-const CITE_CAP = SYNTHESIS_WINDOW ? 8 : 3;
+// Month windows can have 20-30 sources per category — allow more citations so
+// cross-source synthesis insights don't fail grounding due to under-attribution.
+const CITE_CAP = SYNTHESIS_WINDOW ? 8 : WINDOW === "month" ? 6 : 3;
 
 function buildAttributionPrompt(catLabel, windowLabel, insights, sources) {
   const insightLines = insights.map((p, i) => `[${i}] ${p.insight}`).join("\n");
@@ -750,47 +789,70 @@ async function groundExplanationsInCitations(insights, catSources, catLabel) {
     }
 
     // Ground against the cited source's FULL TEXT (abstract/body), not its number-free
-    // summary. The summary is a lossy compression that drops the exact figures, so a
-    // fabricated statistic ("82.7%") read as "consistent with high success rates" and
-    // passed. Fetching full_text for the 1-8 cited sources lets the check see the REAL
-    // numbers and reject any figure/entity the source does not actually contain.
-    const { data: fullRows } = await supabase.from("sources").select("id,full_text").in("id", cited.map(s => s.id));
-    const fullById = Object.fromEntries((fullRows || []).map(r => [r.id, r.full_text || ""]));
+    // summary. For digest children (parent_source_id set), also include the parent's
+    // full text — children have thin text (700-900 chars) but the insight bullets
+    // reference facts only present in the parent report (10k-20k chars).
+    const { data: fullRows } = await supabase.from("sources")
+      .select("id,full_text,parent_source_id").in("id", cited.map(s => s.id));
+    const fullById = Object.fromEntries((fullRows || []).map(r => [r.id, r]));
+
+    // Collect parent IDs needed for thin children
+    const parentIds = [...new Set((fullRows || []).map(r => r.parent_source_id).filter(Boolean))];
+    const parentRows = parentIds.length
+      ? (await supabase.from("sources").select("id,full_text").in("id", parentIds)).data || []
+      : [];
+    const parentTextById = Object.fromEntries(parentRows.map(r => [r.id, r.full_text || ""]));
+
     const citedText = cited.map((s, i) => {
-      const body = (fullById[s.id] && fullById[s.id].length > summaryText(s).length ? fullById[s.id] : summaryText(s)).slice(0, 2500);
-      return `[S${i + 1}] ${titleOf(s.title)} — ${body}`;
+      const row = fullById[s.id];
+      let body = (row?.full_text || summaryText(s));
+      // Supplement thin child text with parent text
+      if (row?.parent_source_id && body.length < 2000) {
+        const parentText = parentTextById[row.parent_source_id] || "";
+        if (parentText) body = body + "\n\n[Parent report context]\n" + parentText;
+      }
+      return `[S${i + 1}] ${titleOf(s.title)} — ${body.slice(0, 4000)}`;
     }).join("\n\n");
     let verdicts;
     try {
       const out = await callAnthropic({
         system: CITE_GROUND_SYSTEM, task: "dashboard_citation_grounding",
         model: process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
-        user: `Insight: ${p.insight}\n\nCITED SOURCES (the only allowed scope):\n${citedText}\n\nBULLETS:\n${bullets.map((b, i) => `[${i}] ${b}`).join("\n")}\n\nVerdict for every bullet index.`,
-        maxTokens: 700,
+        user: `Insight: ${p.insight}\n\nCITED SOURCES (the only allowed scope):\n${citedText}\n\nBULLETS:\n${bullets.map((b, i) => `[${i}] ${b}`).join("\n")}\n\nVerdict for every bullet index. For unsupported and coherence_drift verdicts, provide a correction field.`,
+        maxTokens: 1400,
       });
       verdicts = Array.isArray(out.verdicts) ? out.verdicts : null;
     } catch { verdicts = null; }
-    if (!verdicts) { kept.push(p); continue; }   // QA couldn't run — keep as-is
+    if (!verdicts) { kept.push(p); continue; }
 
-    const good = bullets.filter((_, k) => {
+    // Build final bullet list: ok → keep, correctable → use correction, fatal → drop
+    const CORRECTABLE = new Set(["unsupported", "coherence_drift"]);
+    const FATAL       = new Set(["contradicts", "entity_drift", "redundant"]);
+    const finalBullets = [];
+    const corrected_log = [], dropped_log = [];
+
+    bullets.forEach((b, k) => {
       const v = verdicts.find(v => v.index === k);
-      return !v || v.verdict === "ok";
+      if (!v || v.verdict === "ok") {
+        finalBullets.push(b);
+      } else if (CORRECTABLE.has(v.verdict) && v.correction) {
+        finalBullets.push(v.correction);
+        corrected_log.push(`[${v.verdict}→corrected] ${(v.reason || "").slice(0, 50)}`);
+      } else {
+        dropped_log.push(`[${v.verdict}] ${(v.reason || "").slice(0, 50)}`);
+      }
     });
-    const dropped = bullets.length - good.length;
-    if (dropped) {
-      const badReasons = verdicts.filter(v => v.verdict !== "ok").map(v => `[${v.verdict}] ${(v.reason || "").slice(0, 50)}`);
-      console.log(`  [QA:citation] "${p.insight.slice(0, 46)}" — dropped ${dropped}/${bullets.length} bullet(s): ${badReasons.join(" | ").slice(0, 110)}`);
-    }
-    // Keep the insight as long as a solid GROUNDED CORE survives (>= 3 bullets, or
-    // all of them for a short 2-bullet insight). The headline already passed its own
-    // QA (no fabrication/overreach); dropping the over-specific bullets and keeping
-    // the grounded ones is better than deleting a real insight because a few bullets
-    // named uncited specifics. Remove only when the walkthrough truly collapses.
-    if (good.length < Math.min(3, bullets.length)) {
-      console.log(`  [QA:citation] REMOVED insight — only ${good.length}/${bullets.length} bullets grounded in citations: ${p.insight.slice(0, 55)}`);
+
+    if (corrected_log.length)
+      console.log(`  [QA:citation] "${p.insight.slice(0, 46)}" — corrected ${corrected_log.length} bullet(s): ${corrected_log.join(" | ").slice(0, 110)}`);
+    if (dropped_log.length)
+      console.log(`  [QA:citation] "${p.insight.slice(0, 46)}" — dropped ${dropped_log.length}/${bullets.length} bullet(s): ${dropped_log.join(" | ").slice(0, 110)}`);
+
+    if (finalBullets.length < 2) {
+      console.log(`  [QA:citation] REMOVED insight — only ${finalBullets.length} bullet(s) survived grounding: ${p.insight.slice(0, 55)}`);
       continue;
     }
-    kept.push({ ...p, explanation_points: good, explanation: good.join(" "), explanation_qa: "citation_grounded" });
+    kept.push({ ...p, explanation_points: finalBullets, explanation: finalBullets.join(" "), explanation_qa: "citation_grounded" });
   }
   return kept;
 }
@@ -868,6 +930,7 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs, leadFl
       }
       const explanationStr = points.length ? points.join(" ") : (p.explanation || "").trim();
       return {
+        title:              (p.title || "").trim(),
         insight:            p.insight.trim(),
         explanation_points: points,
         explanation:        explanationStr,
@@ -910,14 +973,15 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs, leadFl
   let assessment_qa = "not_generated";
   if (assessment) {
     const aStatus = {};
-    // Ground the assessment against the already-validated insights (+ maturity),
-    // using the calibrated assessment check that permits generalization.
-    const keepAssessment = await qaAssessment(assessment, insights, maturity, aStatus);
+    const { keep, corrected } = await qaAssessment(assessment, insights, maturity, aStatus);
     if (!aStatus.ran) {
-      assessment_qa = "degraded";              // QA could not run (keyless/error)
-    } else if (!keepAssessment) {
+      assessment_qa = "degraded";
+    } else if (!keep) {
       assessment_qa = "rejected";
-      assessment = null;                        // don't let an overreaching posture drive comparison
+      assessment = null;
+    } else if (corrected) {
+      assessment_qa = "corrected";
+      assessment = corrected;
     } else {
       assessment_qa = "passed";
     }

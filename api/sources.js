@@ -219,6 +219,7 @@ export default async function handler(req, res) {
           // Threat lifecycle — set by Layer 4 / maturity scorer.
           maturity:       maturityOf(s),                   // research|demonstrated|disclosed|observed|operational
           is_report:      s.is_digest === true,
+          all_categories: s.intelligence?.all_categories || null,
           finding_count:  s.intelligence?.digest_item_count || null,
           // Child-source fields (parent_source_id is already in SELECT_BASE).
           // finding_title = the sub-title of this specific finding within the report.

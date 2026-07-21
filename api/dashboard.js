@@ -183,14 +183,20 @@ async function getInsights(win, windowKey) {
     for (const row of rows) {
       if (row.category === META_CATEGORY) continue;
       const points = row.points;
-      // v2 object — points.insights[]: { insight, explanation_points[], sources[{url,title,publisher,...}], evidence, confidence_reason }
+      // v2 object — points.insights[]: { title, insight, explanation_points[], sources[], evidence, confidence_reason }
       if (points && Array.isArray(points.insights) && points.insights.length) {
         byCategory[row.category] = {
+          assessment: points.assessment || null,
           insights: points.insights.map((ins, i) => {
             const isObj = ins && typeof ins === "object";
+            // title = short card label (new schema); fall back to insight (old schema)
+            const title = isObj ? (ins.title || ins.insight || "") : String(ins);
+            // insight_body = full opening sentence shown in drilldown (only if title is separate)
+            const insightBody = isObj && ins.title && ins.insight ? ins.insight : null;
             return {
               insight_id:         `${row.category}-${i}`,
-              title:              isObj ? (ins.insight || "") : String(ins),
+              title,
+              insight_body:       insightBody,
               explanation_points: isObj && Array.isArray(ins.explanation_points) ? ins.explanation_points : [],
               evidence_maturity:  points.evidence_maturity || null,
               cited_sources:      isObj && Array.isArray(ins.sources)
@@ -348,10 +354,10 @@ export default async function handler(req, res) {
         evidence_maturity: maturity,
         maturity_sources:  maturitySources,
 
-        assessment_status: null,
+        assessment:        ci?.assessment         || null,
         insights:          ci?.insights          || [],
         coverage_gaps:     ci?.coverage_gaps     || [],
-        insights_from:     ci ? insightFromLabel : null,  // null = current period
+        insights_from:     ci ? insightFromLabel : null,
         insights_stale:    ci ? insightsStale    : false,
       };
     });

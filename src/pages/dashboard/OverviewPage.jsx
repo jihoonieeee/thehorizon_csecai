@@ -276,42 +276,53 @@ function SourceButton({ cs }) {
 }
 
 // ── Insight item ──────────────────────────────────────────────────────────────
-// New shape: { insight_id, title, explanation_summary, explanation_points[],
-//              evidence_maturity, cited_sources[] }
-// Legacy shape (from dashboard_insights fallback): { insight: string }
-// Both are handled so legacy rows still render.
+// Shape: { insight_id, title (≤12 words), insight_body (full sentence),
+//           explanation_points[], evidence_maturity, is_priority, cited_sources[] }
 
-function InsightItem({ insight }) {
+function InsightItem({ insight, index }) {
   const [open, setOpen] = useState(false);
 
-  const title   = insight.title || insight.insight || "";
-  const points  = Array.isArray(insight.explanation_points)
+  const title      = insight.title || insight.insight || "";
+  const body       = insight.insight_body || null;
+  const maturity   = insight.evidence_maturity || null;
+  const isPriority = insight.is_priority ?? false;
+  const points     = Array.isArray(insight.explanation_points)
     ? insight.explanation_points.filter(p => p?.length > 3)
     : [];
-  const sources = Array.isArray(insight.cited_sources)
+  const sources    = Array.isArray(insight.cited_sources)
     ? insight.cited_sources.filter(cs => cs.source_url)
     : [];
 
-  const hasDetail = points.length > 0 || sources.length > 0;
+  const hasDetail = !!(body || points.length || sources.length);
+  const mat       = maturity ? MATURITY_META[maturity] : null;
 
   return (
     <li
-      className={`hz-insight-item${hasDetail ? " expandable" : ""}${open ? " open" : ""}`}
+      className={`hz-insight-item${hasDetail ? " expandable" : ""}${open ? " open" : ""}${isPriority ? " priority" : ""}`}
       onClick={hasDetail ? () => setOpen(o => !o) : undefined}
     >
-      {/* Headline — always visible */}
-      <div className="hz-insight-headline">
-        {title}
-        {hasDetail && (
-          <span className="hz-insight-chevron">{open ? "▲" : "▼"}</span>
-        )}
+      {/* Headline row: number badge + title + meta */}
+      <div className="hz-insight-headline-row">
+        <span className="hz-insight-num">{(index ?? 0) + 1}</span>
+        <div className="hz-insight-headline">{title}</div>
+        <div className="hz-insight-headline-meta">
+          {mat && (
+            <span
+              className="hz-insight-maturity-pip"
+              title={`Evidence maturity: ${mat.label}`}
+              style={{ background: mat.color }}
+            />
+          )}
+          {hasDetail && (
+            <span className="hz-insight-chevron">{open ? "▲" : "▼"}</span>
+          )}
+        </div>
       </div>
 
       {/* Drilldown — expands on click */}
       {open && hasDetail && (
         <div className="hz-insight-drilldown">
-
-          {/* Explanation bullets */}
+          {body && <p className="hz-insight-body">{body}</p>}
           {points.length > 0 && (
             <ul className="hz-insight-bullets">
               {points.map((b, i) => (
@@ -319,8 +330,6 @@ function InsightItem({ insight }) {
               ))}
             </ul>
           )}
-
-          {/* Cited source buttons */}
           {sources.length > 0 && (
             <div className="hz-insight-sources-row">
               {sources.map((cs, i) => (
@@ -328,7 +337,6 @@ function InsightItem({ insight }) {
               ))}
             </div>
           )}
-
         </div>
       )}
     </li>
@@ -502,11 +510,16 @@ function CategoryCard({ cat, trendValues, selectedMaturity, onMaturitySelect }) 
           <div className="hz-cat-insights-from">Analysis from {cat.insights_from}</div>
         )}
 
+        {/* Category posture assessment — one sentence above the insight list */}
+        {cat.assessment && (
+          <div className="hz-cat-assessment">{cat.assessment}</div>
+        )}
+
         {/* Insight list */}
         {insights.length > 0 && (
           <ul className="hz-insight-list">
             {insights.map((ins, i) => (
-              <InsightItem key={ins.insight_id || i} insight={ins} />
+              <InsightItem key={ins.insight_id || i} insight={ins} index={i} />
             ))}
           </ul>
         )}
