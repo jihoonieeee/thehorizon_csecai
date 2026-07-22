@@ -1,0 +1,67 @@
+name: Generate Slides
+
+on:
+  workflow_dispatch:
+    inputs:
+      window:
+        description: 'Reporting window'
+        type: choice
+        options: [month, week, quarter]
+        default: month
+      from:
+        description: 'Custom start date (YYYY-MM-DD) — overrides window'
+        default: ''
+      to:
+        description: 'Custom end date (YYYY-MM-DD) — overrides window'
+        default: ''
+      category:
+        description: 'Single category only (leave blank for all)'
+        default: ''
+      skip_qa:
+        description: 'Skip entailment QA (faster)'
+        type: boolean
+        default: false
+
+jobs:
+  slides:
+    name: Generate PPTX
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Generate slides
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.from }}" ] && [ -n "${{ github.event.inputs.to }}" ]; then
+            ARGS="--from ${{ github.event.inputs.from }} --to ${{ github.event.inputs.to }}"
+          else
+            ARGS="--window ${{ github.event.inputs.window || 'month' }}"
+          fi
+          if [ -n "${{ github.event.inputs.category }}" ]; then
+            ARGS="$ARGS --category ${{ github.event.inputs.category }}"
+          fi
+          if [ "${{ github.event.inputs.skip_qa }}" = "true" ]; then
+            ARGS="$ARGS --skip-qa"
+          fi
+          node scripts/generateSlides.js $ARGS --out output/deck.pptx
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Upload deck
+        uses: actions/upload-artifact@v4
+        with:
+          name: horizon-scan-deck
+          path: output/deck.pptx
+          retention-days: 30
