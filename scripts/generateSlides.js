@@ -67,13 +67,19 @@ function resolveTimeframe() {
 }
 
 function makeTimeframeLabel(dateFrom, dateTo) {
-  const opts = { month: "long", year: "numeric" };
-  const f    = new Date(dateFrom + "T12:00:00Z");
-  const t    = new Date(dateTo   + "T12:00:00Z");
+  const f = new Date(dateFrom + "T12:00:00Z");
+  const t = new Date(dateTo   + "T12:00:00Z");
+  const monthLong = { month: "long", year: "numeric" };
+  const monthShort = { month: "short" };
   if (f.getMonth() === t.getMonth() && f.getFullYear() === t.getFullYear()) {
-    return f.toLocaleDateString("en-GB", opts);
+    return f.toLocaleDateString("en-GB", monthLong);
   }
-  return `${dateFrom} to ${dateTo}`;
+  if (f.getFullYear() === t.getFullYear()) {
+    const m1 = f.toLocaleDateString("en-GB", { month: "long" });
+    const m2 = t.toLocaleDateString("en-GB", monthLong);
+    return `${m1}–${m2}`;
+  }
+  return `${f.toLocaleDateString("en-GB", monthLong)} – ${t.toLocaleDateString("en-GB", monthLong)}`;
 }
 
 function log(msg) { process.stdout.write(`${msg}\n`); }
@@ -118,8 +124,11 @@ async function main() {
   log("\nStep 2/6  Building category contexts…");
   const contexts = {};
   for (const cat of activeCategories) {
+    const total = allSources.filter(s => s.main_category === cat).length;
     contexts[cat] = buildCategoryContext(cat, allSources);
-    log(`  ${cat}: ${contexts[cat].sources.length} sources in dossier`);
+    const used = contexts[cat].sources.length;
+    const note = used < total ? ` (${total} available, top ${used} selected)` : "";
+    log(`  ${cat}: ${used} sources in dossier${note}`);
   }
 
   // ── Step 3: Generate category reports (LLM, parallel) ────────────────────
@@ -143,12 +152,11 @@ async function main() {
     }
   }
 
-  // ── Steps 4+5: QA + Outlook in parallel ──────────────────────────────────
-  // Outlook only needs categoryReports (done after step 3); QA is independent.
-  // Running them together saves the full wall-clock cost of the outlook call.
-  log("\nSteps 4+5/6  QA checks + Outlook (parallel)…");
+  // ── Steps 4+5: QA + Outlook + Overview in parallel ───────────────────────
+  log("\nSteps 4+5/6  QA checks + Outlook + Overview (parallel)…");
   const allReports = activeCategories.map(c => categoryReports[c]).filter(Boolean);
 
+  // Skip cross-category slides in single-category debug mode — they'd misrepresent the deck
   const [qaResultPairs, outlookRaw, overviewRaw] = await Promise.all([
     Promise.all(
       activeCategories.map(async cat => {
@@ -158,8 +166,8 @@ async function main() {
         return [cat, qa];
       })
     ),
-    generateOutlookSlide(allReports, timeframeLabel, dateFrom, dateTo),
-    generateOverviewSlide(allReports, timeframeLabel, dateFrom, dateTo),
+    singleCat ? Promise.resolve(null) : generateOutlookSlide(allReports, timeframeLabel, dateFrom, dateTo),
+    singleCat ? Promise.resolve(null) : generateOverviewSlide(allReports, timeframeLabel, dateFrom, dateTo),
   ]);
 
   const qaResults = Object.fromEntries(qaResultPairs);
@@ -214,8 +222,8 @@ async function main() {
     log(`  ${cat}: ${resolvedSlides.length} slides`);
   }
 
-  const outlookSlide  = { ...outlookRaw,  bullets: (outlookRaw.bullets  || []).map(b => ({ ...b, cited_urls: [] })) };
-  const overviewSlide = { ...overviewRaw, bullets: (overviewRaw.bullets || []).map(b => ({ ...b, cited_urls: [] })) };
+  const outlookSlide  = outlookRaw  ? { ...outlookRaw,  bullets: (outlookRaw.bullets  || []).map(b => ({ ...b, cited_urls: [] })) } : null;
+  const overviewSlide = overviewRaw ? { ...overviewRaw, bullets: (overviewRaw.bullets || []).map(b => ({ ...b, cited_urls: [] })) } : null;
   log(`  Overview: ${(overviewSlide.bullets || []).length} statements`);
   log(`  Outlook:  ${(outlookSlide.bullets  || []).length} bullets`);
 

@@ -62,7 +62,6 @@ CATEGORY SHIFTS THIS PERIOD
 
 Return:
 {
-  "headline": "{{period_label}} — AI Threat Landscape",
   "bullets": [
     { "text": "<specific, period-grounded statement>" }
   ],

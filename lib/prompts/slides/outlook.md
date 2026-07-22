@@ -28,7 +28,7 @@ GOOD watch item: "Watch for LLM output samples appearing alongside stolen creden
 
 ════ EVIDENCE CONSTRAINT ════
 
-Only synthesise from the developments and signals provided. Do NOT add actors, capabilities, or timelines not visible in the evidence. If the corpus is thin, say so explicitly in a caveat bullet.
+Only synthesise from the strategic shifts provided. Do NOT add actors, capabilities, or timelines not visible in the evidence. If the corpus is thin, say so explicitly in a caveat bullet.
 
 Return ONLY valid JSON.
 ```
