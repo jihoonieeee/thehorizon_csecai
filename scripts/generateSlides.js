@@ -247,7 +247,7 @@ async function main() {
       const dateKey    = new Date().toISOString().slice(0, 10);
       const blobKey    = `decks/${dateKey}/horizon-scan-${argv.window || "custom"}.pptx`;
       const { url: pptxUrl } = await put(blobKey, pptxBytes, {
-        access:          "public",
+        access:          "private",
         token:           process.env.BLOB_READ_WRITE_TOKEN,
         addRandomSuffix: false,
         allowOverwrite:  true,
