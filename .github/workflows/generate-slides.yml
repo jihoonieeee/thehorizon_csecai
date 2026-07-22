@@ -4,9 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       window:
-        description: 'Reporting window'
+        description: 'Reporting period (last N days of validated sources)'
         type: choice
-        options: [month, week, quarter]
+        options:
+          - month
+          - quarter
+          - half_year
+          - year
         default: month
       from:
         description: 'Custom start date (YYYY-MM-DD) — overrides window'

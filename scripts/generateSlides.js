@@ -5,13 +5,13 @@
  * Usage:
  *   node scripts/generateSlides.js --from 2026-07-01 --to 2026-07-20
  *   node scripts/generateSlides.js --window month
- *   node scripts/generateSlides.js --window week --out ./output/deck.pptx
- *   node scripts/generateSlides.js --window month --category llm_threats
+ *   node scripts/generateSlides.js --window quarter --out ./output/deck.pptx
+ *   node scripts/generateSlides.js --window half_year --category llm_threats
  *
  * Options:
  *   --from YYYY-MM-DD   Start of reporting window (inclusive)
  *   --to   YYYY-MM-DD   End of reporting window (inclusive)
- *   --window month|week|quarter  Auto-compute current calendar window
+ *   --window month|quarter|half_year|year  Rolling window ending today
  *   --out  <path>       Output .pptx path (default: ./output/deck.pptx)
  *   --category <name>   Run a single category only (for debugging)
  *   --skip-qa           Skip entailment spot-check (faster, less safe)
@@ -47,6 +47,8 @@ const { values: argv } = parseArgs({
   strict: false,
 });
 
+const WINDOW_DAYS = { month: 30, quarter: 90, half_year: 180, year: 365 };
+
 function resolveTimeframe() {
   if (argv.from && argv.to) {
     return { dateFrom: argv.from, dateTo: argv.to };
@@ -56,21 +58,10 @@ function resolveTimeframe() {
   const pad   = n => String(n).padStart(2, "0");
   const ymd   = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-  if (argv.window === "week") {
-    const from = new Date(today);
-    from.setDate(today.getDate() - 7);
-    return { dateFrom: ymd(from), dateTo: ymd(today) };
-  }
-
-  if (argv.window === "quarter") {
-    const from = new Date(today);
-    from.setDate(today.getDate() - 90);
-    return { dateFrom: ymd(from), dateTo: ymd(today) };
-  }
-
-  // Default: current calendar month up to today
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  return { dateFrom: ymd(monthStart), dateTo: ymd(today) };
+  const days = WINDOW_DAYS[argv.window] ?? 30;
+  const from = new Date(today);
+  from.setDate(today.getDate() - days);
+  return { dateFrom: ymd(from), dateTo: ymd(today) };
 }
 
 function makeTimeframeLabel(dateFrom, dateTo) {
