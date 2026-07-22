@@ -43,18 +43,39 @@ const PERIODS = [
 ];
 
 const POLL_MS = 20000;
+const SLIDES_STORAGE_KEY = "hz_slides_state";
+
+function loadSlidesState() {
+  try {
+    const raw = localStorage.getItem(SLIDES_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveSlidesState(patch) {
+  try {
+    const cur = loadSlidesState();
+    localStorage.setItem(SLIDES_STORAGE_KEY, JSON.stringify({ ...cur, ...patch }));
+  } catch {}
+}
 
 function SlidesPanel({ secret }) {
-  const [period,   setPeriod]   = useState("quarter");
-  const [status,   setStatus]   = useState("idle");
+  const saved = loadSlidesState();
+
+  const [period,   setPeriod]   = useState(saved.period   || "quarter");
+  const [status,   setStatus]   = useState(saved.status === "queued" || saved.status === "done" ? saved.status : "idle");
   const [error,    setError]    = useState(null);
   const [elapsed,  setElapsed]  = useState(0);
-  const [pptxUrl,  setPptxUrl]  = useState(null);
-  const [filename, setFilename] = useState(null);
-  const timerRef      = useRef(null);
-  const pollRef       = useRef(null);
-  const startRef      = useRef(null);
-  const triggeredAtRef = useRef(null);
+  const [pptxUrl,  setPptxUrl]  = useState(saved.pptxUrl  || null);
+  const [filename, setFilename] = useState(saved.filename || null);
+  const timerRef       = useRef(null);
+  const pollRef        = useRef(null);
+  const startRef       = useRef(null);
+  const triggeredAtRef = useRef(saved.triggeredAt || null);
+
+  // Persist state changes to localStorage
+  useEffect(() => { saveSlidesState({ period, status, pptxUrl, filename, triggeredAt: triggeredAtRef.current }); },
+    [period, status, pptxUrl, filename]);
 
   useEffect(() => {
     if (status === "queued") {
@@ -78,27 +99,31 @@ function SlidesPanel({ secret }) {
         const latest = decks?.[0];
         if (latest?.pptx_url && new Date(latest.generated_at) >= new Date(triggeredAtRef.current)) {
           clearInterval(pollRef.current);
-          const dateStr = new Date().toISOString().slice(0, 10);
-          setFilename(`horizon_scan_${period}_${dateStr}.pptx`);
+          const dateStr = new Date(latest.generated_at).toISOString().slice(0, 10);
+          const name = `horizon_scan_${period}_${dateStr}.pptx`;
+          setFilename(name);
           setPptxUrl(latest.pptx_url);
           setStatus("done");
+          saveSlidesState({ status: "done", pptxUrl: latest.pptx_url, filename: name });
         }
       } catch {}
     }
+    poll(); // check immediately on mount in case it finished while away
     pollRef.current = setInterval(poll, POLL_MS);
     return () => clearInterval(pollRef.current);
   }, [status, secret, period]);
 
   async function generate() {
     if (status === "queued") return;
+    const triggeredAt = new Date().toISOString();
+    triggeredAtRef.current = triggeredAt;
     setPptxUrl(null); setFilename(null); setStatus("queued"); setError(null); setElapsed(0);
-    triggeredAtRef.current = new Date().toISOString();
-    const periodObj = PERIODS.find(p => p.id === period);
+    saveSlidesState({ status: "queued", triggeredAt, pptxUrl: null, filename: null, period });
     try {
       const res = await fetch("/api/generate-report", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": secret ? `Bearer ${secret}` : "" },
-        body: JSON.stringify({ window: period, days: periodObj?.days }),
+        body: JSON.stringify({ window: period }),
       });
       if (!res.ok) {
         let msg = `HTTP ${res.status}`;
@@ -107,6 +132,7 @@ function SlidesPanel({ secret }) {
       }
     } catch (err) {
       setError(err.message); setStatus("error");
+      saveSlidesState({ status: "error" });
     }
   }
 
