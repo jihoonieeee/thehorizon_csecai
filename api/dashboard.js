@@ -32,7 +32,7 @@ const TRUST_ORDER = { primary: 4, high: 3, medium: 2, low: 1, unknown: 0 };
 const READING_ORDER = { essential: 40, recommended: 30, analyst: 20, background: 10 };
 function rankSource(s) {
   const level = maturityOf(s);
-  const rv = s.reading_value ?? s.intelligence?.reading_value ?? "background";
+  const rv = s.reading_value ?? "background";
   return {
     ...s,
     _maturity: level,

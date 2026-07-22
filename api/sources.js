@@ -208,10 +208,7 @@ export default async function handler(req, res) {
         return {
           ...rest,
           date_collected: collected_date || null,
-          // reading_value is the new label system (essential/recommended/analyst/background).
-          // Column is null until scripts/labelSources.js backfill runs; fall back to
-          // intelligence jsonb which older ingest may have set.
-          label: rv ?? readingValueOf({ intelligence }) ?? null,
+          label: rv ?? readingValueOf(s) ?? null,
           short_summary:  s.short_summary || s.analyst_brief || s.summary || null,
           analyst_brief:  s.analyst_brief || null,
           // Editorial audience fit — set by Layer 3 LLM.

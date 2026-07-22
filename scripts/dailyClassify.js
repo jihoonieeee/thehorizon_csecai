@@ -230,6 +230,12 @@ async function runClaimExtraction(newSources) {
         const { text: cleanSummary } = rawSummary
           ? scrubImpliedQuantitatives(rawSummary, src.full_text || src.summary || "")
           : { text: rawSummary };
+        // Fetch fresh intelligence from DB: src.intelligence is the pre-L4e in-memory
+        // value and would clobber importance/maturity written by the scoring pass.
+        // Also only merge fields understandSource actually returns (main_claims and
+        // key_numbers are not in its output schema — always writing [] zeroes them).
+        const { data: freshRow } = await supabase.from("sources").select("intelligence").eq("id", src.id).single();
+        const freshIntel = freshRow?.intelligence || src.intelligence || {};
         await supabase.from("sources").update({
           main_category:           u.category,
           tags:                    u.primary_tags || [],
@@ -238,11 +244,11 @@ async function runClaimExtraction(newSources) {
           short_summary:           cleanSummary   || null,
           claim_extraction_status: "success",
           intelligence: {
-            ...(src.intelligence || {}),
-            key_entities:  u.key_entities  || [],
-            main_claims:   u.main_claims   || [],
-            key_numbers:   u.key_numbers   || [],
-            event_date:    u.event_date    || null,
+            ...freshIntel,
+            ...(u.key_entities?.length ? { key_entities: u.key_entities } : {}),
+            ...(u.main_claims?.length  ? { main_claims:  u.main_claims  } : {}),
+            ...(u.key_numbers?.length  ? { key_numbers:  u.key_numbers  } : {}),
+            ...(u.event_date           ? { event_date:   u.event_date   } : {}),
           },
         }).eq("id", src.id);
         pass++;

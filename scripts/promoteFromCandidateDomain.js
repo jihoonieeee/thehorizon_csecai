@@ -4,7 +4,7 @@
  * where L3 already identified an offensive category (candidate_domain) with central focus.
  *
  * These sources were correctly identified by the L3 LLM but ended up stuck in
- * unclear_or_adjacent because classifyNewSources.js skips non-null main_category.
+ * unclear_or_adjacent because dailyClassify.js skips non-null main_category.
  *
  * Promotion logic (no LLM calls):
  *   candidate_domain ∈ VALID_CATEGORIES + ai_threat_focus = "central"
@@ -150,4 +150,4 @@ const remaining = (unclear || []).filter(r =>
   !VALID_CATEGORIES.has(r.candidate_domain) || r.ai_threat_focus !== "central"
 ).length;
 console.log(`\n  Remaining unclear_or_adjacent (need LLM reclassify): ${remaining}`);
-console.log("  Run: node scripts/classifyNewSources.js --reclassify-unclear --limit 200");
+console.log("  Run: node scripts/dailyClassify.js --since-hours 720 --limit 200");

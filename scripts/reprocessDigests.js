@@ -77,7 +77,15 @@ async function main() {
       const rows = result.children.map(({ _norm, ...row }) => row);
       const { error: ce } = await sb.from("sources").upsert(rows, { onConflict: "id", ignoreDuplicates: false });
       if (ce) { console.log(`      ! child write: ${ce.message.slice(0, 70)}`); continue; }
-      const { error: pe } = await sb.from("sources").update({ is_digest: true, intelligence: result.parent_patch.intelligence }).eq("id", s.id);
+      // Fetch fresh intelligence from DB so the merge doesn't clobber significance,
+      // mechanism_classification, maturity_* or any other subfields written after
+      // the initial SELECT at the top of the run.
+      const { data: freshRow } = await sb.from("sources").select("intelligence").eq("id", s.id).single();
+      const freshIntel = freshRow?.intelligence || s.intelligence || {};
+      const { error: pe } = await sb.from("sources").update({
+        is_digest: true,
+        intelligence: { ...freshIntel, is_digest: true, digest_item_count: rows.length },
+      }).eq("id", s.id);
       if (pe) console.log(`      ! parent flag: ${pe.message.slice(0, 70)}`); else wroteParents++;
     }
   }

@@ -3,7 +3,7 @@
  * fixFalseDefensives.js — manual DB corrections for sources the L4 LLM
  * incorrectly flagged as is_defensive=true.
  *
- * Run AFTER reprocessCorpus.js --phase=l4 completes to fix confirmed
+ * Run AFTER dailyClassify.js completes to fix confirmed
  * false-defensive classifications before running L5.
  *
  * Each entry: { titleFragment, correct }

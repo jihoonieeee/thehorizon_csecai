@@ -23,6 +23,10 @@ import { scrubImpliedQuantitatives } from "../lib/utils/scrubQuantitatives.js";
 import { fanOutDigest } from "../lib/pipeline/ingest/digestFanout.js";
 import { callLLM } from "../lib/llm/callLLM.js";
 import { fetchPageText } from "../lib/pipeline/discovery/fetchCandidateText.js";
+import { computeImportance } from "../lib/pipeline/scoring/importance.js";
+import { classifyMaturityLevel } from "../lib/pipeline/scoring/maturityLevel.js";
+import { extractAllEvidence } from "../lib/pipeline/extraction/extractEvidence.js";
+import { getEvidenceHashes, contentHashOf } from "../lib/storage/evidenceStore.js";
 
 const args        = process.argv.slice(2);
 const DRY_RUN     = args.includes("--dry-run");
@@ -77,6 +81,7 @@ async function main() {
 
   const t0 = Date.now();
   let processed = 0, succeeded = 0, failed = 0;
+  const allUnderstood = []; // accumulate for scoring pass + L5
 
   // ── Process in batches ───────────────────────────────────────────────────────
   for (let i = 0; i < sources.length; i += BATCH_SIZE) {
@@ -150,6 +155,11 @@ async function main() {
           failed += updates.length;
         } else {
           succeeded += updates.length;
+          // Merge understood fields back onto the original source for downstream steps
+          for (const u of updates) {
+            const orig = results.find(e => e.src.id === u.id)?.src || {};
+            allUnderstood.push({ ...orig, ...u });
+          }
         }
       }
       // Mark irrelevant ones as rejected
@@ -188,7 +198,11 @@ async function main() {
           const childRows = out.children.map(({ _norm, ...row }) => row);
           const { error: ce } = await sb.from("sources").upsert(childRows, { onConflict: "id", ignoreDuplicates: false });
           if (ce) { console.log(`\n  [fanout] child write failed for ${e.src.id.slice(0,8)}: ${ce.message.slice(0,50)}`); continue; }
-          await sb.from("sources").update({ is_digest: true, intelligence: { ...(e.src.intelligence || {}), is_digest: true, digest_item_count: childRows.length } }).eq("id", e.src.id);
+          // Fetch fresh intelligence after the understand upsert so we don't spread
+          // the pre-understand in-memory value and revert the understand-written fields.
+          const { data: freshRow } = await sb.from("sources").select("intelligence").eq("id", e.src.id).single();
+          const freshIntel = freshRow?.intelligence || e.src.intelligence || {};
+          await sb.from("sources").update({ is_digest: true, intelligence: { ...freshIntel, is_digest: true, digest_item_count: childRows.length } }).eq("id", e.src.id);
           console.log(`\n  [fanout] ${e.src.title?.slice(0,45)} → ${childRows.length} findings across ${new Set(childRows.map(c=>c.main_category)).size} categories`);
         }
       }
@@ -214,11 +228,132 @@ async function main() {
   console.log(`\n\n${"─".repeat(60)}`);
   console.log(`  Done in ${elapsed}s`);
   console.log(`  Processed : ${processed}`);
-  console.log(`  Understood  : ${succeeded}${DRY_RUN ? " (dry run)" : ""}`);
+  console.log(`  Understood: ${succeeded}${DRY_RUN ? " (dry run)" : ""}`);
   console.log(`  Failed    : ${failed}`);
+
+  // ── L4e + L5: Score then extract evidence for newly understood sources ────────
+  if (allUnderstood.length > 0) {
+    const scored = await runScoringPass(allUnderstood);
+    await runL5Extraction(scored);
+  }
+}
+
+const OFFENSIVE_CATS = new Set([
+  "traditional_ai_threats",
+  "llm_threats",
+  "agentic_ai_threats",
+  "ai_enabled_threats",
+]);
+
+// ── L4e: reading_value + importance tier + LLM maturity upgrade ───────────────
+async function runScoringPass(sources) {
+  console.log(`\n── L4e: Scoring pass (reading_value / importance / maturity) ─────`);
+  if (!sources.length) { console.log("  Nothing to score."); return sources; }
+
+  // Fetch fresh intelligence from DB for all sources so we spread from the
+  // current DB state, not the narrow write-back object from the understand step
+  // (which only has key_entities/key_terms/main_claims/key_numbers and would
+  // silently drop significance, mechanism_classification, maturity_*, etc.).
+  const ids = sources.map(s => s.id);
+  const { data: freshRows } = await sb.from("sources")
+    .select("id,intelligence,reading_value,source_type")
+    .in("id", ids);
+  const freshMap = new Map((freshRows || []).map(r => [r.id, r]));
+
+  const CONC = 4;
+  let rvCount = 0, impCount = 0, matCount = 0;
+  const scored = [];
+
+  for (let i = 0; i < sources.length; i += CONC) {
+    const batch = sources.slice(i, i + CONC);
+    const results = await Promise.all(batch.map(async (s) => {
+      const updates = {};
+      const fresh = freshMap.get(s.id) || s;
+      const freshIntel = fresh.intelligence || {};
+
+      const imp = computeImportance({ ...s, intelligence: freshIntel });
+      updates.intelligence = { ...freshIntel, importance: imp };
+      impCount++;
+
+      if (!fresh.reading_value) {
+        const rv =
+          imp.tier === "realized"                                                    ? "essential"
+          : (imp.tier === "proven" && fresh.source_type === "threat_intelligence")  ? "essential"
+          : imp.tier === "proven"                                                    ? "recommended"
+          : imp.tier === "noise"                                                     ? "background"
+          : "analyst";
+        updates.reading_value = rv;
+        rvCount++;
+      }
+
+      if (freshIntel.maturity_method === "deterministic") {
+        try {
+          const m = await classifyMaturityLevel({ ...s, intelligence: freshIntel }, callLLM);
+          updates.intelligence = {
+            ...updates.intelligence,
+            maturity_level:      m.level,
+            maturity_confidence: m.confidence,
+            maturity_reason:     m.reason,
+            maturity_method:     m.method,
+            maturity_at:         new Date().toISOString(),
+          };
+          matCount++;
+        } catch { /* non-blocking */ }
+      }
+
+      if (!DRY_RUN && Object.keys(updates).length > 0) {
+        const { error } = await sb.from("sources").update(updates).eq("id", s.id);
+        if (error) console.warn(`  [L4e] write failed ${s.id.slice(0,8)}: ${error.message}`);
+      }
+
+      return { ...s, ...fresh, ...updates, intelligence: updates.intelligence || freshIntel };
+    }));
+    scored.push(...results);
+  }
+
+  console.log(`  reading_value: ${rvCount}  importance: ${impCount}  maturity-upgrade: ${matCount}`);
+  return scored;
+}
+
+// ── L5: Evidence extraction for eligible newly-understood sources ──────────────
+async function runL5Extraction(sources) {
+  console.log(`\n── L5: Evidence extraction ─────────────────────────────────────`);
+
+  const HIGH_MATURITY = new Set(["operational", "observed", "demonstrated"]);
+  const eligible = sources.filter(s =>
+    OFFENSIVE_CATS.has(s.main_category) && (
+      ["essential", "recommended"].includes(s.reading_value) ||
+      HIGH_MATURITY.has(s.intelligence?.maturity_level)
+    ),
+  );
+
+  if (!eligible.length) { console.log("  No sources eligible for L5 extraction."); return; }
+
+  // Check evidence table exists
+  const probe = await sb.from("evidence").select("id").limit(1);
+  if (probe.error) {
+    console.warn(`  Evidence table unavailable (${probe.error.message}) — skipping L5.`);
+    return;
+  }
+
+  const haveHash = await getEvidenceHashes(sb, eligible.map(s => s.id));
+  const sourceText = s => s.full_text || s.clean_text || "";
+  const stale = eligible.filter(s => haveHash.get(s.id) !== contentHashOf(sourceText(s)));
+
+  console.log(`  ${eligible.length} eligible | ${eligible.length - stale.length} cached | ${stale.length} to extract`);
+  if (!stale.length) return;
+
   if (!DRY_RUN) {
-    console.log(`\n  Next step: run the synthesis pipeline:`);
-    console.log(`  node scripts/runHorizonScan.js --days 365 --limit 1000 --no-slides`);
+    const res = await extractAllEvidence(
+      stale.map(s => ({ ...s, category: s.main_category })),
+      [...OFFENSIVE_CATS],
+      { supabase: sb, concurrency: 3,
+        onProgress: (done, total) => process.stdout.write(`    ${done}/${total}\r`) },
+    );
+    process.stdout.write("\n");
+    console.log(`  Extracted: ${res.counts?.after_dedup ?? "?"} evidence items`);
+  } else {
+    console.log(`  [dry] would extract evidence for ${stale.length} sources`);
   }
 }
 

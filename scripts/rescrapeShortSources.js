@@ -11,7 +11,7 @@
  *   3. Update full_text in Supabase if the new text is meaningfully longer
  *
  * After running this script, re-run L5 extraction on the updated sources:
- *   node scripts/reprocessCorpus.js --phase=l5 --batch-size=20
+ *   node scripts/extractEvidenceBatch.js --limit 150
  *
  * Usage:
  *   node scripts/rescrapeShortSources.js [--min-chars=600] [--limit=100] [--dry-run]
@@ -218,7 +218,7 @@ async function main() {
   if (DRY_RUN) console.log("\n(dry-run — no DB writes)");
   if (results.updated > 0 && !DRY_RUN) {
     console.log("\nNext step: re-run L5 evidence extraction:");
-    console.log("  node scripts/reprocessCorpus.js --phase=l5 --batch-size=20");
+    console.log("  node scripts/extractEvidenceBatch.js --limit 150");
   }
 }
 
