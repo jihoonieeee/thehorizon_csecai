@@ -64,11 +64,22 @@ Include 1–3 monitoring signals: specific, observable artifacts that a defender
   BAD:  "Monitor for AI-enhanced phishing attempts"
   GOOD: "Watch for LLM-generated phishing emails containing grammatically perfect but contextually misaligned requests referencing internal project names — a pattern visible in email header analysis"
 
+════ EVIDENCE ITEMS ════
+
+Each source in the dossier may include pre-extracted evidence items (E1, E2, …). These are structured claims extracted verbatim from the source text — prefer them over the summary when writing bullets:
+
+- [INCIDENT] / [ACTOR] items — use for evidence bullets. Quote the grounded quote if present.
+- [VULN] / [DEMO] / [RESEARCH] items — use for mechanism bullets.
+- [STAT] items with numbers — cite the specific figure in the bullet text.
+- [ASSESSMENT] / [SIGNAL] items — use for implication or caveat bullets.
+
+If an evidence item contains a Numbers field, include the statistic verbatim in your bullet. Do not round, paraphrase, or omit confirmed figures.
+
 ════ CITATION DISCIPLINE ════
 
 - Only cite S-labels that exist in the dossier. Do NOT invent labels.
 - Every bullet must have at least one cited_source from the dossier.
-- Only cite a source if its summary or key quote DIRECTLY supports the specific claim in the bullet.
+- Only cite a source if its evidence items or summary DIRECTLY support the specific claim in the bullet.
 - If no source in the dossier directly supports a bullet, rewrite the bullet to match what the sources actually say, or drop it.
 
 ════ SCOPE ════
