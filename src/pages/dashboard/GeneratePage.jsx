@@ -65,21 +65,21 @@ function SlidesPanel({ secret }) {
   const [period,   setPeriod]   = useState(saved.period   || "quarter");
   const [status,   setStatus]   = useState(saved.status === "queued" || saved.status === "done" ? saved.status : "idle");
   const [error,    setError]    = useState(null);
-  const [elapsed,  setElapsed]  = useState(0);
+  const [elapsed,  setElapsed]  = useState(saved.status === "queued" && saved.startedAt ? Math.floor((Date.now() - saved.startedAt) / 1000) : 0);
   const [pptxUrl,  setPptxUrl]  = useState(saved.pptxUrl  || null);
   const [filename, setFilename] = useState(saved.filename || null);
   const timerRef       = useRef(null);
   const pollRef        = useRef(null);
-  const startRef       = useRef(null);
+  const startRef       = useRef(saved.status === "queued" && saved.startedAt ? saved.startedAt : null);
   const triggeredAtRef = useRef(saved.triggeredAt || null);
 
   // Persist state changes to localStorage
-  useEffect(() => { saveSlidesState({ period, status, pptxUrl, filename, triggeredAt: triggeredAtRef.current }); },
+  useEffect(() => { saveSlidesState({ period, status, pptxUrl, filename, triggeredAt: triggeredAtRef.current, startedAt: startRef.current }); },
     [period, status, pptxUrl, filename]);
 
   useEffect(() => {
     if (status === "queued") {
-      startRef.current = Date.now();
+      if (!startRef.current) startRef.current = Date.now();
       timerRef.current = setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 1000);
     } else {
       clearInterval(timerRef.current);
@@ -116,9 +116,11 @@ function SlidesPanel({ secret }) {
   async function generate() {
     if (status === "queued") return;
     const triggeredAt = new Date().toISOString();
+    const startedAt   = Date.now();
     triggeredAtRef.current = triggeredAt;
+    startRef.current       = startedAt;
     setPptxUrl(null); setFilename(null); setStatus("queued"); setError(null); setElapsed(0);
-    saveSlidesState({ status: "queued", triggeredAt, pptxUrl: null, filename: null, period });
+    saveSlidesState({ status: "queued", triggeredAt, startedAt, pptxUrl: null, filename: null, period });
     try {
       const res = await fetch("/api/generate-report", {
         method: "POST",
