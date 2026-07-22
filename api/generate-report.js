@@ -91,14 +91,32 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  // ── GET: read saved decks ──────────────────────────────────────────────────
+  // ── GET: read saved decks / proxy PPTX download ───────────────────────────
   if (req.method === "GET") {
     try {
-      const { list, deck_id } = req.query;
+      const { list, deck_id, download } = req.query;
 
       if (list === "1") {
         const decks = await listDecks(20);
         return res.status(200).json({ decks });
+      }
+
+      // ?download=1 — proxy the private blob so the browser can save it
+      if (download === "1") {
+        const deck = deck_id ? await getDeck(deck_id) : await loadLatestDeck();
+        if (!deck?.pptx_url) return res.status(404).json({ error: "No PPTX found for this deck" });
+
+        const blobRes = await fetch(deck.pptx_url, {
+          headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+        });
+        if (!blobRes.ok) return res.status(502).json({ error: `Blob fetch failed: ${blobRes.status}` });
+
+        const filename = `horizon_scan_${(deck.deck_id || "deck").replace(/^deck-/, "")}.pptx`;
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.presentationml.presentation");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.setHeader("Cache-Control", "private, no-store");
+        const buf = Buffer.from(await blobRes.arrayBuffer());
+        return res.status(200).send(buf);
       }
 
       const deck = deck_id ? await getDeck(deck_id) : await loadLatestDeck();
@@ -106,7 +124,7 @@ export default async function handler(req, res) {
       if (!deck) {
         return res.status(404).json({
           error: "No deck found",
-          hint: "Run: node scripts/runHorizonScanMVP.js to generate one",
+          hint: "Run: node scripts/generateSlides.js to generate one",
         });
       }
 

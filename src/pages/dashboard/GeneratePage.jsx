@@ -101,10 +101,11 @@ function SlidesPanel({ secret }) {
           clearInterval(pollRef.current);
           const dateStr = new Date(latest.generated_at).toISOString().slice(0, 10);
           const name = `horizon_scan_${period}_${dateStr}.pptx`;
+          const downloadUrl = `/api/generate-report?download=1&deck_id=${latest.deck_id}`;
           setFilename(name);
-          setPptxUrl(latest.pptx_url);
+          setPptxUrl(downloadUrl);
           setStatus("done");
-          saveSlidesState({ status: "done", pptxUrl: latest.pptx_url, filename: name });
+          saveSlidesState({ status: "done", pptxUrl: downloadUrl, filename: name });
         }
       } catch {}
     }
