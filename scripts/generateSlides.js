@@ -23,6 +23,7 @@ import path   from "path";
 import fs     from "fs";
 import { parseArgs } from "node:util";
 
+import { put }                                    from "@vercel/blob";
 import { makeSupabaseClient, fetchSlideCorpus }  from "../lib/slides/fetchSlideCorpus.js";
 import { buildCategoryContext, CATEGORIES }       from "../lib/slides/buildCategoryContext.js";
 import { generateCategoryReport }                 from "../lib/slides/generateCategoryReport.js";
@@ -236,6 +237,40 @@ async function main() {
   const totalIssues = Object.values(qaResults).reduce((n, q) => n + q.issues.length, 0);
   if (totalIssues > 0) {
     log(`\n⚠ ${totalIssues} QA issue(s) — review logs above`);
+  }
+
+  // ── Persist to Vercel Blob + Supabase so the dashboard can find the deck ──
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    log("\nPersisting deck…");
+    try {
+      const pptxBytes  = fs.readFileSync(outPath);
+      const dateKey    = new Date().toISOString().slice(0, 10);
+      const blobKey    = `decks/${dateKey}/horizon-scan-${argv.window || "custom"}.pptx`;
+      const { url: pptxUrl } = await put(blobKey, pptxBytes, {
+        access:          "public",
+        token:           process.env.BLOB_READ_WRITE_TOKEN,
+        addRandomSuffix: false,
+        allowOverwrite:  true,
+        contentType:     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      });
+      log(`  PPTX uploaded → ${pptxUrl}`);
+
+      const deckId     = `deck-${dateKey}-${argv.window || "custom"}`;
+      const { error }  = await supabase.from("decks").upsert({
+        deck_id:             deckId,
+        generated_at:        new Date().toISOString(),
+        source_window_start: dateFrom,
+        source_window_end:   dateTo,
+        source_count:        allSources.length,
+        slide_count,
+        pptx_url:            pptxUrl,
+        deck_version:        "slides-v1.0",
+      }, { onConflict: "deck_id" });
+      if (error) log(`  ⚠ Supabase upsert failed: ${error.message}`);
+      else       log(`  Deck row saved (${deckId})`);
+    } catch (err) {
+      log(`  ⚠ Persist skipped: ${err.message}`);
+    }
   }
 }
 
