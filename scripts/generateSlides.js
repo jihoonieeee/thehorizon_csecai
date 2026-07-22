@@ -243,20 +243,46 @@ async function main() {
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     log("\nPersisting deck…");
     try {
-      const pptxBytes  = fs.readFileSync(outPath);
-      const dateKey    = new Date().toISOString().slice(0, 10);
-      const blobKey    = `decks/${dateKey}/horizon-scan-${argv.window || "custom"}.pptx`;
-      const { url: pptxUrl } = await put(blobKey, pptxBytes, {
-        access:          "private",
-        token:           process.env.BLOB_READ_WRITE_TOKEN,
+      const dateKey  = new Date().toISOString().slice(0, 10);
+      const window   = argv.window || "custom";
+      const deckId   = `deck-${dateKey}-${window}`;
+      const blobBase = `decks/${dateKey}/horizon-scan-${window}`;
+
+      const blobOpts = {
+        access:         "private",
+        token:          process.env.BLOB_READ_WRITE_TOKEN,
         addRandomSuffix: false,
         allowOverwrite:  true,
-        contentType:     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      };
+
+      // Upload PPTX
+      const pptxBytes = fs.readFileSync(outPath);
+      const { url: pptxUrl } = await put(`${blobBase}.pptx`, pptxBytes, {
+        ...blobOpts,
+        contentType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
       });
       log(`  PPTX uploaded → ${pptxUrl}`);
 
-      const deckId     = `deck-${dateKey}-${argv.window || "custom"}`;
-      const { error }  = await supabase.from("decks").upsert({
+      // Upload deck JSON (slides + metadata)
+      const deckJson = JSON.stringify({
+        deck_id:      deckId,
+        generated_at: new Date().toISOString(),
+        timeframe:    timeframeLabel,
+        date_from:    dateFrom,
+        date_to:      dateTo,
+        window,
+        source_count: allSources.length,
+        slide_count,
+        deck,
+        category_reports: categoryReports,
+      }, null, 2);
+      const { url: jsonUrl } = await put(`${blobBase}.json`, deckJson, {
+        ...blobOpts,
+        contentType: "application/json",
+      });
+      log(`  JSON uploaded → ${jsonUrl}`);
+
+      const { error } = await supabase.from("decks").upsert({
         deck_id:             deckId,
         generated_at:        new Date().toISOString(),
         source_window_start: dateFrom,
@@ -264,6 +290,7 @@ async function main() {
         source_count:        allSources.length,
         slide_count,
         pptx_url:            pptxUrl,
+        blob_path:           jsonUrl,
         deck_version:        "slides-v1.0",
       }, { onConflict: "deck_id" });
       if (error) log(`  ⚠ Supabase upsert failed: ${error.message}`);
