@@ -59,6 +59,12 @@ const isHeading = (t) =>
 // Detect exploitation status lines
 const statusMatch = (t) => t.match(/^(confirmed\s+exploitation[^:]*:?\s*)(YES\.?|NO\.?|PARTIAL\.?)/i);
 
+// LLM metadata footer — strip these lines both during streaming and in final answer
+const METADATA_LINE = /^(SCOPE|CONFIDENCE|CONFIDENCE_REASON|CAVEAT|FOLLOWUP):/i;
+
+// Labeled section keywords (Assessment, So what, Defenders, etc.)
+const LABEL_RE = /^(Assessment|So what|So-what|Bottom line|Defenders|Watch|Gap)\s*:\s*([\s\S]*)/i;
+
 function StructuredText({ text, sourceRefs }) {
   if (!text) return null;
 
@@ -79,9 +85,42 @@ function StructuredText({ text, sourceRefs }) {
           return <div key={bi} className="hz-response-divider" />;
         }
 
+        // Strip LLM metadata footer lines (SCOPE:/CONFIDENCE:/CAVEAT: etc.) that
+        // may appear during streaming before the done event cleans the answer.
+        if (METADATA_LINE.test(t)) return null;
+
+        // Markdown headings: ###/##/# — the LLM uses these for section titles
+        // and labeled sections (### So what: / ### Defenders: / ### 1. Title)
+        const mdHeading = t.match(/^(#{1,3})\s+(.*)/);
+        if (mdHeading) {
+          const headText = mdHeading[2].replace(/\*\*/g, "").trim();
+          // Labeled section (### So what: / ### Defenders: / ### Assessment:)
+          const labelM = LABEL_RE.exec(headText);
+          if (labelM) {
+            return (
+              <p key={bi} className="hz-response-para hz-response-labeled">
+                <strong className="hz-response-label">{labelM[1]}:</strong>{" "}
+                {renderInline(labelM[2].trim(), sourceRefs)}
+              </p>
+            );
+          }
+          // Numbered section heading (### 1. Title or ### 2. Title)
+          const numM = headText.match(/^(\d+)[.)]\s+(.*)/);
+          if (numM) {
+            return (
+              <div key={bi} className="hz-response-section-heading">
+                <span className="hz-section-num">{numM[1]}</span>
+                <span className="hz-section-title">{renderInline(numM[2], sourceRefs)}</span>
+              </div>
+            );
+          }
+          // Plain heading
+          return <div key={bi} className="hz-response-heading">{renderInline(headText, sourceRefs)}</div>;
+        }
+
         const lines = t.split("\n").map(l => l.trim()).filter(Boolean);
 
-        // Section heading
+        // Legacy section heading (THREAT 1:, KEY SOURCES:, all-caps)
         if (lines.length === 1 && isHeading(lines[0])) {
           const hText = lines[0].replace(/\*\*/g, "");
           return <div key={bi} className="hz-response-heading">{hText}</div>;
@@ -112,7 +151,6 @@ function StructuredText({ text, sourceRefs }) {
             } else if (sub && merged.length > 0) {
               merged[merged.length - 1].subs.push(sub[1]);
             } else if (merged.length > 0) {
-              // Continuation of the point text, or of the last sub-bullet.
               const item = merged[merged.length - 1];
               if (item.subs.length) item.subs[item.subs.length - 1] += " " + line;
               else item.text += " " + line;
@@ -141,7 +179,7 @@ function StructuredText({ text, sourceRefs }) {
           );
         }
 
-        // Standalone bullet list (no numbers) — e.g. a general-mode answer.
+        // Standalone bullet list (no numbers)
         const hasBullets = lines.some(l => /^[-•]\s+\S/.test(l));
         if (hasBullets) {
           const items = [];
@@ -162,13 +200,14 @@ function StructuredText({ text, sourceRefs }) {
           );
         }
 
-        // Plain paragraph — bold a leading analyst label (Assessment:/So what:/Defenders:).
+        // Plain paragraph — bold a leading analyst label (Assessment:/So what:/Defenders:)
         const joined = lines.join(" ");
-        const labelM = joined.match(/^(Assessment|So what|So-what|Bottom line|Defenders|Watch|Gap)\s*:\s*([\s\S]*)/i);
+        const labelM = LABEL_RE.exec(joined);
         if (labelM) {
           return (
             <p key={bi} className="hz-response-para hz-response-labeled">
-              <strong className="hz-response-label">{labelM[1]}:</strong> {renderInline(labelM[2], sourceRefs)}
+              <strong className="hz-response-label">{labelM[1]}:</strong>{" "}
+              {renderInline(labelM[2].trim(), sourceRefs)}
             </p>
           );
         }
@@ -249,12 +288,12 @@ function Message({ msg, onFollowUp }) {
       })()}
 
       <div className="hz-msg-meta">
-        {msg.confidence && (
+        {msg.confidence && msg.confidence !== "low" && (
           <span className={`hz-msg-conf ${confCls}`} title={msg.confidence_reason}>
             {msg.confidence} confidence
           </span>
         )}
-        {msg.temporal_scope && (
+        {msg.temporal_scope && msg.temporal_scope !== "all available data" && (
           <span className="hz-msg-scope">{msg.temporal_scope}</span>
         )}
         {msg.token_usage && (
@@ -262,7 +301,7 @@ function Message({ msg, onFollowUp }) {
             className="hz-msg-tokens"
             title={`Input: ${msg.token_usage.input_tokens.toLocaleString()} · Output: ${msg.token_usage.output_tokens.toLocaleString()} · ${msg.token_usage.rounds} round${msg.token_usage.rounds !== 1 ? "s" : ""}`}
           >
-            {msg.token_usage.total_tokens.toLocaleString()} tokens · ${msg.token_usage.estimated_cost_usd < 0.01 ? "<$0.01" : `$${msg.token_usage.estimated_cost_usd.toFixed(3)}`}
+            {msg.token_usage.total_tokens.toLocaleString()} tokens · {msg.token_usage.estimated_cost_usd < 0.01 ? "<$0.01" : `$${msg.token_usage.estimated_cost_usd.toFixed(3)}`}
           </span>
         )}
       </div>

@@ -2304,6 +2304,34 @@ a:hover { text-decoration: underline; }
   margin: 4px 0;
 }
 
+/* Numbered section heading (### 1. Title from LLM markdown) */
+.hz-response-section-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 18px;
+  margin-bottom: 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.hz-section-num {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-border);
+  border-radius: 4px;
+  padding: 1px 7px;
+  line-height: 1.6;
+}
+.hz-section-title {
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
 /* ── Exploitation status badge ─────────────────────────────────────────────── */
 
 .hz-status-line {

@@ -168,17 +168,19 @@ function parseResponse(text) {
   const lines = text.split("\n");
   const answerLines = [];
   const meta = { confidence: "low", confidence_reason: "", caveat: null, out_of_scope: false };
+  const META_START = /^(SCOPE|CONFIDENCE|CONFIDENCE_REASON|CAVEAT|FOLLOWUP):/i;
   for (const line of lines) {
-    if (line.startsWith("SCOPE:")) meta.out_of_scope = /out_of_scope/i.test(line);
-    else if (line.startsWith("CONFIDENCE_REASON:")) meta.confidence_reason = line.replace("CONFIDENCE_REASON:", "").trim();
-    else if (line.startsWith("CONFIDENCE:")) {
-      const val = line.replace("CONFIDENCE:", "").trim().toLowerCase();
-      if (["high","moderate","low"].includes(val)) meta.confidence = val;
-    } else if (line.startsWith("CAVEAT:")) {
-      const val = line.replace("CAVEAT:", "").trim();
-      meta.caveat = val === "null" ? null : val;
-    } else if (line.startsWith("FOLLOWUP:")) { /* dropped */ }
-    else answerLines.push(line);
+    if (!META_START.test(line)) { answerLines.push(line); continue; }
+    // Parse all fields from this line — the LLM sometimes puts them all on one
+    // line (e.g. "SCOPE: in_scope CONFIDENCE: high CONFIDENCE_REASON: ... CAVEAT: ...")
+    // so a simple startsWith+else-if chain misses everything after the first match.
+    if (/SCOPE:/i.test(line)) meta.out_of_scope = /out_of_scope/i.test(line);
+    const confM = line.match(/CONFIDENCE:\s*(high|moderate|low)/i);
+    if (confM) meta.confidence = confM[1].toLowerCase();
+    const crM = line.match(/CONFIDENCE_REASON:\s*(.*?)(?=\s+CAVEAT:|$)/);
+    if (crM) meta.confidence_reason = crM[1].trim();
+    const cavM = line.match(/CAVEAT:\s*(.*?)(?=\s+SCOPE:|$)/);
+    if (cavM) { const v = cavM[1].trim(); meta.caveat = v === "null" ? null : (v || null); }
   }
   return { answer: answerLines.join("\n").trim(), ...meta };
 }
