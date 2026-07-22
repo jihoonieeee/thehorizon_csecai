@@ -24,7 +24,7 @@ import fs     from "fs";
 import { parseArgs } from "node:util";
 
 import { put }                                    from "@vercel/blob";
-import { makeSupabaseClient, fetchSlideCorpus }  from "../lib/slides/fetchSlideCorpus.js";
+import { makeSupabaseClient, fetchSlideCorpus, attachEvidence } from "../lib/slides/fetchSlideCorpus.js";
 import { buildCategoryContext, CATEGORIES }       from "../lib/slides/buildCategoryContext.js";
 import { generateCategoryReport }                 from "../lib/slides/generateCategoryReport.js";
 import { qaReport }                               from "../lib/slides/qaReport.js";
@@ -71,7 +71,6 @@ function makeTimeframeLabel(dateFrom, dateTo) {
   const f = new Date(dateFrom + "T12:00:00Z");
   const t = new Date(dateTo   + "T12:00:00Z");
   const monthLong = { month: "long", year: "numeric" };
-  const monthShort = { month: "short" };
   if (f.getMonth() === t.getMonth() && f.getFullYear() === t.getFullYear()) {
     return f.toLocaleDateString("en-GB", monthLong);
   }
@@ -137,8 +136,13 @@ async function main() {
     })
   );
 
-  // ── Step 2b: Build category contexts (deterministic) ─────────────────────
-  log("\nStep 2b/6  Building category contexts…");
+  // ── Step 2b: Attach evidence only to selected sources ────────────────────
+  // Load evidence items from DB only for the selected subset — not all 500+ sources.
+  const allSelected = selectionResults.flatMap(r => r.selectedSources);
+  await attachEvidence(supabase, allSelected);
+
+  // ── Step 2c: Build category contexts (deterministic) ─────────────────────
+  log("\nStep 2c/6  Building category contexts…");
   const contexts = {};
   for (const { cat, selectedSources, clusterContext } of selectionResults) {
     contexts[cat] = buildCategoryContext(cat, selectedSources, clusterContext);
@@ -237,8 +241,8 @@ async function main() {
 
   const outlookSlide  = outlookRaw  ? { ...outlookRaw,  bullets: (outlookRaw.bullets  || []).map(b => ({ ...b, cited_urls: [] })) } : null;
   const overviewSlide = overviewRaw ? { ...overviewRaw, bullets: (overviewRaw.bullets || []).map(b => ({ ...b, cited_urls: [] })) } : null;
-  log(`  Overview: ${(overviewSlide.bullets || []).length} statements`);
-  log(`  Outlook:  ${(outlookSlide.bullets  || []).length} bullets`);
+  log(`  Overview: ${(overviewSlide?.bullets || []).length} statements`);
+  log(`  Outlook:  ${(outlookSlide?.bullets  || []).length} bullets`);
 
   // ── Step 6: Assemble + render ─────────────────────────────────────────────
   log("\nStep 6/6  Assembling deck and rendering PPTX…");

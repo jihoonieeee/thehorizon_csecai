@@ -42,7 +42,7 @@ BAD cluster: "Both sources are about prompt injection." (Too generic — they ma
 
 ════ SELECTION BUDGET ════
 
-Select 6–12 sources. You may go up to 14 when genuine multi-source synthesis opportunities exist across several clusters. Use fewer when the pool is thin, redundant, or dominated by secondary reporting. Do not pad.
+Select 6–12 sources. Use fewer when the pool is thin, redundant, or dominated by secondary reporting. Do not pad to reach 12.
 
 Return ONLY valid JSON.
 ```
@@ -70,5 +70,5 @@ Return:
   "excluded_rationale": "<brief: what was cut and why>"
 }
 
-Select 6–12 sources. Group sources that share a mechanism into clusters. Every cluster needs at least 2 sources.
+Select 6–12 sources. Group sources that share a specific mechanism into clusters (at least 2 sources per cluster).
 ```
