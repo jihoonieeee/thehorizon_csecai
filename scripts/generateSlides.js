@@ -150,26 +150,34 @@ async function main() {
     }
   }
 
-  // ── Step 4: QA pass ───────────────────────────────────────────────────────
-  log("\nStep 4/6  Running QA checks…");
-  const qaResults = {};
+  // ── Steps 4+5: QA + Outlook in parallel ──────────────────────────────────
+  // Outlook only needs categoryReports (done after step 3); QA is independent.
+  // Running them together saves the full wall-clock cost of the outlook call.
+  log("\nSteps 4+5/6  QA checks + Outlook (parallel)…");
+  const allReports = activeCategories.map(c => categoryReports[c]).filter(Boolean);
+
+  const [qaResultPairs, outlookRaw] = await Promise.all([
+    Promise.all(
+      activeCategories.map(async cat => {
+        const report = categoryReports[cat];
+        if (!report) return [cat, { issues: [], citation_issue_count: 0, entailment_issue_count: 0 }];
+        const qa = await qaReport(report, contexts[cat].sourceIndex, { skipEntailment: skipQa });
+        return [cat, qa];
+      })
+    ),
+    generateOutlookSlide(allReports, timeframeLabel, dateFrom, dateTo),
+  ]);
+
+  const qaResults = Object.fromEntries(qaResultPairs);
   for (const cat of activeCategories) {
-    const report = categoryReports[cat];
-    if (!report) continue;
-    const qa = await qaReport(report, contexts[cat].sourceIndex, { skipEntailment: skipQa });
-    qaResults[cat] = qa;
-    if (qa.citation_issue_count > 0) {
-      log(`  ⚠ ${cat}: ${qa.citation_issue_count} citation issues fixed`);
-    }
-    if (qa.entailment_issue_count > 0) {
-      log(`  ⚠ ${cat}: ${qa.entailment_issue_count} entailment failures flagged`);
-    }
-    if (qa.citation_issue_count === 0 && qa.entailment_issue_count === 0) {
-      log(`  ✓ ${cat}: QA passed`);
-    }
+    const qa = qaResults[cat];
+    if (!qa) continue;
+    if (qa.citation_issue_count > 0)   log(`  ⚠ ${cat}: ${qa.citation_issue_count} citation issues fixed`);
+    if (qa.entailment_issue_count > 0) log(`  ⚠ ${cat}: ${qa.entailment_issue_count} entailment failures flagged`);
+    if (qa.citation_issue_count === 0 && qa.entailment_issue_count === 0) log(`  ✓ ${cat}: QA passed`);
   }
 
-  // ── Step 5: Plan category slides + generate outlook ───────────────────────
+  // ── Step 5 (cont): Plan category slides ──────────────────────────────────
   log("\nStep 5/6  Planning slides…");
 
   // Resolve S-labels → URLs for each category, build urlSourceInfo
@@ -209,13 +217,9 @@ async function main() {
     }));
 
     categorySlides[cat] = resolvedSlides;
-    const totalSlides = resolvedSlides.length;
-    log(`  ${cat}: ${totalSlides} slides`);
+    log(`  ${cat}: ${resolvedSlides.length} slides`);
   }
 
-  // Outlook slide
-  const allReports = activeCategories.map(c => categoryReports[c]).filter(Boolean);
-  const outlookRaw = await generateOutlookSlide(allReports, timeframeLabel, dateFrom, dateTo);
   // Outlook bullets have no cited_urls
   const outlookSlide = {
     ...outlookRaw,
