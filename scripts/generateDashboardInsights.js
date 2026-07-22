@@ -8,8 +8,7 @@
  * idempotent — skips window_key × category rows that already exist (unless --force).
  *
  * PIPELINE (per category) — never papers → insights directly:
- *   Stage A (Sonnet):  source summaries → atomic findings → 2-5 themes
- *   Stage B (Sonnet):  themes (NOT raw papers) → structured insights + assessment
+ *   Stage A (Sonnet):  findings → structured insights + assessment (mechanism grouping is internal reasoning)
  *   QA      (Haiku):   reject paper-summaries / claims beyond the evidence maturity
  *   Deterministic:     evidence maturity (from source_type) + confidence cap
  *
@@ -111,7 +110,7 @@ async function callAnthropic({ system, user, model, maxTokens = 1200, task = "da
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        // 90s: the multi-signal emerging-signals / themes calls return large JSON
+        // 90s: the combined insights call returns large JSON with internal reasoning
         // and were tripping a 60s cap under API load.
         signal: AbortSignal.timeout(90000),
         headers: {
@@ -254,46 +253,24 @@ function closeTruncatedJson(s) {
   return head + safeStack.reverse().join("");
 }
 
-// ── Stage A: findings → themes ─────────────────────────────────────────────────
-
-const THEMES_SYSTEM = loadPrompt("insights/themes").system;
-
-function buildThemesPrompt(catLabel, windowLabel, findings, leadFlags = []) {
-  // Present findings in two labelled groups so the model can anchor themes in the
-  // strongest signal. Both are capped upstream (composeCategoryFindings).
-  const lead = findings.filter((_, i) => leadFlags[i]);
-  const bg   = findings.filter((_, i) => !leadFlags[i]);
-  const priorityBlock = lead.length
-    ? `PRIORITY findings (realized incidents / landmark research — anchor themes here):\n${lead.map((s, i) => `  ${i + 1}. ${s}`).join("\n")}\n\n`
-    : "";
-  const bgBlock = bg.length
-    ? `BACKGROUND findings (lower-signal context — supporting only):\n${bg.map((s, i) => `  ${i + 1}. ${s}`).join("\n")}`
-    : "";
-  return `Category: ${catLabel}
-Period: ${windowLabel}
-Source findings (${findings.length} grounded facts / summaries; ${lead.length} priority, ${bg.length} background):
-
-${priorityBlock}${bgBlock}
-
-Extract findings and cluster into themes, led by the PRIORITY findings.`;
-}
-
-// ── Stage B: themes → structured insights ──────────────────────────────────────
+// ── Single-stage: findings → insights ─────────────────────────────────────────
+// Stage A (themes) and Stage B (insights) have been collapsed into one call.
+// Mechanism grouping is now internal reasoning inside the prompt rather than
+// a separate LLM pass — this removes one Sonnet call per category, one failure
+// point, and the lossy theme-label compression that sat between the evidence
+// and the prose.
 
 const INSIGHTS_SYSTEM = loadPrompt("insights/insights").system;
 
-function buildInsightsPrompt(catLabel, windowLabel, themes, maturity, confidence) {
-  const themeLines = themes.map((t, i) => {
-    // Cap per-theme findings so each insight stays anchored to 3–5 sources.
-    // Wider caps produce insights spanning 10+ sources that attribution cannot
-    // fully cover, causing citation grounding to kill otherwise valid insights.
-    const pf = (t.priority_findings   || t.findings || []).slice(0, 4);
-    const bf = (t.background_findings || []).slice(0, 2);
-    const mechanism = t.shared_mechanism ? `\n   Mechanism: ${t.shared_mechanism}` : "";
-    const pfLines = pf.length ? `\n   Priority evidence:\n${pf.map(f => `     • ${f}`).join("\n")}` : "";
-    const bfLines = bf.length ? `\n   Background corroboration:\n${bf.map(f => `     · ${f}`).join("\n")}` : "";
-    return `Theme ${i + 1}: ${t.theme}${mechanism}${pfLines}${bfLines}`;
-  }).join("\n\n");
+function buildInsightsPrompt(catLabel, windowLabel, findings, leadFlags = [], maturity, confidence) {
+  const lead = findings.filter((_, i) => leadFlags[i]);
+  const bg   = findings.filter((_, i) => !leadFlags[i]);
+  const priorityBlock = lead.length
+    ? `PRIORITY findings (realized incidents / landmark research — anchor insights here):\n${lead.map((s, i) => `  ${i + 1}. ${s}`).join("\n")}\n\n`
+    : "";
+  const bgBlock = bg.length
+    ? `BACKGROUND findings (lower-signal context — corroboration only):\n${bg.map((s, i) => `  ${i + 1}. ${s}`).join("\n")}`
+    : "";
   return `Category: ${catLabel}
 Period: ${windowLabel}
 
@@ -301,11 +278,11 @@ EVIDENCE MATURITY (drives your calibration — do not overclaim beyond it):
   ${maturityShortLine(maturity)}  (total ${maturity.total})
   Confidence ceiling: ${confidence.level} — ${confidence.reason}
 
-ANALYTICAL THEMES (each theme names a shared mechanism; synthesise from the pattern, not from individual findings):
+SOURCE FINDINGS (${findings.length} grounded facts / summaries; ${lead.length} priority, ${bg.length} background):
 
-${themeLines}
+${priorityBlock}${bgBlock}
 
-Produce the assessment and structured insights.`;
+Identify the shared mechanisms across these findings, then produce the assessment and structured insights.`;
 }
 
 // ── QA: publication gate — factual accuracy, citation fidelity, maturity language ──
@@ -535,7 +512,7 @@ function composeCategoryFindings(catRows, evItems = [], cap = 40) {
   const perParent = new Map();
 
   // Signal prefix for findings: [maturity | source_type | publisher]
-  // Gives themes and insights LLMs the data to rank operational evidence above research.
+  // Gives the insights LLM the data to rank operational evidence above research.
   const signalPrefix = (row) => {
     const m = maturityOf(row) || "research";
     const t = row?.source_type || "unknown";
@@ -892,23 +869,12 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs, leadFl
   const confidence = deriveConfidence(maturity);
   const totalCount = maturitySrcs.length; // canonical = all validated sources (matches the card)
 
-  // Stage A: findings → themes. maxTokens scales with input — 40 evidence facts
-  // produce a longer themes payload than the old 24 summaries; too low truncates
-  // the JSON mid-array.
-  const themesOut = await callAnthropic({
-    system: THEMES_SYSTEM, task: "dashboard_themes",
-    user: buildThemesPrompt(cat.label, windowLabel, findings, leadFlags),
-    maxTokens: 3000,
-  });
-  const themes = Array.isArray(themesOut.themes) ? themesOut.themes : [];
-  if (!themes.length) throw new Error("no themes extracted");
-
-  // Stage B: themes → structured insights. maxTokens raised to fit the new
-  // 120-180-word explanation per insight (2-4 insights → ~600-720 extra words).
+  // Single call: findings → insights (mechanism grouping is internal reasoning).
+  // maxTokens sized for 2–4 insights with 4–6 bullets each plus internal reasoning.
   const out = await callAnthropic({
     system: INSIGHTS_SYSTEM, task: "dashboard_insights",
-    user: buildInsightsPrompt(cat.label, windowLabel, themes, maturity, confidence),
-    maxTokens: 2800,
+    user: buildInsightsPrompt(cat.label, windowLabel, findings, leadFlags, maturity, confidence),
+    maxTokens: 3200,
   });
   let insights = Array.isArray(out.insights) ? out.insights : [];
   insights = insights

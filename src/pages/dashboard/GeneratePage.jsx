@@ -223,17 +223,47 @@ const NL_WINDOWS = [
   { id: "month", label: "Past month" },
 ];
 
+const NL_STORAGE_KEY = "hz_newsletter_cache";
+
+function loadNlCache() {
+  try {
+    const raw = localStorage.getItem(NL_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveNlCache(cache) {
+  try { localStorage.setItem(NL_STORAGE_KEY, JSON.stringify(cache)); } catch {}
+}
+
 function NewsletterPanel({ secret }) {
   const [win,     setWin]     = useState("week");
   const [status,  setStatus]  = useState("idle");
-  const [html,    setHtml]    = useState(null);
-  const [meta,    setMeta]    = useState(null);
   const [error,   setError]   = useState(null);
   const [elapsed, setElapsed] = useState(0);
   const [copied,  setCopied]  = useState(false);
+  // Per-window cache: { week: { html, meta, generatedAt }, month: { ... } }
+  const [cache,   setCache]   = useState(loadNlCache);
   const timerRef  = useRef(null);
   const startRef  = useRef(null);
   const iframeRef = useRef(null);
+
+  // Derived from cache for the active window
+  const cached = cache[win] || null;
+  const html   = cached?.html  || null;
+  const meta   = cached?.meta  || null;
+  const isDone = !!html && status !== "running";
+
+  // Persist cache to localStorage whenever it changes
+  useEffect(() => { saveNlCache(cache); }, [cache]);
+
+  // Auto-resize iframe when window tab switches or html changes
+  useEffect(() => {
+    if (iframeRef.current && html) {
+      // Re-trigger onIframeLoad by resetting the srcDoc via a short delay
+      iframeRef.current.style.height = "400px";
+    }
+  }, [win, html]);
 
   useEffect(() => {
     if (status === "running") {
@@ -245,7 +275,6 @@ function NewsletterPanel({ secret }) {
     return () => clearInterval(timerRef.current);
   }, [status]);
 
-  // Auto-size the iframe to its content height once it loads.
   const onIframeLoad = useCallback(() => {
     try {
       const doc = iframeRef.current?.contentWindow?.document;
@@ -255,7 +284,7 @@ function NewsletterPanel({ secret }) {
 
   async function generate() {
     if (status === "running") return;
-    setStatus("running"); setError(null); setHtml(null); setMeta(null); setElapsed(0); setCopied(false);
+    setStatus("running"); setError(null); setElapsed(0); setCopied(false);
     try {
       const res = await fetch("/api/dashboard", {
         method: "POST",
@@ -268,7 +297,9 @@ function NewsletterPanel({ secret }) {
         throw new Error(msg);
       }
       const data = await res.json();
-      setHtml(data.html || data.text || ""); setMeta(data); setStatus("done");
+      const entry = { html: data.html || data.text || "", meta: data, generatedAt: new Date().toISOString() };
+      setCache(prev => ({ ...prev, [win]: entry }));
+      setStatus("done");
     } catch (err) {
       setError(err.message); setStatus("error");
     }
@@ -277,7 +308,6 @@ function NewsletterPanel({ secret }) {
   async function copy() {
     if (!html) return;
     try {
-      // Copy as text/html so Gmail/Outlook paste renders the styles, not raw source.
       await navigator.clipboard.write([
         new ClipboardItem({
           "text/html":  new Blob([html], { type: "text/html"  }),
@@ -285,7 +315,6 @@ function NewsletterPanel({ secret }) {
         }),
       ]);
     } catch {
-      // Firefox fallback — copies raw HTML (still usable)
       const ta = Object.assign(document.createElement("textarea"), { value: html, style: "position:fixed;opacity:0" });
       document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
     }
@@ -293,7 +322,6 @@ function NewsletterPanel({ secret }) {
   }
 
   const isRunning = status === "running";
-  const isDone    = status === "done";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -302,7 +330,7 @@ function NewsletterPanel({ secret }) {
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: 6 }}>
           {NL_WINDOWS.map(w => (
-            <button key={w.id} disabled={isRunning} onClick={() => setWin(w.id)} style={{
+            <button key={w.id} disabled={isRunning} onClick={() => { setWin(w.id); setError(null); }} style={{
               padding: "6px 14px", borderRadius: 6, border: "1px solid",
               fontSize: "0.8rem", fontWeight: 600, cursor: isRunning ? "not-allowed" : "pointer",
               background:  win === w.id ? "var(--accent-dim)" : "transparent",
@@ -310,6 +338,11 @@ function NewsletterPanel({ secret }) {
               color:       win === w.id ? "var(--accent)" : "var(--text-secondary)",
             }}>
               {w.label}
+              {cache[w.id] && (
+                <span style={{ marginLeft: 6, fontSize: "0.68rem", opacity: 0.6, fontWeight: 400 }}>
+                  {new Date(cache[w.id].generatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -335,10 +368,12 @@ function NewsletterPanel({ secret }) {
       {/* Preview */}
       {isDone && html && (
         <div>
-          {/* Toolbar above preview */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <span style={{ fontSize: "0.72rem", color: "var(--text-tertiary)" }}>
               {meta?.sourceCount} sources &middot; {meta?.period?.label}
+              {cached?.generatedAt && (
+                <> &middot; generated {new Date(cached.generatedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</>
+              )}
             </span>
             <button onClick={copy} style={{
               display: "flex", alignItems: "center", gap: 6,
@@ -353,7 +388,6 @@ function NewsletterPanel({ secret }) {
             </button>
           </div>
 
-          {/* Rendered preview in iframe */}
           <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
             <iframe
               ref={iframeRef}
@@ -371,9 +405,9 @@ function NewsletterPanel({ secret }) {
         </div>
       )}
 
-      {status === "idle" && (
+      {!isDone && !isRunning && status !== "error" && (
         <div style={{ padding: "44px 20px", textAlign: "center", border: "1px dashed var(--border)", borderRadius: 10, color: "var(--text-tertiary)", fontSize: "0.84rem" }}>
-          Select a window and click Generate.
+          {cache[win] ? "Newsletter cleared — click Generate to create a new one." : "Select a window and click Generate."}
         </div>
       )}
     </div>
