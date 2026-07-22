@@ -30,6 +30,7 @@ import { generateCategoryReport }                 from "../lib/slides/generateCa
 import { qaReport }                               from "../lib/slides/qaReport.js";
 import { planCategorySlides }                     from "../lib/slides/planCategorySlides.js";
 import { generateOutlookSlide }                   from "../lib/slides/generateOutlookSlide.js";
+import { generateOverviewSlide }                  from "../lib/slides/generateOverviewSlide.js";
 import { assembleDeck }                           from "../lib/slides/assembleDeck.js";
 import { renderDeckPptx }                         from "../lib/pipeline/slides/renderDeckPptx.js";
 
@@ -148,7 +149,7 @@ async function main() {
   log("\nSteps 4+5/6  QA checks + Outlook (parallel)…");
   const allReports = activeCategories.map(c => categoryReports[c]).filter(Boolean);
 
-  const [qaResultPairs, outlookRaw] = await Promise.all([
+  const [qaResultPairs, outlookRaw, overviewRaw] = await Promise.all([
     Promise.all(
       activeCategories.map(async cat => {
         const report = categoryReports[cat];
@@ -158,6 +159,7 @@ async function main() {
       })
     ),
     generateOutlookSlide(allReports, timeframeLabel, dateFrom, dateTo),
+    generateOverviewSlide(allReports, timeframeLabel, dateFrom, dateTo),
   ]);
 
   const qaResults = Object.fromEntries(qaResultPairs);
@@ -212,16 +214,14 @@ async function main() {
     log(`  ${cat}: ${resolvedSlides.length} slides`);
   }
 
-  // Outlook bullets have no cited_urls
-  const outlookSlide = {
-    ...outlookRaw,
-    bullets: (outlookRaw.bullets || []).map(b => ({ ...b, cited_urls: [] })),
-  };
-  log(`  Outlook: ${(outlookSlide.bullets || []).length} bullets`);
+  const outlookSlide  = { ...outlookRaw,  bullets: (outlookRaw.bullets  || []).map(b => ({ ...b, cited_urls: [] })) };
+  const overviewSlide = { ...overviewRaw, bullets: (overviewRaw.bullets || []).map(b => ({ ...b, cited_urls: [] })) };
+  log(`  Overview: ${(overviewSlide.bullets || []).length} statements`);
+  log(`  Outlook:  ${(outlookSlide.bullets  || []).length} bullets`);
 
   // ── Step 6: Assemble + render ─────────────────────────────────────────────
   log("\nStep 6/6  Assembling deck and rendering PPTX…");
-  const deck = assembleDeck(categorySlides, outlookSlide, urlSourceInfo, timeframeLabel);
+  const deck = assembleDeck(categorySlides, outlookSlide, overviewSlide, urlSourceInfo, timeframeLabel);
 
   const outDir = path.dirname(outPath);
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
