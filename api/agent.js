@@ -21,7 +21,7 @@
  * instead of the old always-on 4-tool blob. Sonnet input is much smaller.
  */
 
-import { executeTool, retrieveRelevant } from "../lib/agent/agentTools.js";
+import { executeTool, retrieveRelevant, enrichSourcesWithFullText } from "../lib/agent/agentTools.js";
 import { planQuery } from "../lib/agent/queryPlanner.js";
 import { selectSources } from "../lib/agent/agentLlm.js";
 import { verifyAnswer } from "../lib/agent/verifyAnswer.js";
@@ -527,10 +527,13 @@ export default async function handler(req, res) {
     // Pre-filter marketing blogs HERE before synthesis — if we wait until post-QA
     // to strip their citations, the prose that referenced them remains in the answer
     // as orphaned, uncited sentences.
-    const sourceRefs = ret.sources
+    const sourceRefsRaw = ret.sources
       .filter(s => selectedSet.has(s.ref))
       .filter(s => !s.url || !isMarketingBlog(s.url))
       .map((s, i) => ({ ...s, ref: `src-${i + 1}` }));
+    // Enrich selected sources with full article text (up to 2000 chars) so the
+    // synthesis LLM has the real body rather than a 400-char summary snippet.
+    const sourceRefs = await enrichSourcesWithFullText(sourceRefsRaw);
     const isGeneral = sel.verdict === "none" || sourceRefs.length === 0;
 
     let evidence = [], judgments = [], trends = [], cveResults = [];
