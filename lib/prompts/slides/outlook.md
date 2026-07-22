@@ -36,10 +36,10 @@ Return ONLY valid JSON.
 ## User Prompt Template
 
 ```
-Produce a 6-month outlook slide based on the following developments and signals observed during {{period_label}} ({{date_from}} to {{date_to}}).
+Produce a 6-month outlook slide based on the following strategic shifts observed during {{period_label}} ({{date_from}} to {{date_to}}).
 
-CATEGORY DEVELOPMENTS AND SIGNALS
-==================================
+CATEGORY SHIFTS THIS PERIOD
+============================
 {{category_summaries}}
 
 ════ OUTPUT FORMAT ════

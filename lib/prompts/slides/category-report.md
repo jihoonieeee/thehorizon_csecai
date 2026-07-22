@@ -45,7 +45,9 @@ Good synthesis: web pages, repository issues, and poisoned tool descriptions all
 
 Bad aggregation: one paper covers prompt injection, another covers a CVE, a third covers malware. Three different mechanisms — these are three shifts or none, not one.
 
-Repeated secondary reporting about one primary disclosure counts as one evidence base, not independent corroboration.
+Secondary reporting trap: if 8 of 15 sources are news articles covering the same disclosure or incident, that counts as one evidence base, not 8 independent sources. Repeated coverage of one event does not establish independent corroboration. Check whether sources share the same root event before claiming multi-source support.
+
+Recency: when two shifts are otherwise equal in significance, prefer the one supported by more recent evidence within the reporting window.
 
 ════ HEADLINE ════
 
@@ -192,10 +194,11 @@ Return:
       }
     }
   ],
-  "coverage_gaps": ["<specific gap>"]
+  "coverage_gaps": ["<specific gap, or omit array if none>"]
 }
 
 Target two or three strategic shifts. Return fewer only to avoid filler.
 At most one case_study across all shifts.
 Every supporting_evidence fact must cite at least one valid S-label from the dossier above.
+coverage_gaps: include only if there is a meaningful gap in the evidence (e.g. a known active threat with no sources, or a category with very thin coverage). Omit or leave empty otherwise.
 ```

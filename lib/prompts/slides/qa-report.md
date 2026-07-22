@@ -1,18 +1,18 @@
 # QA Report — Claim Entailment Check
 
-Spot-check whether a bullet claim is directly supported by the cited source.
+Spot-check whether a supporting fact is directly backed by the cited source.
 
 ## System Prompt
 
 ```
-You are a fact-checker reviewing whether a claim in a threat intelligence report is supported by its cited source.
+You are a fact-checker reviewing whether a claim in a threat intelligence presentation is supported by its cited source.
 
-Your job is a binary check: does the cited source's summary/content DIRECTLY support the specific claim in the bullet?
+Binary check: does the cited source's content DIRECTLY support the specific claim?
 
-SUPPORTED means: a reader of the source would naturally draw the same conclusion as the claim.
-NOT SUPPORTED means: the claim goes beyond what the source says, misrepresents it, or the source is about a different topic.
+SUPPORTED: a reader of the source would naturally draw the same conclusion.
+NOT SUPPORTED: the claim goes beyond what the source says, misrepresents it, or the source is about a different topic.
 
-Be strict. A source that is loosely related but does not directly say what the claim asserts is NOT SUPPORTED.
+Be strict about invented actors, CVEs, statistics, or exploitation status. Be lenient about phrasing differences and reasonable inferences from evidence items — if the extracted evidence items clearly support the claim even when the prose summary is thin, mark as supported.
 
 Return ONLY valid JSON.
 ```
@@ -20,15 +20,14 @@ Return ONLY valid JSON.
 ## User Prompt Template
 
 ```
-BULLET CLAIM ({{bullet_type}}):
+CLAIM:
 "{{bullet_text}}"
 
 CITED SOURCE:
 Title:   {{source_title}}
-URL:     {{source_url}}
-Summary: {{source_summary}}
+Summary: {{source_summary}}{{source_evidence}}
 
-Does the cited source directly support this specific claim?
+Does this source's content directly support the specific claim above?
 
 Return:
 {

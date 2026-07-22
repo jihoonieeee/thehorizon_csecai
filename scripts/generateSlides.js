@@ -128,8 +128,8 @@ async function main() {
     activeCategories.map(async cat => {
       const t0 = Date.now();
       const report = await generateCategoryReport(cat, contexts[cat], timeframeLabel, dateFrom, dateTo);
-      const devCount = (report.developments || []).length;
-      log(`  ✓ ${cat}: ${devCount} developments (${Date.now() - t0}ms)`);
+      const shiftCount = (report.strategic_shifts || []).length;
+      log(`  ✓ ${cat}: ${shiftCount} shifts (${Date.now() - t0}ms)`);
       return { cat, report };
     })
   );
@@ -291,7 +291,7 @@ async function main() {
         slide_count,
         pptx_url:            pptxUrl,
         blob_path:           jsonUrl,
-        deck_version:        "slides-v1.0",
+        deck_version:        deck.deck_version || "slides-v2.0",
       }, { onConflict: "deck_id" });
       if (error) log(`  ⚠ Supabase upsert failed: ${error.message}`);
       else       log(`  Deck row saved (${deckId})`);
