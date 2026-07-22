@@ -34,7 +34,7 @@ const GH_OWNER    = "landonzhao";
 const GH_REPO     = "thehorizon";
 const GH_WORKFLOW = "generate-slides.yml";
 
-async function dispatchGitHubWorkflow({ days, limit }) {
+async function dispatchGitHubWorkflow({ window: win }) {
   const pat = process.env.GITHUB_PAT;
   if (!pat) throw new Error("GITHUB_PAT env var not set — add a GitHub personal access token with actions:write scope");
 
@@ -48,7 +48,7 @@ async function dispatchGitHubWorkflow({ days, limit }) {
         "Content-Type":  "application/json",
         "X-GitHub-Api-Version": "2022-11-28",
       },
-      body: JSON.stringify({ ref: "main", inputs: { days: String(days) } }),
+      body: JSON.stringify({ ref: "main", inputs: { window: win } }),
     }
   );
 
@@ -123,20 +123,19 @@ export default async function handler(req, res) {
   // GET /api/generate-report?list=1 for completion.
   if (req.method === "POST") {
     try {
-      const { window: win = "half_year", days: daysOverride } = req.body || {};
+      const { window: win = "half_year" } = req.body || {};
 
-      const days = daysOverride || WINDOW_DAYS[win];
-      if (!days) {
+      if (!WINDOW_DAYS[win]) {
         return res.status(400).json({
           error: `Invalid window "${win}". Must be one of: ${Object.keys(WINDOW_DAYS).join(", ")}`,
         });
       }
 
-      await dispatchGitHubWorkflow({ days });
+      await dispatchGitHubWorkflow({ window: win });
 
       return res.status(202).json({
         queued: true,
-        days,
+        days: WINDOW_DAYS[win],
         window: win,
         triggered_at: new Date().toISOString(),
         message: "Generation queued. Poll GET /api/generate-report?list=1 — a new deck will appear in 10–30 minutes.",
