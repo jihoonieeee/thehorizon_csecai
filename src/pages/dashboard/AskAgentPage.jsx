@@ -85,37 +85,64 @@ function StructuredText({ text, sourceRefs }) {
           return <div key={bi} className="hz-response-divider" />;
         }
 
-        // Strip LLM metadata footer lines (SCOPE:/CONFIDENCE:/CAVEAT: etc.) that
-        // may appear during streaming before the done event cleans the answer.
+        // Strip LLM metadata footer lines (SCOPE:/CONFIDENCE:/CAVEAT: etc.).
+        // Check the whole block — during streaming these may arrive as standalone
+        // blocks OR embedded with content; strip any block that starts with a
+        // metadata key OR whose ONLY non-empty lines are metadata keys.
         if (METADATA_LINE.test(t)) return null;
+        const blockLinesRaw = t.split("\n");
+        const nonMetaLines = blockLinesRaw.filter(l => !METADATA_LINE.test(l.trim()) && l.trim());
+        if (nonMetaLines.length === 0) return null;  // all lines were metadata
 
-        // Markdown headings: ###/##/# — the LLM uses these for section titles
-        // and labeled sections (### So what: / ### Defenders: / ### 1. Title)
+        // Markdown headings: ###/##/# — LLM uses these for section titles.
+        // mdHeading[2] only captures the first line; extract content from
+        // subsequent lines in the same block too (LLM often puts label on one
+        // line and content on the next with a single newline, not double).
         const mdHeading = t.match(/^(#{1,3})\s+(.*)/);
         if (mdHeading) {
-          const headText = mdHeading[2].replace(/\*\*/g, "").trim();
-          // Labeled section (### So what: / ### Defenders: / ### Assessment:)
-          const labelM = LABEL_RE.exec(headText);
+          const level    = mdHeading[1].length;
+          const firstLine = mdHeading[2].replace(/\*\*/g, "").trim();
+          // Content on subsequent lines of the same block
+          const restText = blockLinesRaw.slice(1).map(l => l.trim()).filter(Boolean).join(" ").trim();
+
+          // h1/h2 are document-level titles (e.g. "## AI as an Attack Tool: ...") — suppress
+          if (level <= 2) return null;
+
+          // Labeled section: ### So what: / ### Defenders: / ### Assessment:
+          const labelM = LABEL_RE.exec(firstLine);
           if (labelM) {
+            const content = (labelM[2].trim() || restText).trim();
+            if (!content) return null;  // empty section — skip entirely
             return (
               <p key={bi} className="hz-response-para hz-response-labeled">
                 <strong className="hz-response-label">{labelM[1]}:</strong>{" "}
-                {renderInline(labelM[2].trim(), sourceRefs)}
+                {renderInline(content, sourceRefs)}
               </p>
             );
           }
-          // Numbered section heading (### 1. Title or ### 2. Title)
-          const numM = headText.match(/^(\d+)[.)]\s+(.*)/);
+
+          // Numbered section heading: ### 1. Title
+          const numM = firstLine.match(/^(\d+)[.)]\s+(.*)/);
           if (numM) {
             return (
-              <div key={bi} className="hz-response-section-heading">
-                <span className="hz-section-num">{numM[1]}</span>
-                <span className="hz-section-title">{renderInline(numM[2], sourceRefs)}</span>
+              <div key={bi}>
+                <div className="hz-response-section-heading">
+                  <span className="hz-section-num">{numM[1]}</span>
+                  <span className="hz-section-title">{renderInline(numM[2], sourceRefs)}</span>
+                </div>
+                {restText && <p className="hz-response-para" style={{ marginTop: 4 }}>{renderInline(restText, sourceRefs)}</p>}
               </div>
             );
           }
-          // Plain heading
-          return <div key={bi} className="hz-response-heading">{renderInline(headText, sourceRefs)}</div>;
+
+          // Plain h3 heading
+          if (!firstLine) return null;
+          return (
+            <div key={bi}>
+              <div className="hz-response-heading">{renderInline(firstLine, sourceRefs)}</div>
+              {restText && <p className="hz-response-para">{renderInline(restText, sourceRefs)}</p>}
+            </div>
+          );
         }
 
         const lines = t.split("\n").map(l => l.trim()).filter(Boolean);
