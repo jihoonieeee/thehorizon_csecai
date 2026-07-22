@@ -58,17 +58,18 @@ SOURCE CATALOG
 
 ════ OUTPUT FORMAT ════
 
-Return:
+Return JSON matching this shape exactly:
+
 {
-  "selected": ["C3", "C7", "C12"],
+  "selected": ["C2", "C5", "C9", "C14", "C21"],
   "clusters": [
     {
-      "sources": ["C3", "C7", "C12"],
-      "mechanism": "<one phrase — what these sources share>"
+      "sources": ["C5", "C9", "C14"],
+      "mechanism": "external content redirecting privileged agent tool calls"
     }
   ],
-  "excluded_rationale": "<brief: what was cut and why>"
+  "excluded_rationale": "C1, C3, C8 are secondary news coverage of the same CVE as C2; C6, C11 are advisory summaries with no new operational detail"
 }
 
-Select 6–12 sources. Group sources that share a specific mechanism into clusters (at least 2 sources per cluster).
+Select 6–12 sources. Singletons (no cluster) are fine — not every selected source must belong to a cluster. Only group sources that share a specific mechanism.
 ```

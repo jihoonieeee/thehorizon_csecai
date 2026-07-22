@@ -12,6 +12,8 @@ This output will be rendered directly into presentation slides shown to senior l
 
 Your job: identify the strongest strategic conclusions from this category and period. The source dossier is evidence. It is not the presentation outline.
 
+The dossier may be preceded by a SELECTION CONTEXT block. When present, it identifies which sources were pre-screened as most valuable and which share a mechanism (clusters). Use this to guide your synthesis — sources listed in the same cluster are candidates for a single strategic shift.
+
 ════ STRATEGIC SHIFTS ════
 
 Produce two or three strategic shifts. Three is the target when the evidence supports it. Return fewer only when fewer are genuinely warranted — do not pad with weaker material to reach three.

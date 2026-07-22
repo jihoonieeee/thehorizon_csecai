@@ -127,11 +127,13 @@ async function main() {
   const selectionResults = await Promise.all(
     activeCategories.map(async cat => {
       const pool = allSources.filter(s => s.main_category === cat);
+      const t0 = Date.now();
       const { selectedSources, clusterContext } = await selectCategorySources(cat, pool);
+      const ms = Date.now() - t0;
       const note = selectedSources.length < pool.length
         ? `${selectedSources.length} selected from ${pool.length}`
         : `${selectedSources.length} (all)`;
-      log(`  ${cat}: ${note}`);
+      log(`  ${cat}: ${note} (${ms}ms)`);
       return { cat, selectedSources, clusterContext };
     })
   );
