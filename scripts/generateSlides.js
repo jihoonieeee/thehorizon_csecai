@@ -29,6 +29,7 @@ import { buildCategoryContext, CATEGORIES }       from "../lib/slides/buildCateg
 import { generateCategoryReport }                 from "../lib/slides/generateCategoryReport.js";
 import { qaReport }                               from "../lib/slides/qaReport.js";
 import { planCategorySlides }                     from "../lib/slides/planCategorySlides.js";
+import { selectCategorySources }                  from "../lib/slides/selectCategorySources.js";
 import { generateOutlookSlide }                   from "../lib/slides/generateOutlookSlide.js";
 import { generateOverviewSlide }                  from "../lib/slides/generateOverviewSlide.js";
 import { assembleDeck }                           from "../lib/slides/assembleDeck.js";
@@ -120,15 +121,27 @@ async function main() {
     return;
   }
 
-  // ── Step 2: Build category contexts (deterministic) ───────────────────────
-  log("\nStep 2/6  Building category contexts…");
+  // ── Step 2a: Source selection (Haiku, parallel) ──────────────────────────
+  // Each category's full eligible pool is shown to Haiku, which picks the most
+  // strategically valuable sources and identifies clusters (shared mechanisms).
+  log("\nStep 2a/6  Selecting sources (parallel)…");
+  const selectionResults = await Promise.all(
+    activeCategories.map(async cat => {
+      const pool = allSources.filter(s => s.main_category === cat);
+      const { selectedSources, clusterContext } = await selectCategorySources(cat, pool);
+      const note = selectedSources.length < pool.length
+        ? `${selectedSources.length} selected from ${pool.length}`
+        : `${selectedSources.length} (all)`;
+      log(`  ${cat}: ${note}`);
+      return { cat, selectedSources, clusterContext };
+    })
+  );
+
+  // ── Step 2b: Build category contexts (deterministic) ─────────────────────
+  log("\nStep 2b/6  Building category contexts…");
   const contexts = {};
-  for (const cat of activeCategories) {
-    const total = allSources.filter(s => s.main_category === cat).length;
-    contexts[cat] = buildCategoryContext(cat, allSources);
-    const used = contexts[cat].sources.length;
-    const note = used < total ? ` (${total} available, top ${used} selected)` : "";
-    log(`  ${cat}: ${used} sources in dossier${note}`);
+  for (const { cat, selectedSources, clusterContext } of selectionResults) {
+    contexts[cat] = buildCategoryContext(cat, selectedSources, clusterContext);
   }
 
   // ── Step 3: Generate category reports (LLM, parallel) ────────────────────
