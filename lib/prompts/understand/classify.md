@@ -1258,7 +1258,7 @@ out neighbouring tags. Assign the single primary_tag that names the core threat.
       execute arbitrary commands when a developer opens an IDE. The AI coding assistant
       (Claude Code, Cursor, Copilot) is the victim — it is tricked into running malware
       via malicious config directives. Spreads via developer git pushes.
-      ⇒ agentic_ai_threats / ASI04_agentic_supply_chain + ASI03_prompt_injection.
+      ⇒ agentic_ai_threats / ASI04_agentic_supply_chain + ASI03_identity_privilege_abuse.
         NOT AE05 — the worm exploits AI agent trust boundaries; AI did not author it.
         NOT ai_enabled_threats — the attacker is not using AI as their weapon; the AI
         agent is the VICTIM being manipulated.
