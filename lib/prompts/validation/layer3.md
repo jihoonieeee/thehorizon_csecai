@@ -272,8 +272,33 @@ The prior_trust_context is advisory — confirm or adjust based on actual conten
 ════ DIMENSION 6: SOURCE TYPE ════
 
 Classify what kind of intelligence artefact this source is. Choose one:
-  vulnerability            — a specific disclosed flaw/CVE in an AI system or dependency
-  exploit_disclosure       — a working exploit/PoC/tool for a specific vulnerability
+  vulnerability            — a CVE or flaw DISCLOSED without a working exploit: advisory-level
+                             disclosure, patch notes, or vulnerability report where the
+                             researcher describes the flaw but does NOT show how to reproduce
+                             it end-to-end and has NOT released working exploit code or a PoC.
+                             Use this when the text says "could allow" or "may be exploited"
+                             without showing the actual exploit path.
+                             ✗ NOT exploit_disclosure: if no working PoC, no exploit chain,
+                               and no step-by-step reproduction is provided.
+  exploit_disclosure       — a working exploit, PoC, or documented exploit CHAIN is the
+                             primary deliverable. The source SHOWS HOW to exploit the
+                             vulnerability, not just that it exists. Evidence: step-by-step
+                             exploitation path, PoC code, demonstration output, or a complete
+                             kill chain with named attacker-controlled artifacts.
+                             COMMON FAILURE MODE: articles covering CVEs with CVSS scores,
+                             affected versions, and patch guidance look like "vulnerabilities"
+                             but are exploit_disclosure when they include the exploit mechanism
+                             in full technical detail (e.g. which attribute to manipulate,
+                             what code executes, what is exfiltrated).
+                             EXAMPLES → exploit_disclosure:
+                               • CVE-2026-4372 article showing _attn_implementation_internal
+                                 manipulation → kernel download → RCE (full mechanism shown)
+                               • CVE-2026-42271 article showing command injection chain
+                                 + auth bypass + post-exploit credential harvesting steps
+                             EXAMPLES → vulnerability (NOT exploit_disclosure):
+                               • "Researchers found CVE-XXXX in LangChain allowing SSRF;
+                                 patch available" (no exploit chain shown)
+                               • NVD advisory with CVSS score and affected versions only
   incident                 — a documented real-world attack, breach, or abuse
   threat_intelligence      — actor TTPs, IOCs, attribution, campaign tracking,
                              OR a compiled report synthesizing findings from the

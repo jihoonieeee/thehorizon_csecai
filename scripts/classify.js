@@ -38,6 +38,7 @@ import {
 import { computeImportance }     from "../lib/pipeline/scoring/importance.js";
 import { classifyMaturityLevel } from "../lib/pipeline/scoring/maturityLevel.js";
 import { upgradeDate }           from "../lib/pipeline/ingest/upgradeDate.js";
+import { upgradeText }           from "../lib/pipeline/ingest/upgradeText.js";
 import { routedLLM }             from "../lib/llm/llmRouter.js";
 import { callLLM }               from "../lib/llm/callLLM.js";
 import { flushCostBuffer }       from "../lib/llm/usagePersistence.js";
@@ -165,6 +166,14 @@ async function runScoringPass(sources) {
       if (dateUp) {
         updates.date_published  = dateUp.date_published;
         updates.date_confidence = dateUp.date_confidence;
+      }
+
+      // Text upgrade: re-fetch via Jina when full_text is below the usable
+      // threshold (navigation stubs, paywalled previews, RSS teasers).
+      const textUp = await upgradeText(s);
+      if (textUp) {
+        updates.full_text = textUp.full_text;
+        console.log(`  [text-upgrade] ${s.id.slice(0,8)}: ${(s.full_text||"").length} → ${textUp.full_text.length} chars`);
       }
 
       if (Object.keys(updates).length > 0) {
