@@ -313,13 +313,13 @@ async function main() {
   )];
   if (affectedParentIds.length) {
     console.log(`\n── L4f: Sync digest parent metadata (${affectedParentIds.length} parents) ──`);
-    let synced = 0, dateFixes = 0;
+    let synced = 0, dateFixes = 0, trustFixes = 0;
     for (const pid of affectedParentIds) {
       const { data: parent } = await supabase
-        .from("sources").select("id,date_published,date_confidence,intelligence").eq("id", pid).single();
+        .from("sources").select("id,date_published,date_confidence,trust_tier,intelligence").eq("id", pid).single();
       if (!parent) continue;
       const { data: children } = await supabase
-        .from("sources").select("id,main_category,date_published").eq("parent_source_id", pid);
+        .from("sources").select("id,main_category,date_published,trust_tier").eq("parent_source_id", pid);
       if (!children?.length) continue;
 
       // Write all_categories to parent.
@@ -330,15 +330,26 @@ async function main() {
       synced++;
 
       // Fix children whose date drifted from the parent's.
-      const toFix = children.filter(c => parent.date_published && c.date_published !== parent.date_published);
-      if (toFix.length) {
+      const toDateFix = children.filter(c => parent.date_published && c.date_published !== parent.date_published);
+      if (toDateFix.length) {
         await supabase.from("sources")
           .update({ date_published: parent.date_published, date_confidence: parent.date_confidence || "exact" })
-          .in("id", toFix.map(c => c.id));
-        dateFixes += toFix.length;
+          .in("id", toDateFix.map(c => c.id));
+        dateFixes += toDateFix.length;
+      }
+
+      // Fix children whose trust_tier drifted from the parent's.
+      // Children must always inherit publisher trust from the parent; L3 LLM can
+      // mis-assign trust by reading cited institutions as the publisher.
+      const toTrustFix = children.filter(c => parent.trust_tier && c.trust_tier !== parent.trust_tier);
+      if (toTrustFix.length) {
+        await supabase.from("sources")
+          .update({ trust_tier: parent.trust_tier })
+          .in("id", toTrustFix.map(c => c.id));
+        trustFixes += toTrustFix.length;
       }
     }
-    console.log(`  Synced ${synced} parents, fixed ${dateFixes} child dates`);
+    console.log(`  Synced ${synced} parents, fixed ${dateFixes} child dates, ${trustFixes} child trust tiers`);
   }
 
   console.log(`\n${"─".repeat(60)}`);
