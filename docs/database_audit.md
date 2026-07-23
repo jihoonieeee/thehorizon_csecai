@@ -90,6 +90,25 @@ Issues specific to individual sources, recorded for traceability even after fix 
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `classification` | `source_type: vulnerability` — describes a demonstrated attack technique, not a CVE record. | `source_type → capability_demonstration`. |
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `data_integrity` | `full_text: 319 chars` — Jina re-fetch recovered 16,779 chars. Source is a daily roundup, not a single finding. | Re-fetched via Jina. Ran full pipeline (fanout→classify→score→evidence) via `pipelineOneSource.js` with Anthropic/Sonnet. 5 children: Friendly Fire (agentic_ai_threats/ASI05, recommended, 1 ev item) and HalluSquatting (llm_threats/LLM09, analyst, 1 ev item) passed; GhostApproval/Langflow IDOR/AI Agent Poisoning teaser correctly rejected as off-scope. 2 cross-contaminated evidence items removed from Friendly Fire child (S13). Parent `all_categories` synced. |
 
+### Batch 13
+
+| Source | ID (first 8) | Status | Type | Issue | Fix applied |
+|--------|-------------|--------|------|-------|-------------|
+| Bishop Fox / Claude cracks SonicWall firmware | `8487f72e` | `wontfix` | — | Clean. `ai_enabled_threats / AE03 + AE04` ✓ (single agent with MCP tools; AE08 not needed — no multi-agent orchestration). trust=high (Bishop Fox = established security firm) ✓. proven/recommended ✓. 5 grounded evidence items ✓. | No action. |
+| CSO Online / GitLost GitHub agent PI leak | `a733890c` | `fixed` | `trust` | `trust_tier: high` — CSO Online is IDG/Foundry tech security media, not a primary security firm. L3 LLM saw "Noma Security researchers" in content and assigned high. | `trust_tier → medium`. |
+| CSO Online / GitLost GitHub agent PI leak | `a733890c` | `fixed` | `maturity` | `observed` — PoC was a controlled test by Noma Security (created a crafted GitHub Issue in a test org). No real-world exfiltration confirmed. `demonstrated` is the correct tier for an exploit PoC published by a security researcher. | `maturity_level → demonstrated`. |
+| Cybernexora / Deepfake BEC $25M | `eaf9707d` | `fixed` | `date` | `date_published: 2026-07-08` but `date_actual: 2026-07-07` from upgradeDate. 1-day off. | `date_published → 2026-07-07`. |
+| Cybernexora / Deepfake BEC $25M | `eaf9707d` | `wontfix` | `reading_value` | `analyst` vs expected `essential` (importance=realized). S10 accept — LLM override justified: secondary blog republishing the well-known 2024 Hong Kong $25M deepfake case (no new primary intelligence). 0 evidence despite success status — thin secondary coverage, accept. | No fix. |
+| Innovaiden / Prompt Injection Both Ways (BioShocking + macOS.Gaslight synthesis) | `5ddd5a7d` | `fixed` | `trust` | `trust_tier: high` — innovaiden.com is a small consultancy blog, not an established security firm. Content quality is high (good cited synthesis) but publisher credibility is medium. | `trust_tier → medium`. |
+| Innovaiden / Prompt Injection Both Ways | `5ddd5a7d` | `wontfix` | `maturity` | `observed` diverges from det=`operational`. Article synthesises BioShocking (PoC) + macOS.Gaslight (one confirmed NK deployment). `observed` is a reasonable midpoint; no action needed. | No fix. Accepted LLM override. |
+| TechTimes / JADEPUFFER agentic ransomware | `ad1b7070` | `fixed` | `trust` | `trust_tier: high` — TechTimes is general tech media, not a security firm. Secondary coverage of Sysdig's primary research. | `trust_tier → medium`. |
+| TechTimes / JADEPUFFER agentic ransomware | `ad1b7070` | `wontfix` | `taxonomy` | `AE05_ai_malware_dev` borderline — unlike static ENCFORGE binary, JADEPUFFER's LLM dynamically generates commands, ransom notes, and exploit sequences in-flight. Accepted: AI is writing malicious content live, which is the spirit of AE05. | No fix. AE05 accepted alongside AE08. |
+| TechTimes / JADEPUFFER agentic ransomware | `ad1b7070` | `wontfix` | `maturity` | `observed` diverges from det=`operational`. Single documented incident; not yet confirmed systematic campaign. LLM override accepted. | No fix. |
+
+**Trust pattern — batch 13:** Three sources (CSO Online, Innovaiden, TechTimes) all received `trust=high` from L3 LLM despite being media or small consultancy publishers. Added `csoonline`, `techtimes`, `security affairs`, `therecord` to MEDIA_FRAGMENTS in trustAssessment.js for deterministic medium-tier assignment on future articles. L3 LLM inheritance fix (layer3Llm.js) only helps children; standalone articles need MEDIA_FRAGMENTS coverage.
+
+---
+
 ### Batch 12
 
 | Source | ID (first 8) | Status | Type | Issue | Fix applied |
