@@ -90,6 +90,22 @@ Issues specific to individual sources, recorded for traceability even after fix 
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `classification` | `source_type: vulnerability` — describes a demonstrated attack technique, not a CVE record. | `source_type → capability_demonstration`. |
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `data_integrity` | `full_text: 319 chars` — Jina re-fetch recovered 16,779 chars. Source is a daily roundup, not a single finding. | Re-fetched via Jina. Ran full pipeline (fanout→classify→score→evidence) via `pipelineOneSource.js` with Anthropic/Sonnet. 5 children: Friendly Fire (agentic_ai_threats/ASI05, recommended, 1 ev item) and HalluSquatting (llm_threats/LLM09, analyst, 1 ev item) passed; GhostApproval/Langflow IDOR/AI Agent Poisoning teaser correctly rejected as off-scope. 2 cross-contaminated evidence items removed from Friendly Fire child (S13). Parent `all_categories` synced. |
 
+### Batch 12
+
+| Source | ID (first 8) | Status | Type | Issue | Fix applied |
+|--------|-------------|--------|------|-------|-------------|
+| Model Inversion Attacks / Fredrikson et al. 2015 (ACM CCS) | `ad5f207f` | `fixed` | `date` | `date_published: 2026-07-12` is the feed ingest date. `intelligence.event_date` already correctly showed 2015. This is the Fredrikson/Jha/Ristenpart ACM CCS 2015 seminal model inversion paper. | `date_published → 2015-10-12` (approximate, CCS 2015 conference), `date_confidence → approximate`, `needs_review → true`. |
+| Model Inversion Attacks / Fredrikson et al. 2015 (ACM CCS) | `ad5f207f` | `fixed` | `data_integrity` | `research_significance` not set. This is the founding paper on confidence-based model inversion attacks, thousands of citations, defined the modern model inversion threat class. | `intelligence.research_significance → landmark`. |
+| VEXAIoT (arXiv 2607.09653) | `d2b1bfd0` | `wontfix` | — | Clean. `ai_enabled_threats / AE08 + AE03 + AE04` all justified. 8 grounded evidence items. `importance=proven`, `reading_value=recommended` ✓. | No action. |
+| VulnIntel Jul-9 / HalluSquatting (i3) | `5fb5493d` | `fixed` | `reading_value` | `analyst` — importance=realized (operational threat_intelligence source) should give `essential`. | `reading_value → essential`. |
+| VulnIntel Jul-9 / Friendly Fire (i2) | `5fb5493d` | `fixed` | `trust` | `trust_tier: high` — publisher is threat-modeling.com, same as parent and i3 (both medium). Incorrect trust inflation on digest child. | `trust_tier → medium`. |
+| VulnIntel Jul-9 / Friendly Fire (i2) | `5fb5493d` | `fixed` | `reading_value` | `recommended` — importance=research should give `analyst`. Over-inflated. | `reading_value → analyst`. |
+| VulnIntel Jul-9 (parent) | `5fb5493d` | `fixed` | `data_integrity` | `reading_value: null` — digest parent; should be `background` for housekeeping consistency. | `reading_value → background`. |
+
+**Tag note — HalluSquatting taxonomy:** `llm_threats / LLM09_misinformation` is correct. The attack exploits the LLM hallucination tendency (LLM09 covers overreliance/misinformation) to deliver malware via hallucinated-then-registered package names. Not `TAI10` (that targets the AI/ML supply chain itself, not software supply chains enabled by AI hallucination).
+
+---
+
 ### Batch 10
 
 | Source | ID (first 8) | Status | Type | Issue | Fix applied |
