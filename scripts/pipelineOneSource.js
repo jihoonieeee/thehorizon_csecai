@@ -2,7 +2,8 @@
 /**
  * pipelineOneSource.js — run the full L4a–L5 pipeline on specific source IDs.
  *
- * Forces LLM_PROVIDER_ORDER=anthropic so Claude Sonnet handles all calls.
+ * Defaults to LLM_PROVIDER_ORDER=anthropic; override by setting the env var first.
+ *   e.g. LLM_PROVIDER_ORDER=gemini node scripts/pipelineOneSource.js <id>
  *
  * Usage:
  *   node scripts/pipelineOneSource.js <id1> [id2 ...]
@@ -15,7 +16,7 @@
  *   L5   extractAllEvidence           — evidence items saved to evidence table
  */
 
-process.env.LLM_PROVIDER_ORDER = "anthropic";
+if (!process.env.LLM_PROVIDER_ORDER) process.env.LLM_PROVIDER_ORDER = "anthropic";
 
 import "dotenv/config";
 import { createClient }              from "@supabase/supabase-js";
