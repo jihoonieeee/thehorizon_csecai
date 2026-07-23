@@ -1182,19 +1182,26 @@ out neighbouring tags. Assign the single primary_tag that names the core threat.
       malware authored/packaged for deployment (AE05).
 
   AE05_ai_malware_dev
+    ══ MANDATORY TEST BEFORE APPLYING AE05 ══
+    Ask: "Was AI used to WRITE, GENERATE, or MUTATE the malicious code?"
+    If NO → AE05 does NOT apply, no matter how AI-adjacent the malware is.
+    ══════════════════════════════════════════
     WHAT: AI AUTHORS, MUTATES, or PACKAGES malicious software. Also covers conventional
       malware DISTRIBUTED disguised as an AI artifact (e.g. fake model on a hub that
       is actually a dropper) — where the AI ecosystem is the distribution lure.
     EXAMPLES: LLM-generated malware or dropper code; AI-driven polymorphic variants
       that evade static signatures; a fake "OpenAI model" on Hugging Face with 200k
       downloads that installs a password stealer.
-    CRITICAL FAILURE MODE — "targets AI files/systems" ≠ AE05. A ransomware that
-      encrypts model weights (like ENCFORGE) is NOT AE05 — conventional malware
-      targeting AI assets is still conventional malware; AE05 requires AI to be the
-      AUTHOR or GENERATOR of the malicious code. A worm that exploits AI coding-agent
-      config files (like Mini Shai-Hulud) is NOT AE05 — that is agentic_ai_threats
-      (ASI04 supply chain + ASI03 prompt injection). The test: was AI used to WRITE
-      the malware? If no, look elsewhere.
+    CRITICAL FAILURE MODES — do NOT apply AE05 to:
+      • Malware that TARGETS AI files (e.g. ransomware encrypting model weights like
+        ENCFORGE) — conventional malware targeting AI assets is NOT AE05.
+      • Worms that EXPLOIT AI coding-agent config files (e.g. Mini Shai-Hulud poisoning
+        settings.json, SANDWORM_MODE deploying rogue MCP servers to hijack AI assistants)
+        — these are agentic_ai_threats (ASI04 + ASI02/ASI03), NOT AE05.
+      • Supply-chain worms spreading through npm/PyPI that TARGET AI toolchains — if
+        the worm uses AI agents as exfiltration proxies, that is ASI02 tool misuse,
+        not AE05 (AI did not generate the worm code).
+      The test: was AI used to WRITE the malware? If no, look elsewhere.
     ✗ NOT TAI10: conventional dropper with no working ML (AE05) vs a GENUINELY
       FUNCTIONING backdoored model distributed via a hub (TAI10). The test: does a real
       ML model carry the malice, or is the AI branding just a lure?

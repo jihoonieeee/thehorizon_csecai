@@ -75,6 +75,19 @@ Issues specific to individual sources, recorded for traceability even after fix 
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `classification` | `source_type: vulnerability` — describes a demonstrated attack technique, not a CVE record. | `source_type → capability_demonstration`. |
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `data_integrity` | `full_text: 319 chars` — Jina re-fetch recovered 16,779 chars. Source is a daily roundup, not a single finding. | Re-fetched via Jina. Ran full pipeline (fanout→classify→score→evidence) via `pipelineOneSource.js` with Anthropic/Sonnet. 5 children: Friendly Fire (agentic_ai_threats/ASI05, recommended, 1 ev item) and HalluSquatting (llm_threats/LLM09, analyst, 1 ev item) passed; GhostApproval/Langflow IDOR/AI Agent Poisoning teaser correctly rejected as off-scope. 2 cross-contaminated evidence items removed from Friendly Fire child (S13). Parent `all_categories` synced. |
 
+### Batch 6
+
+| Source | ID (first 8) | Status | Type | Issue | Fix applied |
+|--------|-------------|--------|------|-------|-------------|
+| CSO Online / AI agent sandbox escape | `51f82d1c` | `fixed` | `reading_value` | `background` — LLM downgraded from expected `analyst`. Pillar Security disclosure with 4 named attack patterns against Cursor, Codex CLI, Gemini CLI is analyst-grade research, not background. | `reading_value → analyst`, `maturity → demonstrated` (working PoCs disclosed, not yet in wild). |
+| OpenAI/HF GPT-5.6 Sol | `d925d8c9` | `open` | `data_integrity` | URL 403 (openai.com known to block crawlers). Same incident as SecurityWeek `0d7013d5` (flagged batch 1). "GPT-5.6 Sol" still unrecognised model name. Primary source from openai.com lends credibility but needs manual browser verification. | `needs_review → true`, `maturity → observed`, `category → agentic_ai_threats`, `tags → [ASI05, ASI08, AE03, AE04]`. |
+| OpenAI/HF GPT-5.6 Sol | `d925d8c9` | `fixed` | `classification` | Re-classified by pipeline as `ai_enabled_threats / AE08/AE03/AE04`. Primary mechanism is AI agent escaping evaluation sandbox → `agentic_ai_threats`. AE03/AE04 kept as secondaries (model autonomously found and exploited vulns). | `main_category → agentic_ai_threats`, tags corrected. |
+| CrowdStrike SANDWORM_MODE | `b23ce9c5` | `fixed` | `classification` | `ai_enabled_threats / AE05` — third consecutive S15 hit. SANDWORM_MODE is npm worm that deploys rogue MCP servers to hijack AI coding assistants as exfiltration proxies. Not AI-generated malware. Should be `agentic_ai_threats`. | `main_category → agentic_ai_threats`, `tags → [ASI04, ASI02, AE08]`, `AE05 removed`. Prompt fix added mandatory gate to AE05 section. |
+| Nature / Medical AI privacy | `2dad749c` | `wontfix` | `reading_value` | `essential` vs expected `analyst` — S10 divergence. Justified: landmark Nature paper, breaks assumption that aggregate privacy metrics proxy individual risk. LLM upgrade accepted. | No change. `maturity → research` ✓ already set. |
+| Sky Gold deepfake / Economic Times | `d4054ab6` | `fixed` | `data_integrity` | L4b correctly discarded — article lacks AI technical methodology; deepfake claim unverified in text; conventional financial fraud article from business press. AI Incident Database ingested it but it has no threat-intel value. | Accept discard. `validation_status → reject`, `main_category → unclear_or_adjacent`, `reading_value → background`. |
+
+**S15 note:** Three consecutive hits (ENCFORGE batch 5, Mini Shai-Hulud batch 5, SANDWORM_MODE batch 6). Mandatory test gate added at top of AE05 definition in classify.md (most prominent position). Monitoring batch 7+.
+
 ### Batch 5
 
 | Source | ID (first 8) | Status | Type | Issue | Fix applied |
