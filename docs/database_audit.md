@@ -76,6 +76,19 @@ Issues specific to individual sources, recorded for traceability even after fix 
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `classification` | `source_type: vulnerability` — describes a demonstrated attack technique, not a CVE record. | `source_type → capability_demonstration`. |
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `data_integrity` | `full_text: 319 chars` — Jina re-fetch recovered 16,779 chars. Source is a daily roundup, not a single finding. | Re-fetched via Jina. Ran full pipeline (fanout→classify→score→evidence) via `pipelineOneSource.js` with Anthropic/Sonnet. 5 children: Friendly Fire (agentic_ai_threats/ASI05, recommended, 1 ev item) and HalluSquatting (llm_threats/LLM09, analyst, 1 ev item) passed; GhostApproval/Langflow IDOR/AI Agent Poisoning teaser correctly rejected as off-scope. 2 cross-contaminated evidence items removed from Friendly Fire child (S13). Parent `all_categories` synced. |
 
+### Batch 8
+
+| Source | ID (first 8) | Status | Type | Issue | Fix applied |
+|--------|-------------|--------|------|-------|-------------|
+| arXiv / Self-State Attacks on AI Agents | `a2698a85` | `fixed` | `data_integrity` | `is_digest: true` false positive — 15,000-char arXiv paper with headings triggered structural digest heuristic. Single paper, not a digest. | `is_digest → false`. |
+| arXiv / Self-State Attacks on AI Agents | `a2698a85` | `fixed` | `maturity` | `maturity_level` NOT SET. | `maturity → research`, `importance.tier → research`. `reading_value: analyst` ✓ — prompt fix working correctly. |
+| JadePuffer/Infosec (`b5fa4ec6`) | repeat | `wontfix` | — | Clean. All fields correct from batch 7. | No action. |
+| WordPress/GPT (`716ddb75`) | repeat | `wontfix` | — | Clean. All fields correct from batch 7. | No action. |
+| NDSS code-poisoning MIA (`967def4c`) | repeat | `wontfix` | `reading_value` | `recommended` vs expected `analyst` — S10 accept. Cross-domain novelty (TAI07+TAI10) + landmark significance justifies upgrade. | No change. |
+| Scale-MIA (`02d66768`) | repeat | `fixed` | `reading_value` | `recommended` — should be `analyst`. Notable (not landmark) research within known attack class (FL model inversion). Prompt fix now in effect. | `reading_value → analyst`. |
+
+**Prompt fix validation:** Source 1 (arXiv self-state attacks) correctly assigned `analyst` on first classify — confirms the layer3.md research-maturity DEFAULT=analyst fix (S17) is working for new sources.
+
 ### Batch 7
 
 | Source | ID (first 8) | Status | Type | Issue | Fix applied |
