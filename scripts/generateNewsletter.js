@@ -18,6 +18,7 @@ import {
   buildPeriod, loadCandidates, selectSourcesWithLlm,
   generateBlurbs, loadInsights, generateCategoryIntros, renderNewsletterHtml,
 } from "../lib/newsletter/index.js";
+import { saveNewsletter } from "../lib/storage/newsletterStore.js";
 
 const args    = process.argv.slice(2);
 const getArg  = (flag, def) => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : def; };
@@ -26,6 +27,7 @@ const hasFlag = f => args.includes(f);
 const WINDOW  = getArg("--window", "week");
 const ASOF    = getArg("--asof",   null);
 const DRY_RUN = hasFlag("--dry-run");
+const SAVE    = hasFlag("--save");
 
 if (!["week", "month"].includes(WINDOW)) {
   console.error("--window must be week | month"); process.exit(1);
@@ -85,7 +87,20 @@ async function main() {
 
   const kb = (Buffer.byteLength(html, "utf8") / 1024).toFixed(1);
   console.log(`\n  Done. ${sources.length} sources · ${Object.values(introMap).filter(Boolean).length} category intros`);
-  console.log(`  Written to: ${outFile} (${kb} KB)\n`);
+  console.log(`  Written to: ${outFile} (${kb} KB)`);
+
+  if (SAVE) {
+    log("saving to Supabase...");
+    await saveNewsletter(supabase, {
+      window: WINDOW,
+      html,
+      period,
+      sourceCount:  sources.length,
+      insightCount: Object.values(insightCats).reduce((n, ci) => n + (ci?.insights?.length || 0), 0),
+    });
+    log("saved — retrievable via GET /api/dashboard?format=newsletter");
+  }
+  console.log();
 }
 
 main().catch(err => { console.error("\nFATAL:", err.message); process.exit(1); });

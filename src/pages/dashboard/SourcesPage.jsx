@@ -383,7 +383,7 @@ function AtlasChainPanel({ atlas }) {
 function SourceDetail({ s, isAdmin, onUpdateDate, onConfirmDate, onDelete, onSaveClassification, onSaveSummary, knownTags, busy }) {
   const imp  = s.importance || {};
   const mech = s.mechanism || null;
-  const full = s.short_summary || s.analyst_brief || s.summary;
+  const full = s.short_summary || s.summary;
   const domainTag = t => /^(TAI|LLM|ASI|AE)\d/.test(t);
   const [dateVal, setDateVal] = useState((s.date_published || "").slice(0, 10));
   const dirty = dateVal && dateVal !== (s.date_published || "").slice(0, 10);
@@ -802,9 +802,15 @@ export function SourcesPage() {
 
   // Faceted counts — each computed over rows passing all OTHER active filters.
   const catCountsFaceted = useMemo(() => {
-    const base = rowsExcept("category").filter(s => !s.parent_source_id);
+    const base = rowsExcept("category");
     const c = {};
-    for (const s of base) if (s.main_category) c[s.main_category] = (c[s.main_category] || 0) + 1;
+    // Per-category counts exclude children — a child's category shouldn't add to
+    // a different bucket from its parent when viewing category tabs side-by-side.
+    // The "All" total uses base.length (all rows) to match the pagination count.
+    for (const s of base) {
+      if (s.parent_source_id) continue;
+      if (s.main_category) c[s.main_category] = (c[s.main_category] || 0) + 1;
+    }
     return { counts: c, total: base.length };
   }, [rowsExcept]);
 

@@ -386,6 +386,24 @@ THE traditional-VS-not TEST (this is where most errors happen):
     its owner → agentic_ai_threats. "An AI ran the attack" is ai_enabled;
     "someone hijacked my AI" is agentic.
 
+  ⇒ WORKED CASE — autonomous AI agent breaching an AI company's infrastructure:
+    An attacker-operated autonomous agent enters an AI platform (e.g. Hugging Face)
+    via malicious datasets exploiting trust_remote_code, then autonomously chains
+    exploitation, privilege escalation, lateral movement, and credential harvesting
+    across production infrastructure. The article's headline may say "AI agent
+    attacked Hugging Face" — which sounds agentic — but the RULE is: whose agent?
+    The ATTACKER owns the agent; it is their weapon. Hugging Face's infrastructure
+    is the victim. → ai_enabled_threats / AE08_ai_attack_orchestration.
+    The supply-chain entry vector (malicious dataset, trust_remote_code exploit)
+    is a SECONDARY tag: TAI10_ai_supply_chain_compromise.
+    WRONG: agentic_ai_threats (no one's agent was subverted — the attacker's own
+    agent ran the attack)
+    WRONG: traditional_ai_threats as primary (supply chain was entry, not the
+    primary threat story; the orchestration is)
+    COMMON TRAP: "an AI agent autonomously did X" sounds agentic. But ask WHO
+    OWNS the agent. Attacker-owned agents = ai_enabled. Victim-owned agents
+    turned against their owner = agentic.
+
 llm-VS-agentic TEST:
   Same trigger (e.g. a prompt injection), different category by CONSEQUENCE:
     • it only changes the model's answer / leaks text  → llm_threats

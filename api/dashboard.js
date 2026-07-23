@@ -25,6 +25,35 @@ import { getCompletedPeriodWindow } from "../lib/time/reportingWindow.js";
 import { computeEvidenceMaturity, deriveConfidence } from "../lib/dashboard/evidenceMaturity.js";
 import { truncateAtWord } from "../lib/utils/truncate.js";
 import { maturityOf, MATURITY_RANK } from "../lib/pipeline/scoring/maturityLevel.js";
+import { loadNewsletter } from "../lib/storage/newsletterStore.js";
+
+const GH_OWNER             = "landonzhao";
+const GH_REPO              = "thehorizon";
+const GH_NL_WORKFLOW       = "generate-newsletter.yml";
+
+async function dispatchNewsletterWorkflow(window) {
+  const pat = process.env.GITHUB_PAT;
+  if (!pat) throw new Error("GITHUB_PAT env var not set — add a GitHub personal access token with actions:write scope");
+
+  const res = await fetch(
+    `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${GH_NL_WORKFLOW}/dispatches`,
+    {
+      method:  "POST",
+      headers: {
+        "Authorization": `Bearer ${pat}`,
+        "Accept":        "application/vnd.github+json",
+        "Content-Type":  "application/json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      body: JSON.stringify({ ref: "main", inputs: { window } }),
+    }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`GitHub API ${res.status}: ${text.slice(0, 200)}`);
+  }
+}
 
 // Maturity-first ranking for "top sources" — operational > observed > disclosed > demonstrated > research,
 // then trust tier, then recency.
@@ -242,24 +271,38 @@ function isAuthorized(req) {
 
 export default async function handler(req, res) {
 
-  // ── POST /api/dashboard — newsletter generation ─────────────────────────────
+  // ── POST /api/dashboard — dispatch newsletter generation via GitHub Actions ──
   if (req.method === "POST") {
     if (!isAuthorized(req)) return res.status(401).json({ error: "Unauthorized" });
-    const { format, window: win = "week", asof = null } = req.body || {};
+    const { format, window: win = "week" } = req.body || {};
     if (format !== "newsletter") return res.status(400).json({ error: "Only format=newsletter is supported via POST" });
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      return res.status(500).json({ error: "Supabase env vars not configured" });
-    }
+    const safeWin = ["week", "month"].includes(win) ? win : "week";
     try {
-      const { generateNewsletterHtml } = await import("../lib/newsletter/index.js");
-      const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-      const result = await generateNewsletterHtml(sb, {
-        window: ["week", "month"].includes(win) ? win : "week",
-        asof,
+      await dispatchNewsletterWorkflow(safeWin);
+      return res.status(202).json({
+        queued:       true,
+        window:       safeWin,
+        triggered_at: new Date().toISOString(),
+        message:      "Newsletter generation queued. Poll GET /api/dashboard?format=newsletter — the result will appear in ~5 minutes.",
       });
-      return res.status(200).json(result);
     } catch (err) {
-      console.error("[newsletter] error:", err.message);
+      console.error("[newsletter] dispatch error:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── GET /api/dashboard?format=newsletter&window= — serve cached newsletter ──
+  if (req.query?.format === "newsletter") {
+    const win = ["week", "month"].includes(req.query.window) ? req.query.window : "week";
+    try {
+      if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        return res.status(500).json({ error: "Supabase env vars not configured" });
+      }
+      const sb     = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+      const stored = await loadNewsletter(sb, win);
+      if (!stored) return res.status(404).json({ error: "No newsletter found for this window" });
+      return res.status(200).json(stored);
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   }

@@ -1,56 +1,185 @@
-name: Pipeline — Understand & Synthesize
+name: Pipeline — L1–L5 + Insights
 
-# Schedule logic (all times UTC, SGT = UTC+8):
+# One script per layer group. Jobs are chained via `needs:` so each stage
+# starts immediately after the previous one finishes.
 #
-#   22:30 UTC daily   → Understand only (30 min after daily-classify.yml at 22:00 UTC)
-#   01:00 UTC Monday  → Understand + Synthesize 90d (3h after Monday classify at 22:00 UTC)
-#   01:00 UTC 1st     → Understand + Synthesize 365d (3h after monthly classify at 22:00 UTC)
+# Execution order:
+#   connector-ingest ─┐
+#                     ├──→  classify (L4a–f)  ──→  evidence (L5)  ──→  insights
+#   web-ingest       ─┘
 #
-# Manual dispatch lets you run either step on demand with custom parameters.
+# connector-ingest and web-ingest run in parallel. classify starts only after
+# both finish, so it sees all sources from both paths in one pass.
+#
+# Schedule (all times UTC):
+#   22:00 daily           — connector-ingest (3d) + web-ingest + classify + evidence
+#   22:00 Monday          — connector-ingest (7d) + web-ingest + classify + evidence + weekly insights
+#   22:00 1st of month    — connector-ingest (30d) + web-ingest + classify + evidence + monthly insights
+#   22:00 quarterly 1st   — same as monthly + quarterly insights
 
 on:
   schedule:
-    - cron: '30 22 * * *'      # daily understanding (22:30 UTC = 06:30 SGT next day)
-    - cron: '0 1 * * 1'        # weekly synthesis + insights (Monday 01:00 UTC = 09:00 SGT)
-    - cron: '0 1 1 * *'        # monthly synthesis + insights (1st 01:00 UTC = 09:00 SGT)
-    - cron: '0 0 1 1,4,7,10 *' # quarterly insights (1st Jan/Apr/Jul/Oct 00:00 UTC = 08:00 SGT)
+    - cron: '0 22 * * *'          # daily
+    - cron: '0 22 * * 1'          # Monday  — 7-day window
+    - cron: '0 22 1 * *'          # 1st of month — 30-day window
+    - cron: '0 22 1 1,4,7,10 *'   # quarterly 1st
   workflow_dispatch:
     inputs:
-      run_synthesis:
-        description: 'Run synthesis after understanding?'
-        type: boolean
-        default: false
       days:
-        description: 'Synthesis lookback window in days (default: 90)'
-        type: string
-        default: '90'
+        description: 'Connector ingest window in days (3 / 7 / 30)'
+        default: '3'
+      classify_limit:
+        description: 'Max sources to classify (default 200)'
+        default: '200'
+      sig_limit:
+        description: 'Max significance LLM calls (default 100)'
+        default: '100'
+      evidence_limit:
+        description: 'Max sources for evidence extraction (default 150)'
+        default: '150'
       run_insights:
-        description: 'Generate dashboard insights? (week|month|quarter|all)'
+        description: 'Generate dashboard insights (week|month|quarter|all)'
         type: string
         default: ''
+      skip_web_ingest:
+        description: 'Skip web discovery'
+        type: boolean
+        default: false
 
 jobs:
-  # ── Job 1: Understand new sources ──────────────────────────────────────────────
-  # Processes sources where claim_extraction_status IS NULL — safe to re-run, skips
-  # already-understood ones. Operational discovery runs separately and frequently
-  # (operational-discovery.yml); whatever it has accumulated is picked up here.
-  understand:
-    name: Understand new sources
+  # ── Job 1a: L1–L3 connector ingest ───────────────────────────────────────────
+  # Runs arXiv, RSS, CISA KEV, GHSA and other registered connectors.
+  # Saves sources to DB with validation_status set; main_category remains null.
+  connector-ingest:
+    name: L1–L3 Connector ingest
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
+      - run: npm ci
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Determine ingest window
+        id: window
+        run: |
+          if [ -n "${{ github.event.inputs.days }}" ]; then
+            echo "days=${{ github.event.inputs.days }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 22 1 * *" ] || [ "${{ github.event.schedule }}" = "0 22 1 1,4,7,10 *" ]; then
+            echo "days=30" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 22 * * 1" ]; then
+            echo "days=7" >> "$GITHUB_OUTPUT"
+          else
+            echo "days=3" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Run understanding
-        run: node scripts/understandCorpus.js --concurrency 3
+      - name: Run connector ingest (L1–L3)
+        run: node scripts/ingest.js --days ${{ steps.window.outputs.days }}
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BLOB_READ_WRITE_TOKEN:     ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          CRON_SECRET:               ${{ secrets.CRON_SECRET }}
+
+  # ── Job 1b: Web discovery ingest ─────────────────────────────────────────────
+  # Runs Tavily/SerpAPI + sitemaps, then Claude web_search.
+  # Saves raw normalised sources to DB (main_category=null, validation_status=review).
+  # Runs in parallel with connector-ingest.
+  web-ingest:
+    name: Web discovery ingest
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    if: github.event.inputs.skip_web_ingest != 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Tavily/SerpAPI + sitemaps
+        run: node scripts/ingestOperational.js --days 7 --skip-llm
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BLOB_READ_WRITE_TOKEN:     ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
+          TAVILY_API_KEY:            ${{ secrets.TAVILY_API_KEY }}
+          TAVILY_API_KEY_2:          ${{ secrets.TAVILY_API_KEY_2 }}
+          TAVILY_API_KEY_3:          ${{ secrets.TAVILY_API_KEY_3 }}
+          TAVILY_API_KEY_4:          ${{ secrets.TAVILY_API_KEY_4 }}
+          SERPAPI_API_KEY:           ${{ secrets.SERPAPI_API_KEY }}
+          WEB_DISCOVERY_ENABLED:     "1"
+
+      - name: Claude web_search discovery
+        run: node scripts/discoverOperationalSources.js --max-queries 4 --concurrency 2
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          WEB_DISCOVERY_ENABLED:     "1"
+
+  # ── Job 2: L4a–f classify ────────────────────────────────────────────────────
+  # Classifies ALL sources with main_category IS NULL — connector and web-discovery
+  # sources from jobs 1a and 1b, plus any backlog from previous failed runs.
+  classify:
+    name: L4 Classify
+    needs: [connector-ingest, web-ingest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    if: |
+      always() &&
+      needs.connector-ingest.result == 'success' &&
+      (needs.web-ingest.result == 'success' || needs.web-ingest.result == 'skipped')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Run classify (L4a–f)
+        run: |
+          node scripts/classify.js \
+            --limit ${{ github.event.inputs.classify_limit || '400' }} \
+            --sig-limit ${{ github.event.inputs.sig_limit || '100' }}
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+
+  # ── Job 3: L5 evidence extraction ────────────────────────────────────────────
+  # Extracts structured evidence items for newly eligible sources.
+  # --since-hours 26 covers sources from this run plus a buffer for clock drift.
+  evidence:
+    name: L5 Evidence extraction
+    needs: classify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Run evidence extraction (L5)
+        run: |
+          node scripts/extractEvidence.js \
+            --limit ${{ github.event.inputs.evidence_limit || '150' }} \
+            --since-hours 48
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -58,21 +187,17 @@ jobs:
           GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
           OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
 
-  # ── Job 1b: Dashboard insights ────────────────────────────────────────────
-  # Generates per-category bullet-point insights for the Overview page.
-  # Idempotent: skips window_key × category rows that already exist.
-  # Runs on: weekly (week insights), monthly (month + quarter if applicable),
-  #          quarterly cron (quarter insights), manual dispatch with run_insights set.
+  # ── Job 4: Dashboard insights ─────────────────────────────────────────────────
+  # Per-category bullet-point insights. Idempotent by window_key × category.
+  # Skipped on the plain daily cron; only runs weekly/monthly/quarterly.
   insights:
     name: Dashboard insights
-    needs: understand
+    needs: evidence
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # always() so a cancelled/failed upstream (e.g. operational-ingest timeout)
-    # cannot skip scheduled insight generation; the real gating is the OR below.
     if: |
-      always() && needs.understand.result == 'success' && (
-        (github.event_name == 'schedule' && github.event.schedule != '30 22 * * *') ||
+      always() && needs.evidence.result == 'success' && (
+        (github.event_name == 'schedule' && github.event.schedule != '0 22 * * *') ||
         (github.event_name == 'workflow_dispatch' && github.event.inputs.run_insights != '')
       )
     steps:
@@ -81,82 +206,28 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
 
-      - name: Weekly insights (Monday)
-        if: github.event.schedule == '0 1 * * 1' || contains(github.event.inputs.run_insights, 'week') || github.event.inputs.run_insights == 'all'
+      - name: Weekly insights
+        if: github.event.schedule == '0 22 * * 1' || contains(github.event.inputs.run_insights, 'week') || github.event.inputs.run_insights == 'all'
         run: node scripts/generateDashboardInsights.js --window week
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
 
-      - name: Monthly insights (1st of month)
-        if: github.event.schedule == '0 1 1 * *' || contains(github.event.inputs.run_insights, 'month') || github.event.inputs.run_insights == 'all'
+      - name: Monthly insights
+        if: github.event.schedule == '0 22 1 * *' || github.event.schedule == '0 22 1 1,4,7,10 *' || contains(github.event.inputs.run_insights, 'month') || github.event.inputs.run_insights == 'all'
         run: node scripts/generateDashboardInsights.js --window month
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
 
-      - name: Quarterly insights (1st Jan/Apr/Jul/Oct)
-        if: github.event.schedule == '0 0 1 1,4,7,10 *' || contains(github.event.inputs.run_insights, 'quarter') || github.event.inputs.run_insights == 'all'
+      - name: Quarterly insights
+        if: github.event.schedule == '0 22 1 1,4,7,10 *' || contains(github.event.inputs.run_insights, 'quarter') || github.event.inputs.run_insights == 'all'
         run: node scripts/generateDashboardInsights.js --window quarter
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
-
-  # ── Job 2: Synthesize + QA ─────────────────────────────────────────────────
-  # Runs after understanding completes, but only on weekly/monthly schedules
-  # or when manually requested. Not run on the daily 22:30 schedule (too
-  # expensive to synthesize the full corpus every day).
-  synthesize:
-    name: Synthesize & QA (${{ needs.understand.result == 'success' && 'after understand' || 'standalone' }})
-    needs: understand
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    # Run on: weekly schedule | monthly schedule | manual dispatch with run_synthesis=true.
-    # always() so a cancelled/failed upstream (operational-ingest timeout) cannot
-    # skip scheduled synthesis; the real gating is the OR below.
-    if: |
-      always() && needs.understand.result == 'success' && (
-        (github.event_name == 'schedule' && github.event.schedule != '30 22 * * *') ||
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.run_synthesis == 'true')
-      )
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Determine lookback window
-        id: window
-        run: |
-          if [ "${{ github.event.schedule }}" = "0 1 1 * *" ]; then
-            echo "days=365" >> "$GITHUB_OUTPUT"
-            echo "label=monthly full-year" >> "$GITHUB_OUTPUT"
-          elif [ -n "${{ github.event.inputs.days }}" ]; then
-            echo "days=${{ github.event.inputs.days }}" >> "$GITHUB_OUTPUT"
-            echo "label=manual ${{ github.event.inputs.days }}d" >> "$GITHUB_OUTPUT"
-          else
-            echo "days=90" >> "$GITHUB_OUTPUT"
-            echo "label=weekly 90d" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Run synthesis + second-model QA (${{ steps.window.outputs.label }})
-        run: node scripts/runSynthesisOnly.js --days ${{ steps.window.outputs.days }}
-        env:
-          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          BLOB_READ_WRITE_TOKEN:     ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
-          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
-          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
-          GROQ_API_KEY:              ${{ secrets.GROQ_API_KEY }}

@@ -252,57 +252,93 @@ const NL_WINDOWS = [
   { id: "month", label: "Past month" },
 ];
 
-const NL_STORAGE_KEY = "hz_newsletter_cache";
+const NL_POLL_MS      = 15000;
+const NL_STORAGE_KEY  = "hz_newsletter_state";
 
-function loadNlCache() {
+function loadNlState() {
   try {
     const raw = localStorage.getItem(NL_STORAGE_KEY);
     return raw ? JSON.parse(raw) : {};
   } catch { return {}; }
 }
 
-function saveNlCache(cache) {
-  try { localStorage.setItem(NL_STORAGE_KEY, JSON.stringify(cache)); } catch {}
+function saveNlState(patch) {
+  try {
+    const cur = loadNlState();
+    localStorage.setItem(NL_STORAGE_KEY, JSON.stringify({ ...cur, ...patch }));
+  } catch {}
 }
 
 function NewsletterPanel({ secret }) {
-  const [win,     setWin]     = useState("week");
-  const [status,  setStatus]  = useState("idle");
+  const saved = loadNlState();
+
+  const [win,     setWin]     = useState(saved.win || "week");
+  const [status,  setStatus]  = useState(
+    saved.status === "queued" || saved.status === "done" ? saved.status : "idle"
+  );
   const [error,   setError]   = useState(null);
-  const [elapsed, setElapsed] = useState(0);
+  const [elapsed, setElapsed] = useState(
+    saved.status === "queued" && saved.startedAt
+      ? Math.floor((Date.now() - saved.startedAt) / 1000)
+      : 0
+  );
   const [copied,  setCopied]  = useState(false);
-  // Per-window cache: { week: { html, meta, generatedAt }, month: { ... } }
-  const [cache,   setCache]   = useState(loadNlCache);
-  const timerRef  = useRef(null);
-  const startRef  = useRef(null);
-  const iframeRef = useRef(null);
+  // Per-window cache: { week: { html, period, sourceCount, generated_at }, month: { ... } }
+  const [cache,   setCache]   = useState(saved.cache || {});
 
-  // Derived from cache for the active window
+  const timerRef       = useRef(null);
+  const pollRef        = useRef(null);
+  const startRef       = useRef(saved.status === "queued" && saved.startedAt ? saved.startedAt : null);
+  const triggeredAtRef = useRef(saved.triggeredAt || null);
+  const iframeRef      = useRef(null);
+
   const cached = cache[win] || null;
-  const html   = cached?.html  || null;
-  const meta   = cached?.meta  || null;
-  const isDone = !!html && status !== "running";
+  const html   = cached?.html || null;
+  const isDone = !!html && status !== "queued";
 
-  // Persist cache to localStorage whenever it changes
-  useEffect(() => { saveNlCache(cache); }, [cache]);
-
-  // Auto-resize iframe when window tab switches or html changes
+  // Persist state to localStorage
   useEffect(() => {
-    if (iframeRef.current && html) {
-      // Re-trigger onIframeLoad by resetting the srcDoc via a short delay
-      iframeRef.current.style.height = "400px";
-    }
-  }, [win, html]);
+    saveNlState({ win, status, cache, triggeredAt: triggeredAtRef.current, startedAt: startRef.current });
+  }, [win, status, cache]);
 
+  // Elapsed timer while queued
   useEffect(() => {
-    if (status === "running") {
-      startRef.current = Date.now();
+    if (status === "queued") {
+      if (!startRef.current) startRef.current = Date.now();
       timerRef.current = setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 1000);
     } else {
       clearInterval(timerRef.current);
     }
     return () => clearInterval(timerRef.current);
   }, [status]);
+
+  // Poll GET /api/dashboard?format=newsletter while queued
+  useEffect(() => {
+    if (status !== "queued") { clearInterval(pollRef.current); return; }
+
+    async function poll() {
+      try {
+        const res = await fetch(`/api/dashboard?format=newsletter&window=${win}`);
+        if (!res.ok) return; // 404 = not ready yet
+        const data = await res.json();
+        if (!data?.html) return;
+        // Only accept a result generated after we triggered the run
+        if (triggeredAtRef.current && data.generated_at < triggeredAtRef.current) return;
+        clearInterval(pollRef.current);
+        setCache(prev => ({ ...prev, [win]: data }));
+        setStatus("done");
+      } catch {}
+    }
+
+    poll(); // immediate check on mount (handles page refresh after completion)
+    pollRef.current = setInterval(poll, NL_POLL_MS);
+    return () => clearInterval(pollRef.current);
+  }, [status, win]);
+
+  // Auto-resize iframe on content change
+  useEffect(() => {
+    if (iframeRef.current && html) iframeRef.current.style.height = "400px";
+  }, [win, html]);
 
   const onIframeLoad = useCallback(() => {
     try {
@@ -312,25 +348,28 @@ function NewsletterPanel({ secret }) {
   }, []);
 
   async function generate() {
-    if (status === "running") return;
-    setStatus("running"); setError(null); setElapsed(0); setCopied(false);
+    if (status === "queued") return;
+    const triggeredAt = new Date().toISOString();
+    const startedAt   = Date.now();
+    triggeredAtRef.current = triggeredAt;
+    startRef.current       = startedAt;
+    setStatus("queued"); setError(null); setElapsed(0); setCopied(false);
+    saveNlState({ status: "queued", triggeredAt, startedAt, win });
     try {
       const res = await fetch("/api/dashboard", {
-        method: "POST",
+        method:  "POST",
         headers: { "Content-Type": "application/json", "Authorization": secret ? `Bearer ${secret}` : "" },
-        body: JSON.stringify({ format: "newsletter", window: win }),
+        body:    JSON.stringify({ format: "newsletter", window: win }),
       });
       if (!res.ok) {
         let msg = `HTTP ${res.status}`;
         try { const j = await res.json(); msg = j.error || msg; } catch {}
         throw new Error(msg);
       }
-      const data = await res.json();
-      const entry = { html: data.html || data.text || "", meta: data, generatedAt: new Date().toISOString() };
-      setCache(prev => ({ ...prev, [win]: entry }));
-      setStatus("done");
+      // 202 accepted — polling loop picks up the result when the workflow finishes
     } catch (err) {
       setError(err.message); setStatus("error");
+      saveNlState({ status: "error" });
     }
   }
 
@@ -350,7 +389,7 @@ function NewsletterPanel({ secret }) {
     setCopied(true); setTimeout(() => setCopied(false), 2500);
   }
 
-  const isRunning = status === "running";
+  const isQueued = status === "queued";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -359,9 +398,9 @@ function NewsletterPanel({ secret }) {
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: 6 }}>
           {NL_WINDOWS.map(w => (
-            <button key={w.id} disabled={isRunning} onClick={() => { setWin(w.id); setError(null); }} style={{
+            <button key={w.id} disabled={isQueued} onClick={() => { setWin(w.id); setError(null); }} style={{
               padding: "6px 14px", borderRadius: 6, border: "1px solid",
-              fontSize: "0.8rem", fontWeight: 600, cursor: isRunning ? "not-allowed" : "pointer",
+              fontSize: "0.8rem", fontWeight: 600, cursor: isQueued ? "not-allowed" : "pointer",
               background:  win === w.id ? "var(--accent-dim)" : "transparent",
               borderColor: win === w.id ? "var(--accent-border)" : "var(--border)",
               color:       win === w.id ? "var(--accent)" : "var(--text-secondary)",
@@ -369,23 +408,30 @@ function NewsletterPanel({ secret }) {
               {w.label}
               {cache[w.id] && (
                 <span style={{ marginLeft: 6, fontSize: "0.68rem", opacity: 0.6, fontWeight: 400 }}>
-                  {new Date(cache[w.id].generatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                  {new Date(cache[w.id].generated_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                 </span>
               )}
             </button>
           ))}
         </div>
-        <button onClick={generate} disabled={isRunning} style={{
+        <button onClick={generate} disabled={isQueued} style={{
           padding: "7px 20px", borderRadius: 8,
-          border: isRunning ? "1px solid var(--border)" : "none",
-          fontSize: "0.86rem", fontWeight: 700, cursor: isRunning ? "not-allowed" : "pointer",
-          background: isRunning ? "var(--surface-2)" : "var(--accent)",
-          color: isRunning ? "var(--text-tertiary)" : "#fff",
+          border: isQueued ? "1px solid var(--border)" : "none",
+          fontSize: "0.86rem", fontWeight: 700, cursor: isQueued ? "not-allowed" : "pointer",
+          background: isQueued ? "var(--surface-2)" : "var(--accent)",
+          color: isQueued ? "var(--text-tertiary)" : "#fff",
           display: "flex", alignItems: "center", gap: 8,
         }}>
-          {isRunning ? <><Spinner /> Generating… {formatElapsed(elapsed)}</> : isDone ? "Regenerate" : "Generate"}
+          {isQueued ? <><Spinner /> Queued… {formatElapsed(elapsed)}</> : isDone ? "Regenerate" : "Generate"}
         </button>
       </div>
+
+      {/* Queued notice */}
+      {isQueued && (
+        <div style={{ padding: "12px 16px", borderRadius: 8, background: "var(--accent-dim)", border: "1px solid var(--accent-border)", fontSize: "0.82rem", color: "var(--accent)" }}>
+          Generation dispatched to GitHub Actions — usually takes ~5 minutes. You can close this page; the result will be here when you return.
+        </div>
+      )}
 
       {/* Error */}
       {status === "error" && (
@@ -399,9 +445,9 @@ function NewsletterPanel({ secret }) {
         <div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <span style={{ fontSize: "0.72rem", color: "var(--text-tertiary)" }}>
-              {meta?.sourceCount} sources &middot; {meta?.period?.label}
-              {cached?.generatedAt && (
-                <> &middot; generated {new Date(cached.generatedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</>
+              {cached?.sourceCount} sources &middot; {cached?.period?.label}
+              {cached?.generated_at && (
+                <> &middot; generated {new Date(cached.generated_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</>
               )}
             </span>
             <button onClick={copy} style={{
@@ -434,9 +480,9 @@ function NewsletterPanel({ secret }) {
         </div>
       )}
 
-      {!isDone && !isRunning && status !== "error" && (
+      {!isDone && !isQueued && status !== "error" && (
         <div style={{ padding: "44px 20px", textAlign: "center", border: "1px dashed var(--border)", borderRadius: 10, color: "var(--text-tertiary)", fontSize: "0.84rem" }}>
-          {cache[win] ? "Newsletter cleared — click Generate to create a new one." : "Select a window and click Generate."}
+          Select a window and click Generate.
         </div>
       )}
     </div>
@@ -472,7 +518,7 @@ export function GeneratePage() {
         <p style={{ margin: "8px 0 0", fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
           {tab === "slides"
             ? "Dispatches a GitHub Actions run that executes the full analysis pipeline off-Vercel and saves a ready-to-present PPTX deck. The deck appears here in about 10–30 minutes — you can close this page while it runs."
-            : "Generates an AI threat intelligence digest — a curated reading list of relevant sources with summaries. Copy and paste directly into any email client."}
+            : "Dispatches a GitHub Actions run that generates an AI threat intelligence digest off-Vercel and saves it here. Usually ready in ~5 minutes — you can close the page while it runs."}
         </p>
       </div>
 

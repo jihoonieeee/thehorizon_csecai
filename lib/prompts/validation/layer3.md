@@ -275,7 +275,16 @@ Classify what kind of intelligence artefact this source is. Choose one:
   vulnerability            — a specific disclosed flaw/CVE in an AI system or dependency
   exploit_disclosure       — a working exploit/PoC/tool for a specific vulnerability
   incident                 — a documented real-world attack, breach, or abuse
-  threat_intelligence      — actor TTPs, IOCs, attribution, campaign tracking
+  threat_intelligence      — actor TTPs, IOCs, attribution, campaign tracking,
+                             OR a compiled report synthesizing findings from the
+                             publisher's OWN directly investigated real-world
+                             engagements (e.g. annual/quarterly incident response
+                             reports from IR firms based on their own casework, such
+                             as "Unit 42 IR Report: findings across 750 investigations").
+                             KEY TEST: did the publisher directly investigate or respond
+                             to the incidents described? If YES → threat_intelligence.
+                             If they are synthesizing OTHER organisations' public
+                             disclosures → attack_surface_signal.
   adversary_adoption_signal — evidence adversaries are adopting a technique
   research_finding         — a paper analysing/theorising an attack (no released tool)
   benchmark_evaluation     — a dataset/benchmark/measurement study
@@ -285,26 +294,31 @@ Classify what kind of intelligence artefact this source is. Choose one:
                              ONLY use for authoritative standards, formal regulations,
                              and government advisories. Do NOT use for vendor threat blogs.
   societal_harm_signal     — documented societal/individual harm (fraud, disinfo, abuse)
-  attack_surface_signal    — a development that materially shifts the AI attack surface.
+  attack_surface_signal    — a development that materially shifts the AI attack surface
+                             by synthesizing PUBLICLY AVAILABLE threat information.
                              Use for: (a) threat landscape syntheses and roundups that
-                             aggregate MULTIPLE NAMED AI threat developments (named orgs,
-                             dates, CVEs, specific findings); (b) vendor threat intelligence
-                             reports and industry threat roundups that synthesize recent
-                             AI threat events with traceable citations; (c) any article
-                             whose primary contribution is showing HOW the AI threat
-                             surface has shifted (time-to-exploit compression, adversary
-                             adoption of AI tools, emerging attack patterns). Prefer this
-                             over governance_signal for vendor threat blogs, security vendor
-                             quarterly reports, and landscape analysis pieces.
+                             aggregate MULTIPLE NAMED AI threat developments from public
+                             sources (named orgs, dates, CVEs, specific findings);
+                             (b) vendor blogs and industry roundups synthesizing recent
+                             AI threat events from open sources; (c) any article whose
+                             primary contribution is showing HOW the AI threat surface
+                             has shifted (time-to-exploit compression, adversary adoption
+                             of AI tools, emerging attack patterns). Prefer this over
+                             governance_signal for vendor threat blogs and landscape
+                             analysis pieces.
+                             NOT for: reports compiled from the publisher's own directly
+                             investigated incidents or engagements → those are
+                             threat_intelligence regardless of how many topics they cover.
   unknown                  — cannot determine
 
 LONGER-REPORT NOTE: Articles that synthesize MULTIPLE distinct AI threat topics
 (e.g., AI-generated exploits AND jailbreaks AND exploit chains in the same piece)
-are "attack_surface_signal" regardless of whether the publisher originated any
-finding. They are substantive if they reference ≥2 named real events with named
-organizations or dates. A vendor blog accurately synthesizing the GTIG AI-zero-day,
-the Five Eyes statement, and Mandiant M-Trends data is substantive secondary
-reporting — not marketing, not governance_signal.
+are "attack_surface_signal" if drawing from public/open sources, or
+"threat_intelligence" if the findings come from the publisher's own investigations.
+They are substantive if they reference ≥2 named real events with named organizations
+or dates. A vendor blog accurately synthesizing the GTIG AI-zero-day, the Five Eyes
+statement, and Mandiant M-Trends data is substantive secondary reporting — not
+marketing, not governance_signal.
 
 ════ DIMENSION 7: READING VALUE ════
 
