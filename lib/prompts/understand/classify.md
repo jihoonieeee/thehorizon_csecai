@@ -613,7 +613,9 @@ out neighbouring tags. Assign the single primary_tag that names the core threat.
       • A paper on MEMBERSHIP INFERENCE (determining if a sample was in training set) is
         TAI07, not TAI01 — no poisoning occurs.
       • A paper on CODE POISONING of ML training libraries (poisoning the library, not
-        the data) is TAI10_ai_supply_chain_compromise, not TAI01.
+        the data) is TAI10_ai_supply_chain_compromise, not TAI01. Example: CPPIA
+        (arXiv 2607.15970) poisons GitHub/Codex code executed during ML training to
+        leak training-set properties → TAI10, not TAI01.
       Only apply TAI01 when the paper's NOVEL CONTRIBUTION is modifying training inputs.
 
   TAI02_model_poisoning
@@ -730,6 +732,13 @@ out neighbouring tags. Assign the single primary_tag that names the core threat.
     ✗ NOT TAI05: want membership knowledge (TAI07) vs want a working model replica (TAI05).
     ✗ NOT LLM02: classical (non-LLM) models only. Membership inference against an LLM
       or its RAG corpus → LLM02.
+    ✗ NOT TAI07 — property inference: if the attacker infers AGGREGATE dataset statistics
+      (demographic distributions, class proportions, attribute ratios across the full
+      training population) rather than the membership of a SPECIFIC record, that is a
+      property inference attack — a distinct privacy class. TAI07 is a per-record binary
+      signal only. For property inference delivered via code supply chain, use TAI10.
+      Example: CPPIA (arXiv 2607.15970) infers dataset-level properties by poisoning
+      GitHub/Codex code → TAI10, not TAI07.
 
   TAI08_inference_api_abuse
     WHAT: The attacker abuses a classical ML model's inference API for reconnaissance

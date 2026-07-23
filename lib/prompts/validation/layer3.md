@@ -269,6 +269,14 @@ The prior_trust_context is advisory — confirm or adjust based on actual conten
 
 "unknown"  — cannot determine publisher identity or trustworthiness from available text.
 
+CRITICAL FAILURE MODE — subject ≠ publisher:
+  Trust tier is the PUBLISHER'S credibility for THIS article, never the subject matter.
+  • Infosecurity Magazine article about an FBI deepfake alert → medium (publisher = Infosec Mag)
+  • Security Affairs article about a Hugging Face breach → medium (publisher = Security Affairs)
+  • FBI.gov publishing its own IC3 advisory → primary (publisher = FBI)
+  Never assign primary or high because the article quotes, covers, or names a government
+  agency, AI lab, or named victim. Check the DOMAIN you are reading from, not who is cited.
+
 ════ DIMENSION 6: SOURCE TYPE ════
 
 Classify what kind of intelligence artefact this source is. Choose one:
