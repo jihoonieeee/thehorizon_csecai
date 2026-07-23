@@ -29,12 +29,25 @@ Issues that affect multiple sources and require prompt or code changes rather th
 | S8 | `fixed` | `systemic` | `scripts/classifyAndAudit.js` reading `result.tags` (undefined) instead of `result.primary_tags`, silently writing `[]` to DB and erasing tags on every audit run. | Fixed field name in classifyAndAudit.js. Production classify.js unaffected. |
 | S9 | `open` | `systemic` | `claim_extraction_status: success` is set by the classify pipeline on all classified sources, not by evidence extraction. This creates a false signal: a source shows `success` even if it was never eligible for extraction (below `reading_value` gate) or if extraction ran and returned 0 items. Hard to distinguish "not yet run", "ran but empty", and "genuinely no evidence" from the DB. | To investigate: consider a separate flag or distinguish via evidence table count. |
 | S10 | `open` | `systemic` | Deterministic `reading_value` formula (`importance=realized → essential`) is too blunt. Several legitimate `recommended` downgrades by the LLM (secondary sources, known-pattern novelty, no unique case study) are flagged as mismatches by the audit script's deterministic expectation. The formula doesn't account for novelty, duplicateness, or source tier. | To investigate: either accept divergence for secondary sources or update the audit script's expected value to match the 8-step layer3 reading value logic rather than the simple importance→value map. |
-| S11 | `open` | `systemic` | Sources with `source_family` not set (null) fall through to a default extractor. At least one source (THN PowerShell, 10,990 chars, `source_type: incident`) ran evidence extraction and returned 0 items. Unclear if routing failure, silent extractor error, or genuinely no extractable evidence. | To investigate: check `classifySourceFamily` assignment at ingest time; confirm null family causes default routing; check extractor logs. |
+| S11 | `fixed` | `systemic` | Sources with `source_family` not set (null) fall through to a default extractor. At least one source (THN PowerShell, 10,990 chars, `source_type: incident`) ran extraction and returned 0 items. | Resolved as S16 side effect — once `reading_value` was correctly persisted (await fix), extraction ran and returned 2 items for `af8ae50f`. Null `source_family` does not block extraction; the default extractor works. Closing. |
 | S14 | `fixed` | `systemic` | `intelligence.importance.tier` missing for 48 classified sources — those sources had `reading_value` set but `importance` not persisted. Root cause: S16 (fire-and-forget update race in classify.js). | Backfilled all 48 via deterministic `computeImportance()` re-run. |
 | S15 | `open` | `systemic` | `AE05_ai_malware_dev` applied to malware that *targets* AI systems rather than AI-*generated* malware (e.g. ENCFORGE, Mini Shai-Hulud, SANDWORM_MODE, JadePuffer/Infosec). Root cause: classifier pattern-matches "malware + AI = AE05". 4 hits across batches 5–7. | Added mandatory test gate at top of AE05 + CRITICAL FAILURE MODES section + 3 named worked cases. LLM still persisting — monitoring batch 8+. |
 | S17 | `open` | `systemic` | `TAI01_data_poisoning` used as generic secondary tag for classical ML attack papers where no data poisoning occurs (model inversion, model extraction, membership inference via code poisoning). 3 hits in batch 7. | Added CRITICAL FAILURE MODE to TAI01 definition listing explicit non-cases. Also tightened reading_value research-maturity cap in layer3.md: `analyst` is now stated as the DEFAULT for research papers; `recommended` requires explicit justification. |
 | S16 | `fixed` | `systemic` | `runScoringPass` in classify.js used fire-and-forget Supabase `.update().then().catch()` instead of `await`. When `extractEvidence.js` ran immediately after classify in the pipeline, `reading_value` and `intelligence.importance` updates hadn't hit Supabase — sources appeared ineligible for extraction. Root cause of all zero-evidence patterns across batches 1–5 and S14. | Changed to `await` in classify.js `runScoringPass`. |
-| S18 | `open` | `systemic` | `reading_value=background` on `importance=research` sources — 3 hits in batch 9 (WACV2025, DNA embeddings, LLM system monitoring). Expected minimum is `analyst` for research-tier importance. Root cause: these sources were classified before the layer3.md DEFAULT=analyst prompt fix (landed batch 7). Post-fix sources appear clean. | Corpus-wide residual; batch 9 sources manually patched. Monitor new sources to confirm fix is holding. Consider a one-time backfill query for all `importance=research AND reading_value=background` sources. |
+| S18 | `fixed` | `systemic` | `reading_value=background` on `importance=research` sources — 3 hits in batch 9 (WACV2025, DNA embeddings, LLM system monitoring). Expected minimum is `analyst` for research-tier importance. Root cause: these sources were classified before the layer3.md DEFAULT=analyst prompt fix (landed batch 7). Post-fix sources appear clean. | One-time backfill applied 2026-07-23: 25 sources upgraded `background → analyst` (all offensive-category, validation=pass, importance=research). New sources correctly receiving `analyst` since batch 8. |
+
+---
+
+## Corpus-Wide Fixes
+
+One-time bulk operations applied outside the batch audit flow.
+
+| Date | Operation | Scope | Result |
+|------|-----------|-------|--------|
+| 2026-07-23 | S18 backfill: `reading_value background → analyst` | 25 offensive sources with `importance=research` classified before layer3.md DEFAULT=analyst fix | All 25 upgraded. |
+| 2026-07-23 | arXiv duplicate purge (`scripts/dedupeArxiv.js`) | 19 arXiv papers with multiple source rows (abs/pdf/html variants pre-dating `foldUrlVariants`). 21 inferior rows deleted, 30 evidence rows migrated to keepers. Starred row (`55ecb61a`) promoted to keeper. | 21 rows deleted. `foldUrlVariants` prevents new duplicates going forward. |
+| 2026-07-23 | arXiv date fix (`scripts/fixArxivDates.js`) | 2 sources with estimated dates (DNA embeddings `85836d19`, LLM monitoring `31b6b06a`) | `2603.06950 → 2026-03-06 exact`, `2602.19844 → 2026-02-23 exact`. |
+| 2026-07-23 | Non-exact date flag | 30 sources with `date_confidence ∈ {estimated, low}` flagged `needs_review=true` | 25 estimated + 5 low (Unit 42 IR children). Will surface in batch audit queue for per-source date verification. |
 
 ---
 
@@ -47,7 +60,7 @@ Issues specific to individual sources, recorded for traceability even after fix 
 | Source | ID (first 8) | Status | Type | Issue | Fix applied |
 |--------|-------------|--------|------|-------|-------------|
 | Unit 42 IR Report | `4902edd0` | `fixed` | `classification` | `source_type: attack_surface_signal` — should be `threat_intelligence` (publisher's own 750-engagement investigations). | `source_type → threat_intelligence`, `needs_review → true` |
-| Unit 42 IR Report | `4902edd0` | `open` | `evidence` | `main_category: null`, no summary, no evidence. Needs classify run after source_type fix. | `needs_review` set; awaiting next classify run. |
+| Unit 42 IR Report | `4902edd0` | `fixed` | `evidence` | Children `i1`–`i4` had 0 evidence despite `essential` reading_value. | Extracted 2026-07-23 via Gemini. i1 (AI-Enabled Ransomware) and i2 (AI-Assisted Social Engineering) each got 1 item. i3/i4 returned malformed Gemini JSON (thin excerpt content); 0 items acceptable for those sections. |
 | HF Breach – Abstract Security | `de5f5441` | `fixed` | `classification` | Originally `ai_enabled_threats` (correct); incorrectly changed to `agentic_ai_threats` in batch 1 analysis; reverted. | Reverted to `ai_enabled_threats / AE08 + TAI10 + AE05`. |
 | HF Breach – Abstract Security | `de5f5441` | `fixed` | `date` | `date_published: 2026-07-22` off by one day; text says "Published on: Jul 21, 2026". | `date_published → 2026-07-21`, `date_confidence → exact`. |
 | HF/OpenAI – SecurityWeek | `0d7013d5` | `open` | `data_integrity` | "GPT-5.6 Sol" is an unrecognised model name. URL returns 403 (bot-blocked, not confirmed dead). Possible synthetic source. | `needs_review → true`. Awaiting manual browser verification of URL. |
@@ -182,7 +195,7 @@ Issues specific to individual sources, recorded for traceability even after fix 
 |--------|-------------|--------|------|-------|-------------|
 | THN PowerShell AD | `af8ae50f` | `fixed` | `date` | `date_published: 2026-07-13` off by one day vs `date_actual: 2026-07-14`. | `date_published → 2026-07-14`. |
 | THN PowerShell AD | `af8ae50f` | `fixed` | `maturity` | `maturity: operational` — source says "suspected" AI-generated script, unconfirmed. Should be `observed`. | `intelligence.maturity_level → observed`. |
-| THN PowerShell AD | `af8ae50f` | `open` | `evidence` | `claim_extraction_status: success` but 0 evidence items, `source_family: null`. Evidence ran (reading_value=recommended, eligible) but returned nothing. | See S11. Investigate source_family null routing. |
+| THN PowerShell AD | `af8ae50f` | `fixed` | `evidence` | `claim_extraction_status: success` but 0 evidence items, `source_family: null`. | S16 root cause — once reading_value was correctly written (await fix), extraction ran. Now has 2 evidence items. S11 closed. |
 | Rescana GitHub PI | `bd60ca1e` | `fixed` | `data_integrity` | `is_digest: true` false positive — single advisory covering multiple named incidents, not a multi-topic digest. | `is_digest → false`. |
 | Rescana GitHub PI | `bd60ca1e` | `fixed` | `maturity` | `maturity: observed` — three named confirmed real-world campaigns (GhostAction, NX Build, Ultralytics). Should be `operational`. | `intelligence.maturity_level → operational`. |
 | Mastra npm / Sapphire Sleet | `13c887aa` | `fixed` | `classification` | `ai_enabled_threats / AE05` — should be `traditional_ai_threats / TAI10` (npm AI framework supply chain victim). Same pattern as Hades Campaign (S7). | `main_category → traditional_ai_threats`, `tags → [TAI10, AE01]`, `reading_value → essential`, `trust_tier → medium`. |
@@ -190,7 +203,7 @@ Issues specific to individual sources, recorded for traceability even after fix 
 | Ghost Packages | `d6c35d8f` | `fixed` | `date` | `date_published: 2026-07-05` vs `date_actual: 2026-05-21` — 6-week gap. `date_actual` is earlier and should be trusted. | `date_published → 2026-05-21`. |
 | Ghost Packages | `d6c35d8f` | `open` | `evidence` | `claim_extraction_status: success` but 0 evidence items and only 3,268 chars. Was below `reading_value` gate when extraction ran — never actually extracted. See S9. | Not eligible at `analyst` + thin content. Accepted. |
 | BioShocking | `9a0b2777` | `fixed` | `reading_value` | `reading_value: analyst` — working PoC against 6 named AI browser products, only one vendor has a fix. Should be `recommended`. | `reading_value → recommended`. |
-| BioShocking | `9a0b2777` | `open` | `evidence` | `claim_extraction_status: success` but 0 evidence items. Was `analyst` when extraction ran — below gate. Now `recommended`; should extract on next run. | Eligible on next run. Monitor. |
+| BioShocking | `9a0b2777` | `fixed` | `evidence` | 0 items when below reading_value gate. | Extracted 2026-07-23 via Gemini. 7 items, all spec=high grounded=true. Covers PoC mechanism, 6 vendor test results, OpenAI fix, Anthropic failed fix, Perplexity dismissal. |
 
 ---
 
@@ -202,7 +215,7 @@ Issues recorded but not yet investigated:
 
 2. **S10 — reading_value audit mismatch noise:** The `computeImportance` deterministic formula flags too many legitimate LLM downgrades. Consider updating `auditCorpus.js` to show `(LLM override — check layer3 step 2–8)` instead of `✗ MISMATCH` when the divergence is `recommended` vs `essential` on a secondary/news source.
 
-3. **S11 — null source_family extraction routing:** THN PowerShell (10,990 chars, `incident`, `reading_value: recommended`) ran extraction and returned 0 items. `source_family` is null. Investigate whether `classifySourceFamily` is called at classify time and whether null family causes silent extraction failure.
+3. ~~**S11 — null source_family extraction routing**~~ — **CLOSED 2026-07-23.** `af8ae50f` now has 2 evidence items. Null `source_family` does not block extraction; S16 was the real root cause.
 
 4. **SecurityWeek "GPT-5.6 Sol" source (`0d7013d5`):** Flagged `needs_review`. Manually open URL in browser to confirm whether article exists with that title and those claims. If confirmed synthetic, delete from DB.
 
