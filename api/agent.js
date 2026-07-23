@@ -316,7 +316,15 @@ function qaContent(answer, citationCount, groundingText, { requireCitations }) {
   if (groundingText) {
     const cves = [...new Set((text.match(/CVE-\d{4}-\d{4,7}/gi) || []).map(s => s.toUpperCase()))];
     const ungrounded = cves.filter(c => !groundingText.includes(c.toLowerCase()));
-    if (ungrounded.length) issues.push({ code: "ungrounded_cve", severity: "blocking", detail: `Referenced CVE(s) not found in any retrieved source: ${ungrounded.join(", ")}.` });
+    if (ungrounded.length) {
+      // Strip the hallucinated CVE IDs rather than blocking — the surrounding
+      // sentence is usually still valid; only the specific ID was fabricated.
+      for (const cve of ungrounded) {
+        text = text.replace(new RegExp(`\\b${cve}\\b`, "gi"), "a reported vulnerability");
+      }
+      text = text.replace(/ {2,}/g, " ").trim();
+      issues.push({ code: "ungrounded_cve", severity: "repaired", detail: `Replaced ${ungrounded.length} CVE ID(s) not found in any retrieved source with generic language: ${ungrounded.join(", ")}.` });
+    }
   }
   // Only require citations in the GROUNDED path — the general fallback is
   // deliberately uncited and must not be blocked for lacking sources.
@@ -701,7 +709,7 @@ export default async function handler(req, res) {
       let finalAnswer = contentQa.text;
 
       // ── Haiku verifier (grounded path only; general answers have no sources) ──
-      let verify = { verdict: "grounded", unsupported: [], ran: false };
+      let verify = { verdict: "grounded", unsupported: [], contradictions: [], unreconciled: [], ran: false };
       const verifyIssues = [];
       let confidence = parsed.confidence;
       if (!isGeneral && !parsed.out_of_scope && finalAnswer && sourceRefs.length) {
@@ -714,6 +722,16 @@ export default async function handler(req, res) {
         if (verify.ran && verify.verdict === "weakly_grounded") {
           confidence = "low";
           verifyIssues.push({ code: "weak_grounding", severity: "repaired", detail: "Most specific claims could not be tied to a cited source; confidence lowered." });
+        }
+        // Append a reconciliation note for each contradiction the answer left unresolved.
+        // Pass the note through stripUnlinkedMarkers so any [src-N] refs it contains only
+        // appear if the source still has a live URL after QA.
+        if (verify.ran && verify.unreconciled.length) {
+          const noteLines = verify.unreconciled.map(u => `- ${u}`).join("\n");
+          const rawNote = `\n\n**Note — sources conflict on the following point(s):**\n${noteLines}`;
+          finalAnswer += stripUnlinkedMarkers(rawNote, localSourceRefs);
+          verifyIssues.push({ code: "unreconciled_contradiction", severity: "repaired",
+            detail: `Added reconciliation note for ${verify.unreconciled.length} source contradiction(s) not acknowledged in the original answer.` });
         }
       }
 
@@ -750,7 +768,7 @@ export default async function handler(req, res) {
         qa_issues:           qaIssues,
         qa_pass:             !blocked,
         qa_blocked:          blocked,
-        qa_report:           { blocked, blocking: blockingFindings, repaired: qaFindings.filter(i => i.severity === "repaired"), verifier: { ran: verify.ran, verdict: verify.verdict, unsupported: verify.unsupported } },
+        qa_report:           { blocked, blocking: blockingFindings, repaired: qaFindings.filter(i => i.severity === "repaired"), verifier: { ran: verify.ran, verdict: verify.verdict, unsupported: verify.unsupported, contradictions: verify.contradictions, unreconciled: verify.unreconciled } },
         evidence_items_used: evidence.length,
         temporal_scope:      plan.temporal.scope_label,
         token_usage:         tokenUsage(isGeneral ? "general" : "grounded"),
