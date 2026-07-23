@@ -605,6 +605,16 @@ out neighbouring tags. Assign the single primary_tag that names the core threat.
     ✗ NOT ASI06: training corpus poisoning (TAI01) vs agent's runtime/session memory (ASI06).
     ✗ Don't dual-tag TAI01+TAI02 because a paper discusses both — assign only the
       mechanism the paper INTRODUCES. Related-work citations don't earn secondary tags.
+    CRITICAL FAILURE MODE — TAI01 is NOT a generic "ML attack" secondary tag:
+      • A paper on MODEL INVERSION (reconstructing training samples from model outputs)
+        is TAI06, not TAI01 — no training data is modified.
+      • A paper on MODEL EXTRACTION (stealing model functionality via queries) is TAI05,
+        not TAI01 — the attacker queries the model, does not poison training data.
+      • A paper on MEMBERSHIP INFERENCE (determining if a sample was in training set) is
+        TAI07, not TAI01 — no poisoning occurs.
+      • A paper on CODE POISONING of ML training libraries (poisoning the library, not
+        the data) is TAI10_ai_supply_chain_compromise, not TAI01.
+      Only apply TAI01 when the paper's NOVEL CONTRIBUTION is modifying training inputs.
 
   TAI02_model_poisoning
     WHAT: The attacker DIRECTLY EDITS or patches model artifact parameters so malice

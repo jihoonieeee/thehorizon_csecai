@@ -468,19 +468,25 @@ Publisher reputation modifies confidence in the claim, not the reading_value lab
 Apply this cap BEFORE assigning reading_value. It is a hard ceiling.
 
 When evidence_maturity is "research_only" (lab-only, no real-world exploitation):
-  • reading_value is capped at "recommended".
-  • Exception: a research_only paper MAY be "essential" ONLY when ALL of:
-    (a) the attack CLASS is genuinely new — no prior published literature describes this
-        security boundary being attacked in this way,
-    (b) the finding requires defenders to add a brand-new threat to their model (not just
-        a new technique within a known class), AND
-    (c) the paper provides a working demonstration (not just theoretical analysis).
+  • DEFAULT is "analyst". This is the starting point for all research papers.
+  • reading_value MAY be upgraded to "recommended" ONLY when: novelty is "first_of_kind"
+    AND strategic_consequence is "changes_priority" or higher AND the paper demonstrates
+    a working attack (not just theory). Meeting two of three is NOT enough.
+  • reading_value MAY be "essential" ONLY when ALL three hold: (a) attack CLASS is
+    genuinely new, (b) requires defenders to add a brand-new threat to their model, AND
+    (c) working demonstration provided.
   • Papers that introduce frameworks, taxonomies, benchmarks, or systematic studies of
     KNOWN attack classes are "analyst" even if well-executed — the classification work
     has value for practitioners but does not change the strategic threat model.
   • Academic papers that name a new technique within memory poisoning, prompt injection,
     jailbreaks, backdoors, model extraction, adversarial examples, or evasion are "analyst"
     regardless of how many "novel" or "first" claims appear in the abstract.
+  COMMON FAILURE MODE: treating "notable" or "landmark" significance as automatic
+    justification for "recommended". Significance describes research quality; reading_value
+    describes operational urgency for a threat analyst. A landmark paper on a known attack
+    class (e.g. a more efficient model inversion, a faster membership inference method,
+    fewer-query model extraction) is "analyst" — it refines a known threat, it does not
+    change the threat model.
 
 ── ASSIGN READING VALUE ─────────────────────────────────────────────────────────────────
 
