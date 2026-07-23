@@ -380,7 +380,7 @@ async function main() {
 
   if (!DRY_RUN && saved > 0) {
     console.log(`\n  Next step:`);
-    console.log(`    node scripts/dailyClassify.js --since-hours 2 --limit ${saved + 50}`);
+    console.log(`    node scripts/classify.js --limit ${saved + 50}`);
   }
 }
 

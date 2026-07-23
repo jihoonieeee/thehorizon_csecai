@@ -4,7 +4,7 @@
  *
  * Scans every source for (1) dead links (confirmed 404/410/DNS-failure, using the
  * same liveness check the chatbot uses) and (2) duplicates. Reports by default;
- * pass --execute to purge. Never deletes trust_tier="curated" rows.
+ * pass --execute to purge.
  *
  * Duplicate handling:
  *   • URL-variant dupes (same page via http/https, www, trailing slash, query,
@@ -28,7 +28,7 @@ const urlIsBroken = async (url) => (await isUrlReachable(url, 8000)) === false;
 const EXECUTE = process.argv.includes("--execute");
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-const TRUST_RANK = { primary: 5, high: 4, curated: 3, medium: 2, low: 1, unknown: 0 };
+const TRUST_RANK = { primary: 4, high: 3, medium: 2, low: 1, unknown: 0 };
 
 // Canonical URL key: protocol/host-www/trailing-slash/query/fragment stripped.
 function urlKey(url) {
@@ -107,29 +107,29 @@ for (const [p,n] of Object.entries(deadByPub).sort((a,b)=>b[1]-a[1]).slice(0,25)
 
 // ── Build deletion set ────────────────────────────────────────────────────────
 const toDelete = new Map();  // id → reason
-for (const r of deadRows) if (r.trust_tier !== "curated") toDelete.set(r.id, "dead");
+for (const r of deadRows) toDelete.set(r.id, "dead");
 for (const g of urlDupeGroups) {
   const keep = keeper(g);
-  for (const r of g) if (r.id !== keep.id && r.trust_tier !== "curated") toDelete.set(r.id, toDelete.get(r.id) || "url_dupe");
+  for (const r of g) if (r.id !== keep.id) toDelete.set(r.id, toDelete.get(r.id) || "url_dupe");
 }
-const curatedDead = deadRows.filter(r => r.trust_tier === "curated").length;
 
 console.log(`\n── PLAN ──`);
 console.log(`  delete ${[...toDelete.values()].filter(v=>v==="dead").length} dead-link rows`);
 console.log(`  delete ${[...toDelete.values()].filter(v=>v==="url_dupe").length} URL-variant duplicate rows`);
-if (curatedDead) console.log(`  (protected: ${curatedDead} curated rows are dead but will NOT be deleted)`);
 
 if (!EXECUTE) { console.log(`\n[dry-run] nothing deleted. Re-run with --execute to purge.`); process.exit(0); }
 
 // ── Execute ───────────────────────────────────────────────────────────────────
 const ids = [...toDelete.keys()];
-// delete dependent evidence first, then sources
+// Delete evidence first (FK constraint), then sources.
+// Delete evidence by source_id — evidence_id is not globally unique.
 let evDel = 0;
 for (let i = 0; i < ids.length; i += 100) {
-  const batch = ids.slice(i, i+100);
-  const { data: ev } = await supabase.from("evidence").select("evidence_id").in("source_id", batch);
-  const evIds = (ev||[]).map(e=>e.evidence_id);
-  if (evIds.length) { await supabase.from("evidence").delete().in("evidence_id", evIds); evDel += evIds.length; }
+  const batch = ids.slice(i, i + 100);
+  const { count, error: evErr } = await supabase
+    .from("evidence").delete({ count: "exact" }).in("source_id", batch);
+  if (evErr) console.warn(`  evidence delete error: ${evErr.message}`);
+  else evDel += count || 0;
   const { error } = await supabase.from("sources").delete().in("id", batch);
   if (error) { console.log(`  delete error: ${error.message}`); break; }
 }

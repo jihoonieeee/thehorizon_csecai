@@ -359,14 +359,10 @@ function proseToBullets(text) {
 
 // ── Source loading ─────────────────────────────────────────────────────────────
 
-const SRC_SELECT = "id,main_category,short_summary,analyst_brief,intelligence,tags,source_type,trust_tier,title,url,publisher,date_published,parent_source_id,is_digest,reading_value";
+const SRC_SELECT = "id,main_category,short_summary,intelligence,tags,source_type,trust_tier,title,url,publisher,date_published,parent_source_id,is_digest,reading_value";
 
-// Some pipeline-enriched sources leave the top-level short_summary/analyst_brief
-// columns empty and stash the prose under intelligence.source_summary. Fall back
-// to it so those sources still feed the insight pipeline instead of looking
-// unenriched.
 function summaryText(s) {
-  return (s.analyst_brief || s.short_summary || s.intelligence?.source_summary || "").trim();
+  return (s.short_summary || s.intelligence?.source_summary || "").trim();
 }
 
 export async function loadWindowSources(from, to) {

@@ -39,13 +39,7 @@ import { runDiscoveryQuery } from "../lib/pipeline/discovery/webDiscoverySearch.
 import { runDiscoverySearch, hasAnyDiscoveryProvider } from "../lib/pipeline/discovery/discoverySearchRouter.js";
 import { candidatesToSources } from "../lib/pipeline/discovery/candidateToSource.js";
 import { normalizeSource } from "../lib/pipeline/ingest/normalizeSource.js";
-import { validateAndTypeSource } from "../lib/pipeline/validation/validateAndTypeSource.js";
 import { fetchPageText, contentQualityOk } from "../lib/pipeline/discovery/fetchCandidateText.js";
-import { understandSource } from "../lib/pipeline/understand/understandSource.js";
-import { DOMAINS } from "../lib/pipeline/understand/taxonomy.js";
-
-// Valid offensive/adjacent v2 domains (excludes the catch-all for the v2ok gate).
-const DOMAINS_SET = new Set(DOMAINS.filter(d => d !== "unclear_or_adjacent"));
 
 const args   = process.argv.slice(2);
 const getArg  = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i + 1] ? args[i + 1] : d; };
@@ -141,15 +135,16 @@ for (let i = 0; i < ids.length; i += 200) {
 const fresh = acceptedSources.filter((s) => !existing.has(makeId(s.url)));
 console.log(`Dedup: ${acceptedSources.length} accepted → ${fresh.length} new (${existing.size} already in corpus)\n`);
 
-// ── Stage 6-8: text floor + Layer 3 validation gate + persist ─────────────────
-const tally = { pass: 0, review: 0, reject: 0, too_short: 0, errored: 0, saved: 0 };
+// ── Stage 6-7: text quality floor + persist ───────────────────────────────────
+// L3 validation and L4 classification are intentionally not run here — the daily
+// classify job (classify.js) handles both uniformly for all sources with
+// main_category IS NULL, including these web-discovery ones.
+const tally = { saved: 0, too_short: 0, errored: 0 };
 
 async function processOne(src) {
   try {
-    // web_search returns short snippets — fetch the real article body before QA
-    // so the text floor + Layer-3 relevance call judge the full source, not a teaser.
-    // Re-fetch when the text is short OR fails the prose gate (Tavily sometimes
-    // returns a page's nav/"Featured/Recent" chrome, which is long but not prose).
+    // Fetch the real article body when the search snippet is too short or is
+    // boilerplate nav/chrome (Tavily sometimes returns page structure, not prose).
     if ((src.full_text || "").length < 600 || !contentQualityOk(src.full_text)) {
       const fetched = await fetchPageText(src.url).catch(() => "");
       if (fetched && contentQualityOk(fetched) &&
@@ -157,95 +152,44 @@ async function processOne(src) {
         src.full_text = fetched;
       }
     }
-    // Demote sources whose body is too short OR is boilerplate we could not improve,
-    // so nav chrome is never passed to the relevance LLM as if it were the article.
     if ((src.full_text || "").length < 200 || !contentQualityOk(src.full_text)) { tally.too_short++; return; }
-    const id = makeId(src.url);
+
+    const id  = makeId(src.url);
     const row = normalizeSource({
       id,
-      title:          src.title,
-      url:            src.url,
-      publisher:      src.publisher || "Unknown",
-      author:         src.author || src.publisher || "",
-      date_published: src.date_published,
-      // Carry the honest date confidence from candidateToSource (exact/estimated/
-      // low) instead of dropping it — otherwise the DB column default ("exact")
-      // silently launders inferred/collection-time dates into authoritative ones.
-      date_confidence:        src.date_confidence,
-      date_published_actual:  src.date_published_actual,
-      source_type:    src.source_type && src.source_type !== "unknown" ? src.source_type : "incident",
-      full_text:      src.full_text,
-      trust_tier:     src.trust_tier && src.trust_tier !== "unknown" ? src.trust_tier : "medium",
+      title:                 src.title,
+      url:                   src.url,
+      publisher:             src.publisher || "Unknown",
+      author:                src.author || src.publisher || "",
+      date_published:        src.date_published,
+      date_confidence:       src.date_confidence,
+      date_published_actual: src.date_published_actual,
+      source_type:           src.source_type && src.source_type !== "unknown" ? src.source_type : "incident",
+      full_text:             src.full_text,
+      trust_tier:            src.trust_tier && src.trust_tier !== "unknown" ? src.trust_tier : "medium",
     });
 
-    const v = await validateAndTypeSource(row, { runQa: true });
-    tally[v.validation_status] = (tally[v.validation_status] || 0) + 1;
-
-    // Drop sources that pass L3 but are classified as background reading_value —
-    // these are evergreen educational/overview pages (e.g. "What Is Prompt
-    // Injection? Guide for 2026"), not new intelligence. Discovery should add
-    // new findings, not re-ingest reference material already well-indexed elsewhere.
-    const isBackground = v.reading_value === "background";
-    const keep = (v.validation_status === "pass" || v.validation_status === "review") && !isBackground;
-    if (keep && !DRY) {
-      // v2 understand-layer classification so discovered sources are born with a
-      // v2 main_category + tags + defensive flag (legacy validateAndTypeSource does
-      // not assign the v2 taxonomy, which left discovered sources at null category
-      // and invisible to the dashboard / insights / slides).
-      let u = null;
-      try { u = await understandSource(row); } catch { /* fall back to legacy */ }
-      const v2ok = u && u.relevant && DOMAINS_SET.has(u.category);
-
-      const tags = v2ok ? (u.primary_tags || []) : [];
-      const intelligence = v2ok
-        ? {
-            is_defensive:         u.is_defensive || false,
-            defended_category:    u.defended_category || null,
-            defensive_techniques: u.defensive_techniques || [],
-            key_entities:         u.key_entities || [],
-            key_terms:            u.key_terms || [],
-            main_claims:          u.main_claims || [],
-          }
-        : null;
-
+    if (!DRY) {
       const { error } = await sb.from("sources").upsert({
-        id:                 row.id,
-        url:                row.url,
-        title:              row.title,
-        publisher:          row.publisher,
-        author:             row.publisher,
-        date_published:     row.date_published,
-        // Persist the computed confidence so inferred/collection-time dates are NOT
-        // laundered to the DB default ("exact") and stay visible to the date audit.
-        date_confidence:    row.date_confidence,
+        id:                    row.id,
+        url:                   row.url,
+        title:                 row.title,
+        publisher:             row.publisher,
+        author:                row.publisher,
+        date_published:        row.date_published,
+        date_confidence:       row.date_confidence,
         date_published_actual: row.date_published_actual,
-        source_type:        (v2ok && u.source_type) || v.source_type || row.source_type,
-        full_text:          row.full_text,
-        summary:            row.full_text?.slice(0, 500) || "",
-        short_summary:      v2ok ? (u.short_summary || null) : null,
-        trust_tier:         (v2ok && u.trust_tier && u.trust_tier !== "unknown") ? u.trust_tier : row.trust_tier,
-        main_category:      v2ok ? u.category : (v.main_category || null),
-        tags,
-        intelligence,
-        validation_status:  v.validation_status,
-        layer3_status:      v.layer3_status || v.validation_status,
-        downstream_route:   v.downstream_route || null,
-        ai_threat_focus:    v.ai_threat_focus || null,
-        ai_specificity_score: v.ai_specificity_score ?? null,
-        relevance_tier:     v.relevance_tier ?? null,
-        validation_summary: v.validation_summary || null,
-        claim_extraction_status: null,
-        source_origin:      "web_discovery",
+        source_type:           row.source_type,
+        full_text:             row.full_text,
+        summary:               row.full_text?.slice(0, 500) || "",
+        trust_tier:            row.trust_tier,
+        validation_status:     "review",  // classify job confirms/rejects
+        source_origin:         "web_discovery",
       }, { onConflict: "id" });
       if (error) { console.log(`  ! save failed ${id}: ${error.message}`); return; }
       tally.saved++;
-      const defMark = v2ok && u.is_defensive ? " [defensive]" : "";
-      const catMark = v2ok ? u.category.split("_")[0] : "null-cat";
-      process.stdout.write(`  ${v.validation_status.padEnd(6)} ${(DRY ? "would-save" : "saved").padEnd(10)} ${catMark.padEnd(12)}${defMark} ${(row.publisher || "").slice(0, 18).padEnd(18)} ${(row.title || "").slice(0, 42)}\n`);
-      return;
     }
-    const mark = keep ? (DRY ? "would-save" : "saved") : (isBackground ? "background" : "drop");
-    process.stdout.write(`  ${v.validation_status.padEnd(6)} ${mark.padEnd(10)} ${(row.publisher || "").slice(0, 20).padEnd(20)} ${(row.title || "").slice(0, 46)}\n`);
+    process.stdout.write(`  ${DRY ? "would-save" : "saved"} ${(row.publisher || "").slice(0, 20).padEnd(20)} ${(row.title || "").slice(0, 50)}\n`);
   } catch (e) {
     tally.errored++;
     console.log(`  ! error: ${e.message}`);
@@ -257,9 +201,8 @@ for (let i = 0; i < fresh.length; i += CONC) {
 }
 
 console.log("\n────────────────────────────────────────────────────────────");
-console.log(`  Validated ${fresh.length} new candidates`);
-console.log(`  → pass: ${tally.pass}   review: ${tally.review}   reject: ${tally.reject}   too_short: ${tally.too_short}   errored: ${tally.errored}`);
-console.log(`  ${DRY ? "Would save" : "Saved"}: ${DRY ? tally.pass + tally.review : tally.saved} (pass + review)${DRY ? "  [DRY RUN — no writes]" : ""}`);
+console.log(`  Processed ${fresh.length} new candidates`);
+console.log(`  → ${DRY ? "would-save" : "saved"}: ${tally.saved}   too_short: ${tally.too_short}   errored: ${tally.errored}`);
 
 const { flushCostBuffer } = await import("../lib/llm/usagePersistence.js").catch(() => ({}));
 if (flushCostBuffer) await flushCostBuffer().catch(() => {});

@@ -283,7 +283,7 @@ async function main() {
     console.log(`  Saved ${newRows.length} sources.`);
   }
 
-  console.log(`\n  Next: node scripts/dailyClassify.js --since-hours 1 --limit ${Math.max(newRows.length, 0) + 50}`);
+  console.log(`\n  Next: node scripts/classify.js --limit ${Math.max(newRows.length, 0) + 50}`);
 }
 
 main().catch(err => { console.error(err); process.exit(1); });

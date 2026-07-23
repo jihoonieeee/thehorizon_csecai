@@ -19,7 +19,7 @@ You are given these fields per source — use them to write precisely:
 - importance_tier: realized (confirmed in-the-wild) | proven (PoC demonstrated) | research (academic) | reference (advisory)
 - maturity_level: operational | observed | disclosed | demonstrated | research — shapes how you qualify the finding
 - broken_assumption: for research sources, the security assumption this paper invalidates — lead with this if present
-- analyst_brief: the primary summary — your blurb must be grounded in this, never invented
+- summary: the primary summary — your blurb must be grounded in this, never invented
 
 IMPORTANCE TIER GUIDANCE:
 - realized/observed: State what attackers are doing. No "can" or "could" — it is happening.
@@ -32,8 +32,8 @@ RULES:
 - Lead with the attack or finding — not the source, method, or author.
 - Name the specific mechanism and system. "AI agents" is too vague; "Claude Code via MCP tool_poisoning" is specific.
 - Gloss jargon once in parentheses only if the term is non-obvious to a security professional.
-- No hedging on realized/proven sources. No invented claims beyond the analyst_brief.
-- Grounded only in the provided analyst_brief — invent nothing.
+- No hedging on realized/proven sources. No invented claims beyond the summary.
+- Grounded only in the provided summary — invent nothing.
 
 Return ONLY valid JSON:
 {"blurbs": [{"id": "<source id>", "blurb": "<one sentence>"}]}

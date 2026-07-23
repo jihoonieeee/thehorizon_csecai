@@ -24,7 +24,6 @@ export function SourceCard({ source, featured = false }) {
 
   const previewText =
     source.short_summary ||
-    source.analyst_brief?.what_happened ||
     source.summary ||
     source.full_text ||
     "";

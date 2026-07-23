@@ -80,12 +80,11 @@ No prompt should be a raw string literal in application code.
 
 | Script | Layers run |
 |---|---|
-| `scripts/dailyClassify.js` | Ingest → Understand (L1–L4) |
-| `scripts/extractEvidenceBatch.js` | Extraction only (L5), incremental |
-| `scripts/runSynthesisOnly.js` | Extraction + Analysis + Slides |
-| `scripts/runHorizonScan.js` | Full pipeline + both branches |
-| `lib/pipeline/runPipeline.js` | Core orchestrator (called by above) |
-| `scripts/generateDashboardInsights.js` | Dashboard insights (independent) |
+| `scripts/ingest.js` | L1–L3: connector ingest |
+| `scripts/classify.js` | L4a–f: classify + score |
+| `scripts/extractEvidence.js` | L5: evidence extraction |
+| `scripts/generateDashboardInsights.js` | Dashboard insights |
+| `scripts/generateSlides.js` | L7–L8: PPTX deck |
 
 ---
 

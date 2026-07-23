@@ -218,7 +218,7 @@ console.log(`   Raw sources seen  : ${grandRaw}`);
 console.log(`   Sources saved     : ${grandTotal}`);
 if (errors > 0) console.log(`   Errors            : ${errors}`);
 console.log(`\n Next steps:`);
-console.log(`   1. node scripts/dailyClassify.js --since-hours 48 --limit 500  (classify + QA + digest fanout)`);
+console.log(`   1. node scripts/classify.js --limit 500  (classify + QA + digest fanout)`);
 console.log(`   2. node scripts/generateDashboardInsights.js  (rebuild period insights)`);
 console.log(`   3. node scripts/generateNewsletter.js --window week  (generate newsletter)`);
 console.log(`${"═".repeat(60)}\n`);

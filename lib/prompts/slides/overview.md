@@ -25,6 +25,9 @@ Each statement must NOT:
 - begin with "AI-enabled attacks are..."
 - begin with "Organisations should..."
 - use hedging language
+- exceed 25 words
+
+Three specific statements are better than five generic ones. If you cannot write a fourth statement as specific as the first three, stop at three.
 
 ════ QUALITY BAR ════
 

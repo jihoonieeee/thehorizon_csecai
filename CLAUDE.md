@@ -13,7 +13,7 @@ The intended audience is cybersecurity professionals, policy analysts, and decis
 - File storage: Vercel Blob for snapshot JSON archives
 - LLM enrichment: OpenAI (primary, gpt-4o-mini) or Gemini (fallback, gemini-2.5-flash)
 - Deployment: Vercel Hobby plan (12 serverless function limit)
-- Scheduling: Vercel cron — /api/refresh runs daily at 22:00 UTC (06:00 SGT next day)
+- Scheduling: GitHub Actions — pipeline.yml runs daily at 22:00 UTC (06:00 SGT next day)
 
 
 ## Environment Variables
@@ -65,19 +65,17 @@ WEB_DISCOVERY_PROVIDER — optional: force tavily | serpapi | anthropic
 /docs — architecture and API documentation
 
 
-## The Pipeline (9 Layers)
+## The Pipeline
 
-Layer 1 (ingest)     → collect raw sources from connectors
+Layer 1 (ingest)     → collect raw sources from connectors (arXiv, RSS, CISA KEV, GHSA, NVD)
 Layer 2 (clean)      → normalize text, extract code blocks and IOCs
-Layer 3 (validation) → validate; LLM-led AI-threat relevance + summary + source typing; gate sources for Layer 4
-Layer 4 (understand) → LLM deep understanding, framework mapping [stub]
-Layer 5a (feed)      → feed evidence extraction and scoring [stub]
-Layer 5b (analytics) → analytics aggregation and visualization data [stub]
-Layer 6 (synthesis)  → strategic viewpoint synthesis [stub]
-Layer 7–8 (slides)   → slide planning and content generation [stub]
-Layer 9 (qa)         → QA, citation validation, export [stub]
+Layer 3 (validation) → AI-threat relevance gate + source typing + trust assignment
+Layer 4a-f (classify) → LLM classification: main_category, tags, summary, entities; QA verifier; research significance; scoring; digest sync
+Layer 5 (evidence)   → extract atomic, quote-grounded evidence items from classified sources
+Layer 6 (insights)   → generate per-category analytical summaries for the dashboard
+Layer 7–8 (slides)   → slide planning, content generation, PPTX render
 
-See docs/ai_cyber_horizon_scan_mvp_pipeline_architecture.md for the full spec.
+See docs/pipeline.md for the full pipeline reference.
 Each API endpoint is documented in docs/api.md.
 
 
@@ -101,8 +99,8 @@ Key columns on sources:
 - validation_summary, ai_threat_focus, candidate_domain — set by the Layer 3 LLM relevance call
 - downstream_route — layer4/layer4_with_review/discard
 - intelligence (jsonb) — LLM-extracted fields: trend_signals, key_entities, threat_maturity, etc.
-- short_summary, analyst_brief — LLM-generated summaries
-- claim_extraction_status — null or "success"; indicates whether LLM enrichment ran
+- short_summary — LLM-generated 2–4 sentence summary
+- claim_extraction_status — null or "success"; set when classify completes a source
 
 
 ## Threat Categories
@@ -120,20 +118,17 @@ unclear_or_adjacent — relevant AI-security context that does not map to one of
 ## Source Trust Tiers
 
 primary — government agencies (CISA, NCSC, CSA, NIST), AI labs (Anthropic, OpenAI)
-high — established security vendors (Google, Microsoft), academic, reputable blogs
-medium — general security news outlets
-curated — manually imported sources from the Excel backlog; never deleted by purge
+high — established security vendors (Google, Microsoft), academic institutions, reputable research blogs
+medium — general security news outlets, smaller vendors
 low — lower-confidence sources
 unknown — trust tier not determined
 
 
 ## Key Design Decisions
 
-Source IDs are derived from URL sha256 hashes. This means the same article always gets the same ID, so Supabase upsert on conflict:id naturally deduplicates across multiple ingestion runs.
+Source IDs are derived from URL sha256 hashes. The same article always gets the same ID, so Supabase upsert on conflict:id naturally deduplicates across multiple ingestion runs.
 
-The classification pipeline never hard-deletes curated sources (trust_tier = "curated"). They are protected from the ai_specificity_score < 10 purge threshold.
-
-LLM enrichment (OpenAI/Gemini) is optional. The pipeline runs fully on rule-based classification if no API keys are available. LLM enrichment adds short_summary, analyst_brief, intelligence metadata, and more accurate ai_specificity_score, but is not required for the pipeline to function.
+`main_category IS NULL` is the authoritative "not yet classified" signal. `claim_extraction_status='success'` marks a source as fully processed. These two fields gate every classify run — re-running classify.js is always safe.
 
 arXiv is the most important API source for research coverage. It runs 6 targeted queries for different AI security subtopics. It rate-limits aggressively — the backfill script adds 8s between weekly chunks and 3s between queries within a chunk.
 
@@ -148,39 +143,43 @@ npm run dev — starts Vite dev server on :5173 (frontend only)
 npx vercel dev — starts full local environment with API functions on :3000 (use this)
 
 
-## Operational Scripts (run locally — Vercel times out)
+## Operational Scripts (run locally — mirrors the GitHub Actions pipeline)
 
 End-to-end pipeline order for a manual run:
 
-  1. INGEST
-     node scripts/backfillSources.js [start] [end] [connectors]
-       connectors: arxiv | nvd | ghsa | cisa_kev | all (default: all)
-       e.g. node scripts/backfillSources.js 2026-07-01 2026-07-13 nvd,ghsa,cisa_kev
+  1. CONNECTOR INGEST (L1–L3)
+     node scripts/ingest.js [--days N]
+       Runs all connectors (arXiv, RSS, CISA KEV, GHSA, NVD) and saves to DB.
+       For historical date ranges: node scripts/backfillSources.js [start] [end] [connectors]
+         connectors: arxiv | nvd | ghsa | cisa_kev | all (default: all)
 
-  2. CLASSIFY + QA + DIGEST FANOUT
-     node scripts/dailyClassify.js [--since-hours 48] [--limit 200]
-       Runs understand layer, cross-model QA, and digest splitting on new sources.
-
-  3. DISCOVER (optional — open-web source discovery)
+  2. WEB DISCOVERY INGEST (optional)
+     node scripts/ingestOperational.js --days 7 --skip-llm
      node scripts/discoverOperationalSources.js
-     node scripts/ingestOperational.js
 
-  4. DASHBOARD INSIGHTS
-     node scripts/generateDashboardInsights.js
+  3. CLASSIFY (L4a–f)
+     node scripts/classify.js [--limit 200] [--sig-limit 100]
+       Classifies all sources with main_category IS NULL (from steps 1 + 2).
 
-  5. NEWSLETTER
+  4. EVIDENCE EXTRACTION (L5)
+     node scripts/extractEvidence.js [--limit 150] [--since-hours 26]
+       Extracts structured evidence for eligible classified sources.
+       Omit --since-hours for a full-corpus backfill.
+
+  5. DASHBOARD INSIGHTS
+     node scripts/generateDashboardInsights.js [--window week|month|quarter]
+
+  6. NEWSLETTER
      node scripts/generateNewsletter.js [--window week|month] [--asof YYYY-MM-DD]
 
-  6. SLIDES / FULL PIPELINE
-     node scripts/runHorizonScan.js   — full pipeline + PPTX deck
-     node scripts/runSynthesisOnly.js — synthesis + slides only (no new ingest)
+  7. SLIDES
+     node scripts/generateSlides.js --window month [--out output/deck.pptx]
 
 Other useful scripts:
-  node scripts/importCuratedExcel.js <path-to-xlsx>   — import curated sources
-  node scripts/importCuratedPdfs.js <dir>             — import curated PDFs
-  node scripts/debugValidation.js [options]           — inspect Layer 3 validation
-  node scripts/labelSources.js [--limit N]            — re-run source label scoring
-  node scripts/reprocessAllSources.js                 — full QA + URL liveness check
-  node scripts/auditSourceLinks.js                    — check URL liveness
+  node scripts/importCuratedExcel.js <path-to-xlsx>   — import sources from Excel
+  node scripts/importCuratedPdfs.js <dir>             — import PDFs via Anthropic Files API
+  node scripts/auditSourceLinks.js                    — check URL liveness, report dead links
+  node scripts/auditSourceLinks.js --execute          — purge dead links and URL-variant dupes
+  node scripts/understandCorpus.js                    — recovery: re-classify sources with claim_extraction_status=NULL
 
 scripts/archive/ — one-time data-fix and superseded scripts (kept for reference)

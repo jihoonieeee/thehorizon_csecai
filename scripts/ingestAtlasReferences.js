@@ -200,7 +200,7 @@ async function main() {
     .upsert(toUpsert, { onConflict: "id", ignoreDuplicates: false });
   if (error) throw new Error(`Upsert failed: ${error.message}`);
   console.log(`  Saved ${toUpsert.length} ATLAS reference sources.`);
-  console.log(`\n  Next: node scripts/dailyClassify.js --since-hours 1 --limit ${toUpsert.length + 50}`);
+  console.log(`\n  Next: node scripts/classify.js --limit ${toUpsert.length + 50}`);
 }
 
 main().catch(err => { console.error(err); process.exit(1); });

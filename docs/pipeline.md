@@ -1,185 +1,422 @@
-# The Horizon — Pipeline Reference
+# Pipeline
 
-## Overview
+This is the entry point for any engineer working on The Horizon's data pipeline.
+Read this before touching pipeline code. For API endpoints, see `docs/api.md`.
 
-The pipeline is a sequential 9-layer enrichment process. In production, **Layers 1–3** run inside the Vercel cron (`/api/refresh`) and are time-bounded to Vercel's function timeout. **Layers 4–6** are too expensive/slow for serverless and run as local Node.js scripts or GitHub Actions jobs.
+---
 
-## Layer 1 — Ingest (`lib/pipeline/ingest/`)
+## What the pipeline does
 
-**Entry points:** `collectRawSources.js`, individual connector files, `runConnector.js`
+Every day at 22:00 UTC, GitHub Actions runs the full pipeline:
 
-**What it does:**
-- Runs each configured connector in parallel to fetch raw source objects
-- Normalizes every source via `normalizeSource.js` (sets title, url, publisher, date_published, full_text, tags, source_type, trust_tier)
-- Deduplicates against known IDs via URL-hash comparison
-- Applies the eligibility filter (`filterAcceptableSources.js`) — removes sources with text < 50 chars, non-HTTPS URLs, private hosts
-- Persists to Supabase via `snapshotDatabase.js` with `ignoreDuplicates: true` so re-ingest never clobbers existing classification
+```
+collect sources  →  classify them  →  extract evidence  →  (weekly) generate insights
+```
 
-**Connectors** (`lib/pipeline/ingest/connectors/`):
-- `registryFeedConnector.js` — RSS feeds from `lib/pipeline/ingest/sourceRegistry.js`
-- `arxivConnector.js` — 6 targeted arXiv API queries; rate-limited (3s between queries)
+Sources come from two places in parallel:
+- **Connectors** — structured APIs and RSS feeds (arXiv, CISA, GHSA, vendor blogs)
+- **Web discovery** — open-web search via Tavily/SerpAPI and Claude's web_search
+
+Both write raw sources to the database. A single classify job then runs over everything,
+regardless of where it came from. Every source goes through exactly the same pipeline.
+
+---
+
+## What "classified" means
+
+A source starts life in the database with `main_category = NULL`. That is the signal for
+"not yet classified." The classify job queries this field to know what to work on.
+
+When classify finishes a source, it writes:
+- `main_category` — which of the four offensive threat categories it belongs to
+- `tags` — specific techniques from the taxonomy
+- `short_summary` — 2–4 sentence plain-English summary
+- `key_entities` — named actors, CVEs, products mentioned
+- `claim_extraction_status = 'success'` — marks the source as fully processed
+
+Sources the LLM decides are irrelevant get `validation_status = 'reject'` and never
+appear on the dashboard.
+
+---
+
+## The four offensive categories
+
+Every source is assigned to exactly one:
+
+| Category | What it covers |
+|---|---|
+| `traditional_ai_threats` | Attacks on ML models: data poisoning, model extraction, evasion, adversarial examples |
+| `llm_threats` | LLM-specific attacks: prompt injection, jailbreaks, RAG poisoning, guardrail bypass |
+| `agentic_ai_threats` | Autonomous AI agents: MCP risks, tool abuse, coding agent vulnerabilities |
+| `ai_enabled_threats` | AI as a weapon: deepfakes, AI phishing, AI malware, disinformation |
+
+Sources that don't clearly fit any of these get `unclear_or_adjacent`. They are saved to
+the database but excluded from the dashboard, slides, and newsletter.
+
+---
+
+## Job chain
+
+```
+22:00 UTC daily
+│
+├─ connector-ingest  (scripts/ingest.js)         ─┐  parallel
+├─ web-ingest        (two scripts, see below)    ─┘
+│
+│  [both must finish before classify starts]
+│
+├─ classify          (scripts/classify.js)
+│
+├─ evidence          (scripts/extractEvidence.js)
+│
+└─ insights          (scripts/generateDashboardInsights.js)
+                     [weekly / monthly / quarterly only]
+```
+
+---
+
+## Job 1a — Connector ingest (L1–L3)
+
+**Script:** `scripts/ingest.js --days N`
+
+Runs all configured connectors over a date window and saves raw sources to the database.
+No classification happens here.
+
+**Active connectors** (`lib/pipeline/ingest/connectors/`):
+- `arxivConnector.js` — 6 targeted arXiv API queries for AI security subtopics (3s between queries)
+- `registryFeedConnector.js` — RSS feeds listed in `lib/pipeline/ingest/sourceRegistry.js`
 - `cisaKevConnector.js` — CISA Known Exploited Vulnerabilities catalog
-- `exploitResearchConnector.js` — exploit-research specific feeds
-- `aiidConnector.js` — AI Incident Database
-- `pdfConnector.js` — PDF ingestion via Anthropic Files API
-- `llmDiscoveryConnector.js` — wraps Layer 1B/1C web discovery
-- `sitemapConnector.js` — sitemap-based source discovery
+- `exploitResearchConnector.js` — exploit-research feeds
+- `ghsaConnector.js` — GitHub Security Advisories
+- `nvdConnector.js` — National Vulnerability Database
 
-**Key output columns:** `id`, `title`, `url`, `full_text`, `publisher`, `date_published`, `source_type`, `trust_tier`, `tags`, `date_confidence`, `validation_status=null`
+Each connector returns normalised source objects. The ingest script deduplicates by
+URL-derived SHA-256 ID (same URL always gets the same ID, so re-running is always safe),
+then upserts to Supabase and records an audit row in `ingestion_runs`.
 
-### Layer 1B/1C — Web Discovery (`lib/pipeline/discovery/`) [opt-in]
+**Ingest window by schedule:**
 
-Enabled by `WEB_DISCOVERY_ENABLED=1`. Uses LLM query planning + Tavily/SerpAPI search + binary accept/reject triage to find operational sources not in the RSS feed registry. Gated behind `--discover` flag in the daily classify script.
+| Schedule | `--days` | Why |
+|---|---|---|
+| Daily | 3 | Catches new sources with a 1-day buffer |
+| Monday | 7 | Weekly sweep in case the daily missed anything |
+| 1st of month | 30 | Monthly sweep for maximum coverage |
 
-### Digest Fan-out (`lib/pipeline/ingest/digestFanout.js`)
+---
 
-Run after understand (not at raw ingest time). When a source is detected as a multi-topic report/roundup/bulletin, `fanOutDigest()` extracts each distinct AI-security finding via one LLM call per chunk, then builds child source rows (one per finding) that each go through the full understand pipeline independently. The parent is flagged `is_digest=true`.
+## Job 1b — Web discovery ingest (L1B)
 
-**Key invariant:** child rows are written with `main_category=null`, `validation_status=null`, `layer3_status=null` so they are picked up by `understandCorpus.js` on the next classify run.
+**Scripts:** `ingestOperational.js` then `discoverOperationalSources.js`
 
-## Layer 2 — Clean (`lib/pipeline/clean/`)
+Runs in parallel with connector-ingest. Finds sources that static RSS feeds miss — vendor
+incident reports, real-world attribution, new AI-enabled cybercrime. Two steps run in
+sequence within this job:
 
-**Entry point:** `cleanSources.js`
+**Step 1 — `ingestOperational.js --skip-llm`**
 
-**What it does:**
-- Strips HTML, boilerplate navigation, cookie notices (`cleanText.js`, `cleanPlaintext.js`)
-- Extracts code blocks and IOCs into structured fields
-- Near-duplicate detection via `detectNearDuplicates.js` (Jaccard on word tokens)
+Runs Tavily/SerpAPI keyword searches and crawls sitemaps of high-value operational blogs
+(DFIR Report, Red Canary, Huntress, Volexity). No LLM calls — sources are saved raw with
+`validation_status='review'`. The classify job handles relevance filtering.
 
-**Key output columns:** `clean_text`, `extracted_code_blocks`, `extracted_iocs`, `cleaning_version`
+**Step 2 — `discoverOperationalSources.js`**
 
-## Layer 3 + 4 — Understand (`lib/pipeline/understand/understandSource.js`)
+Uses Claude's `web_search` across 7 targeted missions: emerging threats, new incidents,
+actor adoption, AI-enabled cybercrime, fresh attack modes, adversary campaigns, supply
+chain compromise. Claude reasons about search results, surfacing things keyword search
+misses. Sources are saved raw (`main_category=null`) — classify handles all classification.
 
-**Entry points:** `understandSource()`, `understandAllSources()`  
-**Script:** `scripts/understandCorpus.js`
+---
 
-These layers are merged into a single LLM call per source (the old 13-file L3 + 49K L4 have been consolidated).
+## Job 2 — Classify (L4a–f)
 
-**What it does:**
-1. **Deterministic pre-screen (H1)** — rejects PR-wire domains, private hosts, stale dates (>6 years old for untrusted sources), non-English text
-2. **Date recovery (H0)** — if `date_published` is missing, fetches the page <head> for meta dates before the LLM call
-3. **LLM call** (`lib/prompts/understand/classify.md`) — assigns: `relevant` (boolean), `scope` (offensive_finding / adjacent_context / off_topic), `main_category`, `primary_tag`, `secondary_tags`, `source_type`, `trust_tier`, `key_entities`, `short_summary`, `is_defensive`
-4. **`normalise()`** — validates LLM output: checks main_category against the 5 valid domains, validates primary_tag exists in the taxonomy and belongs to the correct domain, enforces defensive invariant
-5. **`classifySourceFamily()`** — deterministic routing to extraction family (academic_paper / threat_intel_report / roundup_digest / atlas_case_study / major_capability_announcement / corporate_blog / news_blog)
-6. **Write-back** — persists `main_category`, `tags`, `source_type`, `trust_tier`, `short_summary`, `intelligence` (key_entities, maturity_level, mechanism_classification), `validation_status=pass`, `layer3_status=pass`
+**Script:** `scripts/classify.js --limit 200 --sig-limit 100`
 
-**Models:** `routedLLM` (task=`source_understanding`) → Haiku primary, Gemini Flash fallback.
+This is the core intelligence job. It processes every source with `main_category IS NULL`
+— no time filter, so any backlog from previous failed runs is automatically cleared.
+Runs newest-first, up to `--limit`.
 
-**Skip logic:** sources with `layer3_status=pass` are restored from the DB row via `fromDbRow()` without an LLM call.
+The six sub-steps run in order:
 
-**Intelligence JSONB written at this step:**
+---
+
+### L4a — Digest fanout
+
+**The problem it solves:** some sources are multi-topic reports. A CISA weekly alert or
+a vendor monthly bulletin might contain 8 distinct AI security findings. Treating it as
+one source would be wrong — it would appear as a single data point in one category even
+though it spans several.
+
+**What it does:** `detectDigest()` identifies these containers by title patterns, source
+type, and structure. For each detected digest, `fanOutDigest()` makes one LLM call to
+extract each distinct finding as a separate item.
+
+**The result:** the original source becomes a **parent container** (`is_digest=true`,
+`main_category='unclear_or_adjacent'`). Each finding becomes a **child source** with
+`parent_source_id` pointing to the parent. Children go through the full classify pipeline
+independently as if they were standalone articles. The parent is never classified as an
+offensive source.
+
+---
+
+### L4b — Classify
+
+**What it does:** one LLM call per source using the `classify.md` prompt (Haiku primary,
+Gemini Flash fallback). The model reads the source text and assigns:
+
+- `main_category` — which of the four offensive categories (or `unclear_or_adjacent`)
+- `tags` — specific technique tags from the taxonomy (e.g. `prompt_injection`, `model_extraction`)
+- `short_summary` — 2–4 sentence plain-English description of what the source reports
+- `key_entities` — named actors, CVEs, products, organisations mentioned
+- `key_terms` — domain-specific vocabulary terms
+- `source_family` — document type: academic paper, threat intel report, corporate blog, etc.
+
+After a successful LLM call, the write-back sets `claim_extraction_status='success'`. This
+is the idempotency gate: a source with `claim_extraction_status='success'` will never be
+re-classified by a future run, even if classify is re-run on the same corpus.
+
+Sources the LLM marks as irrelevant are written as `validation_status='reject'` and exit
+the pipeline here. They remain in the database but are excluded from all outputs.
+
+**The `layer3_status` cache:** `understandAllSources()` checks `layer3_status` before
+making an LLM call. If it is `'pass'`, the source already has a cached classification
+and no LLM call is made. This makes re-running `classify.js` on a large corpus cheap —
+only new or previously-failed sources trigger LLM calls. The classify script clears
+`layer3_status=null` for digest children (new sources) and web discovery sources (which
+may have a stale status from a partial previous run), forcing a fresh classification.
+
+---
+
+### L4c — Classification QA
+
+A second LLM call using a different model spot-checks the classifications from L4b. When
+the two models disagree on `main_category`, the QA model's verdict wins and the source is
+auto-corrected. Agreement rate is logged — below 85% suggests the `classify.md` prompt
+needs attention.
+
+This step exists because category assignment is consequential: it determines which
+dashboard section and which slide deck category the source appears in. A second model
+catching obvious misclassifications is cheaper than manual review.
+
+---
+
+### L4d — Research significance
+
+Only runs on `source_family='academic_paper'` and `source_family='benchmark_evaluation'`
+sources. Makes a Haiku LLM call to rate each paper as one of:
+`landmark / notable / routine / incremental`.
+
+This is separate from L4b because significance scoring requires reading the paper's
+abstract carefully for novelty claims — it's a different analytical task from topic
+classification. Result is written to `intelligence.significance`.
+
+Capped at `--sig-limit` per run (default 100) so a large backlog of unscored papers
+doesn't blow the time budget. Within the cap, sources classified in the current run are
+scored first; the remainder fills from the oldest unscored backlog.
+
+---
+
+### L4e — Scoring
+
+Three deterministic writes (no LLM) for every newly classified source:
+
+**`reading_value`** — `essential / recommended / analyst / background`
+Derived from importance tier:
+- `realized` tier → essential
+- `proven` tier + `threat_intelligence` source type → essential
+- `proven` tier (other) → recommended
+- `noise` tier → background
+- everything else → analyst
+
+**`intelligence.importance`** — the full importance object, recomputed from current source
+state. See `lib/pipeline/scoring/importance.js` for the tier-derivation logic.
+
+**Maturity upgrade** — L4b writes a deterministic maturity guess based on source type.
+L4e upgrades those guesses to an LLM judgment via `classifyMaturityLevel()` (Haiku call).
+Only runs on sources where the deterministic fallback is still in place
+(`maturity_method='deterministic'`).
+
+---
+
+### L4f — Sync digest parent metadata
+
+Only runs when L4a created children in this run. Loops over the parent containers whose
+children just received a `main_category` and writes back two things:
+
+1. **`intelligence.all_categories`** — the list of distinct categories across all children.
+   Example: a CISA alert that spawned children in `llm_threats`, `agentic_ai_threats`, and
+   `ai_enabled_threats` gets `all_categories: ["agentic_ai_threats", "ai_enabled_threats",
+   "llm_threats"]`. The Sources page uses this to show category badges on digest containers.
+
+2. **Child date fix** — the fanout LLM occasionally infers a different `date_published`
+   for a child than the parent has (e.g. it pulls a date from the finding's text instead
+   of the report's publication date). This step overwrites any drifted child dates with the
+   parent's authoritative date.
+
+---
+
+## Job 3 — Evidence extraction (L5)
+
+**Script:** `scripts/extractEvidence.js --limit 150 --since-hours 26`
+
+**Why this step exists:** the classify step produces summaries and tags. Evidence
+extraction goes deeper: it reads the full source text and pulls out individual, verifiable
+facts — each tied to a direct quote. These evidence items are what the slide generator and
+chatbot are actually built on. Summaries say "this paper discusses prompt injection."
+Evidence says "the paper reports a 94% bypass rate on GPT-4o tool-call guardrails, with
+the quote: 'we observed a 94% bypass rate across 200 test prompts'."
+
+**What an evidence item looks like:**
+
 ```json
 {
-  "is_defensive": false,
-  "defended_category": null,
-  "defensive_techniques": [],
-  "mechanism_classification": { "schema": "taxonomy-v2", "main_category": "...", "primary_tag": "...", ... },
-  "key_entities": [...],
-  "maturity_level": "research",
-  "maturity_confidence": "low",
-  "maturity_reason": "...",
-  "maturity_method": "deterministic",
-  "maturity_at": "..."
+  "fact": "Indirect prompt injection bypassed GPT-4o tool-call guardrails in 94% of tests",
+  "quote": "we observed a 94% bypass rate across 200 test prompts",
+  "quote_grounded": true,
+  "evidence_type": "capability_demonstration",
+  "specificity": "high",
+  "numbers": [{ "value": "94%", "context": "bypass rate" }],
+  "entities": ["GPT-4o"],
+  "technique_tags": ["prompt_injection"]
 }
 ```
 
-Note: `understandCorpus.js` write-back (lines 116–141) uses a narrower `intelligence` object that only includes `key_entities`, `key_terms`, `main_claims`, `key_numbers`, and optional event_date/source_coverage_type fields. It does **not** spread the existing DB intelligence — subfields like `maturity_level`, `mechanism_classification`, `significance` written by prior steps will be overwritten. See Bug #1 in `docs/architecture.md`.
+Evidence items are stored in the `evidence` table (one row per item, linked by `source_id`).
 
-## Layer 4e — Scoring (`lib/pipeline/scoring/`)
+**Eligibility gate:** only sources that are likely to contain concrete, actionable
+intelligence get evidence extracted. A source must:
+- Be in one of the four offensive categories (not `unclear_or_adjacent`)
+- Have `reading_value IN (essential, recommended)` OR a high maturity level
+  (`operational / observed / demonstrated`)
 
-Run immediately after understand in both `scripts/understandCorpus.js` (`runScoringPass`) and `scripts/dailyClassify.js` (`runScoringPass`).
+Lower-signal sources (background reading, reference material) are excluded to control LLM cost.
 
-### `importance.js` — Deterministic importance tier
+**Extraction is routed by `source_family`** — academic papers, threat intel reports,
+corporate blogs, news articles, and ATLAS case studies each go to a specialist extractor
+with a prompt tuned for that document structure.
 
-Maps `(source_type, main_category, trust_tier, is_defensive)` to one of five tiers: `realized > proven > research > reference > noise`. No LLM, no numeric weights.
+**Content-hash deduplication:** each source is hashed from its `full_text`. If the hash
+hasn't changed since the last extraction run, the source is skipped entirely. This makes
+re-running `extractEvidence.js` safe and cheap — it only does LLM work on new or changed
+sources.
 
-| Tier | Condition |
+The `--since-hours 26` flag scopes the DB query to recent sources so the daily job doesn't
+scan the full corpus. Omit it for a full-corpus backfill.
+
+---
+
+## Job 4 — Dashboard insights
+
+**Script:** `scripts/generateDashboardInsights.js --window week|month|quarter`
+
+Generates the analytical bullet-point summaries shown on the Overview page, grouped by
+category and time window. A Sonnet LLM call reads the top sources for the window and
+synthesises key developments, patterns, and assessments.
+
+Results are stored in the `dashboard_insights` table keyed by `window_key × category`.
+Running the same window twice is a no-op unless `--force` is passed.
+
+**Only runs on non-daily schedules** — weekly on Mondays, monthly on the 1st, quarterly on
+Jan/Apr/Jul/Oct 1st. The plain daily run skips this job.
+
+---
+
+## Schedule summary
+
+| Day | What runs | `--days` |
+|---|---|---|
+| Every day | connector-ingest, web-ingest, classify, evidence | 3 |
+| Every Monday | + weekly insights | 7 |
+| 1st of month | + monthly insights | 30 |
+| 1st Jan/Apr/Jul/Oct | + monthly + quarterly insights | 30 |
+
+---
+
+## Other workflows
+
+### `generate-slides.yml` — PPTX deck (manual only)
+
+Triggered on demand (or from the dashboard "Generate Slides" button, which dispatches it
+via the GitHub API). Runs the slide pipeline:
+
+1. Query the classified + evidence-enriched corpus for the requested window
+2. One Sonnet LLM call per category → category report (developments, evidence points, case studies)
+3. QA the report (citation validation + optional entailment spot-check)
+4. Generate an outlook slide across all categories
+5. Render to PPTX using PptxGenJS + CSA template assets
+6. Upload PPTX + JSON to Vercel Blob; upsert a row in the `decks` table
+
+The frontend polls `GET /api/generate-report?list=1` every 20 seconds after triggering.
+When a new deck row appears, it shows the download button.
+
+### `link-audit.yml` — Dead-link pruning (Monday 03:00 UTC)
+
+Runs before the main pipeline on Mondays. Checks every source URL with HEAD → GET. Only
+deletes sources with confirmed-dead responses (404/410/DNS failure). Transient errors
+(5xx/429/timeout) are never acted on.
+
+Also detects URL-variant duplicates (http vs https, www prefix, trailing slash, query
+string) and keeps the highest-trust version.
+
+Deletes evidence rows for removed sources before deleting the source itself (foreign key
+ordering). `evidence_id` is not globally unique — deletion must be by `source_id`.
+
+Manual dispatch defaults to dry-run (report only). Scheduled runs execute.
+
+---
+
+## Manual operations
+
+The scripts mirror the GitHub Actions jobs exactly. Run them in the same order:
+
+```bash
+# 1. Ingest connectors (last 7 days)
+node scripts/ingest.js --days 7
+
+# 2. Web discovery (optional)
+node scripts/ingestOperational.js --days 7 --skip-llm
+node scripts/discoverOperationalSources.js
+
+# 3. Classify everything unclassified
+node scripts/classify.js --limit 200
+
+# 4. Extract evidence (full corpus, no time window)
+node scripts/extractEvidence.js --limit 150
+
+# 5. Generate insights
+node scripts/generateDashboardInsights.js --window week
+
+# 6. Generate newsletter
+node scripts/generateNewsletter.js --window week
+
+# 7. Generate slide deck
+node scripts/generateSlides.js --window month
+```
+
+**For historical backfills** (ingesting a date range rather than a rolling window):
+
+```bash
+node scripts/backfillSources.js 2026-07-01 2026-07-21 arxiv,nvd,ghsa
+```
+
+**Recovery:** if `classify.js` failed mid-run, just re-run it. The `main_category IS NULL`
+query picks up anything that didn't finish. Sources that already completed are skipped via
+the `claim_extraction_status='success'` gate.
+
+`scripts/understandCorpus.js` is a manual recovery tool for the rare case where sources
+have `claim_extraction_status IS NULL` but `main_category` is already set — a state that
+shouldn't occur in normal operation but can appear after certain backfill scripts or direct
+DB edits.
+
+---
+
+## Environment secrets
+
+| Job | Required secrets |
 |---|---|
-| realized | source_type incident or threat_intelligence; OR vulnerability with in-wild language in summary |
-| proven | exploit_disclosure or capability_demonstration |
-| research | research_finding or benchmark_evaluation |
-| reference | governance_signal from primary/curated source |
-| noise | defensive, unclear_or_adjacent, or unrecognized type |
-
-### `maturityLevel.js` — Threat maturity
-
-Five levels: `operational > observed > disclosed > demonstrated > research`.
-
-- `deterministicMaturity()` — fallback from source_type (always available)
-- `classifyMaturityLevel()` — LLM call (`scoring/maturity` prompt) for upgrade when `maturity_method=deterministic`
-
-Stored at `intelligence.maturity_level`.
-
-### `researchSignificance.js` — Research paper novelty
-
-Only runs on `source_family=academic_paper` sources. LLM call assigns `level` (landmark / notable / incremental / narrow) + `novelty` and `reason`. Stored at `intelligence.significance`.
-
-### `reading_value` derivation
-
-`essential | recommended | analyst | background` — derived deterministically from importance tier:
-- realized → essential
-- proven + threat_intelligence → essential  
-- proven → recommended
-- research/reference → analyst (in dailyClassify) or analyst (in understandCorpus)
-- noise → background
-
-## Layer 5 — Evidence Extraction (`lib/pipeline/extraction/`)
-
-**Entry point:** `extractEvidence.js` (`extractEvidence()`, `extractAllEvidence()`)  
-**Scripts:** `scripts/extractEvidenceBatch.js`, called inline from `understandCorpus.js` and `dailyClassify.js`
-
-**Eligibility gate:** source must have `full_text >= 600 chars`, `main_category != unclear_or_adjacent`, `trust_tier != low`.
-
-**Fast paths (no LLM):**
-1. Digest child with `intelligence.report_finding` → `reportFindingToEvidence()` builds one evidence item from the fanout data
-2. Source with `intelligence.report_analysis` → `reportAnalysisToEvidence()` converts walkthroughs/insights/trends
-
-**LLM extraction — routed by `source_family`:**
-
-| Family | Extractor |
-|---|---|
-| atlas_case_study | `extractAtlasEvidence.js` |
-| academic_paper | `extractAcademicEvidence.js` (with academicRelevanceGate) |
-| threat_intel_report | `extractThreatIntelEvidence.js` |
-| major_capability_announcement | `extractCapabilityEvidence.js` |
-| roundup_digest | `extractRoundupEvidence.js` |
-| corporate_blog | `extractCorporateBlogEvidence.js` |
-| news_blog / default | `extractEvidence.js` default path (`extraction/extract-evidence-news` prompt) |
-
-Each extractor returns `evidence_items[]` with: `fact`, `quote`, `quote_grounded` (deterministically verified), `evidence_type`, `specificity`, `numbers` (each grounded), `technique_tags`, `entities`, `event_date`, `time_basis`.
-
-**Post-extraction:** Jaccard dedup at 0.4 threshold. Items stored in the `evidence` table via `lib/storage/evidenceStore.js`.
-
-## Layer 6 — Dashboard Insights (`scripts/generateDashboardInsights.js`)
-
-Runs per reporting window (week/month/quarter/annual). Calls Anthropic Sonnet directly (not via llmRouter) to stay outside Vercel timeout.
-
-**Pipeline per category:**
-1. **Stage A (Sonnet):** Evidence facts + source summaries → atomic findings → 2-5 themes (`insights/themes` prompt)
-2. **Stage B (Sonnet):** Themes → structured insights + assessment sentence (`insights/insights` prompt)
-3. **Insight QA (Haiku):** Reject fabricated claims, maturity overreach, lone low-signal CVEs (`insights/insight-qa` prompt)
-4. **Attribution (Haiku):** Tag which real sources support each insight (`insights/attribution` prompt)
-5. **Citation grounding (Haiku):** Verify explanation bullets against cited source full text; drop unsupported bullets; remove insight if fewer than 2 bullets survive (`insights/citation-grounding` prompt)
-6. **Assessment QA (Haiku):** Validate the category-level assessment sentence (`insights/assessment-qa` prompt)
-
-Results stored in `dashboard_insights` table (JSONB `points` column, schema `v2`).
-
-## Slide Deck Generation (`lib/slides/`, `lib/pipeline/slides/`)
-
-**Scripts:** `scripts/generateSlides.js`, `scripts/runSynthesisOnly.js`
-
-- `fetchSlideCorpus.js` — fetches sources for the window
-- `buildCategoryContext.js` — assembles context per category
-- `generateCategoryReport.js` — LLM call (`slides/category-report` prompt) → developments + case studies
-- `planCategorySlides.js` — deterministic: maps report to slide plan
-- `generateOutlookSlide.js` — LLM call (`slides/outlook` prompt)
-- `assembleDeck.js` — builds full deck object
-- `qaReport.js` — LLM QA pass (`slides/qa-report` prompt)
-- `lib/pipeline/slides/renderDeckPptx.js` — renders to PPTX via PptxGenJS
-
-## Chatbot (`/api/agent`, `lib/agent/`)
-
-1. **Query planner** (`lib/agent/queryPlanner.js`, `agent/planner` prompt) — decomposes user question into a search plan
-2. **Selector** (`agent/selector` prompt) — plan-aware semantic search in `sources` + `evidence` tables
-3. **Verifier** (`lib/agent/verifyAnswer.js`, `agent/verifier` prompt) — checks answer is grounded in retrieved sources
-4. **General fallback** — when no relevant sources found, responds with `agent/general` prompt (labelled as general knowledge, not corpus-grounded)
+| `connector-ingest` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `BLOB_READ_WRITE_TOKEN`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `CRON_SECRET` |
+| `web-ingest` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `BLOB_READ_WRITE_TOKEN`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `TAVILY_API_KEY` (×4), `SERPAPI_API_KEY` |
+| `classify` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` |
+| `evidence` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY` |
+| `insights` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY` |
+| `generate-slides` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `BLOB_READ_WRITE_TOKEN`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` |
+| `link-audit` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |

@@ -150,4 +150,4 @@ const remaining = (unclear || []).filter(r =>
   !VALID_CATEGORIES.has(r.candidate_domain) || r.ai_threat_focus !== "central"
 ).length;
 console.log(`\n  Remaining unclear_or_adjacent (need LLM reclassify): ${remaining}`);
-console.log("  Run: node scripts/dailyClassify.js --since-hours 720 --limit 200");
+console.log("  Run: node scripts/classify.js --limit 200");

@@ -46,9 +46,23 @@ const { values: argv } = parseArgs({
     category:   { type: "string" },
     "skip-qa":  { type: "boolean", default: false },
     "dry-run":  { type: "boolean", default: false },
+    rerender:   { type: "string" },   // path to a saved deck .json — skips all LLM calls
   },
   strict: false,
 });
+
+// ── Re-render shortcut: read saved JSON, render, exit ─────────────────────────
+if (argv.rerender) {
+  const jsonPath = path.resolve(argv.rerender);
+  const outPath  = path.resolve(argv.out);
+  const saved    = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+  const { renderDeckPptx } = await import("../lib/pipeline/slides/renderDeckPptx.js");
+  const { slide_count } = await renderDeckPptx(saved.deck, outPath, {
+    title: `AI Cyber Threat Horizon Scan — ${saved.timeframe}`,
+  });
+  process.stdout.write(`✓ Re-rendered ${slide_count} slides → ${outPath}\n`);
+  process.exit(0);
+}
 
 const WINDOW_DAYS = { month: 30, quarter: 90, half_year: 180, year: 365 };
 
@@ -241,10 +255,15 @@ async function main() {
     log(`  ${cat}: ${resolvedSlides.length} slides`);
   }
 
-  const outlookSlide  = outlookRaw  ? { ...outlookRaw,  bullets: (outlookRaw.bullets  || []).map(b => ({ ...b, cited_urls: [] })) } : null;
+  const outlookSlide  = outlookRaw  ? {
+    ...outlookRaw,
+    watch_items: outlookRaw.watch_items || [],
+    caveat:      outlookRaw.caveat || null,
+    bullets:     [],
+  } : null;
   const overviewSlide = overviewRaw ? { ...overviewRaw, bullets: (overviewRaw.bullets || []).map(b => ({ ...b, cited_urls: [] })) } : null;
   log(`  Overview: ${(overviewSlide?.bullets || []).length} statements`);
-  log(`  Outlook:  ${(outlookSlide?.bullets  || []).length} bullets`);
+  log(`  Outlook:  ${(outlookSlide?.watch_items || []).length} watch items`);
 
   // ── Step 6: Assemble + render ─────────────────────────────────────────────
   log("\nStep 6/6  Assembling deck and rendering PPTX…");
@@ -266,14 +285,32 @@ async function main() {
     log(`\n⚠ ${totalIssues} QA issue(s) — review logs above`);
   }
 
+  // ── Save deck JSON locally so re-rendering is always possible without new LLM calls ──
+  const jsonOutPath = outPath.replace(/\.pptx$/i, ".json");
+  fs.writeFileSync(jsonOutPath, JSON.stringify({
+    generated_at:     new Date().toISOString(),
+    timeframe:        timeframeLabel,
+    date_from:        dateFrom,
+    date_to:          dateTo,
+    window:           argv.window || "custom",
+    category:         singleCat || null,
+    source_count:     allSources.length,
+    slide_count,
+    deck,
+    category_reports: categoryReports,
+  }, null, 2));
+  log(`  JSON saved → ${jsonOutPath}`);
+
   // ── Persist to Vercel Blob + Supabase so the dashboard can find the deck ──
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     log("\nPersisting deck…");
     try {
       const dateKey  = new Date().toISOString().slice(0, 10);
       const window   = argv.window || "custom";
-      const deckId   = `deck-${dateKey}-${window}`;
-      const blobBase = `decks/${dateKey}/horizon-scan-${window}`;
+      // Single-category runs use a suffixed key so they never overwrite the full deck blob
+      const catSuffix = singleCat ? `-${singleCat}` : "";
+      const deckId   = `deck-${dateKey}-${window}${catSuffix}`;
+      const blobBase = `decks/${dateKey}/horizon-scan-${window}${catSuffix}`;
 
       const blobOpts = {
         access:         "private",
