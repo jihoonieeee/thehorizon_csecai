@@ -177,9 +177,8 @@ async function runScoringPass(sources) {
       }
 
       if (Object.keys(updates).length > 0) {
-        supabase.from("sources").update(updates).eq("id", s.id)
-          .then(({ error }) => { if (error) console.warn(`  [L4e] ${s.id.slice(0,8)}: ${error.message}`); })
-          .catch(() => {});
+        const { error } = await supabase.from("sources").update(updates).eq("id", s.id);
+        if (error) console.warn(`  [L4e] ${s.id.slice(0,8)}: ${error.message}`);
       }
     }));
   }

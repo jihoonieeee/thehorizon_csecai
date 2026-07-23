@@ -1188,6 +1188,13 @@ out neighbouring tags. Assign the single primary_tag that names the core threat.
     EXAMPLES: LLM-generated malware or dropper code; AI-driven polymorphic variants
       that evade static signatures; a fake "OpenAI model" on Hugging Face with 200k
       downloads that installs a password stealer.
+    CRITICAL FAILURE MODE — "targets AI files/systems" ≠ AE05. A ransomware that
+      encrypts model weights (like ENCFORGE) is NOT AE05 — conventional malware
+      targeting AI assets is still conventional malware; AE05 requires AI to be the
+      AUTHOR or GENERATOR of the malicious code. A worm that exploits AI coding-agent
+      config files (like Mini Shai-Hulud) is NOT AE05 — that is agentic_ai_threats
+      (ASI04 supply chain + ASI03 prompt injection). The test: was AI used to WRITE
+      the malware? If no, look elsewhere.
     ✗ NOT TAI10: conventional dropper with no working ML (AE05) vs a GENUINELY
       FUNCTIONING backdoored model distributed via a hub (TAI10). The test: does a real
       ML model carry the malice, or is the AI branding just a lure?
@@ -1221,6 +1228,23 @@ out neighbouring tags. Assign the single primary_tag that names the core threat.
       human victim; the ML package ecosystem is the victim. "AI analyst misdirection"
       and AI-sounding package names are stealth tactics (secondary: AE06_ai_evasion_
       obfuscation), not the primary threat category.
+    WORKED CASE — ENCFORGE ransomware targeting AI model files (JadePuffer, 2026):
+      A threat actor deployed a Go-based ransomware (ENCFORGE) that targets 180 file
+      extensions including model weights (.pt, .ckpt), vector databases, and training
+      datasets. An LLM-powered agent orchestrated the initial compromise via CVE-2025-3248
+      in Langflow.
+      ⇒ ai_enabled_threats / AE08_ai_attack_orchestration (the AI AGENT orchestrates
+        the attack). NOT AE05 — ENCFORGE is conventional ransomware; the fact that it
+        encrypts AI files does NOT make it "AI-generated malware."
+    WORKED CASE — Mini Shai-Hulud / Miasma worm (AI coding-assistant config hijack, 2026):
+      Worm poisons settings.json and .cursorrules files to inject SessionStart hooks that
+      execute arbitrary commands when a developer opens an IDE. The AI coding assistant
+      (Claude Code, Cursor, Copilot) is the victim — it is tricked into running malware
+      via malicious config directives. Spreads via developer git pushes.
+      ⇒ agentic_ai_threats / ASI04_agentic_supply_chain + ASI03_prompt_injection.
+        NOT AE05 — the worm exploits AI agent trust boundaries; AI did not author it.
+        NOT ai_enabled_threats — the attacker is not using AI as their weapon; the AI
+        agent is the VICTIM being manipulated.
 
   AE06_ai_evasion_obfuscation
     WHAT: AI makes MALICIOUS CONTENT or BEHAVIOR HARDER TO DETECT for defenders.
