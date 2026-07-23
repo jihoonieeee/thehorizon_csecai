@@ -148,16 +148,32 @@ Classification rules for AI Infrastructure:
     deserialization) with no AI-specific attack surface — the same CVE class could
     exist in any web service — route to unclear_or_adjacent. Record the affected
     product and CVE type in boundary_rationale.
+    EXCEPTION — CONFIRMED ACTIVE EXPLOITATION IN LLM INFRASTRUCTURE:
+    When a CVE in LLM serving infrastructure (LiteLLM, vLLM, LMDeploy, LangChain,
+    Ollama, or any AI API gateway or model proxy) has ALL of:
+      (a) confirmed active in-the-wild exploitation (CISA KEV listing, "actively
+          exploited" vendor confirmation, or documented post-exploitation activity), AND
+      (b) the post-exploitation specifically targets LLM provider API keys, model
+          access credentials, connected AI infrastructure, or AI workload secrets,
+    THEN classify as llm_threats / LLM03_llm_supply_chain (NOT unclear_or_adjacent).
+    Rationale: the operational consequence — compromise of LLM API access and
+    downstream AI infrastructure — makes this an LLM threat regardless of the
+    generic underlying CVE class (command injection, SSRF, etc.).
+    Example: CVE-2026-42271 in LiteLLM MCP endpoints (command injection + auth bypass,
+    CVSS 10.0, CISA KEV-confirmed, post-exploit harvests OpenAI/Anthropic API keys and
+    Kubernetes service account tokens) → llm_threats / LLM03_llm_supply_chain.
   • If the flaw meaningfully affects AI capability (e.g. an LLM inference proxy
     whose SSRF exposes model weights, or a gateway whose command injection runs
     on the same host as training jobs), use the closest LLM/ASI infrastructure tag
     AND preserve the concrete CVE class in boundary_rationale.
   • NEVER route a plain CVE in a legitimate component to LLM03 (supply-chain
     requires compromised distribution or installation trust, not just a vuln).
+    Exception: the active-exploitation carve-out above overrides this rule.
   • NEVER route it to ASI05 (code execution via a deterministic endpoint is not
     an agentic execution path — the agent's tool-selection is not the mechanism).
   • A CVE in a real, legitimately released version of LiteLLM, vLLM, LangChain,
-    Ollama, or any AI product is AI infrastructure, not supply chain.
+    Ollama, or any AI product is AI infrastructure, not supply chain — UNLESS the
+    active-exploitation carve-out above applies.
 
 STOLEN ASSET DOES NOT DETERMINE CATEGORY:
   The category is set by HOW the exploit worked, not by WHAT was stolen.
@@ -1176,15 +1192,35 @@ out neighbouring tags. Assign the single primary_tag that names the core threat.
       FUNCTIONING backdoored model distributed via a hub (TAI10). The test: does a real
       ML model carry the malice, or is the AI branding just a lure?
     SCALE + COORDINATION RULE: A ONE-OFF fake model on HF is AE05. A COORDINATED
-      CAMPAIGN that systematically plants hundreds of malicious models/skills in a
-      major AI repository (Hugging Face, ClawHub, etc.) is TAI10 — the supply chain
-      itself is the target, not just a distribution lure.
+      CAMPAIGN that systematically plants malicious packages/models/skills in AI/ML
+      repositories or package registries is TAI10 — the supply chain itself is the
+      target, not just a distribution lure. This applies to:
+        • Model hubs (Hugging Face, ClawHub): malicious model checkpoints
+        • PyPI/npm packages in the ML ecosystem: backdoored ML libraries, AI agent
+          frameworks, computational biology or graph ML packages used by ML practitioners
+        • Agent marketplaces: poisoned skills or tools targeting agent runtimes
+    CRITICAL: DO NOT classify a coordinated ML supply chain campaign as ai_enabled_threats
+      just because the attacker uses AI-sounding package names, "AI analyst misdirection"
+      as a tactic, or AI tooling internally. Ask: what is the VICTIM? If the victim is the
+      ML/AI software supply chain (developers and ML practitioners who install packages),
+      it is TAI10. The attacker's own AI use is irrelevant to the category.
     WORKED CASE — Hugging Face + ClawHub supply chain attack (2026):
       352K+ unsafe entries on HF; 341 malicious ClawHub skills from one coordinated
       operator; malicious pickle models execute code on download.
       ⇒ traditional_ai_threats / TAI10_ai_supply_chain_compromise (NOT AE05 — the
         scale, coordination, and targeting of AI infrastructure make this supply chain
         compromise, not just "malware disguised as a model")
+    WORKED CASE — Hades Campaign (PyPI ML library supply chain, 2026):
+      Miasma threat actor compromises 32+ PyPI packages in computational biology and
+      graph ML ecosystems (ensmallen, pantheon-agents, magique-ai, etc.) by forging
+      OIDC/SLSA provenance bundles. Malware harvests GitHub credentials and plants
+      persistent C2 daemons. The campaign uses "AI analyst misdirection" as a stealth
+      technique and targets ML practitioners who pip-install these packages.
+      ⇒ traditional_ai_threats / TAI10_ai_supply_chain_compromise.
+      NOT ai_enabled_threats — the attacker is not using AI as a weapon against a
+      human victim; the ML package ecosystem is the victim. "AI analyst misdirection"
+      and AI-sounding package names are stealth tactics (secondary: AE06_ai_evasion_
+      obfuscation), not the primary threat category.
 
   AE06_ai_evasion_obfuscation
     WHAT: AI makes MALICIOUS CONTENT or BEHAVIOR HARDER TO DETECT for defenders.
