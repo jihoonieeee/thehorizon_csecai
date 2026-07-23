@@ -60,6 +60,18 @@ Issues specific to individual sources, recorded for traceability even after fix 
 | Hades Campaign | `464bc4ee` | `fixed` | `classification` | `ai_enabled_threats` — should be `traditional_ai_threats / TAI10` (ML package supply chain victim). Classifier misrouted despite prompt rules. | `main_category → traditional_ai_threats`, `tags → [TAI10, AE06]`, `maturity → operational`. See S7. |
 | HF Transformers CVE | `7f4740806` | `fixed` | `classification` | `source_type: vulnerability` — has full exploit path described, should be `exploit_disclosure`. | `source_type → exploit_disclosure`, `tags → [LLM03, TAI10]`, `maturity → demonstrated`. |
 
+### Batch 4
+
+| Source | ID (first 8) | Status | Type | Issue | Fix applied |
+|--------|-------------|--------|------|-------|-------------|
+| Hades Campaign | `464bc4ee` | `fixed` | — | Repeat from batch 2/3. All fields clean. | No action. |
+| Meta Instagram | `07cd9713` | `fixed` | — | Repeat from batch 2. `unclear_or_adjacent` confirmed correct. | No action. |
+| HF Transformers CVE | `7f4740806` | `open` | `evidence` | 0 evidence items despite `claim_extraction_status: success` and `reading_value: recommended`. Source fixed (source_type, category) after last extraction run; content hash unchanged so won't re-extract automatically. | Log only. Needs manual re-extract or content-hash reset. |
+| Claude Code CVE-2025-66032 (CSA) | `339ff99a` | `fixed` | `classification` | `source_type: vulnerability` understates content — Clinejection (2026-02-17) is a confirmed real-world npm supply chain compromise. Full exploit chain documented. | `source_type → incident`, `date_published → 2026-06-07`, `date_confidence → exact`. See S12. |
+| Claude Code CVE-2025-66032 (CSA) | `339ff99a` | `open` | `reading_value` | `importance: noise` contradicts `reading_value: recommended` — importance engine blind spot on `vulnerability` source_type (see S12). After source_type fix to `incident`, importance will recalculate correctly on next scoring run. | Awaiting next classify/scoring run. |
+| VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `classification` | `source_type: vulnerability` — describes a demonstrated attack technique, not a CVE record. | `source_type → capability_demonstration`. |
+| VulnIntel Report (symlink) | `5fb5493f` | `open` | `data_integrity` | `full_text: 319 chars` — extremely thin; article body not fetched. `needs_review: true` already set. | Thin content accepted; no evidence extraction attempted. |
+
 ### Batch 3
 
 | Source | ID (first 8) | Status | Type | Issue | Fix applied |
@@ -89,3 +101,5 @@ Issues recorded but not yet investigated:
 3. **S11 — null source_family extraction routing:** THN PowerShell (10,990 chars, `incident`, `reading_value: recommended`) ran extraction and returned 0 items. `source_family` is null. Investigate whether `classifySourceFamily` is called at classify time and whether null family causes silent extraction failure.
 
 4. **SecurityWeek "GPT-5.6 Sol" source (`0d7013d5`):** Flagged `needs_review`. Manually open URL in browser to confirm whether article exists with that title and those claims. If confirmed synthetic, delete from DB.
+
+5. **S12 — importance engine blind spot for `source_type: vulnerability`:** `typeToReality("vulnerability")` returns `"vulnerability"` which maps to `noise` unless the text contains an in-wild exploitation marker. This means a CVE with a full documented exploit chain and real-world incident (e.g. Claude Code CVE-2025-66032 / Clinejection) scores `noise` until manually fixed to `source_type: incident`. The in-wild regex in `importance.js` only checks `short_summary` and `summary` — not `validation_summary` or evidence items where exploitation evidence often lives. To investigate: extend in-wild check to `validation_summary`, or treat `source_type: exploit_disclosure` as `proven` rather than `noise`.
