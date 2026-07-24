@@ -151,17 +151,12 @@ Classification rules for AI Infrastructure:
     EXCEPTION — CONFIRMED ACTIVE EXPLOITATION IN LLM INFRASTRUCTURE:
     When a CVE in LLM serving infrastructure (LiteLLM, vLLM, LMDeploy, LangChain,
     Ollama, or any AI API gateway or model proxy) has ALL of:
-      (a) confirmed active in-the-wild exploitation (CISA KEV listing, "actively
-          exploited" vendor confirmation, or documented post-exploitation activity), AND
-      (b) the post-exploitation specifically targets LLM provider API keys, model
-          access credentials, connected AI infrastructure, or AI workload secrets,
+      (a) confirmed active in-the-wild exploitation (CISA KEV listing or equivalent), AND
+      (b) post-exploitation specifically targets LLM provider API keys, model access
+          credentials, connected AI infrastructure, or AI workload secrets,
     THEN classify as llm_threats / LLM03_llm_supply_chain (NOT unclear_or_adjacent).
-    Rationale: the operational consequence — compromise of LLM API access and
-    downstream AI infrastructure — makes this an LLM threat regardless of the
-    generic underlying CVE class (command injection, SSRF, etc.).
-    Example: CVE-2026-42271 in LiteLLM MCP endpoints (command injection + auth bypass,
-    CVSS 10.0, CISA KEV-confirmed, post-exploit harvests OpenAI/Anthropic API keys and
-    Kubernetes service account tokens) → llm_threats / LLM03_llm_supply_chain.
+    Example: CVE-2026-42271 in LiteLLM (command injection + auth bypass, CISA KEV,
+    post-exploit harvests OpenAI/Anthropic keys) → LLM03_llm_supply_chain.
   • If the flaw meaningfully affects AI capability (e.g. an LLM inference proxy
     whose SSRF exposes model weights, or a gateway whose command injection runs
     on the same host as training jobs), use the closest LLM/ASI infrastructure tag
@@ -257,11 +252,6 @@ WORKED EXAMPLES using lifecycle stage:
     (supply-chain), not TAI02. Note in boundary_rationale.
   • LoRA adapter patched directly post-training with adversarial weights → POST-
     TRAINING WEIGHT EDIT → TAI02 (classical) or LLM03 (LLM stack).
-  • Simulator trajectories poisoned to train an RL agent with hidden goals →
-    DATA COLLECTION for training → TAI01.
-  • Post-training RL fine-tune that encodes a reward backdoor via poisoned reward
-    SIGNALS → FINE-TUNING (data side) → TAI01; if the reward model ARTIFACT
-    itself is directly tampered → TAI02.
 
 ────────────────────────────────────────────────────────────────────────
 WHEN THE AI IS THE TARGET — which of the three attacked-surface categories?
@@ -527,24 +517,16 @@ ENABLING TECHNIQUE VS ATTACKER OBJECTIVE (PRIMARY-OBJECTIVE RULE):
   did not have at the start?"
 
   PRIMARY-OBJECTIVE-BEATS-MECHANISM — the key anti-pattern this rule prevents:
-  When an enabling mechanism overlaps with a threat category (e.g. high API query
-  volume looks like LLM10 consumption), always check whether the OBJECTIVE is
-  something more specific:
+  When an enabling mechanism overlaps a threat category (e.g. high API query volume
+  looks like LLM10 consumption), always check whether the OBJECTIVE is more specific:
 
-    • Large query volumes issued to DISTIL or EXTRACT a model's capabilities →
-      the objective is MODEL EXTRACTION (TAI05 for classical models, LLM10's
-      model-theft reading for LLMs) — NOT LLM10_unbounded_consumption (DoS/cost).
-      The high-volume API usage is the MECHANISM; the loot is a working replica.
-      Classify by loot, not by the HTTP call count.
+    • Large query volumes to DISTIL or EXTRACT model capabilities → MODEL EXTRACTION
+      (TAI05 classical / LLM10 model-theft for LLMs) — NOT LLM10 DoS/cost.
+      Classify by loot (a working replica), not by the HTTP call count.
 
-    • Model distillation and capability extraction are MODEL EXTRACTION
-      (TAI05 for classical; LLM10 model-theft for LLMs; ASI03 if the stolen
-      capability is an agent's delegated identity/permissions) — even when:
-        - the target is an LLM or an agentic model;
-        - the technique uses supervised fine-tuning of a student on teacher outputs;
-        - the attacker frames it as "knowledge distillation research."
-      The mechanism (issuing queries, training a student) is secondary. The
-      goal (possessing a functional clone or capability replica) is primary.
+    • Model distillation and capability extraction are MODEL EXTRACTION even when
+      the attacker uses supervised fine-tuning of a student or frames it as
+      "knowledge distillation research." Mechanism is secondary; goal is primary.
 
   COMMON ENABLING-TECHNIQUE MISCLASSIFICATIONS:
     Enabling technique              → Correct primary tag (attacker's objective)
@@ -1185,6 +1167,15 @@ out neighbouring tags. Assign the single primary_tag that names the core threat.
       triage that surfaces exploitable bugs; an AI system automatically analysing a
       patch to reverse-engineer a vulnerability.
     BELONGS WHEN: the deliverable is a FOUND VULNERABILITY, not yet a working exploit.
+    CRITICAL FAILURE MODE — do NOT apply AE03 when:
+      • The vulnerability was already KNOWN, DISCLOSED, or CVE-listed before the AI
+        used it. An attacker (or agent) exploiting CVE-2025-3248 is NOT AE03 — that
+        CVE was already public and on the CISA KEV list. AE03 requires the AI to be
+        the entity that FOUND the bug, not merely the entity that triggered it.
+      • An autonomous attack agent (e.g. agentic ransomware) exploits a known CVE as
+        part of an attack chain — that is AE08 (orchestration), not AE03.
+      Test: "Did the AI find this vulnerability, or was it already public?" If it was
+      already public → AE03 does NOT apply.
     ✗ NOT AE04: vulnerability found but not weaponized (AE03) vs WORKING EXPLOIT
       generated/weaponized (AE04). The boundary is whether the AI produced an exploit.
 
@@ -1196,6 +1187,15 @@ out neighbouring tags. Assign the single primary_tag that names the core threat.
       vulnerability report into a working n-day exploit.
     BELONGS WHEN: the deliverable is a WORKING EXPLOIT — the AI produced functional
       attack code, not just a bug report.
+    CRITICAL FAILURE MODE — do NOT apply AE04 when:
+      • An attacker or agent simply TRIGGERED or RAN a public/known exploit without
+        the AI generating new exploit code. Using CVE-2025-3248's public PoC is NOT
+        AE04 — AE04 requires the AI to write or materially adapt the exploit itself.
+      • An autonomous attack agent (e.g. agentic ransomware) uses a known CVE as its
+        initial access vector — that is AE08 (orchestration). AE04 only applies if the
+        AI specifically generated or adapted the exploit payload.
+      Test: "Did the AI write or adapt the exploit code, or did it just invoke a known
+      public vulnerability?" If it just invoked a known CVE → AE04 does NOT apply.
     ✗ NOT AE03: working exploit (AE04) vs bug found but not weaponized (AE03).
     ✗ NOT AE05: exploit code targeting a specific vulnerability (AE04) vs standalone
       malware authored/packaged for deployment (AE05).
@@ -1272,6 +1272,21 @@ out neighbouring tags. Assign the single primary_tag that names the core threat.
         NOT ai_enabled_threats — the attacker is not using AI as their weapon; the AI
         agent is the VICTIM being manipulated.
 
+    WORKED CASE — JADEPUFFER agentic ransomware exploiting CVE-2025-3248 (Sysdig, 2026):
+      An autonomous LLM agent (JadePuffer) exploited a known, patched, CISA KEV-listed
+      vulnerability (CVE-2025-3248 in Langflow) to gain initial access, then autonomously
+      conducted reconnaissance, credential theft, lateral movement, and data encryption —
+      all without human intervention. The agent dynamically adapted payloads and generated
+      ransom notes in-flight.
+      ⇒ ai_enabled_threats / AE08_ai_attack_orchestration (AI agent directing full attack
+        chain) + AE05_ai_malware_dev (LLM generating commands, payloads, ransom notes).
+      ✗ NOT AE03 — CVE-2025-3248 was already public and CISA KEV-listed; JadePuffer did
+        NOT discover the vulnerability. "The agent exploited a CVE" ≠ AI vulnerability
+        research. AE03 requires the AI to find a previously unknown bug.
+      ✗ NOT AE04 — JadePuffer invoked the known CVE's existing exploit path; it did NOT
+        write or generate new exploit code. "The agent ran a known exploit" ≠ AI exploit
+        development. AE04 requires the AI to generate or materially adapt exploit code.
+
   AE06_ai_evasion_obfuscation
     WHAT: AI makes MALICIOUS CONTENT or BEHAVIOR HARDER TO DETECT for defenders.
     EXAMPLES: AI-driven packing/obfuscation; generating malware variants to slip past
@@ -1339,14 +1354,10 @@ or TRUST RELATIONSHIP surrounding the model compromised?"
     → POISONING: TAI02 (classical model) / LLM03 weight/adapter side (LLM)
 
   Compromise of PRODUCTION, DISTRIBUTION, or TRUST INFRASTRUCTURE —
-  the artifact emerges correctly from the author but is intercepted,
-  wrapped, converted, or loaded through a compromised channel:
-    build pipelines / CI/CD that introduce ops without editing stored weights
-    serialization exploits (pickle RCE runs arbitrary code on model load)
-    compiler toolchains injecting graph ops during ONNX/TorchScript export
-    hub/registry hijacking, package dependency tampering, metadata spoofing
-    serving proxies (vLLM, LiteLLM, inference gateways) with backdoors
-    agent framework / skill registry / MCP server compromise
+  the artifact emerges correctly from the author but is intercepted or loaded
+  through a compromised channel (build pipelines, CI/CD, serialization exploits,
+  compiler toolchains, hub/registry hijacking, serving proxies, agent framework /
+  skill registry / MCP server):
     → SUPPLY-CHAIN: TAI10 (classical) / LLM03 infra side (LLM) / ASI04 (agent)
 
   AMBIGUOUS CASE — compiler-induced graph backdoor:
@@ -1367,29 +1378,17 @@ MULTI-FINDING SOURCES — competition write-ups, conference proceedings,
 bug-bounty reports, and incident round-ups covering multiple attacks
 ════════════════════════════════════════════════════════════════════════
 
-When a source describes TWO OR MORE independent attacks hitting DIFFERENT victim
-systems or trust boundaries (e.g. a Pwn2Own write-up, a quarterly threat report,
-a "top-N vulnerabilities" article), do NOT force a single taxonomy label onto the
-whole article. That collapses distinct findings into one generic narrative and
-destroys the analytical value of each.
+When a source describes TWO OR MORE independent attacks on DIFFERENT victim systems
+or trust boundaries (e.g. a Pwn2Own write-up, a quarterly threat report, a "top-N
+vulnerabilities" article), do NOT force a single taxonomy label onto the whole.
 
-CLASSIFICATION RULE FOR MULTI-FINDING SOURCES:
-  • Set primary_tag to the MOST ANALYTICALLY SIGNIFICANT single finding — the one
-    that is most novel, most exploitable, or best supported by technical detail.
-  • Set secondary_tags to capture every other distinct attack class that appears.
-  • In boundary_rationale, note: "multi-finding source; primary covers [X]; secondary
-    tags cover [Y, Z]."
-  • Do NOT promote an umbrella label (e.g. TAI10_ai_supply_chain_compromise) just
-    because it is the only tag that "fits everything" — if the tag fits only by
-    being vague, it is the wrong tag.
-
-COMMON ANTI-PATTERNS TO AVOID:
-  ✗ Collapsing a heterogeneous report into a single "supply chain" narrative when
-    the findings span container escapes, agent privilege abuse, and injection vulns.
-  ✗ Picking "ai_enabled_threats" because AI is loosely involved in multiple items
-    when the actual victims are AI systems being attacked.
-  ✗ Using secondary_tags only for minor footnotes — they should carry the other
-    PRIMARY attack classes that the primary_tag cannot represent.
+  • Set primary_tag to the MOST ANALYTICALLY SIGNIFICANT single finding.
+  • Set secondary_tags to every other distinct attack class that appears.
+  • In boundary_rationale note: "multi-finding; primary covers [X]; secondary tags [Y, Z]."
+  • Do NOT promote a vague umbrella label just because it superficially fits everything.
+  ✗ Do NOT collapse to "supply chain" when findings span container escapes + agent abuse + injection.
+  ✗ Do NOT pick ai_enabled_threats because AI is loosely involved when the actual victims are AI systems.
+  ✗ Do NOT use secondary_tags only for footnotes — carry the other primary attack classes there.
 
 RECURRING FAILURE MODE DETECTION:
   When 3+ findings in a multi-source report share an underlying trust violation
@@ -1435,16 +1434,12 @@ scope="adjacent_context"  → KEEP as reference; set relevant=false, main_catego
     The test: does the source name at least 2 specific real AI threat events with named
     organizations or CVEs? If yes → adjacent_context. If it only makes vague claims
     ("AI threats are increasing") → off_topic.
-    EXAMPLES of adjacent_context landscape syntheses:
+    EXAMPLE of adjacent_context landscape synthesis:
     • A vendor blog citing the GTIG AI-generated zero-day + Five Eyes statement + Mandiant
-      negative time-to-exploit data → adjacent_context (names real events, multiple domains)
-    • A quarterly threat report synthesizing AI phishing trends + LLM jailbreak incidents
-      + agentic abuse cases with named examples → adjacent_context (multi-domain synthesis)
-    MULTI-FINDING HANDLING for landscape syntheses: apply the MULTI-FINDING SOURCES rules.
-    Set primary_tag to the most analytically significant cited finding. Use secondary_tags
-    for every other AI threat domain the synthesis covers. Extract key_entities (the
-    organizations, incidents, CVEs, and research cited). Do NOT leave these empty just
-    because the source is secondary — the cited findings are the intelligence.
+      negative time-to-exploit data → adjacent_context (names real events, multiple domains).
+    Apply the MULTI-FINDING SOURCES rules: set primary_tag to the most analytically
+    significant cited finding; secondary_tags for every other domain; key_entities must
+    name the orgs, CVEs, and research cited (do not leave them empty for secondary sources).
 
   CRITICAL — capability research WITH specific measured results is offensive_finding, NOT adjacent_context:
   A paper that reports CONCRETE numbers — specific CVEs exploited, exact timelines ("first exploit in 12 min"), benchmark success rates against real targets, measured exploitation cost — is scope="offensive_finding" in ai_enabled_threats, tagged AE03_ai_vuln_research or AE04_ai_exploit_dev. The "responsible disclosure" or "find-AND-fix" framing is irrelevant; if the deliverable is a measured AI attack capability, it is an offensive finding. Examples:
@@ -1456,13 +1451,9 @@ scope="adjacent_context"  → KEEP as reference; set relevant=false, main_catego
 RED TEAM EXERCISES AND ADVERSARIAL ROBUSTNESS PAPERS:
 A red team operation or paper that ATTACKS an AI system or its defenses is OFFENSIVE
 THREAT INTELLIGENCE regardless of who performed it. is_defensive=false.
-  "Red Teaming FOR DEFENSES" = attacking defenses to prove they're breakable → OFFENSIVE
-  "Improving Defenses via Red Teaming" = same thing → OFFENSIVE
   The deliverable is the ATTACK METHOD, even if the stated purpose is improving security.
-  ✓ Microsoft AI Red Team disrupts Azure using adversarial ML → TAI03 / is_defensive=false
-  ✓ PISmith: RL-based framework that systematically breaks prompt injection defenses
-    → llm_threats / LLM01_prompt_injection / is_defensive=false (attack on defenses)
   ✓ Any paper titled "Attacking/Breaking/Bypassing X Defense" → offensive / is_defensive=false
+  ✓ PISmith: breaks prompt injection defenses → LLM01_prompt_injection / is_defensive=false
   ✗ is_defensive=true ONLY when the deliverable is a NEW DEFENSE THAT HOLDS (reduces
     attack success), not when a paper proves existing defenses don't hold.
 
@@ -1508,68 +1499,31 @@ the DELIVERABLE a defense or an attack?", not "does it mention attacks?". Titles
 almost always defensive. Set is_defensive=false only when the deliverable is an ATTACK
 the source newly demonstrates.
 
-WATCH OUT — "evaluating and mitigating" or "measuring and defending" titles:
-If a paper's PRIMARY deliverable is MEASURING an offensive capability (with specific
-attack results, exploit counts, timelines, or success rates), it is is_defensive=FALSE
-even if the title mentions "mitigating" as a secondary goal. "Evaluating and mitigating
-the growing risk of LLM-discovered 0-days" is primarily an ATTACK CAPABILITY paper
-(it documents that Claude found 500+ real zero-days) — is_defensive=false, classify as
-offensive_finding in ai_enabled_threats. Only set is_defensive=true if the actual
-content primarily presents a working defense, not if it merely calls for one.
+WATCH OUT — titles with "evaluating and mitigating", "understanding and mitigating",
+"auditing", "evaluation", "benchmarking", or "privacy assessment": do NOT classify as
+defensive based on framing alone. Ask: "Does the paper's primary technical contribution
+IMPROVE AN ATTACK?" If yes → is_defensive=false regardless of stated defensive intent.
 
-WATCH OUT — "Understanding and Mitigating X" / prevalence measurement papers:
-A paper that MEASURES how prevalent or successful an attack is across real systems —
-even if it also proposes a defense — is primarily an ATTACK MEASUREMENT contribution.
-Ask: "What is the new intelligence a threat analyst would cite this paper for?"
-  • Cited as: "X% of real-world systems are vulnerable to attack Y" → attack prevalence
-    measurement → is_defensive=false, offensive_finding
-  • Cited as: "Defense D reduces attack success from X% to Y%" → defense contribution
-    → is_defensive=true, off_topic
+  • Cited as: "X% of real-world systems are vulnerable to Y" → attack prevalence
+    measurement → is_defensive=false, offensive_finding. The proposed defense is secondary.
+  • Cited as: "Defense D reduces attack success from X% to Y%" → is_defensive=true.
+  • The presence of "Mitigating" in the title or a co-proposed defense NEVER alone
+    triggers is_defensive=true — only the primary deliverable does.
 
-The proposed defense is secondary when the paper's primary discovery is attack prevalence.
-The presence of "Mitigating" in the title or a co-proposed defense NEVER alone triggers
-is_defensive=true — only the actual primary contribution does.
+COMMON PATTERNS THAT ARE OFFENSIVE, NOT DEFENSIVE:
+  ✗ "Privacy auditing tool" implementing membership inference / model inversion
+    more effectively → TAI07 / TAI06
+  ✗ "Red-teaming benchmark" introducing new jailbreak techniques or higher rates → LLM11
+  ✗ "Robustness evaluation framework" whose primary contribution is a stronger attack → TAI03
+  ✗ "Security assessment tool" automating vulnerability discovery or exploit generation → AE03/AE04
+  ✗ "Fairness or bias audit" reconstructing sensitive training data → TAI06 / LLM02
+  ✗ "Watermark verification tool" demonstrating watermark removal more reliably → TAI03
 
-WORKED CASE — "Understanding and Mitigating Prompt Leaking Attacks in Real-World LLM-Based Applications":
-  Primary finding: 80%+ of 1,200 surveyed production LLM apps leak system prompts under
-  realistic adversarial queries; attention drift explains why defenses fail.
-  Secondary contribution: AREA soft-prompt defense.
-  ⇒ is_defensive=false; scope="offensive_finding"; main_category=llm_threats;
-    primary_tag=LLM07_system_prompt_leakage.
+WORKED CASE — "Understanding and Mitigating Prompt Leaking Attacks in Real-World LLM Apps":
+  Primary finding: 80%+ of 1,200 production LLM apps leak system prompts under realistic
+  adversarial queries; attention drift explains why defenses fail. Secondary: AREA defense.
+  ⇒ is_defensive=false; offensive_finding; LLM07_system_prompt_leakage.
   (An analyst cites this for "how many apps are exposed" — not "here is a new defense.")
-
-WATCH OUT — "auditing", "evaluation", "benchmarking", and "privacy assessment" framing:
-Do NOT classify a paper as defensive solely because it is framed as an audit tool,
-evaluation framework, benchmark suite, or privacy assessment methodology.
-
-The test is: "Does the paper's primary technical contribution IMPROVE an attack?"
-  Improves effectiveness, stealth, transferability, automation, efficiency,
-  or reduces attacker assumptions → is_defensive=FALSE, classify under the
-  corresponding OFFENSIVE tag regardless of stated defensive framing.
-
-  The framing is often genuine — authors do intend their audit tool to help
-  defenders — but the artefact they produce (a more capable attack, a dataset
-  of successful exploits, a framework for generating adversarial examples at
-  scale) is an offensive contribution. Classify by what the tool DOES, not
-  what the authors HOPE it will be used for.
-
-  COMMON PATTERNS THAT ARE OFFENSIVE, NOT DEFENSIVE:
-  ✗ "Privacy auditing tool" that implements membership inference, model
-    inversion, or training-data extraction more effectively → TAI07 / TAI06
-  ✗ "Red-teaming benchmark" that introduces new jailbreak techniques or
-    demonstrates higher jailbreak success rates → LLM11
-  ✗ "Robustness evaluation framework" whose primary contribution is a stronger
-    adversarial attack against a classifier → TAI03
-  ✗ "Security assessment tool" that automates vulnerability discovery or
-    exploit generation against AI systems → AE03 / AE04
-  ✗ "Fairness or bias audit" that reconstructs sensitive training data as
-    evidence of the bias → TAI06 / LLM02
-  ✗ "Watermark verification tool" that demonstrates watermark removal or
-    evasion more reliably → TAI03 (taxonomy limitation, see that entry)
-
-  A paper is genuinely defensive when its PRIMARY contribution is a detection
-  method, hardening technique, certified bound, or guardrail — not when it
-  produces a better attack and calls that attack an audit.
 
 When is_defensive=true, set scope="off_topic" and relevant=false. This corpus tracks
 offensive AI threats only; defensive techniques, hardening frameworks, detection methods,
@@ -1649,10 +1603,6 @@ WORKED BOUNDARY EXAMPLES
       → ai_enabled_threats, AE03_ai_vuln_research (discovery) or AE04_ai_exploit_dev
         (working exploit); the AI is the attacker's tool; the victim is conventional
         software. This is NOT traditional_ai_threats — no ML model is being attacked.
-  • LLM generates adversarial perturbations against a classical malware detector
-      → traditional_ai_threats, TAI03_adversarial_evasion; the malware classifier is
-        the victim; the LLM is the attacker's tooling (like using a compiler to craft
-        shellcode); classify by the attacked system, not by what generated the attack.
 
   MEASUREMENT PAPERS WITH CO-PROPOSED DEFENSES — examples:
   • "Understanding and Mitigating Prompt Leaking Attacks in Real-World LLM Apps"
@@ -1662,10 +1612,6 @@ WORKED BOUNDARY EXAMPLES
   • "Evaluating and Mitigating the Growing Risk of LLM-Discovered 0-days"
     — primary finding: Claude found 500+ real zero-days
     ⇒ offensive_finding, ai_enabled_threats, AE03_ai_vuln_research, is_defensive=false
-  • "Certified Robustness to Data Poisoning in Gradient Aggregation"
-    — primary contribution: a certified defense bound
-    ⇒ off_topic (defensive), is_defensive=true
-
   AI INFRASTRUCTURE vs SUPPLY-CHAIN vs BEHAVIORAL — new examples:
   • CVE-2024-XXXX: LiteLLM SQL injection in a legitimate v1.x release
       → unclear_or_adjacent (AI infrastructure; deterministic appsec bug; LLM
@@ -1694,167 +1640,45 @@ WORKED BOUNDARY EXAMPLES
 SUMMARY GENERATION RULES (short_summary)
 ════════════════════════════════════════════════════════════════════════
 
-The purpose of a summary is NOT to restate the abstract. It is to preserve:
-  • the attack target
-  • the attack mechanism
-  • the violated trust assumption
-  • the operational significance
-  • the novelty relative to prior work
+Write 2–4 sentences, ≤600 chars. NOT an abstract restatement — an intelligence record.
+Cover ALL of these:
+  • ATTACKED ASSET — the specific system/component that is the victim (name it exactly)
+  • MECHANISM — how it was compromised (plain language, not paper jargon)
+  • VIOLATED TRUST ASSUMPTION — what guarantee defenders previously relied on (state it explicitly)
+  • OPERATIONAL SIGNIFICANCE — who is exposed and why existing controls fail
+  • CONCRETE RESULTS — include numbers verbatim when the source states them
+  • NOVELTY — what became possible that was previously impossible or unknown
 
-Every summary must answer five questions:
-  1. What system was attacked?
-  2. What exactly was manipulated?
-  3. What assumption did defenders previously rely on?
-  4. What new capability did the paper demonstrate?
-  5. Why is this different from previous attacks?
-
-If the summary does not answer these questions, it is incomplete.
-
-────────────────────────────────────────────────────────────────────────
-MULTI-FINDING SOURCES
-
-When the source covers multiple independent attacks across different systems,
-DO NOT reduce everything to a single generic category in the summary.
-
-Two acceptable strategies:
-  1. EXTRACT THE RECURRING FAILURE MODE — if 2+ findings share an underlying
-     trust-boundary violation, name that violation directly.
-     Example: "Inference runtimes (Ollama, LM Studio) repeatedly exposed host
-     escape vectors because they run with OS-level privileges beyond what model
-     serving requires."
-
-  2. NAME THE DISTINCT CLASSES — if no common thread exists, list the top 2–3
-     attack classes concisely, with their specific victims.
-     Example: "Findings span container escapes against local inference daemons,
-     excessive-agency exploits against coding agents, and injection vulns in
-     AI-native vector databases."
-
-  PROHIBITED — generic umbrella summaries that lose all mechanisms:
-  ✗ "Multiple AI systems were compromised, highlighting AI supply-chain risks."
-  ✗ "The event demonstrated that AI infrastructure remains broadly vulnerable."
-  ✗ "Attackers targeted a variety of AI tools and platforms."
-
-  If you find yourself writing one of these, ask: "Which specific system failed,
-  in what specific way, because of which violated assumption?" Then write that.
-
-────────────────────────────────────────────────────────────────────────
-MECHANISM OVER TERMINOLOGY
-
-Do NOT repeat paper terminology if it obscures the mechanism.
-
+Plain-language rule: translate paper terminology into what the mechanism does.
   BAD:  "Exploits local-global semantic consistency tension."
   GOOD: "Preserves image meaning while causing watermark detectors to fail."
-
-  BAD:  "Uses phase perturbations against CVNNs."
-  GOOD: "Manipulates phase information that many robustness evaluations ignore."
-
   BAD:  "Uses background-aware alignment poisoning."
   GOOD: "Backdoors vision-language models using only poisoned text captions without modifying images."
 
-────────────────────────────────────────────────────────────────────────
-PRESERVE THE VIOLATED ASSUMPTION
+Numbers: include verbatim. "95% poisoning success" beats "high attack effectiveness".
+  "Bypasses all six evaluated detectors" beats "bypasses existing defenses."
 
-The most important part of a summary is often NOT the attack technique itself but
-the assumption that failed. Include it explicitly. Examples:
-
+Violated assumption: state it explicitly. Examples:
   "Differential privacy intended to protect participants simultaneously blinded backdoor detectors."
-  "Teacher models can appear benign during their entire lifetime while acting as a delivery mechanism for poisoning downstream student models."
+  "Teacher models can appear benign during their entire lifetime while acting as a delivery mechanism."
   "Compilation pipelines can introduce backdoors into models even when training artifacts remain clean."
   "Watermarks that survive visual edits may still fail against semantic edits."
-  "Model robustness against magnitude perturbations does not imply robustness against phase perturbations."
 
-────────────────────────────────────────────────────────────────────────
-PRESERVE THE ATTACK SURFACE
+Multi-finding sources: extract the recurring failure mode shared by 2+ findings (see MULTI-FINDING
+SOURCES above), or name the top 2–3 distinct attack classes with their specific victims.
+  ✗ DO NOT write: "Multiple AI systems were compromised, highlighting supply-chain risks."
+  ✗ DO NOT write: "The event demonstrated that AI infrastructure remains broadly vulnerable."
 
-Always name the specific attacked asset:
-  training data / model weights / inference inputs / model artifacts /
-  compilation pipelines / provenance systems / agent tools / model hubs /
-  watermark detectors / RAG corpora / simulators
+BANNED: risk-escalation language without source support ("critical", "immediately", "urgent");
+  generic CISO framing ("highlights the need for", "underscores the importance of");
+  extrapolation the source does not itself state or measure;
+  generic remediation not tied to a specific system named in the source.
 
-Do NOT write: "Novel attack against AI systems."
-Instead write:
-  "Attack against teacher models during knowledge distillation."
-  "Attack against watermark verification systems."
-  "Attack against model compilation pipelines."
+ANTI-ABSTRACT: if the sentence could apply to ten unrelated papers unchanged, rewrite it.
+  Name the specific asset, mechanism, and violated assumption.
 
-────────────────────────────────────────────────────────────────────────
-QUANTITATIVE RESULTS
-
-If the source states concrete numbers, include them verbatim.
-
-  PREFER: "95% poisoning success while evading existing defenses."
-  AVOID:  "High attack effectiveness."
-
-  PREFER: "Bypasses all six evaluated detectors."
-  AVOID:  "Bypasses existing defenses."
-
-Numbers survive slide generation better than qualitative descriptions.
-
-────────────────────────────────────────────────────────────────────────
-NOVELTY EXTRACTION
-
-Every summary should name what became possible that was previously impossible,
-impractical, or unknown. Examples:
-  • Visual backdoors through text-only poisoning
-  • Backdoors triggered during knowledge transfer rather than at inference
-  • Compiler-generated backdoors without modifying training artifacts
-  • Semantic watermark removal without degrading image quality
-
-If the novelty signal is missing, the summary has failed.
-
-────────────────────────────────────────────────────────────────────────
-WHAT BELONGS IN short_summary
-
-short_summary is the single output that serves every downstream context:
-the row preview, the newsletter blurb input, the expanded detail panel,
-and search. It must be self-contained.
-
-Cover all of these in <=600 chars:
-  • ATTACKED ASSET — what specific system/component is the victim
-  • MECHANISM — how it was compromised
-  • VIOLATED TRUST ASSUMPTION — what defender guarantee was broken
-  • OPERATIONAL SIGNIFICANCE — who is exposed and why existing controls fail
-  • CONCRETE RESULTS — quantitative findings if the source states them
-  • ONE DEFENSIVE IMPLICATION — only if clearly supported by the source itself
-
-BANNED (never include):
-  ✗ Risk escalation language without a source-supported basis: "critical", "immediately", "urgent"
-  ✗ Generic CISO framing: "highlights the need for", "underscores the importance of"
-  ✗ Unsupported extrapolation: anything the source does not itself state or measure
-  ✗ Generic remediation not tied to a specific system named in the source
-
-  EXAMPLE (knowledge-distillation backdoor paper):
-    WRONG: "Critical supply-chain risk: organizations using knowledge distillation
-      must immediately audit teacher models for backdoors."
-    RIGHT: "Malicious behaviour implanted in a teacher model remains dormant
-      throughout the teacher's lifetime and transfers to student models only during
-      distillation, evading detection that inspects only the teacher. ML pipelines
-      that distill from third-party or open-weight teachers inherit any dormant
-      backdoors; safety sign-off must cover student models, not just the teacher."
-
-────────────────────────────────────────────────────────────────────────
-ANTI-ABSTRACT FILTER
-
-Reject any summary that contains ONLY vague claims such as:
-  "improves attack effectiveness" / "bypasses existing defenses" /
-  "introduces a novel attack" / "demonstrates a new framework" /
-  "achieves state-of-the-art performance" / "exploits limitations of current approaches"
-
-UNLESS the sentence also names the attack target, manipulated asset,
-violated assumption, or a concrete quantitative result.
-
-If the summary could apply to ten unrelated papers, rewrite it.
-
-────────────────────────────────────────────────────────────────────────
-FINAL TEST
-
-A human reading only the summary must be able to answer:
-  • What was attacked?
-  • How did it work?
-  • What assumption failed?
-  • Why does this paper matter?
-
-If any of those four are missing, regenerate the summary.
+COMPLETENESS CHECK: a reader must be able to answer: what was attacked? how did it work?
+  what assumption failed? why does this matter? If any are missing, regenerate.
 
 ════════════════════════════════════════════════════════════════════════
 OUTPUT — return ONLY valid JSON, no markdown
