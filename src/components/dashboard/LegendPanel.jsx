@@ -144,7 +144,6 @@ export function LegendPanel({ onClose }) {
       {/* Reading value */}
       <Section
         title="Reading Value"
-        note="Who should read this source, and where should it appear? Assigned by Layer 3 LLM — independent of threat severity, maturity level, and publisher prestige. Populated by scripts/labelSources.js."
       >
         {READING_VALUE.map(l => (
           <div key={l.key} className="hz-legend-maturity-row">
@@ -163,7 +162,6 @@ export function LegendPanel({ onClose }) {
       {/* Maturity ladder */}
       <Section
         title="Threat Maturity Ladder"
-        note="How far along the adversary lifecycle is this threat technique? Assigned by LLM from source content. Drives the Importance filter and category bars."
       >
         {MATURITY.map(m => (
           <div key={m.key} className="hz-legend-maturity-row">
@@ -178,12 +176,6 @@ export function LegendPanel({ onClose }) {
             </div>
           </div>
         ))}
-        <ul className="hz-legend-steps" style={{ marginTop: 8 }}>
-          <li>CVE alone → <strong>Disclosed</strong>. CVE + public PoC → <strong>Demonstrated</strong>. CVE + confirmed exploitation → <strong>Observed</strong>.</li>
-          <li>Paper tested only in a controlled lab → <strong>Research</strong>, even if the attack worked there.</li>
-          <li>Paper tested against a live real product → <strong>Demonstrated</strong>.</li>
-          <li>Single confirmed incident → <strong>Observed</strong>. Repeated campaign → <strong>Operational</strong>.</li>
-        </ul>
       </Section>
 
       {/* Threat categories */}

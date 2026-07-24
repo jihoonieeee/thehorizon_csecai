@@ -73,6 +73,19 @@ function byRankThenRecency(a, b) {
   return (b.date_published || "").localeCompare(a.date_published || "");
 }
 
+// Cap sources from the same digest family to maxPerFamily entries.
+// Caller must pre-sort by signal so the best-ranked family member is kept.
+function dedupByFamily(sources, maxPerFamily = 1) {
+  const counts = new Map();
+  return sources.filter(s => {
+    const key = s.parent_source_id || s.id;
+    const n = counts.get(key) || 0;
+    if (n >= maxPerFamily) return false;
+    counts.set(key, n + 1);
+    return true;
+  });
+}
+
 // Some stored titles are CVE descriptions hard-cut mid-word at ingest (e.g.
 // "CVE-…: multiple functions in langchain_core.pro"). Clean those for display:
 // if a title looks mid-word-truncated, trim back to the last whole word + "…".
@@ -336,7 +349,7 @@ export default async function handler(req, res) {
     // silently undercounts the corpus (total, category cards, tag matrix).
     const all = await selectAll(() => supabase
       .from("sources")
-      .select("id,title,url,publisher,date_published,main_category,trust_tier,tags,source_type,analyst_brief,short_summary,intelligence,validation_status")
+      .select("id,title,url,publisher,date_published,main_category,trust_tier,tags,source_type,analyst_brief,short_summary,intelligence,validation_status,parent_source_id")
       .gte("date_published", from)
       .lte("date_published", to)
       .eq("validation_status", "pass")
@@ -354,7 +367,7 @@ export default async function handler(req, res) {
 
     const categories = CATEGORIES.map(c => {
       const srcs = catMap[c.key];
-      const top  = srcs.map(rankSource).sort(byRankThenRecency).slice(0, 5).map(s => ({
+      const top  = dedupByFamily(srcs.map(rankSource).sort(byRankThenRecency)).slice(0, 5).map(s => ({
         title:     cleanTitle(s.title),
         url:       s.url,
         publisher: s.publisher,
@@ -484,11 +497,12 @@ export default async function handler(req, res) {
           why: s.why || null,          // ← the editor's justification
           summary: s.summary || null,
         }))
-      : all
-          .map(rankSource)
-          .filter(s => s._rank > 0 && s.main_category && s.main_category !== "unclear_or_adjacent")
-          .sort(byRankThenRecency)
-          .slice(0, 12)
+      : dedupByFamily(
+          all
+            .map(rankSource)
+            .filter(s => s._rank > 0 && s.main_category && s.main_category !== "unclear_or_adjacent")
+            .sort(byRankThenRecency)
+        ).slice(0, 12)
           .map(s => ({
             title: cleanTitle(s.title), url: s.url, publisher: s.publisher,
             date: s.date_published?.slice(0, 10), category: s.main_category,

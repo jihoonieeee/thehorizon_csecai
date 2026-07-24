@@ -371,16 +371,16 @@ const MATURITY_DEFS = [
 const READING_VALUE_DEFS = [
   { key: "essential",   color: "#b91c1c", label: "Essential",
     desc: "Changes the threat model or establishes something the field had not seen before. First confirmed adversary operationalisation of a major AI capability, landmark frameworks leadership will repeatedly reference, named multi-government advisories declaring a strategic posture shift.",
-    signals: "First confirmed in-the-wild AI technique; a named campaign establishing a new attack class; field-first framework (OWASP LLM Top 10 launch); Five Eyes / CISA strategic advisory." },
+    signals: "Confirms something the field considered theoretical; establishes a new attack class; landmark framework or multi-government advisory that reshapes strategic posture." },
   { key: "recommended", color: "#c2410c", label: "Recommended",
     desc: "Materially changes prioritisation within a known attack surface. New variants with concrete evidence, confirmed adversary adoption, strong multi-incident syntheses, and reusable case studies with named actors and measurable impact.",
-    signals: "Quarterly TI report with new adversary TTPs; first observed AI-generated phishing at scale; HuggingFace malware incident; vendor advisory with active exploitation." },
+    signals: "New TTP variant backed by concrete evidence; first confirmed adversary adoption of a known technique; named incident with measurable impact; shifts how you weight a known risk." },
   { key: "analyst",     color: "#475569", label: "Analyst",
     desc: "Technically useful for practitioners but does not change strategic posture. Implementation mechanics, incremental research, exploit details, thin-text advisories. Leadership sees the summary rather than reading the source directly.",
-    signals: "Advisory with no exploit; routine arXiv paper; 2nd/3rd writeup of a known incident; CVE disclosure without active exploitation." },
+    signals: "CVE or advisory with no exploitation evidence; implementation mechanics; 2nd or 3rd coverage of a known story; incremental research on a well-mapped technique." },
   { key: "background",  color: "#94a3b8", label: "Background",
     desc: "Adjacent guidance, policy context, defensive advice, or generic commentary with no distinct offensive intelligence. Sources that add nothing beyond stronger existing coverage.",
-    signals: "Defensive/hardening content; policy/governance without offensive findings; off-topic despite passing the keyword gate; generic editorial." },
+    signals: "Defensive or hardening content only; policy/governance without offensive findings; generic editorial; adds nothing beyond what better sources already cover." },
 ];
 
 function ThreatLegend({ open, onToggle }) {
@@ -394,9 +394,6 @@ function ThreatLegend({ open, onToggle }) {
         <div className="hz-threat-legend-body">
           <div className="hz-threat-legend-col">
             <div className="hz-threat-legend-col-title">Threat Maturity Ladder</div>
-            <p className="hz-threat-legend-note">
-              Every source is classified into exactly one level. The same level drives the category card bar and the badge on each source in Top Sources.
-            </p>
             {MATURITY_DEFS.map(m => (
               <div key={m.key} className="hz-threat-legend-row">
                 <div className="hz-threat-legend-row-head">
@@ -410,22 +407,9 @@ function ThreatLegend({ open, onToggle }) {
                 </div>
               </div>
             ))}
-            <div className="hz-threat-legend-rules">
-              <div className="hz-threat-legend-rules-title">Classification rules</div>
-              <ul>
-                <li>CVE alone → <b>Disclosed</b>. CVE + public PoC → <b>Demonstrated</b>. CVE + confirmed exploitation → <b>Observed</b>.</li>
-                <li>Research paper in a controlled environment → <b>Research</b>, even if the attack "worked" there.</li>
-                <li>Paper tested against a real live system (live API, real product) → <b>Demonstrated</b>.</li>
-                <li>Single confirmed incident → <b>Observed</b>. Repeated or sustained campaign → <b>Operational</b>.</li>
-                <li>The highest level present in a source wins.</li>
-              </ul>
-            </div>
           </div>
           <div className="hz-threat-legend-col">
             <div className="hz-threat-legend-col-title">Reading Value</div>
-            <p className="hz-threat-legend-note">
-              A separate axis from maturity. Maturity answers "how real is the threat?"; reading value answers "who should read this, and where should it surface?". A source can be high-maturity but analyst-only (routine advisory on a known technique) or the reverse (a field-first research paper at research maturity).
-            </p>
             {READING_VALUE_DEFS.map(p => (
               <div key={p.key} className="hz-threat-legend-row">
                 <div className="hz-threat-legend-row-head">
