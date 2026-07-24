@@ -10,6 +10,9 @@
  *
  * Options:
  *   --batch N            which batch of 5 to fetch (default: 1)
+ *   --page N             which 200-source slice to operate on (default: 1 = most recent 200)
+ *                        page 2 = sources 200-399 by date, page 3 = 400-599, etc.
+ *                        use --page all to load the entire corpus (slow on large corpora)
  *   --no-http            skip URL reachability check
  *   --show-all-evidence  show every evidence item (default: first 4)
  *   --category <key>     filter to one main_category
@@ -34,7 +37,10 @@ const ALL_EVIDENCE  = hasFlag("--show-all-evidence");
 const CAT_FILTER    = getArg("--category", null);
 const ORIGIN_FILTER = getArg("--origin", null);
 const RAW_OFFSET    = getArg("--offset", null);
+const PAGE_ARG      = getArg("--page", "1");
+const PAGE          = PAGE_ARG === "all" ? null : parseInt(PAGE_ARG, 10);
 const BATCH_SIZE    = 5;
+const WINDOW_SIZE   = 200;
 const OFFSET        = RAW_OFFSET !== null ? parseInt(RAW_OFFSET, 10) : (BATCH - 1) * BATCH_SIZE;
 const EV_LIMIT      = ALL_EVIDENCE ? 999 : 4;
 
@@ -335,27 +341,43 @@ async function renderSource(s, idx, total, evidenceData) {
 // ── Load sources ──────────────────────────────────────────────────────────────
 
 async function loadBatch() {
-  // Pull a larger window and sort risk-first client-side, because risk scoring
-  // depends on fields that aren't easy to ORDER BY in SQL.
-  const window = 200;
-  const { data, error } = await sb
-    .from("sources")
-    .select([
-      "id", "title", "url", "publisher", "date_published", "date_published_actual",
-      "date_confidence", "source_type", "trust_tier", "main_category", "all_categories",
-      "tags", "taxonomy_validation_status", "short_summary", "full_text",
-      "validation_status", "validation_summary", "layer3_status",
-      "claim_extraction_status", "reading_value", "intelligence",
-      "source_origin", "discovery_route", "hallucination_risk",
-      "needs_review", "starred", "is_curated", "is_digest",
-      "parent_source_id",
-    ].join(","))
-    .eq("validation_status", "pass")
-    .order("date_published", { ascending: false })
-    .range(0, window - 1);
+  // Pull a window of sources sorted by date DESC, then risk-sort client-side.
+  // --page N shifts the window: page 1 = rows 0-199, page 2 = rows 200-399, etc.
+  // --page all loads the entire corpus (no window limit).
+  const FIELDS = [
+    "id", "title", "url", "publisher", "date_published", "date_published_actual",
+    "date_confidence", "source_type", "trust_tier", "main_category", "all_categories",
+    "tags", "taxonomy_validation_status", "short_summary", "full_text",
+    "validation_status", "validation_summary", "layer3_status",
+    "claim_extraction_status", "reading_value", "intelligence",
+    "source_origin", "discovery_route", "hallucination_risk",
+    "needs_review", "starred", "is_curated", "is_digest",
+    "parent_source_id",
+  ].join(",");
 
-  if (error) { console.error("load error:", error.message); process.exit(1); }
-  let rows = data || [];
+  let rows = [];
+  if (PAGE === null) {
+    // Load full corpus in pages
+    let from = 0;
+    while (true) {
+      const { data, error } = await sb.from("sources").select(FIELDS)
+        .eq("validation_status", "pass").order("date_published", { ascending: false })
+        .range(from, from + 499);
+      if (error) { console.error("load error:", error.message); process.exit(1); }
+      if (!data || data.length === 0) break;
+      rows.push(...data);
+      if (data.length < 500) break;
+      from += 500;
+    }
+  } else {
+    const rangeStart = (PAGE - 1) * WINDOW_SIZE;
+    const rangeEnd   = rangeStart + WINDOW_SIZE - 1;
+    const { data, error } = await sb.from("sources").select(FIELDS)
+      .eq("validation_status", "pass").order("date_published", { ascending: false })
+      .range(rangeStart, rangeEnd);
+    if (error) { console.error("load error:", error.message); process.exit(1); }
+    rows = data || [];
+  }
 
   if (CAT_FILTER)    rows = rows.filter(s => s.main_category === CAT_FILTER);
   if (ORIGIN_FILTER) rows = rows.filter(s => (s.source_origin || s.discovery_route || "").toLowerCase().includes(ORIGIN_FILTER.toLowerCase()));
@@ -371,8 +393,9 @@ async function loadBatch() {
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 async function main() {
+  const pageLabel = PAGE === null ? "all" : `page ${PAGE}`;
   console.log(`\n  The Horizon — Corpus Audit`);
-  console.log(`  Batch ${BATCH}  (offset ${OFFSET}–${OFFSET + BATCH_SIZE - 1})${CAT_FILTER ? `  category=${CAT_FILTER}` : ""}${ORIGIN_FILTER ? `  origin~=${ORIGIN_FILTER}` : ""}`);
+  console.log(`  Batch ${BATCH}  (offset ${OFFSET}–${OFFSET + BATCH_SIZE - 1})  [${pageLabel}]${CAT_FILTER ? `  category=${CAT_FILTER}` : ""}${ORIGIN_FILTER ? `  origin~=${ORIGIN_FILTER}` : ""}`);
   console.log(`  HTTP checks: ${NO_HTTP ? "off" : "on"}   Evidence: ${ALL_EVIDENCE ? "all" : `first ${EV_LIMIT}`}\n`);
 
   const { batch, totalInWindow } = await loadBatch();
@@ -389,7 +412,10 @@ async function main() {
     console.log(report);
   }
 
-  console.log(`\n  End of batch ${BATCH}. Run --batch ${BATCH + 1} for the next 5.\n`);
+  const nextPageHint = PAGE !== null && OFFSET + BATCH_SIZE >= totalInWindow
+    ? `  Page ${PAGE} exhausted. Continue with --page ${PAGE + 1} --batch 1.`
+    : `  Run --batch ${BATCH + 1}${PAGE !== null && PAGE > 1 ? ` --page ${PAGE}` : ""} for the next 5.`;
+  console.log(`\n  End of batch ${BATCH} [${pageLabel}].${nextPageHint}\n`);
 }
 
 main().catch(err => { console.error("FATAL:", err.message); process.exit(1); });
