@@ -89,6 +89,20 @@ Issues specific to individual sources, recorded for traceability even after fix 
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `classification` | `source_type: vulnerability` — describes a demonstrated attack technique, not a CVE record. | `source_type → capability_demonstration`. |
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `data_integrity` | `full_text: 319 chars` — Jina re-fetch recovered 16,779 chars. Source is a daily roundup, not a single finding. | Re-fetched via Jina. Ran full pipeline (fanout→classify→score→evidence) via `pipelineOneSource.js` with Anthropic/Sonnet. 5 children: Friendly Fire (agentic_ai_threats/ASI05, recommended, 1 ev item) and HalluSquatting (llm_threats/LLM09, analyst, 1 ev item) passed; GhostApproval/Langflow IDOR/AI Agent Poisoning teaser correctly rejected as off-scope. 2 cross-contaminated evidence items removed from Friendly Fire child (S13). Parent `all_categories` synced. |
 
+### Batch 18
+
+| Source | ID (first 8) | Status | Type | Issue | Fix applied |
+|--------|-------------|--------|------|-------|-------------|
+| TechTimes / Armored Likho APT | `c6fc51b7` | `fixed` | `trust` | `trust_tier: high` — pre-fix inflation (techtimes already in MEDIA_FRAGMENTS). Starred source. | `trust_tier → medium`. |
+| Ars Technica / HalluSquatting | `7357f78a` | `wontfix` | — | Repeat from batch 14 (date already fixed, reading_value mismatch documented as S10 wontfix). Re-surfacing due to reading_value flag. | No action. |
+| Security Affairs / JADEPUFFER | `5ad336a0` | `fixed` | `taxonomy` | `AE03_ai_vuln_research` wrong — JadePuffer used known CISA KEV-listed CVE-2025-3248 (patched May 2025), not AI-discovered vulnerability. `AE04_ai_exploit_dev` wrong — no AI-generated exploit code. Same recurring JadePuffer tag error (batches 15–16 fixed same issue on HIPAA Journal and CSO Online). | `AE03 + AE04 removed`, `AE05_ai_malware_dev added`. Tags now AE08+AE05 consistent with all JadePuffer sources. |
+| arXiv / HADES VLM jailbreak | `dc8a4275` | `wontfix` | `evidence` | 0 evidence items. `reading_value=analyst` gates source below extraction threshold — extraction never ran (S9 behavior). 15k chars of full paper content available; eligible for extraction if reading_value upgraded to recommended. | No fix. reading_value mismatch (analyst vs expected recommended) is S10 accept. |
+| SecurityWeek / JadePuffer | `2ce78954` | `wontfix` | `reading_value` | `recommended` vs expected `essential` (importance=realized). S10 accept — secondary SecurityWeek coverage; Sysdig primary is the essential read. Tags AE08+AE05 already correct. HTTP 403 (bot-blocked), content stored. | No fix. |
+
+**Tag pattern — batch 18:** Security Affairs JADEPUFFER had AE03+AE04, making this the fourth JadePuffer source corrected to AE08+AE05 across batches 15–18 (HIPAA Journal, CSO Online, Security Affairs). AE03 misassignment is particularly wrong — JadePuffer used a known CISA KEV CVE, not AI-discovered vulnerabilities. Consider adding a CRITICAL FAILURE MODE note to AE03 definition: "Do NOT assign if the vulnerability was previously known/disclosed — this tag requires AI to actively discover the vulnerability."
+
+---
+
 ### Batch 17
 
 | Source | ID (first 8) | Status | Type | Issue | Fix applied |
