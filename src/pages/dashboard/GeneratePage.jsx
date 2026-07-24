@@ -201,7 +201,7 @@ function SlidesPanel({ secret }) {
 
       {isQueued && (
         <p style={{ margin: 0, textAlign: "center", fontSize: "0.76rem", color: "var(--text-tertiary)" }}>
-          Running in GitHub Actions — you can close this tab and come back.
+          Processing in the background. You can close this tab and come back.
         </p>
       )}
 
@@ -231,11 +231,11 @@ function SlidesPanel({ secret }) {
         </div>
         <ul style={{ margin: 0, padding: "0 0 0 16px", display: "flex", flexDirection: "column", gap: 5 }}>
           {[
-            "Executive summary — top strategic judgments across all threat categories",
-            "Per-category developments with mechanism walkthroughs",
-            "3–5 insights per category",
-            "Case study slides with AI-generated attack-chain diagrams",
-            "Numbered citations on every bullet with a source reference slide",
+            "Executive summary with key findings across all threat categories",
+            "Per-category threat developments and analysis",
+            "3–5 key insights per category",
+            "Case study slides with attack-chain diagrams",
+            "Source citations on every slide",
           ].map((line, i) => (
             <li key={i} style={{ fontSize: "0.79rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>{line}</li>
           ))}
@@ -251,6 +251,32 @@ const NL_WINDOWS = [
   { id: "week",  label: "Past week"  },
   { id: "month", label: "Past month" },
 ];
+
+function nlDateRange(win) {
+  const SGT_MS = 8 * 60 * 60 * 1000;
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const now    = new Date();
+  const sgtNow = new Date(now.getTime() + SGT_MS);
+  const fmt    = d => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+  if (win === "week") {
+    // Last completed Mon–Sun ISO week (weekOffset = -1)
+    const dow      = sgtNow.getUTCDay(); // 0=Sun … 6=Sat
+    const fromMon  = dow === 0 ? 6 : dow - 1;
+    const monSgt   = new Date(sgtNow);
+    monSgt.setUTCDate(sgtNow.getUTCDate() - fromMon - 7);
+    monSgt.setUTCHours(0, 0, 0, 0);
+    const sunSgt = new Date(monSgt.getTime() + 6 * DAY_MS);
+    return `${fmt(monSgt)} – ${fmt(sunSgt)}`;
+  }
+
+  // month: previous complete calendar month
+  const y     = sgtNow.getUTCFullYear();
+  const m     = sgtNow.getUTCMonth(); // 0-indexed
+  const first = new Date(Date.UTC(y, m - 1, 1));
+  const last  = new Date(Date.UTC(y, m, 0)); // day 0 = last day of prev month
+  return `${fmt(first)} – ${fmt(last)}`;
+}
 
 const NL_POLL_MS      = 15000;
 const NL_STORAGE_KEY  = "hz_newsletter_state";
@@ -395,24 +421,29 @@ function NewsletterPanel({ secret }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
       {/* Controls row */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 6 }}>
-          {NL_WINDOWS.map(w => (
-            <button key={w.id} disabled={isQueued} onClick={() => { setWin(w.id); setError(null); }} style={{
-              padding: "6px 14px", borderRadius: 6, border: "1px solid",
-              fontSize: "0.8rem", fontWeight: 600, cursor: isQueued ? "not-allowed" : "pointer",
-              background:  win === w.id ? "var(--accent-dim)" : "transparent",
-              borderColor: win === w.id ? "var(--accent-border)" : "var(--border)",
-              color:       win === w.id ? "var(--accent)" : "var(--text-secondary)",
-            }}>
-              {w.label}
-              {cache[w.id] && (
-                <span style={{ marginLeft: 6, fontSize: "0.68rem", opacity: 0.6, fontWeight: 400 }}>
-                  {new Date(cache[w.id].generated_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                </span>
-              )}
-            </button>
-          ))}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", gap: 6 }}>
+            {NL_WINDOWS.map(w => (
+              <button key={w.id} disabled={isQueued} onClick={() => { setWin(w.id); setError(null); }} style={{
+                padding: "6px 14px", borderRadius: 6, border: "1px solid",
+                fontSize: "0.8rem", fontWeight: 600, cursor: isQueued ? "not-allowed" : "pointer",
+                background:  win === w.id ? "var(--accent-dim)" : "transparent",
+                borderColor: win === w.id ? "var(--accent-border)" : "var(--border)",
+                color:       win === w.id ? "var(--accent)" : "var(--text-secondary)",
+              }}>
+                {w.label}
+                {cache[w.id] && (
+                  <span style={{ marginLeft: 6, fontSize: "0.68rem", opacity: 0.6, fontWeight: 400 }}>
+                    {new Date(cache[w.id].generated_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: "0.72rem", color: "var(--text-tertiary)" }}>
+            {nlDateRange(win)}
+          </div>
         </div>
         <button onClick={generate} disabled={isQueued} style={{
           padding: "7px 20px", borderRadius: 8,
@@ -429,7 +460,7 @@ function NewsletterPanel({ secret }) {
       {/* Queued notice */}
       {isQueued && (
         <div style={{ padding: "12px 16px", borderRadius: 8, background: "var(--accent-dim)", border: "1px solid var(--accent-border)", fontSize: "0.82rem", color: "var(--accent)" }}>
-          Generation dispatched to GitHub Actions — usually takes ~5 minutes. You can close this page; the result will be here when you return.
+          Generation in progress. Usually takes about 5 minutes. You can close this page and the result will be here when you return.
         </div>
       )}
 
@@ -480,11 +511,23 @@ function NewsletterPanel({ secret }) {
         </div>
       )}
 
-      {!isDone && !isQueued && status !== "error" && (
-        <div style={{ padding: "44px 20px", textAlign: "center", border: "1px dashed var(--border)", borderRadius: 10, color: "var(--text-tertiary)", fontSize: "0.84rem" }}>
-          Select a window and click Generate.
+      {/* What's included */}
+      <div style={{ padding: "16px 18px", background: "var(--surface-2)", borderRadius: 8, border: "1px solid var(--border)" }}>
+        <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
+          What's included
         </div>
-      )}
+        <ul style={{ margin: 0, padding: "0 0 0 16px", display: "flex", flexDirection: "column", gap: 5 }}>
+          {[
+            "Top threats and developments for the selected period",
+            "Per-category highlights with source references",
+            "Notable research and advisories",
+            "Ready to paste into Gmail or Outlook",
+          ].map((line, i) => (
+            <li key={i} style={{ fontSize: "0.79rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>{line}</li>
+          ))}
+        </ul>
+      </div>
+
     </div>
   );
 }
@@ -517,8 +560,8 @@ export function GeneratePage() {
         </h1>
         <p style={{ margin: "8px 0 0", fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
           {tab === "slides"
-            ? "Dispatches a GitHub Actions run that executes the full analysis pipeline off-Vercel and saves a ready-to-present PPTX deck. The deck appears here in about 10–30 minutes — you can close this page while it runs."
-            : "Dispatches a GitHub Actions run that generates an AI threat intelligence digest off-Vercel and saves it here. Usually ready in ~5 minutes — you can close the page while it runs."}
+            ? "Generates a .pptx deck on the AI threat landscape for the selected time period. Takes 10–30 minutes. You can close this page while it runs."
+            : "A digest of curated AI threat sources and key insights from the selected time period, ready to send as an email newsletter. Usually ready in about 5 minutes. You can close this page while it runs."}
         </p>
       </div>
 
