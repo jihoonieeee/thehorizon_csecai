@@ -371,15 +371,19 @@ const MATURITY_DEFS = [
 const READING_VALUE_DEFS = [
   { key: "essential",   color: "#b91c1c", label: "Essential",
     desc: "Changes the threat model or establishes something the field had not seen before. First confirmed adversary operationalisation of a major AI capability, landmark frameworks leadership will repeatedly reference, named multi-government advisories declaring a strategic posture shift.",
+    examples: "GTIG's first confirmed AI-generated zero-day in a real operation. OWASP LLM Top 10 initial release. Five Eyes statement on frontier AI cyber risk.",
     signals: "Confirms something the field considered theoretical; establishes a new attack class; landmark framework or multi-government advisory that reshapes strategic posture." },
   { key: "recommended", color: "#c2410c", label: "Recommended",
     desc: "Materially changes prioritisation within a known attack surface. New variants with concrete evidence, confirmed adversary adoption, strong multi-incident syntheses, and reusable case studies with named actors and measurable impact.",
+    examples: "GTIG quarterly AI threat report with new adversary TTPs. CrowdStrike on first observed AI-generated phishing at scale. HiddenLayer HuggingFace malware incident.",
     signals: "New TTP variant backed by concrete evidence; first confirmed adversary adoption of a known technique; named incident with measurable impact; shifts how you weight a known risk." },
   { key: "analyst",     color: "#475569", label: "Analyst",
     desc: "Technically useful for practitioners but does not change strategic posture. Implementation mechanics, incremental research, exploit details, thin-text advisories. Leadership sees the summary rather than reading the source directly.",
+    examples: "Vulnerability advisory for a vLLM SSRF. arXiv paper with only an abstract available. Third journalist writeup of a known incident.",
     signals: "CVE or advisory with no exploitation evidence; implementation mechanics; 2nd or 3rd coverage of a known story; incremental research on a well-mapped technique." },
   { key: "background",  color: "#94a3b8", label: "Background",
     desc: "Adjacent guidance, policy context, defensive advice, or generic commentary with no distinct offensive intelligence. Sources that add nothing beyond stronger existing coverage.",
+    examples: 'Generic "AI threats are rising" editorial. AWS implementation guide for multi-tenant agents. Defensive IR playbook with no new offensive findings.',
     signals: "Defensive or hardening content only; policy/governance without offensive findings; generic editorial; adds nothing beyond what better sources already cover." },
 ];
 
@@ -418,6 +422,7 @@ function ThreatLegend({ open, onToggle }) {
                 </div>
                 <div className="hz-threat-legend-row-body">
                   <div className="hz-threat-legend-row-desc">{p.desc}</div>
+                  <div className="hz-threat-legend-row-sub"><b>Examples:</b> {p.examples}</div>
                   <div className="hz-threat-legend-row-sub"><b>Signals:</b> {p.signals}</div>
                 </div>
               </div>
