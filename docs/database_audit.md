@@ -89,6 +89,23 @@ Issues specific to individual sources, recorded for traceability even after fix 
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `classification` | `source_type: vulnerability` — describes a demonstrated attack technique, not a CVE record. | `source_type → capability_demonstration`. |
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `data_integrity` | `full_text: 319 chars` — Jina re-fetch recovered 16,779 chars. Source is a daily roundup, not a single finding. | Re-fetched via Jina. Ran full pipeline (fanout→classify→score→evidence) via `pipelineOneSource.js` with Anthropic/Sonnet. 5 children: Friendly Fire (agentic_ai_threats/ASI05, recommended, 1 ev item) and HalluSquatting (llm_threats/LLM09, analyst, 1 ev item) passed; GhostApproval/Langflow IDOR/AI Agent Poisoning teaser correctly rejected as off-scope. 2 cross-contaminated evidence items removed from Friendly Fire child (S13). Parent `all_categories` synced. |
 
+### Batch 20
+
+| Source | ID (first 8) | Status | Type | Issue | Fix applied |
+|--------|-------------|--------|------|-------|-------------|
+| TechRepublic / Microsoft MCP tool descriptions | `234794f9` | `fixed` | `trust` | `trust_tier: high` — pre-fix inflation; techrepublic not in MEDIA_FRAGMENTS. Starred source. | `trust_tier → medium`. Added `techrepublic` to MEDIA_FRAGMENTS. |
+| TechRepublic / Microsoft MCP tool descriptions | `234794f9` | `fixed` | `date` | `date_published: 2026-07-02` but `date_actual: 2026-07-03`. 1-day off. | `date_published → 2026-07-03`. |
+| TechRepublic / Microsoft MCP tool descriptions | `234794f9` | `fixed` | `classification` | `source_type: attack_surface_signal` → importance=noise. Content is Microsoft IR guidance disclosing a concrete attack vector (MCP tool description poisoning) with documented techniques. Deserves `threat_intelligence`. | `source_type → threat_intelligence`, `importance.tier → proven`. reading_value=essential already correct. |
+| THN ThreatsDay roundup | `8baed1cc` | `fixed` | `trust` | `trust_tier: high` — pre-fix inflation (thehackernews in MEDIA_FRAGMENTS). | `trust_tier → medium`. |
+| THN ThreatsDay roundup | `8baed1cc` | `fixed` | `date` | `date_published: 2026-07-02` but `date_actual: 2026-07-07`. 5-day discrepancy — RSS ingest date vs roundup publication date. | `date_published → 2026-07-07`. |
+| THN ThreatsDay roundup | `8baed1cc` | `wontfix` | `evidence` | Evidence [1]–[3] are from non-AI stories in the 14-story roundup (INTERPOL phishing, custom ransomware, Tox ransom negotiation). Cross-contamination from roundup digest format. [4] (Claude Cowork sandbox escape) is the AI-relevant content. Known limitation of roundup sources without fan-out. | No fix. |
+| Malwarebytes / BioShocking | `bf535c4c` | `fixed` | `classification` | `source_type: vulnerability` → importance=noise. Content is a working PoC tested on 6 deployed AI browsers with 100% bypass rate, coordinated vendor disclosure. Should be `capability_demonstration`. | `source_type → capability_demonstration`, `importance.tier → proven`. reading_value=recommended already correct. |
+| Security Affairs / GuardFall | `9127ee9d` | `fixed` | `taxonomy` | `ASI03_identity_privilege_abuse` wrong — GuardFall is a shell command filter bypass (regex vs bash expansion mismatch). No identity/privilege abuse involved. | Removed `ASI03`. Tags now: `ASI05_unexpected_code_execution` only. |
+| Security Affairs / GuardFall | `9127ee9d` | `wontfix` | `reading_value` | `essential` vs expected `analyst` (importance=research). S10 accept — 10/11 major open-source agents affected with live exploitation confirmed; LLM upgrade defensible for starred source. | No fix. |
+| Kaspersky Securelist / OpenClaw | `2a2ece76` | `wontfix` | — | Clean. ASI04+ASI02 ✓, realized/essential ✓. Primary Kaspersky research: 1,100+ malicious accounts, 600+ malicious skills, ongoing exploitation. 9 items, all grounded ✓. | No action. |
+
+---
+
 ### Batch 19
 
 | Source | ID (first 8) | Status | Type | Issue | Fix applied |
