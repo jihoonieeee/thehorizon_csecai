@@ -89,6 +89,21 @@ Issues specific to individual sources, recorded for traceability even after fix 
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `classification` | `source_type: vulnerability` — describes a demonstrated attack technique, not a CVE record. | `source_type → capability_demonstration`. |
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `data_integrity` | `full_text: 319 chars` — Jina re-fetch recovered 16,779 chars. Source is a daily roundup, not a single finding. | Re-fetched via Jina. Ran full pipeline (fanout→classify→score→evidence) via `pipelineOneSource.js` with Anthropic/Sonnet. 5 children: Friendly Fire (agentic_ai_threats/ASI05, recommended, 1 ev item) and HalluSquatting (llm_threats/LLM09, analyst, 1 ev item) passed; GhostApproval/Langflow IDOR/AI Agent Poisoning teaser correctly rejected as off-scope. 2 cross-contaminated evidence items removed from Friendly Fire child (S13). Parent `all_categories` synced. |
 
+### Batch 14
+
+| Source | ID (first 8) | Status | Type | Issue | Fix applied |
+|--------|-------------|--------|------|-------|-------------|
+| Friendly Fire / AI Now Institute | `8ff098c0` | `fixed` | `date` | `date_published: 2026-07-08` but `date_actual: 2026-07-09`. 1-day off. | `date_published → 2026-07-09`. |
+| Friendly Fire / AI Now Institute | `8ff098c0` | `wontfix` | `reading_value` | `essential` vs expected `recommended` (importance=proven). S10 accept — LLM upgrade justified: novel PoC against two widely deployed coding agents (Claude Code + Codex CLI) with RCE in default out-of-box config; no setup required. | No fix. |
+| Ars Technica / HalluSquatting | `7357f78a` | `fixed` | `date` | `date_published: 2026-07-08` but `date_actual: 2026-07-04`. 4-day off (feed lag). | `date_published → 2026-07-04`. |
+| Ars Technica / HalluSquatting | `7357f78a` | `wontfix` | `reading_value` | `recommended` vs expected `analyst` (importance=research). S10 accept — secondary media covering a genuinely novel attack class (hallucination-driven supply chain); LLM one-tier upgrade acceptable. | No fix. |
+| Sygnia digest child / AI-Accelerated Attack | `1fa3bfa0` | `wontfix` | — | Digest child (i2). Trust=high, date=2026-07-08 inherited from parent ✓. Category `ai_enabled_threats / AE08+AE01+AE04` ✓. Evidence [1] fact field contains a section heading ("Agentic AI-Assisted Workflows") — thin content expected for digest children. 693 chars of body is normal for this press release excerpt. | No action. |
+| Security Affairs / Armored Likho APT | `0d4e76fc` | `wontfix` | `maturity` | `observed` vs det=`operational`. Secondary media report on Kaspersky research; direct IR documentation not present. `observed` is a justified LLM downgrade. | No fix. |
+| Security Affairs / Armored Likho APT | `0d4e76fc` | `wontfix` | `reading_value` | `recommended` vs expected `essential` (importance=realized). S10 accept — secondary media coverage; the primary Kaspersky report is the essential read. | No fix. |
+| Cybernexora / Deepfake BEC $25M | `eaf9707d` | `fixed` | `data_integrity` | Deleted 2026-07-24 — secondary blog republishing 2024 Arup Hong Kong deepfake case (no new primary intelligence, 0 evidence items despite 14k chars of page chrome, unknown publisher). | Deleted from DB. 0 evidence rows cascaded. |
+
+---
+
 ### Batch 13
 
 | Source | ID (first 8) | Status | Type | Issue | Fix applied |
@@ -96,8 +111,7 @@ Issues specific to individual sources, recorded for traceability even after fix 
 | Bishop Fox / Claude cracks SonicWall firmware | `8487f72e` | `wontfix` | — | Clean. `ai_enabled_threats / AE03 + AE04` ✓ (single agent with MCP tools; AE08 not needed — no multi-agent orchestration). trust=high (Bishop Fox = established security firm) ✓. proven/recommended ✓. 5 grounded evidence items ✓. | No action. |
 | CSO Online / GitLost GitHub agent PI leak | `a733890c` | `fixed` | `trust` | `trust_tier: high` — CSO Online is IDG/Foundry tech security media, not a primary security firm. L3 LLM saw "Noma Security researchers" in content and assigned high. | `trust_tier → medium`. |
 | CSO Online / GitLost GitHub agent PI leak | `a733890c` | `fixed` | `maturity` | `observed` — PoC was a controlled test by Noma Security (created a crafted GitHub Issue in a test org). No real-world exfiltration confirmed. `demonstrated` is the correct tier for an exploit PoC published by a security researcher. | `maturity_level → demonstrated`. |
-| Cybernexora / Deepfake BEC $25M | `eaf9707d` | `fixed` | `date` | `date_published: 2026-07-08` but `date_actual: 2026-07-07` from upgradeDate. 1-day off. | `date_published → 2026-07-07`. |
-| Cybernexora / Deepfake BEC $25M | `eaf9707d` | `wontfix` | `reading_value` | `analyst` vs expected `essential` (importance=realized). S10 accept — LLM override justified: secondary blog republishing the well-known 2024 Hong Kong $25M deepfake case (no new primary intelligence). 0 evidence despite success status — thin secondary coverage, accept. | No fix. |
+| Cybernexora / Deepfake BEC $25M | `eaf9707d` | `fixed` | `data_integrity` | Secondary blog republishing the 2024 Hong Kong $25M deepfake case. 0 evidence despite 14k chars (page chrome). Deleted 2026-07-24. | Deleted from DB (batch 14). |
 | Innovaiden / Prompt Injection Both Ways (BioShocking + macOS.Gaslight synthesis) | `5ddd5a7d` | `fixed` | `trust` | `trust_tier: high` — innovaiden.com is a small consultancy blog, not an established security firm. Content quality is high (good cited synthesis) but publisher credibility is medium. | `trust_tier → medium`. |
 | Innovaiden / Prompt Injection Both Ways | `5ddd5a7d` | `wontfix` | `maturity` | `observed` diverges from det=`operational`. Article synthesises BioShocking (PoC) + macOS.Gaslight (one confirmed NK deployment). `observed` is a reasonable midpoint; no action needed. | No fix. Accepted LLM override. |
 | TechTimes / JADEPUFFER agentic ransomware | `ad1b7070` | `fixed` | `trust` | `trust_tier: high` — TechTimes is general tech media, not a security firm. Secondary coverage of Sysdig's primary research. | `trust_tier → medium`. |
