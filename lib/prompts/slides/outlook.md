@@ -59,8 +59,7 @@ Return:
       "confidence": "low|moderate"
     }
   ],
-  "caveat": "<one sentence about evidence gaps, or null if 3 items are well-grounded>",
-  "speaker_notes": "<brief notes for the presenter>"
+  "caveat": "<one sentence about evidence gaps, or null if 3 items are well-grounded>"
 }
 
 Return 3 watch_items. Reduce to 2 and add a caveat only if evidence is genuinely insufficient.

@@ -67,8 +67,7 @@ Return:
 {
   "bullets": [
     { "text": "<specific, period-grounded statement>" }
-  ],
-  "speaker_notes": "<brief notes for the presenter>"
+  ]
 }
 
 3–5 bullets. Each must be specific to this period. No generic observations.
