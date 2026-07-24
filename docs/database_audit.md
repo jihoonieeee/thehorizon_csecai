@@ -89,6 +89,24 @@ Issues specific to individual sources, recorded for traceability even after fix 
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `classification` | `source_type: vulnerability` — describes a demonstrated attack technique, not a CVE record. | `source_type → capability_demonstration`. |
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `data_integrity` | `full_text: 319 chars` — Jina re-fetch recovered 16,779 chars. Source is a daily roundup, not a single finding. | Re-fetched via Jina. Ran full pipeline (fanout→classify→score→evidence) via `pipelineOneSource.js` with Anthropic/Sonnet. 5 children: Friendly Fire (agentic_ai_threats/ASI05, recommended, 1 ev item) and HalluSquatting (llm_threats/LLM09, analyst, 1 ev item) passed; GhostApproval/Langflow IDOR/AI Agent Poisoning teaser correctly rejected as off-scope. 2 cross-contaminated evidence items removed from Friendly Fire child (S13). Parent `all_categories` synced. |
 
+### Batch 19
+
+| Source | ID (first 8) | Status | Type | Issue | Fix applied |
+|--------|-------------|--------|------|-------|-------------|
+| Zscaler ThreatLabz / IPI primary | `0ee31b0e` | `fixed` | `taxonomy` | `AE02_ai_social_engineering` wrong — AE02 is AI used to socially engineer *humans*. These IPI campaigns target AI *agents*, not humans. `ASI01_agent_goal_hijack` is the correct secondary (injected instructions redirect the agent's objective). Inconsistent with secondary media sources (batches 15–17) that used ASI01+ASI02. Starred source. | `AE02 → ASI01_agent_goal_hijack`. |
+| Trail of Bits / GPT-5.5-Cyber zlib fuzzing | `0b94fcf7` | `wontfix` | — | Trust=high correct — ToB is a primary security research firm. AE03+AE04 ✓ — this is the LEGITIMATE AE03 case: GPT-5.5-Cyber discovered NEW, previously unknown vulnerabilities that OSS-Fuzz missed. Correct application of the tag just tightened in classify.md. Evidence 5 items, all grounded ✓. Added `trailofbits` to SECURITY_FIRM_FRAGMENTS (with `trail of bits`, `nsfocus`, `sygnia`, `bishop fox`). | No source fix. SECURITY_FIRM_FRAGMENTS updated. |
+| arXiv / Pmeta-TLA speech backdoor | `90ca3704` | `fixed` | `trust` | `trust_tier: medium` — arXiv source; deriveTrustTier keeps connector-assigned medium without upgrading. Should be high. | `trust_tier → high`. |
+| arXiv / Pmeta-TLA speech backdoor | `90ca3704` | `fixed` | `taxonomy` | Missing `TAI03_backdoor_attack` — trigger-word activation is a backdoor by definition. Same reasoning as smolVLA (batch 17). TAI01 is mechanism; TAI03 is effect. | Added `TAI03_backdoor_attack`. |
+| arXiv / Cloak and Detonate (SkillCloak paper) | `0a2e3e1d` | `fixed` | `date` | `date_published: 2026-07-02` but `date_actual: 2026-07-03`. 1-day off. | `date_published → 2026-07-03`. |
+| arXiv / Cloak and Detonate (SkillCloak paper) | `0a2e3e1d` | `fixed` | `maturity` | `research` — SkillCloak was tested against 1,613 real malicious skills from a live marketplace, bypassing all 8 scanners >90% of the time. That is firmly `demonstrated`. LLM downgrade incorrect. | `intelligence.threat_maturity → demonstrated`. |
+| arXiv / Cloak and Detonate (SkillCloak paper) | `0a2e3e1d` | `fixed` | `reading_value` | `analyst` — gates out evidence extraction (0 items despite 15k chars). importance=proven → recommended expected. Fixed maturity also supports upgrade. | `reading_value → recommended` (will ungate evidence on next extraction run). |
+| eSecurity Planet / BioShocking weekly roundup | `7848455e` | `fixed` | `date` | `date_published: 2026-07-02` but `date_actual: 2026-07-01`. 1-day off. | `date_published → 2026-07-01`. |
+| eSecurity Planet / BioShocking weekly roundup | `7848455e` | `wontfix` | `reading_value` | `recommended` vs expected `essential`. S10 accept — diluted weekly roundup covering 4+ stories (BioShocking, macOS.Gaslight, GEO poisoning, Five Eyes). | No fix. Added `esecurityplanet` to MEDIA_FRAGMENTS. |
+
+**Batch count note:** 910 total pass sources. At offset 94 after batch 19. Risk window = 200 sources. Estimated ~20–25 more batches to exhaust window; meaningful finds likely thin out after another 5–8 batches as pre-fix trust inflation and date errors clear.
+
+---
+
 ### Batch 18
 
 | Source | ID (first 8) | Status | Type | Issue | Fix applied |
