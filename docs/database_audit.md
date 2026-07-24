@@ -89,6 +89,23 @@ Issues specific to individual sources, recorded for traceability even after fix 
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `classification` | `source_type: vulnerability` — describes a demonstrated attack technique, not a CVE record. | `source_type → capability_demonstration`. |
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `data_integrity` | `full_text: 319 chars` — Jina re-fetch recovered 16,779 chars. Source is a daily roundup, not a single finding. | Re-fetched via Jina. Ran full pipeline (fanout→classify→score→evidence) via `pipelineOneSource.js` with Anthropic/Sonnet. 5 children: Friendly Fire (agentic_ai_threats/ASI05, recommended, 1 ev item) and HalluSquatting (llm_threats/LLM09, analyst, 1 ev item) passed; GhostApproval/Langflow IDOR/AI Agent Poisoning teaser correctly rejected as off-scope. 2 cross-contaminated evidence items removed from Friendly Fire child (S13). Parent `all_categories` synced. |
 
+### Batch 16
+
+| Source | ID (first 8) | Status | Type | Issue | Fix applied |
+|--------|-------------|--------|------|-------|-------------|
+| CSO Online / JadePuffer | `4aa5a98c` | `fixed` | `taxonomy` | `AE04_ai_exploit_dev` wrong — same as batch 15 HIPAA Journal. JadePuffer used existing CVE-2025-3248, not AI-generated exploit code. | `AE04 → AE05_ai_malware_dev`. |
+| Infosecurity Magazine / JadePuffer | `78610dc1` | `fixed` | `trust` | `trust_tier: high` — pre-fix trust inflation (infosecurity already in MEDIA_FRAGMENTS). | `trust_tier → medium`. |
+| Infosecurity Magazine / JadePuffer | `78610dc1` | `wontfix` | `reading_value` | `recommended` vs expected `essential`. S10 accept — thin article (1,717 chars, four takeaway bullets). LLM downgrade correct. | No fix. |
+| CyberScoop / JadePuffer | `8a0b157d` | `fixed` | `data_integrity` | Deleted 2026-07-24. Full text only 559 chars — scraper captured author bio only, not article body. Evidence[1] fully malformed (TYPE=?, FACT=none). 4+ other JadePuffer sources with complete content exist. | Deleted from DB (1 malformed evidence row cascaded). |
+| SecurityWeek / Zscaler PI | `b6054fef` | `wontfix` | — | Clean. trust=medium ✓. ASI02+LLM01 ✓. HTTP 403 (bot-blocked), content stored (10,598 chars). reading_value=recommended vs essential — S10 accept (secondary media on Zscaler primary). Evidence [4] adds new detail: 10 GitHub repos used by threat actor. 4th outlet covering same Zscaler ThreatLabz indirect PI research. | No action. |
+| TechTimes / Tencent AI-Infra-Guard + MCP | `baf7aa90` | `fixed` | `classification` | `source_type: governance_signal` wrong — article covers a real NSA-documented CVE (CVE-2025-49596 in MCP-Inspector) and Tencent's active red teaming framework, not a policy/standards document. governance_signal was routing importance to advisory→noise and reading_value→background. | `source_type → threat_intelligence`, `importance.tier → proven`, `reading_value → recommended`. |
+
+**Tag pattern — batch 16:** CSO Online JadePuffer had AE04 (same error as batch 15 HIPAA Journal). This is the third JadePuffer source with AE04 misassigned (batch 15 fixed HIPAA Journal; batch 16 fixed CSO Online). All JadePuffer sources now consistently use AE08+AE05. Root cause: classifier sees "exploit CVE-2025-3248" and assigns AE04 (AI exploit dev) rather than AE05 (AI-generated/adapted payloads).
+
+**Scraping note — batch 16:** CyberScoop article captured only 559 chars (author bio). Jina/fetch likely hit a paywall or JavaScript rendering barrier. Consider adding cyberscoop.com to scraper problem-domains list if pattern recurs.
+
+---
+
 ### Batch 15
 
 | Source | ID (first 8) | Status | Type | Issue | Fix applied |
