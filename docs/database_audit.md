@@ -89,6 +89,25 @@ Issues specific to individual sources, recorded for traceability even after fix 
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `classification` | `source_type: vulnerability` — describes a demonstrated attack technique, not a CVE record. | `source_type → capability_demonstration`. |
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `data_integrity` | `full_text: 319 chars` — Jina re-fetch recovered 16,779 chars. Source is a daily roundup, not a single finding. | Re-fetched via Jina. Ran full pipeline (fanout→classify→score→evidence) via `pipelineOneSource.js` with Anthropic/Sonnet. 5 children: Friendly Fire (agentic_ai_threats/ASI05, recommended, 1 ev item) and HalluSquatting (llm_threats/LLM09, analyst, 1 ev item) passed; GhostApproval/Langflow IDOR/AI Agent Poisoning teaser correctly rejected as off-scope. 2 cross-contaminated evidence items removed from Friendly Fire child (S13). Parent `all_categories` synced. |
 
+### Batch 17
+
+| Source | ID (first 8) | Status | Type | Issue | Fix applied |
+|--------|-------------|--------|------|-------|-------------|
+| The Hacker News / SkillCloak | `5ab4c1aa` | `fixed` | `trust` | `trust_tier: high` — pre-fix inflation (thehackernews already in MEDIA_FRAGMENTS). | `trust_tier → medium`. |
+| The Hacker News / SkillCloak | `5ab4c1aa` | `fixed` | `date` | `date_published: 2026-07-06` but `date_actual: 2026-07-07`. 1-day off. | `date_published → 2026-07-07`. |
+| CSO Online / Zscaler IPI (dup) | `eb6bf4e9` | `fixed` | `data_integrity` | Deleted 2026-07-24 — URL-variant duplicate of `fb0b3356`. Both share CSO Online article ID `4193498` ingested under different URL slugs (`zscaler-finds` vs `ai-agents-fal`). `foldUrlVariants` does not catch same-ID different-slug variants. | Deleted from DB (6 evidence rows cascaded). |
+| CSO Online / Zscaler IPI (keeper) | `fb0b3356` | `fixed` | `taxonomy` | Missing `LLM01_prompt_injection` — the attack is indirect prompt injection. All other Zscaler IPI sources in corpus (batches 15–16) carry LLM01. Inconsistent. | Added `LLM01_prompt_injection`. |
+| CSO Online / Zscaler IPI (keeper) | `fb0b3356` | `wontfix` | `reading_value` | `recommended` vs expected `analyst` (importance=research). S10 accept — Zscaler's model testing is applied research with direct enterprise relevance; LLM upgrade to recommended is justified. | No fix. |
+| IBM Research / Trojan Knowledge CKA-Agent | `f09a3af6` | `wontfix` | `evidence` | 0 evidence items. Full text is IBM Research abstract page (2,098 chars). Extraction correctly found nothing quotable. The 95%+ jailbreak success rate against commercial LLMs is in the abstract summary. | No fix. Accept 0 evidence for abstract-only sources. |
+| IBM Research / Trojan Knowledge CKA-Agent | `f09a3af6` | `wontfix` | `reading_value` | `analyst` vs expected `recommended` (importance=proven). S10 accept — crowded jailbreak paper space; without richer content or benchmark context, LLM downgrade defensible. | No fix. |
+| arXiv / smolVLA robotics poisoning | `fb755ecb` | `fixed` | `taxonomy` | Missing `TAI03_backdoor_attack` — attack uses a trigger-word to activate hidden backdoor (0% task success on trigger). TAI01 is the mechanism; TAI03 is the effect. Both apply. | Added `TAI03_backdoor_attack`. |
+
+**Duplicate note — batch 17:** CSO Online article 4193498 ingested twice under different URL slugs. `foldUrlVariants` normalises `/abs/` vs `/pdf/` for arXiv and common redirect patterns, but does not match same-domain same-article-ID different-slug variants. Consider adding a CSO Online article-ID dedup pass to the ingest pipeline if this recurs.
+
+**Trust pattern — batch 17:** THN pre-fix inflation continues (thehackernews was in MEDIA_FRAGMENTS since original list). These sources were all classified before the batch 13 validateAndTypeSource hard-cap fix landed.
+
+---
+
 ### Batch 16
 
 | Source | ID (first 8) | Status | Type | Issue | Fix applied |
