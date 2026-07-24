@@ -89,6 +89,19 @@ Issues specific to individual sources, recorded for traceability even after fix 
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `classification` | `source_type: vulnerability` — describes a demonstrated attack technique, not a CVE record. | `source_type → capability_demonstration`. |
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `data_integrity` | `full_text: 319 chars` — Jina re-fetch recovered 16,779 chars. Source is a daily roundup, not a single finding. | Re-fetched via Jina. Ran full pipeline (fanout→classify→score→evidence) via `pipelineOneSource.js` with Anthropic/Sonnet. 5 children: Friendly Fire (agentic_ai_threats/ASI05, recommended, 1 ev item) and HalluSquatting (llm_threats/LLM09, analyst, 1 ev item) passed; GhostApproval/Langflow IDOR/AI Agent Poisoning teaser correctly rejected as off-scope. 2 cross-contaminated evidence items removed from Friendly Fire child (S13). Parent `all_categories` synced. |
 
+### Batch 21
+
+| Source | ID (first 8) | Status | Type | Issue | Fix applied |
+|--------|-------------|--------|------|-------|-------------|
+| arXiv / KidnapRAG | `49c5f5ca` | `wontfix` | — | Clean. Starred. ASI01+ASI06 ✓ (Bait/Chain-Link/Mal-Ins sequential RAG poisoning). proven/recommended ✓. 5 items ✓. maturity=research accepted (lab experiments, not wild exploitation). | No action. |
+| arXiv / SMT jailbreak function-calling LLMs | `4265c735` | `wontfix` | — | Clean. LLM11+LLM01 ✓ (fabricated moderation traces exploit trusted/untrusted context blur). proven/recommended ✓. 8 items all grounded ✓. | No action. |
+| eSecurity Planet / BioShocking roundup | `7848455e` | `wontfix` | — | Repeat from batch 19. Date fixed, reading_value S10 wontfix documented. No new issues. | No action. |
+| TechTimes / PromptMink Famous Chollima | `5defb918` | `fixed` | `classification` | `source_type: adversary_adoption_signal` → importance=noise, despite the deterministic formula showing expected=realized. Active North Korean APT campaign (Famous Chollima) with confirmed in-the-wild agent compromise. S12 blind spot: adversary_adoption_signal routes through advisory→noise for confirmed operational campaigns. | `source_type → threat_intelligence`, `importance.tier → realized`. reading_value=essential already correct. |
+| TechTimes / PromptMink Famous Chollima | `5defb918` | `fixed` | `taxonomy` | `AE02_ai_social_engineering` wrong — LLMO-optimized README files target AI agent trust in npm packages, not human users. AE02 is social engineering of humans. Correct tag is `ASI04_agentic_supply_chain` (packages engineered for AI agent installation workflows). | `AE02 → ASI04_agentic_supply_chain`. Tags now: AE05+ASI04. |
+| Sysdig / JADEPUFFER primary | `4ae9d38a` | `wontfix` | — | Clean. Primary Sysdig source for JADEPUFFER. AE08+AE05 ✓, realized/essential ✓. 6 items (evidence [2]–[4] grounded=no despite quotes — minor extraction inconsistency, accepted for primary report). Added `sysdig` to SECURITY_FIRM_FRAGMENTS (distinct from `sygnia` added in batch 19). | No source fix. SECURITY_FIRM_FRAGMENTS updated. |
+
+---
+
 ### Batch 20
 
 | Source | ID (first 8) | Status | Type | Issue | Fix applied |
