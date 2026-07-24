@@ -649,12 +649,8 @@ After assigning reading_value, set the three distribution flags:
 
   essential / dashboard + library only (no newsletter):
     First arXiv paper introducing compositional backdoors that defeat local monitors —
-    first_of_kind + changes_threat_model, but the contribution requires understanding
-    multi-agent architecture to appreciate; not newsletter-readable.
-
-  essential / dashboard + library only (no newsletter):
-    OWASP LLM Top 10 initial release — canonical framework, leadership reference,
-    but too technical in structure for a newsletter without editorial translation.
+    first_of_kind + changes_threat_model, but requires understanding multi-agent architecture
+    to appreciate; not newsletter-readable.
 
   recommended / dashboard + newsletter + library:
     GTIG quarterly AI threat report with named new adversary TTPs, confirmed adversary
@@ -662,52 +658,23 @@ After assigning reading_value, set the three distribution flags:
 
   recommended / dashboard + library only (no newsletter):
     New MCP tool-poisoning technique with PoC against a named product — new_variant +
-    changes_priority, but the value requires understanding tool-calling mechanics; not
+    changes_priority, but value requires understanding tool-calling mechanics; not
     newsletter-readable without a translator.
-
-  analyst / library only:
-    arXiv paper with 150-char abstract — thin-text cap applies; body too short to verify
-    novelty regardless of how novel the title sounds.
-
-  analyst / library only:
-    arXiv paper "MemPoison: Uncovering Persistent Memory Threats and Structural Blind
-    Spots in LLM Agents" — says "we introduce a three-tier taxonomy" and "we propose
-    MemPoison, a benchmark for evaluating persistent memory poisoning." Memory poisoning
-    in LLM agents is a known attack class (variant of indirect prompt injection / data
-    poisoning); the contribution is a new taxonomy and benchmark for a known class, not
-    a new attack class. evidence_maturity=research_only. Even if the taxonomy is well-
-    executed, strategic_consequence=adds_technical_detail → analyst.
-
-  analyst / library only:
-    arXiv paper "Context Contamination in LLM Analysis of Network Security Logs: Poison
-    with Passive Prompt Injection" — "first systematic empirical study" of prompt injection
-    in SIEM/SOC log pipelines. Prompt injection is a known attack class; showing it works
-    in log analysis is new_variant (new deployment context), not first_of_kind. Showing it
-    in SIEM logs does not change the threat model (defenders already knew AI-powered log
-    analysis was susceptible). evidence_maturity=research_only → capped at recommended;
-    but without operational data on adversary adoption, strategic_consequence=changes_priority
-    at most → recommended.
 
   recommended / dashboard + library only:
     arXiv technical report from Snyk finding 76 confirmed malicious payloads in 3,984
-    real agent skill marketplace listings — this is operational data (malicious content
-    FOUND in live marketplaces), not research_only. Documents the first real-world
-    coordinated malware campaign targeting AI coding agents. Confirmed adversary adoption
-    of a known attack surface → changes_priority → recommended. (If the "first documented
-    coordinated campaign" claim is specific and sourced, could reach essential.)
+    real agent skill marketplace listings — operational data (malicious content FOUND in
+    live marketplaces), not research_only. Confirmed adversary adoption of a known attack
+    surface → changes_priority → recommended.
 
   analyst / library only:
-    AWS blog: how to implement token-exchange for multi-tenant Bedrock agents —
-    defensive-primary (implementation guide for AWS customers); attack surface is context
-    for the architectural guidance, not the primary finding.
+    arXiv paper "MemPoison: Uncovering Persistent Memory Threats in LLM Agents" —
+    introduces a taxonomy and benchmark for memory poisoning, a known attack class.
+    evidence_maturity=research_only; strategic_consequence=adds_technical_detail → analyst.
 
   analyst / library only:
-    Vendor blog: "Our Red Agent tool finds vulnerabilities in your environment" —
-    defensive-primary (product announcement); offensive capability cited as motivation only.
-
-  analyst / library only:
-    JadePuffer incident article with 188-char body, title says "First Successful LLM-Driven
-    Ransomware Attack" — thin-text cap applies unconditionally; title is not body evidence.
+    arXiv paper with 150-char abstract — thin-text cap applies unconditionally; body too
+    short to verify novelty regardless of how novel the title sounds.
 
   background / none:
     Generic "AI security threats are rising in 2026" editorial — no distinct intelligence,
@@ -723,28 +690,21 @@ Before writing the JSON, verify:
   4. Did commercial framing override real technical substance?
      (Vendor blog with original research = not marketing)
   5. Did you label reputable secondary reporting as primary?
-     (Journalist citing a vendor advisory = secondary_reporting)
+     (Journalist citing a vendor advisory = secondary_reporting, not primary)
   6. Is the AI materiality real, or is AI only in the ecosystem/company context?
   7. Is the domain classification driven by the AFFECTED SECURITY BOUNDARY, not by
      downstream product associations or who consumes the component?
-  8. Is reading_value independent of severity, trust_tier, and maturity?
-     (A severe CVE can be "analyst"; a theoretical paper can be "essential")
-  9. Did publisher prestige determine reading_value instead of content?
-     (A routine GTIG advisory is "analyst"; a novel paper from an unknown team may be "essential")
-  10. Are first_of_kind and confirmed_first_operational claims EXPLICIT in the source text,
-      not inferred from the title or topic alone? If the source does not say "first",
-      "novel", "previously unknown", or equivalent, classify as "new_variant" or "known_pattern".
-  11. Is duplicate coverage down-ranked? A second or third article covering the same finding
-      should not be "recommended" unless it adds unique detail absent from the primary.
-  12. Does recommendation_reason name the specific, distinct intelligence value — not just
-      "covers an important topic" or "from a reputable publisher"?
-  13. Did the thin-text cap apply? If the BODY TEXT (not title) is under ~300 chars,
-      reading_value must be "analyst". Did you accidentally use the title as evidence?
-      Cover the title and re-read only the body. If the body alone does not support
-      "recommended" or "essential", the title cannot save it.
-  14. Did the defensive-primary check apply? If the source's primary deliverable is a
-      defensive capability, vendor tool, or implementation guide — even if it describes
-      attacks as context — reading_value must be "analyst" or "background".
+  8. Is reading_value driven by content, not by severity, trust_tier, maturity, or publisher
+     prestige? A severe CVE can be "analyst"; a routine GTIG advisory can be "analyst";
+     a novel paper from an unknown team may be "essential".
+  9. Are first_of_kind and confirmed_first_operational claims EXPLICIT in the source text,
+     not inferred from the title or topic alone? If not stated → "new_variant" or "known_pattern".
+  10. Is duplicate coverage down-ranked? A second or third article on the same finding
+      should not be "recommended" unless it adds unique detail the primary lacks.
+  11. Did the thin-text cap apply? BODY TEXT <~300 chars → reading_value="analyst"
+      unconditionally. Title is NOT body evidence — cover it and re-read only the body.
+  12. Did the defensive-primary check apply? If the primary deliverable is a defensive
+      capability, vendor tool, or implementation guide → reading_value "analyst" or "background".
 
 ════ VERDICT ════
 
