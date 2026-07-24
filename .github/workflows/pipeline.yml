@@ -117,6 +117,7 @@ jobs:
           TAVILY_API_KEY_3:          ${{ secrets.TAVILY_API_KEY_3 }}
           TAVILY_API_KEY_4:          ${{ secrets.TAVILY_API_KEY_4 }}
           SERPAPI_API_KEY:           ${{ secrets.SERPAPI_API_KEY }}
+          EVA_API_KEY:               ${{ secrets.EVA_API_KEY }}
           WEB_DISCOVERY_ENABLED:     "1"
 
       - name: Claude web_search discovery
@@ -159,14 +160,42 @@ jobs:
           GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
 
+  # ── Job 2b: Rescrape short sources ───────────────────────────────────────────
+  # Re-fetches article text for essential/recommended sources with < 600 chars.
+  # Cascade: arXiv preprint (paywall domains) → direct → Jina → Tavily.
+  # Sources that fail all methods are purged (digest children are exempt).
+  # Runs after classify so reading_value is already set; before evidence so
+  # recovered text is available for extraction in the same pipeline run.
+  rescrape:
+    name: Rescrape short sources
+    needs: classify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Rescrape short sources + purge failures
+        run: node scripts/rescrapeShortSources.js --min-chars 600 --limit 200 --purge-failed
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          JINA_API_KEY:              ${{ secrets.JINA_API_KEY }}
+          TAVILY_API_KEY:            ${{ secrets.TAVILY_API_KEY }}
+
   # ── Job 3: L5 evidence extraction ────────────────────────────────────────────
   # Extracts structured evidence items for newly eligible sources.
   # --since-hours 26 covers sources from this run plus a buffer for clock drift.
   evidence:
     name: L5 Evidence extraction
-    needs: classify
+    needs: [classify, rescrape]
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    if: always() && needs.classify.result == 'success' && (needs.rescrape.result == 'success' || needs.rescrape.result == 'failure')
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

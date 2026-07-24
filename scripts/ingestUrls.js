@@ -202,6 +202,18 @@ const SOURCES = [
     candidate_domain: "ai_enabled_threats",
     note: "OpenAI disruption of 5 covert influence operations from Russia, China, Iran, Israel",
   },
+
+  // ── Batch 3 ──────────────────────────────────────────────────────────────────
+  {
+    url:            "https://www.bleepingcomputer.com/news/security/new-dolphin-x-malware-uses-ai-to-rank-high-value-targets/",
+    title:          "New Dolphin-X malware uses AI to rank high-value targets",
+    publisher:      "BleepingComputer",
+    trust_tier:     "medium",
+    source_type:    "news_article",
+    date_published: "2026-07-23",
+    candidate_domain: "ai_enabled_threats",
+    note: "AI-enabled malware using LLMs to score and prioritise victims for follow-on attacks",
+  },
 ];
 
 // ── Main ─────────────────────────────────────────────────────────────────────
