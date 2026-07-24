@@ -63,7 +63,7 @@ Issues specific to individual sources, recorded for traceability even after fix 
 | Unit 42 IR Report | `4902edd0` | `fixed` | `evidence` | Children `i1`–`i4` had 0 evidence despite `essential` reading_value. | Extracted 2026-07-23 via Gemini. i1 (AI-Enabled Ransomware) and i2 (AI-Assisted Social Engineering) each got 1 item. i3/i4 returned malformed Gemini JSON (thin excerpt content); 0 items acceptable for those sections. |
 | HF Breach – Abstract Security | `de5f5441` | `fixed` | `classification` | Originally `ai_enabled_threats` (correct); incorrectly changed to `agentic_ai_threats` in batch 1 analysis; reverted. | Reverted to `ai_enabled_threats / AE08 + TAI10 + AE05`. |
 | HF Breach – Abstract Security | `de5f5441` | `fixed` | `date` | `date_published: 2026-07-22` off by one day; text says "Published on: Jul 21, 2026". | `date_published → 2026-07-21`, `date_confidence → exact`. |
-| HF/OpenAI – SecurityWeek | `0d7013d5` | `open` | `data_integrity` | "GPT-5.6 Sol" is an unrecognised model name. URL returns 403 (bot-blocked, not confirmed dead). Possible synthetic source. | `needs_review → true`. Awaiting manual browser verification of URL. |
+| HF/OpenAI – SecurityWeek | `0d7013d5` | `fixed` | `data_integrity` | "GPT-5.6 Sol" is an unrecognised model name. URL returns 403 (bot-blocked, not confirmed dead). Possible synthetic source. | Confirmed real 2026-07-24 by user manual browser check. `needs_review → false`. |
 | Sygnia AI-Accelerated Attack | `1fa3bfa0` | `fixed` | `data_integrity` | `is_digest: true` false positive on press release. | `is_digest → false`. |
 | Sygnia AI-Accelerated Attack | `1fa3bfa0` | `fixed` | `maturity` | `maturity_level` not set. | `intelligence.maturity_level → observed`. |
 
@@ -71,8 +71,7 @@ Issues specific to individual sources, recorded for traceability even after fix 
 
 | Source | ID (first 8) | Status | Type | Issue | Fix applied |
 |--------|-------------|--------|------|-------|-------------|
-| CRS Policy Brief | `f5b72df5` | `fixed` | `trust` | `trust_tier: medium` — CRS is a U.S. government agency; should be `primary`. | `trust_tier → primary`. |
-| CRS Policy Brief | `f5b72df5` | `open` | `evidence` | No evidence extracted; not yet classified. | Awaiting classify run. |
+| CRS Policy Brief | `f5b72df5` | `fixed` | `data_integrity` | Deleted 2026-07-24 — no evidence extracted, no classify run completed, not worth keeping without content. | Deleted from DB. |
 | LiteLLM CVE (CSA) | `0b52fef6` | `fixed` | `classification` | `source_type: vulnerability` — CISA KEV-confirmed active exploitation makes this `incident`. Classifier then routed to `unclear_or_adjacent` via AI Infrastructure Doctrine (no active-exploitation exception). | `source_type → incident`; manual override to `llm_threats / LLM03 / realized / essential / operational`. See S6. |
 | Meta Instagram hack | `07cd9713` | `wontfix` | `classification` | Classified `unclear_or_adjacent` — LLM correctly identified AI materiality as incidental (generic email-validation bypass, not an AI-specific exploit). | No fix; classification correct. |
 | Hades Campaign | `464bc4ee` | `fixed` | `classification` | `ai_enabled_threats` — should be `traditional_ai_threats / TAI10` (ML package supply chain victim). Classifier misrouted despite prompt rules. | `main_category → traditional_ai_threats`, `tags → [TAI10, AE06]`, `maturity → operational`. See S7. |
