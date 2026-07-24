@@ -89,6 +89,24 @@ Issues specific to individual sources, recorded for traceability even after fix 
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `classification` | `source_type: vulnerability` — describes a demonstrated attack technique, not a CVE record. | `source_type → capability_demonstration`. |
 | VulnIntel Report (symlink) | `5fb5493f` | `fixed` | `data_integrity` | `full_text: 319 chars` — Jina re-fetch recovered 16,779 chars. Source is a daily roundup, not a single finding. | Re-fetched via Jina. Ran full pipeline (fanout→classify→score→evidence) via `pipelineOneSource.js` with Anthropic/Sonnet. 5 children: Friendly Fire (agentic_ai_threats/ASI05, recommended, 1 ev item) and HalluSquatting (llm_threats/LLM09, analyst, 1 ev item) passed; GhostApproval/Langflow IDOR/AI Agent Poisoning teaser correctly rejected as off-scope. 2 cross-contaminated evidence items removed from Friendly Fire child (S13). Parent `all_categories` synced. |
 
+### Batch 15
+
+| Source | ID (first 8) | Status | Type | Issue | Fix applied |
+|--------|-------------|--------|------|-------|-------------|
+| NSFOCUS/Security Boulevard / JadePuffer | `1cc99f24` | `fixed` | `trust` | `trust_tier: high` — Security Boulevard is a community contributor platform (any vendor can post); not a primary security firm. NSFOCUS is the content author but the domain determines classification. Pre-fix trust inflation via connector-assigned high + fallback promotion. | `trust_tier → medium`. Added `securityboulevard` + `hipaajournal` to MEDIA_FRAGMENTS in publisherClass.js. |
+| NSFOCUS/Security Boulevard / JadePuffer | `1cc99f24` | `wontfix` | `data_integrity` | HTTP 403 (bot-blocked, not dead). Content fully stored (14,506 chars). IS_REPORT=yes is an S4 false positive (page chrome with navigation headings) — no fan-out, no harm. | No action. |
+| Infosecurity Magazine / Indirect PI | `d94dbce3` | `fixed` | `trust` | `trust_tier: high` — `infosecurity` already in MEDIA_FRAGMENTS; source predates the batch 13 trust fix. | `trust_tier → medium`. |
+| Infosecurity Magazine / Indirect PI | `d94dbce3` | `wontfix` | `maturity` | `observed` vs det=`operational`. Secondary media coverage of Zscaler ThreatLabz primary research. LLM downgrade justified. | No fix. |
+| arXiv / Agent Data Injection (ADI) | `8b82ec14` | `wontfix` | — | Clean. Novel ADI attack class (metadata confusion ≠ instruction injection). `agentic_ai_threats / ASI02+LLM01`, proven/recommended ✓. 8 items, all grounded, precise ASR percentages. Best evidence in the batch. | No action. |
+| HIPAA Journal / JadePuffer | `a7efd37f` | `wontfix` | `data_integrity` | HTTP 403 (bot-blocked). Content stored (5,230 chars). trust=medium already correct (hipaajournal → "other" class). Added `hipaajournal` to MEDIA_FRAGMENTS for future sources. | No action on source. MEDIA_FRAGMENTS updated. |
+| Security Affairs / Hidden Web Prompts | `118c05d7` | `wontfix` | — | Clean. Secondary coverage of Zscaler ThreatLabz indirect PI research (same story as `d94dbce3`). trust=medium ✓, essential ✓. 9 items, all grounded. | No action. |
+
+**Cross-batch note — batch 15:** Sources 1+4 are both secondary coverage of Sysdig JadePuffer (plus TechTimes from batch 13 = 3 secondary sources on same incident). Sources 2+5 are both secondary coverage of Zscaler ThreatLabz indirect PI research. Duplicate secondary coverage is expected for high-signal incidents and does not require deduplication.
+
+**Trust pattern — batch 15:** Two more pre-fix trust inflation cases (Security Boulevard, Infosecurity Magazine). Both corrected. Added `securityboulevard` and `hipaajournal` to MEDIA_FRAGMENTS to prevent recurrence on future ingestions.
+
+---
+
 ### Batch 14
 
 | Source | ID (first 8) | Status | Type | Issue | Fix applied |
