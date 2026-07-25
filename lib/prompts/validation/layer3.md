@@ -298,15 +298,29 @@ Classify what kind of intelligence artefact this source is. Choose one:
                              but are exploit_disclosure when they include the exploit mechanism
                              in full technical detail (e.g. which attribute to manipulate,
                              what code executes, what is exfiltrated).
+                             CRITICAL FAILURE MODE: researcher-authored security blog posts
+                               that document the FULL ATTACK CHAIN they ran themselves are
+                               exploit_disclosure, NOT vulnerability — even when a patch is
+                               mentioned and even when the article reads like a disclosure.
+                               Ask: "Does the source show me HOW the attack works step by
+                               step?" If YES → exploit_disclosure.
                              EXAMPLES → exploit_disclosure:
                                • CVE-2026-4372 article showing _attn_implementation_internal
                                  manipulation → kernel download → RCE (full mechanism shown)
                                • CVE-2026-42271 article showing command injection chain
                                  + auth bypass + post-exploit credential harvesting steps
+                               • Microsoft Threat Intelligence blog showing: PI via HTML
+                                 comment in GitHub issue → agent Read tool accesses
+                                 /proc/self/environ → CI/CD secrets exfiltrated + XSS
+                                 injected into docs → patch confirmed in v2.1.128.
+                                 Full chain shown by the researcher who ran it = exploit_disclosure
+                                 NOT vulnerability (even though a patch is referenced)
                              EXAMPLES → vulnerability (NOT exploit_disclosure):
                                • "Researchers found CVE-XXXX in LangChain allowing SSRF;
                                  patch available" (no exploit chain shown)
                                • NVD advisory with CVSS score and affected versions only
+                               • Vendor patch note: "version X fixes an injection flaw
+                                 that could allow..." (no reproduction steps shown)
   incident                 — a documented real-world attack, breach, or abuse
   threat_intelligence      — actor TTPs, IOCs, attribution, campaign tracking,
                              OR a compiled report synthesizing findings from the

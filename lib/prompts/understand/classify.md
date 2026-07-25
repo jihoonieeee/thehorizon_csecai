@@ -792,6 +792,20 @@ out neighbouring tags. Assign the single primary_tag that names the core threat.
       run code, write to persistent memory, or change permissions — use the ASI tag
       as primary and LLM01 as secondary (it records the injection vector). LLM01
       stays primary only when harm is textual.
+    CRITICAL FAILURE MODE — do NOT apply LLM01 to:
+      • RAG corpus poisoning (planting attacker documents in the knowledge base so
+        future queries retrieve malicious content) → LLM04, not LLM01. LLM01 requires
+        a malicious instruction injected at INFERENCE TIME into the prompt/context.
+        Poisoning the corpus is a pre-retrieval attack; it affects many future queries
+        and operates on the data layer, not the prompt layer.
+      • Federated RAG profile forging (malicious clients sending false semantic profiles
+        to hijack query routing) → LLM04 + LLM08, not LLM01. No prompt is injected.
+      • Knowledge graph extraction / structural knowledge stealing (GraphSteal-type
+        attacks that query an LLM to reconstruct hidden data) → LLM02 + LLM08, not LLM01.
+        Reconstruction queries are not injections; they exploit output to infer structure.
+      KEY TEST: "Did the attacker inject a malicious instruction into the prompt/context
+        that runs at inference time?" If YES → LLM01. If the attack operates on the
+        DATA LAYER (corpus, index, routing profiles) BEFORE retrieval → LLM04.
 
   LLM02_sensitive_info_disclosure
     WHAT: The LLM or its application exposes confidential data in its outputs.
@@ -849,6 +863,19 @@ out neighbouring tags. Assign the single primary_tag that names the core threat.
       one-shot override (LLM01).
     ✗ NOT ASI06: LLM training/RAG corpus (LLM04) vs an AGENT's session-specific or
       long-term persistent memory store (ASI06).
+    CRITICAL FAILURE MODE — do NOT apply LLM04 to:
+      • Knowledge graph / RAG structural EXTRACTION (e.g. GraphSteal recovering the
+        hidden knowledge graph via adaptive queries) → LLM02 + LLM08, not LLM04.
+        Extraction reads data out; poisoning writes malicious data in. Opposite directions.
+      • Model extraction / knowledge stealing (querying a model to clone its behaviour
+        or reconstruct its training data) → TAI05/LLM02, not LLM04. Extraction attacks
+        exploit the model's outputs, not its training pipeline.
+      • Routing hijacking in federated RAG (forging semantic profiles to attract queries)
+        → LLM04 is acceptable if the malicious routing returns poisoned content, but the
+        PRIMARY tag is LLM08 (embedding/routing weakness), not LLM04.
+      KEY TEST: "Is the attacker WRITING malicious content into a data store?" If YES →
+        LLM04 is correct. If the attacker is READING/EXTRACTING data via model queries →
+        LLM02 or TAI05. If the attacker is manipulating ROUTING/EMBEDDINGS → LLM08.
 
   LLM05_improper_output_handling
     WHAT: The APPLICATION (not the model itself) trusts the model's output and passes

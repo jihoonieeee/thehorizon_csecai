@@ -25,6 +25,10 @@ SOURCE:
   publisher: {{publisher}}
   text:      {{text}}
 
+CANONICAL TAXONOMY — every primary_tag MUST be an exact ID from this list:
+
+{{taxonomyBlock}}
+
 KNOWN MISCLASSIFICATION PATTERNS — look for these specifically:
   1. TAI10_ai_supply_chain_compromise on generic software CVEs (JWT, OAuth, Docker, CI/CD, npm)
      with NO AI model/weights/ML library as the specific compromised artifact
@@ -36,6 +40,9 @@ KNOWN MISCLASSIFICATION PATTERNS — look for these specifically:
      in AI platforms where the bug is NOT exploitable via LLM-specific attack surface
   5. Any category assigned to content that is primarily a product announcement,
      press release, or market report with no threat finding
+  6. primary_tags containing IDs not in the CANONICAL TAXONOMY above
+     (stale v9 names like AE04_ai_exploit_development, ASI01_goal_hijacking,
+     AE03_ai_vulnerability_discovery, TAI02_model_backdoor, etc.)
 
 Return JSON:
 {

@@ -1,0 +1,8 @@
+{
+  "page": 5,
+  "batch": 35,
+  "totalDone": 191,
+  "completed": true,
+  "lastRun": "2026-07-25T00:00:00.000Z",
+  "note": "Corpus fully audited. All 968 sources processed across pages 1-5 (p1 manual, p2/b18+ through p5/b34 automated)."
+}

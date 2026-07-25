@@ -31,6 +31,13 @@ RESEARCH
   Benchmark default: Jailbreak evaluations, agent benchmarks, MCP evaluations, and other benchmark
   papers default to RESEARCH unless they contain explicit evidence of real-world exploitation,
   production system impact, or independent adversary observation outside the benchmark.
+  EXCEPTION — real-model attacks: If a paper attacks real commercial models or real deployed
+  systems (GPT-4, Claude, Gemini, live production APIs, real mobile apps, real Graph RAG
+  deployments) and demonstrates a working technique with measured results, classify as DEMONSTRATED
+  even if framed as a "benchmark evaluation". The benchmark framing describes the task dataset,
+  not the attack target. Attacking a real frontier model in a controlled experiment = DEMONSTRATED.
+  The RESEARCH default applies when the paper targets synthetic/toy models, simulated environments,
+  or its own purpose-built evaluation infrastructure — not when it runs against real deployed AI.
   Example: A paper showing that differential privacy in federated learning can be exploited to hide
            backdoor signals, with experiments on four benchmark datasets.
 
