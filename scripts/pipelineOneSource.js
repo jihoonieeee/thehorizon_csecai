@@ -16,7 +16,7 @@
  *   L5   extractAllEvidence           — evidence items saved to evidence table
  */
 
-if (!process.env.LLM_PROVIDER_ORDER) process.env.LLM_PROVIDER_ORDER = "gemini";
+if (!process.env.LLM_PROVIDER_ORDER) process.env.LLM_PROVIDER_ORDER = "anthropic";
 
 import "dotenv/config";
 import { createClient }              from "@supabase/supabase-js";
