@@ -12,14 +12,22 @@ name: Pipeline — L1–L5 + Insights
 # both finish, so it sees all sources from both paths in one pass.
 #
 # Schedule (all times UTC):
-#   22:00 daily           — connector-ingest (3d) + web-ingest + classify + evidence
-#   22:00 Monday          — connector-ingest (7d) + web-ingest + classify + evidence + weekly insights
-#   22:00 1st of month    — connector-ingest (30d) + web-ingest + classify + evidence + monthly insights
+#   04:00 daily  — backup run (arXiv low-traffic; GHA drops ~1 cron/day on Hobby plan)
+#   10:00 daily  — backup run (second window, 8h before primary)
+#   22:00 daily  — primary run (3d window)
+#   22:00 Monday — primary run (7d window) + weekly insights
+#   22:00 1st of month    — primary run (30d window) + monthly insights
 #   22:00 quarterly 1st   — same as monthly + quarterly insights
+#
+# Backup runs (04:00, 10:00) use the same 3-day window as the daily primary.
+# They are idempotent: classify/evidence gate on NULL fields so a backup that
+# finds nothing to do exits in seconds.
 
 on:
   schedule:
-    - cron: '0 22 * * *'          # daily
+    - cron: '0 4 * * *'           # daily backup — arXiv low-traffic window
+    - cron: '0 10 * * *'          # daily backup — second window
+    - cron: '0 22 * * *'          # daily primary
     - cron: '0 22 * * 1'          # Monday  — 7-day window
     - cron: '0 22 1 * *'          # 1st of month — 30-day window
     - cron: '0 22 1 1,4,7,10 *'   # quarterly 1st
@@ -142,7 +150,7 @@ jobs:
     if: |
       always() &&
       needs.connector-ingest.result == 'success' &&
-      (needs.web-ingest.result == 'success' || needs.web-ingest.result == 'skipped')
+      (needs.web-ingest.result == 'success' || needs.web-ingest.result == 'skipped' || needs.web-ingest.result == 'cancelled')
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -229,7 +237,11 @@ jobs:
     timeout-minutes: 15
     if: |
       always() && needs.evidence.result == 'success' && (
-        (github.event_name == 'schedule' && github.event.schedule != '0 22 * * *') ||
+        (github.event_name == 'schedule' && (
+          github.event.schedule == '0 22 * * 1' ||
+          github.event.schedule == '0 22 1 * *' ||
+          github.event.schedule == '0 22 1 1,4,7,10 *'
+        )) ||
         (github.event_name == 'workflow_dispatch' && github.event.inputs.run_insights != '')
       )
     steps:
