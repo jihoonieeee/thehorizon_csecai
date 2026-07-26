@@ -11,26 +11,36 @@ name: Pipeline — L1–L5 + Insights
 # connector-ingest and web-ingest run in parallel. classify starts only after
 # both finish, so it sees all sources from both paths in one pass.
 #
-# Schedule (all times UTC):
-#   04:00 daily  — backup run (arXiv low-traffic; GHA drops ~1 cron/day on Hobby plan)
-#   10:00 daily  — backup run (second window, 8h before primary)
-#   22:00 daily  — primary run (3d window)
-#   22:00 Monday — primary run (7d window) + weekly insights
-#   22:00 1st of month    — primary run (30d window) + monthly insights
-#   22:00 quarterly 1st   — same as monthly + quarterly insights
+# Schedule (all times UTC; SGT = UTC+8):
+#   04:00 UTC daily  — pre-ingest buffer (12:00 SGT; arXiv low-traffic window)
+#   16:00 UTC daily  — primary run (00:00 SGT midnight; 3d window)
+#   20:00 UTC daily  — backup run (04:00 SGT; fires 4h after primary, catches GHA drops)
 #
-# Backup runs (04:00, 10:00) use the same 3-day window as the daily primary.
-# They are idempotent: classify/evidence gate on NULL fields so a backup that
-# finds nothing to do exits in seconds.
+#   16:00 UTC Monday — primary weekly run (7d window) + weekly insights
+#   20:00 UTC Monday — backup weekly run (same day, only does real work if primary failed)
+#
+#   16:00 UTC 1st of month  — primary monthly run (30d window) + monthly insights
+#   20:00 UTC 1st of month  — backup monthly run (same day)
+#
+#   16:00 UTC quarterly 1st — same as monthly + quarterly insights
+#   20:00 UTC quarterly 1st — backup quarterly run (same day)
+#
+# Backup runs are idempotent: classify/evidence gate on NULL fields (exit in
+# seconds if nothing to do), and insights upsert on window_key × category
+# (skip existing rows). A backup that follows a successful primary costs ~5s
+# of runner time and makes zero LLM calls.
 
 on:
   schedule:
-    - cron: '0 4 * * *'           # daily backup — arXiv low-traffic window
-    - cron: '0 10 * * *'          # daily backup — second window
-    - cron: '0 22 * * *'          # daily primary
-    - cron: '0 22 * * 1'          # Monday  — 7-day window
-    - cron: '0 22 1 * *'          # 1st of month — 30-day window
-    - cron: '0 22 1 1,4,7,10 *'   # quarterly 1st
+    - cron: '0 4 * * *'           # pre-ingest buffer (12:00 SGT, arXiv low-traffic)
+    - cron: '0 16 * * *'          # daily primary (midnight SGT)
+    - cron: '0 20 * * *'          # daily backup (04:00 SGT, 4h after primary)
+    - cron: '0 16 * * 1'          # Monday primary — 7-day window + weekly insights
+    - cron: '0 20 * * 1'          # Monday backup — weekly insights (same day)
+    - cron: '0 16 1 * *'          # 1st of month primary — 30-day window + monthly insights
+    - cron: '0 20 1 * *'          # 1st of month backup — monthly insights (same day)
+    - cron: '0 16 1 1,4,7,10 *'   # quarterly 1st primary — monthly + quarterly insights
+    - cron: '0 20 1 1,4,7,10 *'   # quarterly 1st backup — quarterly insights (same day)
   workflow_dispatch:
     inputs:
       days:
@@ -75,9 +85,13 @@ jobs:
         run: |
           if [ -n "${{ github.event.inputs.days }}" ]; then
             echo "days=${{ github.event.inputs.days }}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event.schedule }}" = "0 22 1 * *" ] || [ "${{ github.event.schedule }}" = "0 22 1 1,4,7,10 *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 16 1 * *" ] || \
+               [ "${{ github.event.schedule }}" = "0 20 1 * *" ] || \
+               [ "${{ github.event.schedule }}" = "0 16 1 1,4,7,10 *" ] || \
+               [ "${{ github.event.schedule }}" = "0 20 1 1,4,7,10 *" ]; then
             echo "days=30" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event.schedule }}" = "0 22 * * 1" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 16 * * 1" ] || \
+               [ "${{ github.event.schedule }}" = "0 20 * * 1" ]; then
             echo "days=7" >> "$GITHUB_OUTPUT"
           else
             echo "days=3" >> "$GITHUB_OUTPUT"
@@ -230,6 +244,10 @@ jobs:
   # ── Job 4: Dashboard insights ─────────────────────────────────────────────────
   # Per-category bullet-point insights. Idempotent by window_key × category.
   # Skipped on the plain daily cron; only runs weekly/monthly/quarterly.
+  # Backup crons (20:00 UTC) run on the same day as their primary (16:00 UTC):
+  # if the primary succeeded, all rows already exist and every category is skipped
+  # in seconds with zero LLM calls. If the primary was dropped by GHA, the backup
+  # runs for real.
   insights:
     name: Dashboard insights
     needs: evidence
@@ -238,9 +256,12 @@ jobs:
     if: |
       always() && needs.evidence.result == 'success' && (
         (github.event_name == 'schedule' && (
-          github.event.schedule == '0 22 * * 1' ||
-          github.event.schedule == '0 22 1 * *' ||
-          github.event.schedule == '0 22 1 1,4,7,10 *'
+          github.event.schedule == '0 16 * * 1' ||
+          github.event.schedule == '0 20 * * 1' ||
+          github.event.schedule == '0 16 1 * *' ||
+          github.event.schedule == '0 20 1 * *' ||
+          github.event.schedule == '0 16 1 1,4,7,10 *' ||
+          github.event.schedule == '0 20 1 1,4,7,10 *'
         )) ||
         (github.event_name == 'workflow_dispatch' && github.event.inputs.run_insights != '')
       )
@@ -253,7 +274,11 @@ jobs:
       - run: npm ci
 
       - name: Weekly insights
-        if: github.event.schedule == '0 22 * * 1' || contains(github.event.inputs.run_insights, 'week') || github.event.inputs.run_insights == 'all'
+        if: |
+          github.event.schedule == '0 16 * * 1' ||
+          github.event.schedule == '0 20 * * 1' ||
+          contains(github.event.inputs.run_insights, 'week') ||
+          github.event.inputs.run_insights == 'all'
         run: node scripts/generateDashboardInsights.js --window week
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
@@ -261,7 +286,13 @@ jobs:
           ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Monthly insights
-        if: github.event.schedule == '0 22 1 * *' || github.event.schedule == '0 22 1 1,4,7,10 *' || contains(github.event.inputs.run_insights, 'month') || github.event.inputs.run_insights == 'all'
+        if: |
+          github.event.schedule == '0 16 1 * *' ||
+          github.event.schedule == '0 20 1 * *' ||
+          github.event.schedule == '0 16 1 1,4,7,10 *' ||
+          github.event.schedule == '0 20 1 1,4,7,10 *' ||
+          contains(github.event.inputs.run_insights, 'month') ||
+          github.event.inputs.run_insights == 'all'
         run: node scripts/generateDashboardInsights.js --window month
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
@@ -269,7 +300,11 @@ jobs:
           ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Quarterly insights
-        if: github.event.schedule == '0 22 1 1,4,7,10 *' || contains(github.event.inputs.run_insights, 'quarter') || github.event.inputs.run_insights == 'all'
+        if: |
+          github.event.schedule == '0 16 1 1,4,7,10 *' ||
+          github.event.schedule == '0 20 1 1,4,7,10 *' ||
+          contains(github.event.inputs.run_insights, 'quarter') ||
+          github.event.inputs.run_insights == 'all'
         run: node scripts/generateDashboardInsights.js --window quarter
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
