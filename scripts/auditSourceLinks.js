@@ -68,12 +68,32 @@ for (const r of rows) {
   const tk = titleKey(r.title);
   if (tk.length > 12) { (byTitle.get(tk) || byTitle.set(tk, []).get(tk)).push(r); }
 }
-const urlDupeGroups   = [...byUrl.values()].filter(g => g.length > 1);
+// URL-variant duplicates: same canonical URL AND same title.
+// Same URL + different titles = digest children (fan-out from a roundup/digest
+// article into multiple claim-focused rows) — these are NEVER purged.
+const urlDupeGroups = [...byUrl.values()].filter(g => {
+  if (g.length <= 1) return false;
+  const titles = new Set(g.map(r => titleKey(r.title)));
+  return titles.size === 1;  // all same title → true URL variant, safe to deduplicate
+});
+// Same URL, different titles = digest children. Report only, never purge.
+const digestChildGroups = [...byUrl.values()].filter(g => {
+  if (g.length <= 1) return false;
+  const titles = new Set(g.map(r => titleKey(r.title)));
+  return titles.size > 1;
+});
 const titleDupeGroups = [...byTitle.values()].filter(g => g.length > 1 &&
   new Set(g.map(r => urlKey(r.url))).size > 1);   // distinct URLs only
 
 console.log(`URL-variant duplicate groups: ${urlDupeGroups.length} (${urlDupeGroups.reduce((s,g)=>s+g.length-1,0)} redundant rows)`);
 for (const g of urlDupeGroups.slice(0, 15)) console.log(`  • ${g.length}× ${urlKey(g[0].url)}`);
+if (digestChildGroups.length > 0) {
+  console.log(`\nDigest-child groups (same URL, different titles — never purged): ${digestChildGroups.length}`);
+  for (const g of digestChildGroups.slice(0, 5)) {
+    console.log(`  • ${g.length}× ${urlKey(g[0].url)}`);
+    for (const r of g.slice(0, 3)) console.log(`       "${(r.title||"").slice(0, 70)}"`);
+  }
+}
 console.log(`\nSame-title / different-URL groups (report only): ${titleDupeGroups.length}`);
 for (const g of titleDupeGroups.slice(0, 20)) {
   console.log(`  • "${(g[0].title||"").slice(0,60)}"`);
