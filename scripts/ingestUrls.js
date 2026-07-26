@@ -203,6 +203,38 @@ const SOURCES = [
     note: "OpenAI disruption of 5 covert influence operations from Russia, China, Iran, Israel",
   },
 
+    // ── GTIG AI Threat Tracker reports (re-ingested after link audit deletion) ──
+  {
+    url:            "https://cloud.google.com/blog/topics/threat-intelligence/advances-in-threat-actor-use-of-ai",
+    title:          "GTIG AI Threat Tracker: Advances in Threat Actor Use of AI",
+    publisher:      "Google Threat Intelligence Group",
+    trust_tier:     "primary",
+    source_type:    "threat_intelligence",
+    date_published: "2025-04-01",
+    candidate_domain: "ai_enabled_threats",
+    note: "GTIG quarterly report: APT use of Gemini, AI-assisted malware, nation-state adoption — digest with multiple findings",
+  },
+  {
+    url:            "https://cloud.google.com/blog/topics/threat-intelligence/ai-threat-tracker-distillation-and-experimentation",
+    title:          "GTIG AI Threat Tracker: Distillation, Experimentation, and Exploitation",
+    publisher:      "Google Threat Intelligence Group",
+    trust_tier:     "primary",
+    source_type:    "threat_intelligence",
+    date_published: "2025-01-01",
+    candidate_domain: "ai_enabled_threats",
+    note: "GTIG quarterly report: distillation attacks, LLM experimentation by APTs, supply chain exploitation — digest",
+  },
+  {
+    url:            "https://cloud.google.com/blog/topics/threat-intelligence/ai-vulnerability-exploitation-initial-access",
+    title:          "GTIG: AI Vulnerability Exploitation and Initial Access",
+    publisher:      "Google Threat Intelligence Group",
+    trust_tier:     "primary",
+    source_type:    "threat_intelligence",
+    date_published: "2025-07-01",
+    candidate_domain: "ai_enabled_threats",
+    note: "GTIG report: AI-assisted vulnerability research, exploitation chains, and initial access techniques — digest with 10+ findings",
+  },
+
   // ── Batch 3 ──────────────────────────────────────────────────────────────────
   {
     url:            "https://www.bleepingcomputer.com/news/security/new-dolphin-x-malware-uses-ai-to-rank-high-value-targets/",

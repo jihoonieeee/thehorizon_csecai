@@ -25,7 +25,10 @@ import { isUrlReachable } from "../lib/pipeline/validation/urlSafety.js";
 // 404/410/DNS-failure, null for anything transient (timeout, 5xx, rate-limit).
 const urlIsBroken = async (url) => (await isUrlReachable(url, 8000)) === false;
 
-const EXECUTE = process.argv.includes("--execute");
+// --execute  : delete dead links only (confirmed 404/410/DNS, never URL-variant dupes)
+// --purge    : delete both dead links AND URL-variant duplicates (use with caution)
+const EXECUTE = process.argv.includes("--execute") || process.argv.includes("--purge");
+const PURGE_DUPES = process.argv.includes("--purge");
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const TRUST_RANK = { primary: 4, high: 3, medium: 2, low: 1, unknown: 0 };
@@ -133,16 +136,31 @@ for (const g of urlDupeGroups) {
   for (const r of g) if (r.id !== keep.id) toDelete.set(r.id, toDelete.get(r.id) || "url_dupe");
 }
 
-console.log(`\n── PLAN ──`);
-console.log(`  delete ${[...toDelete.values()].filter(v=>v==="dead").length} dead-link rows`);
-console.log(`  delete ${[...toDelete.values()].filter(v=>v==="url_dupe").length} URL-variant duplicate rows`);
+// Build the deletion set based on mode:
+//   default / --execute : dead links only
+//   --purge             : dead links + URL-variant dupes
+const deadIds = new Set([...toDelete.entries()].filter(([,v])=>v==="dead").map(([k])=>k));
+const dupeIds = new Set([...toDelete.entries()].filter(([,v])=>v==="url_dupe").map(([k])=>k));
 
-if (!EXECUTE) { console.log(`\n[dry-run] nothing deleted. Re-run with --execute to purge.`); process.exit(0); }
+console.log(`\n── PLAN ──`);
+console.log(`  dead-link rows:       ${deadIds.size}  (deleted by --execute or --purge)`);
+console.log(`  URL-variant dupes:    ${dupeIds.size}  (flagged; only deleted by --purge)`);
+console.log(`  digest-child groups:  ${digestChildGroups.length}  (never deleted — different titles, same URL)`);
+
+if (!EXECUTE) {
+  console.log(`\n[dry-run] nothing deleted.`);
+  console.log(`  --execute  delete dead links only (safe)`);
+  console.log(`  --purge    delete dead links + URL-variant dupes (review first!)`);
+  process.exit(0);
+}
 
 // ── Execute ───────────────────────────────────────────────────────────────────
-const ids = [...toDelete.keys()];
+const ids = PURGE_DUPES ? [...deadIds, ...dupeIds] : [...deadIds];
+if (!ids.length) { console.log("\nNothing to delete."); process.exit(0); }
+
+console.log(`\nDeleting ${ids.length} sources (${deadIds.size} dead${PURGE_DUPES ? ` + ${dupeIds.size} dupes` : ""})…`);
+
 // Delete evidence first (FK constraint), then sources.
-// Delete evidence by source_id — evidence_id is not globally unique.
 let evDel = 0;
 for (let i = 0; i < ids.length; i += 100) {
   const batch = ids.slice(i, i + 100);
