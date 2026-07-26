@@ -85,6 +85,7 @@ jobs:
           GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
           CRON_SECRET:               ${{ secrets.CRON_SECRET }}
+          ARXIV_INITIAL_DELAY_MS:    "90000"
 
   # ── Job 1b: Web discovery ingest ─────────────────────────────────────────────
   # Runs Tavily/SerpAPI + sitemaps, then Claude web_search.
@@ -93,7 +94,8 @@ jobs:
   web-ingest:
     name: Web discovery ingest
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 55
+    continue-on-error: true
     if: github.event.inputs.skip_web_ingest != 'true'
     steps:
       - uses: actions/checkout@v4
@@ -126,6 +128,7 @@ jobs:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
           WEB_DISCOVERY_ENABLED:     "1"
 
   # ── Job 2: L4a–f classify ────────────────────────────────────────────────────
