@@ -62,22 +62,33 @@ async function dispatchGitHubWorkflow({ window: win }) {
 // (SGT-anchored) inside scripts/generateSlides.js — see getCompletedPeriodWindow.
 const SLIDE_WINDOWS = ["month", "quarter", "year"];
 
-function isAuthorized(req) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return true;
-  const auth = req.headers.authorization || "";
-  // GEN_TOKEN: separate rotatable token, baked into the frontend, that unlocks
-  // ONLY the generation endpoints — never the rest of the admin surface.
+async function isAuthorized(req) {
+  const secret   = process.env.CRON_SECRET;
   const genToken = process.env.GEN_TOKEN;
-  return (
-    auth === `Bearer ${secret}` ||
-    (genToken && auth === `Bearer ${genToken}`) ||
-    req.headers["x-vercel-cron"] === "1"
-  );
+  const auth     = req.headers.authorization || "";
+
+  if (!secret) return true;
+  if (auth === `Bearer ${secret}`) return true;
+  if (genToken && auth === `Bearer ${genToken}`) return true;
+  if (req.headers["x-vercel-cron"] === "1") return true;
+
+  // Supabase user session JWT (any logged-in user may access reports)
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (token) {
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabaseAdmin = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    if (!error && user) return true;
+  }
+
+  return false;
 }
 
 export default async function handler(req, res) {
-  if (!isAuthorized(req)) {
+  if (!await isAuthorized(req)) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 

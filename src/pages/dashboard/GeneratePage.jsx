@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { getBestToken, getAccessLevel, onAuthChange } from "../../auth.js";
+import { useAuth } from "../../AuthContext.jsx";
+import { getSessionToken } from "../../auth.js";
 
 // Reports (slide decks + newsletters) are pre-generated on a schedule by GitHub
 // Actions (see .github/workflows/generate-slides.yml + generate-newsletter.yml).
@@ -388,12 +389,9 @@ const TABS = [
 ];
 
 export function GeneratePage() {
-  const [tab,   setTab]   = useState("slides");
-  const [level, setLevel] = useState(getAccessLevel);
-
-  useEffect(() => onAuthChange(() => setLevel(getAccessLevel())), []);
-
-  const token = getBestToken();
+  const session     = useAuth();
+  const [tab, setTab] = useState("slides");
+  const token = getSessionToken(session);
 
   return (
     <div style={{ maxWidth: 620, margin: "0 auto", padding: "48px 24px" }}>
@@ -413,43 +411,31 @@ export function GeneratePage() {
         </p>
       </div>
 
-      {level === "public" ? (
-        <div style={{
-          padding: "40px 24px", textAlign: "center",
-          border: "1px dashed var(--border)", borderRadius: 12,
-          color: "var(--text-tertiary)", fontSize: "0.88rem", lineHeight: 1.7,
-        }}>
-          <div style={{ fontSize: "1.4rem", marginBottom: 12 }}>🔒</div>
-          <div style={{ fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>Access required</div>
-          Enter a guest or admin code via the lock icon in the nav to access reports.
-        </div>
-      ) : (
-        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
+      <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
 
-          {/* Tab bar */}
-          <div style={{ display: "flex", borderBottom: "1px solid var(--border)" }}>
-            {TABS.map(t => (
-              <button key={t.id} onClick={() => setTab(t.id)} style={{
-                flex: 1, padding: "12px 20px",
-                border: "none", borderBottom: tab === t.id ? "2px solid var(--accent)" : "2px solid transparent",
-                background: "transparent",
-                fontSize: "0.84rem", fontWeight: tab === t.id ? 700 : 500,
-                color: tab === t.id ? "var(--accent)" : "var(--text-secondary)",
-                cursor: "pointer", marginBottom: -1,
-              }}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Panel content */}
-          <div style={{ padding: "24px 24px" }}>
-            {tab === "slides"
-              ? <SlidesPanel secret={token} />
-              : <NewsletterPanel />}
-          </div>
+        {/* Tab bar */}
+        <div style={{ display: "flex", borderBottom: "1px solid var(--border)" }}>
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{
+              flex: 1, padding: "12px 20px",
+              border: "none", borderBottom: tab === t.id ? "2px solid var(--accent)" : "2px solid transparent",
+              background: "transparent",
+              fontSize: "0.84rem", fontWeight: tab === t.id ? 700 : 500,
+              color: tab === t.id ? "var(--accent)" : "var(--text-secondary)",
+              cursor: "pointer", marginBottom: -1,
+            }}>
+              {t.label}
+            </button>
+          ))}
         </div>
-      )}
+
+        {/* Panel content */}
+        <div style={{ padding: "24px 24px" }}>
+          {tab === "slides"
+            ? <SlidesPanel secret={token} />
+            : <NewsletterPanel />}
+        </div>
+      </div>
     </div>
   );
 }

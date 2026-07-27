@@ -5,7 +5,8 @@
 
 import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
 import { LegendPanel, TaxonomyPanel, TAXONOMY_GROUPS } from "../../components/dashboard/LegendPanel.jsx";
-import { getAdminToken, getAccessLevel, onAuthChange } from "../../auth.js";
+import { useAuth } from "../../AuthContext.jsx";
+import { getAccessLevel, getSessionToken } from "../../auth.js";
 
 // Build a flat id → label map from the taxonomy so tags render as human-readable names.
 const TAG_LABEL = new Map(
@@ -568,6 +569,7 @@ function SourceDetail({ s, isAdmin, onUpdateDate, onConfirmDate, onDelete, onSav
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function SourcesPage() {
+  const session = useAuth();
   const [showLegend,    setShowLegend]    = useState(false);
   const [showTaxonomy,  setShowTaxonomy]  = useState(false);
   const [period,      setPeriod]      = useState("all-time");
@@ -586,7 +588,7 @@ export function SourcesPage() {
   const [reportsOnly,  setReportsOnly]  = useState(false);  // filter to digest reports + their children
   const [labelFilter, setLabelFilter] = useState(null);   // filter to one importance label
   const [sortBy,      setSortBy]      = useState("importance"); // "importance" | "date" | "ingested"
-  const [accessLevel, setAccessLevel] = useState(getAccessLevel);
+  const accessLevel = getAccessLevel(session);
   const [busyId,      setBusyId]      = useState(null);   // id of the source mid-mutation
   const [adminMsg,    setAdminMsg]    = useState(null);   // { ok, text } feedback
 
@@ -612,16 +614,12 @@ export function SourcesPage() {
   }, [period]);
 
   useEffect(() => { loadSources(); }, [loadSources]);
-  useEffect(() => onAuthChange(() => setAccessLevel(getAccessLevel())), []);
 
   // ── Admin mutations (persist to DB via api/sources.js PATCH/DELETE) ──────────
-  const authHeaders = () => {
-    const tok = getAdminToken();
-    return {
-      "Content-Type": "application/json",
-      ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
-    };
-  };
+  const authHeaders = () => ({
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${getSessionToken(session)}`,
+  });
   const updateDate = useCallback((s, date) => {
     if (!date) return;
     setBusyId(s.id); setAdminMsg(null);

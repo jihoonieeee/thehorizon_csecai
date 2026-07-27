@@ -267,26 +267,35 @@ async function getInsights(win, windowKey) {
   }
 }
 
-function isAuthorized(req) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return true;
-  const auth = req.headers.authorization || "";
-  // GEN_TOKEN is a separate, rotatable token that unlocks ONLY the generation
-  // endpoints (baked into the frontend so no secret typing). It never grants the
-  // rest of the admin surface, and can be rotated without touching CRON_SECRET.
+async function isAuthorized(req) {
+  const secret   = process.env.CRON_SECRET;
   const genToken = process.env.GEN_TOKEN;
-  return (
-    auth === `Bearer ${secret}` ||
-    (genToken && auth === `Bearer ${genToken}`) ||
-    req.headers["x-vercel-cron"] === "1"
-  );
+  const auth     = req.headers.authorization || "";
+
+  if (!secret) return true;
+  if (auth === `Bearer ${secret}`) return true;
+  if (genToken && auth === `Bearer ${genToken}`) return true;
+  if (req.headers["x-vercel-cron"] === "1") return true;
+
+  // Supabase user session JWT
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (token) {
+    const supabaseAdmin = (await import("@supabase/supabase-js")).createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    if (!error && user) return true;
+  }
+
+  return false;
 }
 
 export default async function handler(req, res) {
 
   // ── POST /api/dashboard — dispatch newsletter generation via GitHub Actions ──
   if (req.method === "POST") {
-    if (!isAuthorized(req)) return res.status(401).json({ error: "Unauthorized" });
+    if (!await isAuthorized(req)) return res.status(401).json({ error: "Unauthorized" });
     const { format, window: win = "week" } = req.body || {};
     if (format !== "newsletter") return res.status(400).json({ error: "Only format=newsletter is supported via POST" });
     const safeWin = ["week", "month"].includes(win) ? win : "week";
