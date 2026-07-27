@@ -35,6 +35,7 @@ import { selectCategorySources }                  from "../lib/slides/selectCate
 import { generateOutlookSlide }                   from "../lib/slides/generateOutlookSlide.js";
 import { generateOverviewSlide }                  from "../lib/slides/generateOverviewSlide.js";
 import { assembleDeck }                           from "../lib/slides/assembleDeck.js";
+import { scrubSlideReport }                       from "../lib/slides/scrubSlideFacts.js";
 import { renderDeckPptx }                         from "../lib/pipeline/slides/renderDeckPptx.js";
 import { getCompletedPeriodWindow }               from "../lib/time/reportingWindow.js";
 
@@ -87,7 +88,26 @@ function resolveTimeframe() {
   }
 
   const period = getCompletedPeriodWindow(win);
-  return { dateFrom: period.date_from, dateTo: period.date_to, label: period.label };
+  return { dateFrom: period.date_from, dateTo: period.date_to, label: period.label, insightKey: period.key };
+}
+
+// Load the period's validated dashboard insights, keyed by category. These anchor
+// the slide content when present (higher-quality synthesis than re-deriving from
+// raw sources). Returns {} when the window has no insights (e.g. the year window,
+// or a custom --from/--to range) — the pipeline then falls back to dossier synthesis.
+async function loadCategoryInsights(supabase, windowKey) {
+  if (!windowKey) return {};
+  const { data, error } = await supabase
+    .from("dashboard_insights")
+    .select("category, points")
+    .eq("window_key", windowKey);
+  if (error) { log(`  ⚠ insight load failed: ${error.message}`); return {}; }
+  const byCat = {};
+  for (const r of data || []) {
+    if (r.category?.startsWith("_")) continue; // skip _period_meta / _newsletter
+    if (r.points?.insights?.length) byCat[r.category] = r.points;
+  }
+  return byCat;
 }
 
 function makeTimeframeLabel(dateFrom, dateTo) {
@@ -110,7 +130,7 @@ function log(msg) { process.stdout.write(`${msg}\n`); }
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const { dateFrom, dateTo, label: timeframeLabel } = resolveTimeframe();
+  const { dateFrom, dateTo, label: timeframeLabel, insightKey } = resolveTimeframe();
   const outPath = path.resolve(argv.out);
   const skipQa  = argv["skip-qa"] ?? false;
   const dryRun  = argv["dry-run"] ?? false;
@@ -183,10 +203,14 @@ async function main() {
   await attachEvidence(supabase, allSelected);
 
   // ── Step 2c: Build category contexts (deterministic) ─────────────────────
-  log("\nStep 2c/6  Building category contexts…");
+  // Anchor on the period's validated insights when available (higher quality
+  // than re-deriving from raw sources); fall back to dossier-only otherwise.
+  const categoryInsights = await loadCategoryInsights(supabase, insightKey);
+  const insightCats = Object.keys(categoryInsights);
+  log(`\nStep 2c/6  Building category contexts… ${insightCats.length ? `(insight-anchored: ${insightCats.join(", ")})` : "(dossier-only — no insights for this window)"}`);
   const contexts = {};
   for (const { cat, selectedSources, clusterContext } of selectionResults) {
-    contexts[cat] = buildCategoryContext(cat, selectedSources, clusterContext);
+    contexts[cat] = buildCategoryContext(cat, selectedSources, clusterContext, categoryInsights[cat] || null);
   }
 
   // ── Step 3: Generate category reports (LLM, parallel) ────────────────────
@@ -210,6 +234,18 @@ async function main() {
     }
   }
 
+  // ── Grounding scrub: drop facts with invented/mis-stated figures ──────────
+  // Safety net for the prompt's grounding rules — strips a supporting fact whose
+  // specific figures are absent from the insight block + the fact's cited sources.
+  for (const cat of activeCategories) {
+    const report = categoryReports[cat];
+    if (!report) continue;
+    const dropped = scrubSlideReport(report, contexts[cat]);
+    for (const d of dropped) {
+      log(`  ⚠ ${cat}: dropped ungrounded fact [${(d.ungrounded || []).join(", ")}] — "${d.fact?.slice(0, 80)}"`);
+    }
+  }
+
   // ── Steps 4+5: QA + Outlook + Overview in parallel ───────────────────────
   log("\nSteps 4+5/6  QA checks + Outlook + Overview (parallel)…");
   const allReports = activeCategories.map(c => categoryReports[c]).filter(Boolean);
@@ -220,7 +256,7 @@ async function main() {
       activeCategories.map(async cat => {
         const report = categoryReports[cat];
         if (!report) return [cat, { issues: [], citation_issue_count: 0, entailment_issue_count: 0 }];
-        const qa = await qaReport(report, contexts[cat].sourceIndex, { skipEntailment: skipQa });
+        const qa = await qaReport(report, contexts[cat].sourceIndex, { skipEntailment: skipQa, supabase });
         return [cat, qa];
       })
     ),
@@ -235,6 +271,15 @@ async function main() {
     if (qa.citation_issue_count > 0)   log(`  ⚠ ${cat}: ${qa.citation_issue_count} citation issues fixed`);
     if (qa.entailment_issue_count > 0) log(`  ⚠ ${cat}: ${qa.entailment_issue_count} entailment failures flagged`);
     if (qa.citation_issue_count === 0 && qa.entailment_issue_count === 0) log(`  ✓ ${cat}: QA passed`);
+    // Surface each flagged bullet so it can be reviewed (spot-check, non-blocking).
+    for (const iss of qa.issues || []) {
+      if (iss.type === "entailment_failure") {
+        log(`      ↳ [${iss.cited}] "${iss.bullet}${iss.bullet?.length >= 100 ? "…" : ""}"`);
+        if (iss.reason) log(`         reason: ${iss.reason}`);
+      } else if (iss.type === "unresolvable_citation") {
+        log(`      ↳ dropped citation ${iss.label} (${iss.context})`);
+      }
+    }
   }
 
   // ── Step 5 (cont): Plan category slides ──────────────────────────────────
