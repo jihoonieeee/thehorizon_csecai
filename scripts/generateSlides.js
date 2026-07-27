@@ -35,6 +35,7 @@ import { selectCategorySources }                  from "../lib/slides/selectCate
 import { generateOutlookSlide }                   from "../lib/slides/generateOutlookSlide.js";
 import { generateOverviewSlide }                  from "../lib/slides/generateOverviewSlide.js";
 import { assembleDeck }                           from "../lib/slides/assembleDeck.js";
+import { scrubSlideReport }                       from "../lib/slides/scrubSlideFacts.js";
 import { renderDeckPptx }                         from "../lib/pipeline/slides/renderDeckPptx.js";
 import { getCompletedPeriodWindow }               from "../lib/time/reportingWindow.js";
 
@@ -230,6 +231,18 @@ async function main() {
       categoryReports[r.value.cat] = r.value.report;
     } else {
       log(`  ✗ ${r.reason?.message || r.reason}`);
+    }
+  }
+
+  // ── Grounding scrub: drop facts with invented/mis-stated figures ──────────
+  // Safety net for the prompt's grounding rules — strips a supporting fact whose
+  // specific figures are absent from the insight block + the fact's cited sources.
+  for (const cat of activeCategories) {
+    const report = categoryReports[cat];
+    if (!report) continue;
+    const dropped = scrubSlideReport(report, contexts[cat]);
+    for (const d of dropped) {
+      log(`  ⚠ ${cat}: dropped ungrounded fact [${(d.ungrounded || []).join(", ")}] — "${d.fact?.slice(0, 80)}"`);
     }
   }
 

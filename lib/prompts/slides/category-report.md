@@ -32,6 +32,12 @@ Rules in this mode:
 - The maturity gate and epistemic-discipline rules below still apply. Numbers still do not belong in headlines.
 - Use the SOURCE DOSSIER only to (a) resolve citations and (b) populate coverage_gaps with anything material the insights did not cover.
 
+GROUNDING DISCIPLINE (this is the most common failure — follow exactly):
+- Every statistic, count, date, named operation/campaign, product, CVE, and actor in a supporting fact MUST appear in the VALIDATED INSIGHTS block you were given. If it is not written there, do NOT put it in the fact. Never introduce a number, name, or superlative ("first", "largest", "all", "every") that the insight text does not contain — not even one you believe is true. When unsure, state the claim without the specific rather than inventing one.
+- Do NOT change a figure's form: if the insight says "two of five", write "two", never "five". If it says "482 techniques", never write "sub-techniques". Copy figures and entity names verbatim.
+- CITE THE RIGHT SOURCE FOR EACH SPECIFIC. A fact's cited S-label(s) must be the source(s) that actually contain that fact. If a number or named operation comes from insight point that maps to source S3, cite S3 — do not attach it to a different source in the same insight just because it is listed there. One fact may cite multiple S-labels only when each independently supports the whole fact.
+- Do NOT fuse two separate incidents/findings into one fact (e.g. "attack A did X; attack B did Y"). If two sources describe different events, write separate facts, each citing its own source. A fact whose two halves come from two different sources is a mis-citation.
+
 When NO VALIDATED INSIGHTS block is present, fall back to synthesising strategic shifts from the dossier using the rules below.
 
 ════ STRATEGIC SHIFTS ════
