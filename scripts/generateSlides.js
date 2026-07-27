@@ -6,12 +6,14 @@
  *   node scripts/generateSlides.js --from 2026-07-01 --to 2026-07-20
  *   node scripts/generateSlides.js --window month
  *   node scripts/generateSlides.js --window quarter --out ./output/deck.pptx
- *   node scripts/generateSlides.js --window half_year --category llm_threats
+ *   node scripts/generateSlides.js --window year --category llm_threats
  *
  * Options:
- *   --from YYYY-MM-DD   Start of reporting window (inclusive)
- *   --to   YYYY-MM-DD   End of reporting window (inclusive)
- *   --window month|quarter|half_year|year  Rolling window ending today
+ *   --from YYYY-MM-DD   Start of reporting window (inclusive) — custom range override
+ *   --to   YYYY-MM-DD   End of reporting window (inclusive)   — custom range override
+ *   --window month|quarter|year  Previous COMPLETE calendar period
+ *                       (SGT-anchored, same semantics as the newsletter — not a
+ *                        rolling "last N days ending today" window)
  *   --out  <path>       Output .pptx path (default: ./output/deck.pptx)
  *   --category <name>   Run a single category only (for debugging)
  *   --skip-qa           Skip entailment spot-check (faster, less safe)
@@ -34,6 +36,7 @@ import { generateOutlookSlide }                   from "../lib/slides/generateOu
 import { generateOverviewSlide }                  from "../lib/slides/generateOverviewSlide.js";
 import { assembleDeck }                           from "../lib/slides/assembleDeck.js";
 import { renderDeckPptx }                         from "../lib/pipeline/slides/renderDeckPptx.js";
+import { getCompletedPeriodWindow }               from "../lib/time/reportingWindow.js";
 
 // ── Arg parsing ───────────────────────────────────────────────────────────────
 
@@ -64,21 +67,23 @@ if (argv.rerender) {
   process.exit(0);
 }
 
-const WINDOW_DAYS = { month: 30, quarter: 90, half_year: 180, year: 365 };
+const SLIDE_WINDOWS = ["month", "quarter", "year"];
 
+// Fixed, previous-complete calendar window (SGT-anchored) — same semantics as
+// the newsletter. Not a rolling "last N days ending today" window. A --from/--to
+// pair overrides with an explicit custom range.
 function resolveTimeframe() {
   if (argv.from && argv.to) {
-    return { dateFrom: argv.from, dateTo: argv.to };
+    return { dateFrom: argv.from, dateTo: argv.to, label: makeTimeframeLabel(argv.from, argv.to) };
   }
 
-  const today = new Date();
-  const pad   = n => String(n).padStart(2, "0");
-  const ymd   = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const win = argv.window || "month";
+  if (!SLIDE_WINDOWS.includes(win)) {
+    throw new Error(`Invalid --window "${win}". Must be one of: ${SLIDE_WINDOWS.join(", ")} (or pass --from/--to).`);
+  }
 
-  const days = WINDOW_DAYS[argv.window] ?? 30;
-  const from = new Date(today);
-  from.setDate(today.getDate() - days);
-  return { dateFrom: ymd(from), dateTo: ymd(today) };
+  const period = getCompletedPeriodWindow(win);
+  return { dateFrom: period.date_from, dateTo: period.date_to, label: period.label };
 }
 
 function makeTimeframeLabel(dateFrom, dateTo) {
@@ -101,8 +106,7 @@ function log(msg) { process.stdout.write(`${msg}\n`); }
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const { dateFrom, dateTo } = resolveTimeframe();
-  const timeframeLabel = makeTimeframeLabel(dateFrom, dateTo);
+  const { dateFrom, dateTo, label: timeframeLabel } = resolveTimeframe();
   const outPath = path.resolve(argv.out);
   const skipQa  = argv["skip-qa"] ?? false;
   const dryRun  = argv["dry-run"] ?? false;

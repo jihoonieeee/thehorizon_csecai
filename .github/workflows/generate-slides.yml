@@ -1,15 +1,31 @@
 name: Generate Slides
 
+# Slide decks are pre-generated on a schedule so the dashboard can offer instant
+# downloads (no on-demand user trigger). Each cron maps to one fixed, previous-
+# complete calendar window (see scripts/generateSlides.js → getCompletedPeriodWindow).
+# On overlapping dates (e.g. 1 Jan) GitHub fires one run per matching cron, each
+# with its own github.event.schedule, so month/quarter/year all regenerate.
+# Runs are idempotent: decks upsert on deck_id = deck-<date>-<window>.
+#
+# Times are UTC; offset a few hours after the daily pipeline (16:00 UTC) so the
+# corpus is fully classified. The window covers the PREVIOUS complete period,
+# which was already ingested over prior days, so exact timing is not critical.
+#
+# workflow_dispatch remains for development/testing only.
+
 on:
+  schedule:
+    - cron: '0 18 1 * *'          # monthly deck   — 1st of every month → previous complete month
+    - cron: '0 18 1 1,4,7,10 *'   # quarterly deck — 1st of each quarter → previous complete quarter
+    - cron: '0 18 1 1 *'          # yearly deck    — 1 Jan → previous complete year
   workflow_dispatch:
     inputs:
       window:
-        description: 'Reporting period (last N days of validated sources)'
+        description: 'Reporting period (previous complete calendar month/quarter/year)'
         type: choice
         options:
           - month
           - quarter
-          - half_year
           - year
         default: month
       from:
@@ -41,13 +57,25 @@ jobs:
 
       - run: npm ci
 
+      # Map a scheduled cron to its window. Empty for workflow_dispatch (the
+      # Generate step falls back to the dispatch input).
+      - name: Resolve scheduled window
+        id: resolve
+        if: github.event_name == 'schedule'
+        run: |
+          case "${{ github.event.schedule }}" in
+            "0 18 1 1 *")        echo "window=year"    >> "$GITHUB_OUTPUT" ;;
+            "0 18 1 1,4,7,10 *") echo "window=quarter" >> "$GITHUB_OUTPUT" ;;
+            *)                   echo "window=month"   >> "$GITHUB_OUTPUT" ;;
+          esac
+
       - name: Generate slides
         run: |
           ARGS=""
           if [ -n "${{ github.event.inputs.from }}" ] && [ -n "${{ github.event.inputs.to }}" ]; then
             ARGS="--from ${{ github.event.inputs.from }} --to ${{ github.event.inputs.to }}"
           else
-            ARGS="--window ${{ github.event.inputs.window || 'month' }}"
+            ARGS="--window ${{ steps.resolve.outputs.window || github.event.inputs.window || 'month' }}"
           fi
           if [ -n "${{ github.event.inputs.category }}" ]; then
             ARGS="$ARGS --category ${{ github.event.inputs.category }}"

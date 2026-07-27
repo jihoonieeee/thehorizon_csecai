@@ -1,6 +1,19 @@
 name: Generate Newsletter
 
+# Newsletters are pre-generated on a schedule so the dashboard can show the
+# latest instantly (no on-demand user trigger). Each cron maps to one fixed,
+# previous-complete calendar window (see lib/newsletter buildPeriod). Runs are
+# idempotent: saveNewsletter upserts on window_key × category. On a Monday that
+# is also the 1st, both crons fire and week + month regenerate.
+#
+# Times are UTC; offset a couple hours after the pipeline's insight runs
+# (16:00 UTC Mon / 1st) so category insights exist. workflow_dispatch remains
+# for development/testing only.
+
 on:
+  schedule:
+    - cron: '0 18 * * 1'   # weekly  — Monday → previous complete Mon–Sun week
+    - cron: '0 18 1 * *'   # monthly — 1st    → previous complete calendar month
   workflow_dispatch:
     inputs:
       window:
@@ -26,8 +39,19 @@ jobs:
 
       - run: npm ci
 
+      # Map a scheduled cron to its window. Empty for workflow_dispatch (falls
+      # back to the dispatch input).
+      - name: Resolve scheduled window
+        id: resolve
+        if: github.event_name == 'schedule'
+        run: |
+          case "${{ github.event.schedule }}" in
+            "0 18 1 * *") echo "window=month" >> "$GITHUB_OUTPUT" ;;
+            *)            echo "window=week"  >> "$GITHUB_OUTPUT" ;;
+          esac
+
       - name: Generate and save newsletter
-        run: node scripts/generateNewsletter.js --window ${{ github.event.inputs.window || 'week' }} --save
+        run: node scripts/generateNewsletter.js --window ${{ steps.resolve.outputs.window || github.event.inputs.window || 'week' }} --save
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

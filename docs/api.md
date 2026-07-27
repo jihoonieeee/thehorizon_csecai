@@ -61,19 +61,25 @@ Returns dashboard data for a reporting window.
 - `top_incidents` is LLM-curated (from `dashboard_insights._period_meta`) when available; falls back to deterministic importance ranking.
 - PostgREST 1000-row cap is handled by paginated `selectAll()` internally.
 
+## GET /api/dashboard?format=newsletter&window={week|month}
+
+Returns the latest **pre-generated** newsletter for a window (public read). Newsletters are generated on a schedule by `generate-newsletter.yml` and stored via `saveNewsletter`. The dashboard Generate page reads this on load — there is no user-facing trigger.
+
+**Response:** `{ html, period, sourceCount, insightCount, generated_at }` · `404` if not generated yet.
+
 ## POST /api/dashboard
 
-Generates newsletter HTML for a window.
+**Development / testing only** — dispatches the `generate-newsletter.yml` workflow to (re)generate a newsletter on demand. Not called from the UI.
 
 **Auth:** `Bearer {CRON_SECRET}` or `Bearer {GEN_TOKEN}`
 
 **Body:**
 ```json
-{ "format": "newsletter", "window": "week", "asof": "2026-06-30" }
+{ "format": "newsletter", "window": "week" }
 ```
 Only `format=newsletter` is supported.
 
-**Response:** `{ html: "...", subject: "...", sources: [...] }`
+**Response:** `202 { queued: true, window, triggered_at }`
 
 ---
 

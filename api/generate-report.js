@@ -8,7 +8,7 @@
  *   (no params)      → fetch the latest saved deck JSON
  *
  * POST body (JSON):
- *   window   "month" | "quarter" | "half_year" | "year"  (default "quarter")
+ *   window   "month" | "quarter" | "year"  (default "quarter")
  *   format   "pptx" | "json"                             (default "pptx")
  *   skipLlm  boolean                                     (default false)
  *
@@ -58,19 +58,9 @@ async function dispatchGitHubWorkflow({ window: win }) {
   }
 }
 
-const WINDOW_DAYS = {
-  month:     30,
-  quarter:   90,
-  half_year: 180,
-  year:      365,
-};
-
-const WINDOW_LABEL = {
-  month:     "1 Month",
-  quarter:   "1 Quarter",
-  half_year: "Half Year",
-  year:      "1 Year",
-};
+// Allowed slide windows. Each resolves to a previous-complete calendar period
+// (SGT-anchored) inside scripts/generateSlides.js — see getCompletedPeriodWindow.
+const SLIDE_WINDOWS = ["month", "quarter", "year"];
 
 function isAuthorized(req) {
   const secret = process.env.CRON_SECRET;
@@ -141,11 +131,11 @@ export default async function handler(req, res) {
   // GET /api/generate-report?list=1 for completion.
   if (req.method === "POST") {
     try {
-      const { window: win = "half_year" } = req.body || {};
+      const { window: win = "quarter" } = req.body || {};
 
-      if (!WINDOW_DAYS[win]) {
+      if (!SLIDE_WINDOWS.includes(win)) {
         return res.status(400).json({
-          error: `Invalid window "${win}". Must be one of: ${Object.keys(WINDOW_DAYS).join(", ")}`,
+          error: `Invalid window "${win}". Must be one of: ${SLIDE_WINDOWS.join(", ")}`,
         });
       }
 
@@ -153,7 +143,6 @@ export default async function handler(req, res) {
 
       return res.status(202).json({
         queued: true,
-        days: WINDOW_DAYS[win],
         window: win,
         triggered_at: new Date().toISOString(),
         message: "Generation queued. Poll GET /api/generate-report?list=1 — a new deck will appear in 10–30 minutes.",

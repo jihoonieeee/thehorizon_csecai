@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getBestToken, getAccessLevel, onAuthChange } from "../../auth.js";
 
+// Reports (slide decks + newsletters) are pre-generated on a schedule by GitHub
+// Actions (see .github/workflows/generate-slides.yml + generate-newsletter.yml).
+// This page is READ-ONLY: users pick a timeframe and download / copy the latest
+// pre-generated artifact. There is no on-demand generation trigger in the UI —
+// regeneration is a backend/dev operation (workflow_dispatch or local scripts).
+
 function Spinner() {
   return (
     <span style={{
@@ -9,11 +15,6 @@ function Spinner() {
       borderRadius: "50%", animation: "hz-spin 0.7s linear infinite",
     }} />
   );
-}
-
-function formatElapsed(secs) {
-  if (secs < 60) return `${secs}s`;
-  return `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, "0")}s`;
 }
 
 function CopyIcon() {
@@ -33,115 +34,93 @@ function CheckIcon() {
   );
 }
 
+// ── Formatting helpers ──────────────────────────────────────────────────────────
+
+function fmtGenerated(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+// source_window_start / _end are SGT calendar dates ("YYYY-MM-DD").
+function fmtCovered(from, to) {
+  if (!from || !to) return null;
+  const f = new Date(from + "T12:00:00Z");
+  const t = new Date(to   + "T12:00:00Z");
+  if (isNaN(f.getTime()) || isNaN(t.getTime())) return null;
+  const opts = { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" };
+  return `${f.toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" })} – ${t.toLocaleDateString(undefined, opts)}`;
+}
+
 // ── Slides panel ──────────────────────────────────────────────────────────────
 
 const PERIODS = [
-  { id: "month",     label: "1 Month",    days: 30  },
-  { id: "quarter",   label: "1 Quarter",  days: 90  },
-  { id: "half_year", label: "Half Year",  days: 180 },
-  { id: "year",      label: "1 Year",     days: 365 },
+  { id: "month",   label: "1 Month",   desc: "previous complete calendar month"   },
+  { id: "quarter", label: "1 Quarter", desc: "previous complete calendar quarter" },
+  { id: "year",    label: "1 Year",    desc: "previous complete calendar year"    },
 ];
 
-const POLL_MS = 20000;
-const SLIDES_STORAGE_KEY = "hz_slides_state";
-
-function loadSlidesState() {
-  try {
-    const raw = localStorage.getItem(SLIDES_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
-}
-
-function saveSlidesState(patch) {
-  try {
-    const cur = loadSlidesState();
-    localStorage.setItem(SLIDES_STORAGE_KEY, JSON.stringify({ ...cur, ...patch }));
-  } catch {}
-}
-
 function SlidesPanel({ secret }) {
-  const saved = loadSlidesState();
+  const [period, setPeriod]           = useState("quarter");
+  const [status, setStatus]           = useState("loading"); // loading | ready | empty | error
+  const [deck, setDeck]               = useState(null);
+  const [error, setError]             = useState(null);
+  const [downloading, setDownloading] = useState(false);
 
-  const [period,   setPeriod]   = useState(saved.period   || "quarter");
-  const [status,   setStatus]   = useState(saved.status === "queued" || saved.status === "done" ? saved.status : "idle");
-  const [error,    setError]    = useState(null);
-  const [elapsed,  setElapsed]  = useState(saved.status === "queued" && saved.startedAt ? Math.floor((Date.now() - saved.startedAt) / 1000) : 0);
-  const [pptxUrl,  setPptxUrl]  = useState(saved.pptxUrl  || null);
-  const [filename, setFilename] = useState(saved.filename || null);
-  const timerRef       = useRef(null);
-  const pollRef        = useRef(null);
-  const startRef       = useRef(saved.status === "queued" && saved.startedAt ? saved.startedAt : null);
-  const triggeredAtRef = useRef(saved.triggeredAt || null);
-
-  // Persist state changes to localStorage
-  useEffect(() => { saveSlidesState({ period, status, pptxUrl, filename, triggeredAt: triggeredAtRef.current, startedAt: startRef.current }); },
-    [period, status, pptxUrl, filename]);
-
+  // Fetch the latest pre-generated deck for the selected window on mount + switch.
   useEffect(() => {
-    if (status === "queued") {
-      if (!startRef.current) startRef.current = Date.now();
-      timerRef.current = setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 1000);
-    } else {
-      clearInterval(timerRef.current);
-    }
-    return () => clearInterval(timerRef.current);
-  }, [status]);
+    let cancelled = false;
+    setStatus("loading"); setDeck(null); setError(null);
 
-  useEffect(() => {
-    if (status !== "queued") { clearInterval(pollRef.current); return; }
-    async function poll() {
+    (async () => {
       try {
         const res = await fetch("/api/generate-report?list=1", {
           headers: { "Authorization": secret ? `Bearer ${secret}` : "" },
         });
-        if (!res.ok) return;
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const { decks } = await res.json();
-        const latest = decks?.[0];
-        if (latest?.pptx_url && new Date(latest.generated_at) >= new Date(triggeredAtRef.current)) {
-          clearInterval(pollRef.current);
-          const dateStr = new Date(latest.generated_at).toISOString().slice(0, 10);
-          const name = `horizon_scan_${period}_${dateStr}.pptx`;
-          const downloadUrl = `/api/generate-report?download=1&deck_id=${latest.deck_id}`;
-          setFilename(name);
-          setPptxUrl(downloadUrl);
-          setStatus("done");
-          saveSlidesState({ status: "done", pptxUrl: downloadUrl, filename: name });
-        }
-      } catch {}
-    }
-    poll(); // check immediately on mount in case it finished while away
-    pollRef.current = setInterval(poll, POLL_MS);
-    return () => clearInterval(pollRef.current);
-  }, [status, secret, period]);
-
-  async function generate() {
-    if (status === "queued") return;
-    const triggeredAt = new Date().toISOString();
-    const startedAt   = Date.now();
-    triggeredAtRef.current = triggeredAt;
-    startRef.current       = startedAt;
-    setPptxUrl(null); setFilename(null); setStatus("queued"); setError(null); setElapsed(0);
-    saveSlidesState({ status: "queued", triggeredAt, startedAt, pptxUrl: null, filename: null, period });
-    try {
-      const res = await fetch("/api/generate-report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": secret ? `Bearer ${secret}` : "" },
-        body: JSON.stringify({ window: period }),
-      });
-      if (!res.ok) {
-        let msg = `HTTP ${res.status}`;
-        try { const j = await res.json(); msg = j.error || msg; } catch {}
-        throw new Error(msg);
+        // deck_id = deck-<date>-<window>. endsWith('-'+window) selects the newest
+        // full-deck run for this window and excludes single-category / custom runs.
+        const match = (decks || []).find(d => d.deck_id?.endsWith(`-${period}`));
+        if (cancelled) return;
+        if (match) { setDeck(match); setStatus("ready"); }
+        else       { setStatus("empty"); }
+      } catch (err) {
+        if (!cancelled) { setError(err.message); setStatus("error"); }
       }
+    })();
+
+    return () => { cancelled = true; };
+  }, [period, secret]);
+
+  // Download proxies the private blob through the API (auth header required), then
+  // saves the returned bytes — a plain <a href> can't send the bearer token.
+  async function download() {
+    if (!deck || downloading) return;
+    setDownloading(true); setError(null);
+    try {
+      const res = await fetch(`/api/generate-report?download=1&deck_id=${encodeURIComponent(deck.deck_id)}`, {
+        headers: { "Authorization": secret ? `Bearer ${secret}` : "" },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob    = await res.blob();
+      const url     = URL.createObjectURL(blob);
+      const dateStr = new Date(deck.generated_at).toISOString().slice(0, 10);
+      const a = document.createElement("a");
+      a.href = url; a.download = `horizon_scan_${period}_${dateStr}.pptx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
     } catch (err) {
-      setError(err.message); setStatus("error");
-      saveSlidesState({ status: "error" });
+      setError(`Download failed: ${err.message}`);
+    } finally {
+      setDownloading(false);
     }
   }
 
-  const isQueued  = status === "queued";
-  const isDone    = status === "done";
   const periodObj = PERIODS.find(p => p.id === period);
+  const covered   = deck && fmtCovered(deck.source_window_start, deck.source_window_end);
+  const genAt     = deck && fmtGenerated(deck.generated_at);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -153,9 +132,9 @@ function SlidesPanel({ secret }) {
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           {PERIODS.map(p => (
-            <button key={p.id} disabled={isQueued} onClick={() => setPeriod(p.id)} style={{
+            <button key={p.id} onClick={() => setPeriod(p.id)} style={{
               padding: "6px 14px", borderRadius: 6, border: "1px solid",
-              fontSize: "0.8rem", fontWeight: 600, cursor: isQueued ? "not-allowed" : "pointer",
+              fontSize: "0.8rem", fontWeight: 600, cursor: "pointer",
               background:  period === p.id ? "var(--accent-dim)" : "transparent",
               borderColor: period === p.id ? "var(--accent-border)" : "var(--border)",
               color:       period === p.id ? "var(--accent)" : "var(--text-secondary)",
@@ -166,62 +145,67 @@ function SlidesPanel({ secret }) {
         </div>
         {periodObj && (
           <div style={{ marginTop: 6, fontSize: "0.76rem", color: "var(--text-tertiary)" }}>
-            Last {periodObj.days} days of validated, classified sources
+            Validated, classified sources from the {periodObj.desc}
           </div>
         )}
       </div>
 
       <div style={{ borderTop: "1px solid var(--border)" }} />
 
-      {/* Buttons */}
-      <div style={{ display: "flex", gap: 10 }}>
-        <button onClick={generate} disabled={isQueued} style={{
-          flex: 1, padding: "11px 20px", borderRadius: 8,
-          border: isQueued ? "1px solid var(--border)" : "none",
-          fontSize: "0.88rem", fontWeight: 700, cursor: isQueued ? "not-allowed" : "pointer",
-          background: isQueued ? "var(--surface-2)" : "var(--accent)",
-          color: isQueued ? "var(--text-tertiary)" : "#fff",
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-        }}>
-          {isQueued ? <><Spinner /> Generating… {formatElapsed(elapsed)}</> : isDone ? "Regenerate" : "Generate Slides"}
-        </button>
-
-        {isDone && pptxUrl && (
-          <a href={pptxUrl} download={filename} style={{
-            padding: "11px 20px", borderRadius: 8, border: "none",
-            fontSize: "0.88rem", fontWeight: 700, cursor: "pointer",
-            background: "#15803d", color: "#fff",
-            display: "flex", alignItems: "center", gap: 8,
-            textDecoration: "none", whiteSpace: "nowrap",
-          }}>
-            ↓ Download PPTX
-          </a>
-        )}
-      </div>
-
-      {isQueued && (
-        <p style={{ margin: 0, textAlign: "center", fontSize: "0.76rem", color: "var(--text-tertiary)" }}>
-          Processing in the background. You can close this tab and come back.
-        </p>
+      {/* Loading */}
+      {status === "loading" && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--text-tertiary)", fontSize: "0.84rem" }}>
+          <Spinner /> Loading latest deck…
+        </div>
       )}
 
-      {/* Success */}
-      {isDone && (
-        <div style={{ padding: "12px 16px", borderRadius: 8, background: "#f0fdf4", border: "1px solid #bbf7d0", display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ color: "#16a34a" }}>✓</span>
-          <div>
-            <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "#15803d" }}>Deck ready</div>
-            {filename && <div style={{ fontSize: "0.74rem", color: "#16a34a", marginTop: 1 }}>{filename}</div>}
+      {/* Ready — deck available for download */}
+      {status === "ready" && deck && (
+        <>
+          <div style={{ padding: "14px 16px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+            <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>
+              Latest {periodObj?.label} deck ready
+            </div>
+            <div style={{ fontSize: "0.76rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+              {covered && <>Covers {covered}<br /></>}
+              {deck.source_count != null && <>{deck.source_count} sources · </>}
+              {deck.slide_count != null && <>{deck.slide_count} slides · </>}
+              {genAt && <>generated {genAt}</>}
+            </div>
           </div>
+
+          <button onClick={download} disabled={downloading} style={{
+            padding: "11px 20px", borderRadius: 8,
+            border: "none", fontSize: "0.88rem", fontWeight: 700,
+            cursor: downloading ? "not-allowed" : "pointer",
+            background: downloading ? "var(--surface-2)" : "#15803d",
+            color: downloading ? "var(--text-tertiary)" : "#fff",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+          }}>
+            {downloading ? <><Spinner /> Preparing download…</> : "↓ Download PPTX"}
+          </button>
+        </>
+      )}
+
+      {/* Empty — not generated yet */}
+      {status === "empty" && (
+        <div style={{ padding: "20px 18px", textAlign: "center", border: "1px dashed var(--border)", borderRadius: 10, color: "var(--text-tertiary)", fontSize: "0.84rem", lineHeight: 1.6 }}>
+          <div style={{ fontWeight: 600, color: "var(--text-secondary)", marginBottom: 4 }}>Not available yet</div>
+          The {periodObj?.label} deck is generated automatically each period. Check back after the next scheduled run.
         </div>
       )}
 
       {/* Error */}
       {status === "error" && (
         <div style={{ padding: "12px 16px", borderRadius: 8, background: "var(--red-dim)", border: "1px solid var(--red-border)" }}>
-          <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "var(--red)", marginBottom: 4 }}>Generation failed</div>
+          <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "var(--red)", marginBottom: 4 }}>Couldn’t load deck</div>
           <div style={{ fontSize: "0.78rem", color: "var(--red)" }}>{error}</div>
         </div>
+      )}
+
+      {/* Download-failure notice (surfaced independently of load state) */}
+      {status === "ready" && error && (
+        <div style={{ fontSize: "0.78rem", color: "var(--red)" }}>{error}</div>
       )}
 
       {/* What's included */}
@@ -252,119 +236,34 @@ const NL_WINDOWS = [
   { id: "month", label: "Past month" },
 ];
 
-function nlDateRange(win) {
-  const SGT_MS = 8 * 60 * 60 * 1000;
-  const DAY_MS = 24 * 60 * 60 * 1000;
-  const now    = new Date();
-  const sgtNow = new Date(now.getTime() + SGT_MS);
-  const fmt    = d => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+function NewsletterPanel() {
+  const [win, setWin]       = useState("week");
+  const [status, setStatus] = useState("loading"); // loading | ready | empty | error
+  const [data, setData]     = useState(null);      // { html, period, sourceCount, generated_at }
+  const [copied, setCopied] = useState(false);
+  const iframeRef           = useRef(null);
 
-  if (win === "week") {
-    // Last completed Mon–Sun ISO week (weekOffset = -1)
-    const dow      = sgtNow.getUTCDay(); // 0=Sun … 6=Sat
-    const fromMon  = dow === 0 ? 6 : dow - 1;
-    const monSgt   = new Date(sgtNow);
-    monSgt.setUTCDate(sgtNow.getUTCDate() - fromMon - 7);
-    monSgt.setUTCHours(0, 0, 0, 0);
-    const sunSgt = new Date(monSgt.getTime() + 6 * DAY_MS);
-    return `${fmt(monSgt)} – ${fmt(sunSgt)}`;
-  }
-
-  // month: previous complete calendar month
-  const y     = sgtNow.getUTCFullYear();
-  const m     = sgtNow.getUTCMonth(); // 0-indexed
-  const first = new Date(Date.UTC(y, m - 1, 1));
-  const last  = new Date(Date.UTC(y, m, 0)); // day 0 = last day of prev month
-  return `${fmt(first)} – ${fmt(last)}`;
-}
-
-const NL_POLL_MS      = 15000;
-const NL_STORAGE_KEY  = "hz_newsletter_state";
-
-function loadNlState() {
-  try {
-    const raw = localStorage.getItem(NL_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
-}
-
-function saveNlState(patch) {
-  try {
-    const cur = loadNlState();
-    localStorage.setItem(NL_STORAGE_KEY, JSON.stringify({ ...cur, ...patch }));
-  } catch {}
-}
-
-function NewsletterPanel({ secret }) {
-  const saved = loadNlState();
-
-  const [win,     setWin]     = useState(saved.win || "week");
-  const [status,  setStatus]  = useState(
-    saved.status === "queued" || saved.status === "done" ? saved.status : "idle"
-  );
-  const [error,   setError]   = useState(null);
-  const [elapsed, setElapsed] = useState(
-    saved.status === "queued" && saved.startedAt
-      ? Math.floor((Date.now() - saved.startedAt) / 1000)
-      : 0
-  );
-  const [copied,  setCopied]  = useState(false);
-  // Per-window cache: { week: { html, period, sourceCount, generated_at }, month: { ... } }
-  const [cache,   setCache]   = useState(saved.cache || {});
-
-  const timerRef       = useRef(null);
-  const pollRef        = useRef(null);
-  const startRef       = useRef(saved.status === "queued" && saved.startedAt ? saved.startedAt : null);
-  const triggeredAtRef = useRef(saved.triggeredAt || null);
-  const iframeRef      = useRef(null);
-
-  const cached = cache[win] || null;
-  const html   = cached?.html || null;
-  const isDone = !!html && status !== "queued";
-
-  // Persist state to localStorage
+  // Fetch the latest pre-generated newsletter for the selected window (public GET).
   useEffect(() => {
-    saveNlState({ win, status, cache, triggeredAt: triggeredAtRef.current, startedAt: startRef.current });
-  }, [win, status, cache]);
+    let cancelled = false;
+    setStatus("loading"); setData(null); setCopied(false);
 
-  // Elapsed timer while queued
-  useEffect(() => {
-    if (status === "queued") {
-      if (!startRef.current) startRef.current = Date.now();
-      timerRef.current = setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 1000);
-    } else {
-      clearInterval(timerRef.current);
-    }
-    return () => clearInterval(timerRef.current);
-  }, [status]);
-
-  // Poll GET /api/dashboard?format=newsletter while queued
-  useEffect(() => {
-    if (status !== "queued") { clearInterval(pollRef.current); return; }
-
-    async function poll() {
+    (async () => {
       try {
         const res = await fetch(`/api/dashboard?format=newsletter&window=${win}`);
-        if (!res.ok) return; // 404 = not ready yet
-        const data = await res.json();
-        if (!data?.html) return;
-        // Only accept a result generated after we triggered the run
-        if (triggeredAtRef.current && data.generated_at < triggeredAtRef.current) return;
-        clearInterval(pollRef.current);
-        setCache(prev => ({ ...prev, [win]: data }));
-        setStatus("done");
-      } catch {}
-    }
+        if (res.status === 404) { if (!cancelled) setStatus("empty"); return; }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const d = await res.json();
+        if (cancelled) return;
+        if (d?.html) { setData(d); setStatus("ready"); }
+        else         { setStatus("empty"); }
+      } catch {
+        if (!cancelled) setStatus("error");
+      }
+    })();
 
-    poll(); // immediate check on mount (handles page refresh after completion)
-    pollRef.current = setInterval(poll, NL_POLL_MS);
-    return () => clearInterval(pollRef.current);
-  }, [status, win]);
-
-  // Auto-resize iframe on content change
-  useEffect(() => {
-    if (iframeRef.current && html) iframeRef.current.style.height = "400px";
-  }, [win, html]);
+    return () => { cancelled = true; };
+  }, [win]);
 
   const onIframeLoad = useCallback(() => {
     try {
@@ -373,33 +272,8 @@ function NewsletterPanel({ secret }) {
     } catch {}
   }, []);
 
-  async function generate() {
-    if (status === "queued") return;
-    const triggeredAt = new Date().toISOString();
-    const startedAt   = Date.now();
-    triggeredAtRef.current = triggeredAt;
-    startRef.current       = startedAt;
-    setStatus("queued"); setError(null); setElapsed(0); setCopied(false);
-    saveNlState({ status: "queued", triggeredAt, startedAt, win });
-    try {
-      const res = await fetch("/api/dashboard", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", "Authorization": secret ? `Bearer ${secret}` : "" },
-        body:    JSON.stringify({ format: "newsletter", window: win }),
-      });
-      if (!res.ok) {
-        let msg = `HTTP ${res.status}`;
-        try { const j = await res.json(); msg = j.error || msg; } catch {}
-        throw new Error(msg);
-      }
-      // 202 accepted — polling loop picks up the result when the workflow finishes
-    } catch (err) {
-      setError(err.message); setStatus("error");
-      saveNlState({ status: "error" });
-    }
-  }
-
   async function copy() {
+    const html = data?.html;
     if (!html) return;
     try {
       await navigator.clipboard.write([
@@ -415,71 +289,56 @@ function NewsletterPanel({ secret }) {
     setCopied(true); setTimeout(() => setCopied(false), 2500);
   }
 
-  const isQueued = status === "queued";
+  const genAt = data && fmtGenerated(data.generated_at);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-      {/* Controls row */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ display: "flex", gap: 6 }}>
-            {NL_WINDOWS.map(w => (
-              <button key={w.id} disabled={isQueued} onClick={() => { setWin(w.id); setError(null); }} style={{
-                padding: "6px 14px", borderRadius: 6, border: "1px solid",
-                fontSize: "0.8rem", fontWeight: 600, cursor: isQueued ? "not-allowed" : "pointer",
-                background:  win === w.id ? "var(--accent-dim)" : "transparent",
-                borderColor: win === w.id ? "var(--accent-border)" : "var(--border)",
-                color:       win === w.id ? "var(--accent)" : "var(--text-secondary)",
-              }}>
-                {w.label}
-                {cache[w.id] && (
-                  <span style={{ marginLeft: 6, fontSize: "0.68rem", opacity: 0.6, fontWeight: 400 }}>
-                    {new Date(cache[w.id].generated_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-          <div style={{ fontSize: "0.72rem", color: "var(--text-tertiary)" }}>
-            {nlDateRange(win)}
-          </div>
-        </div>
-        <button onClick={generate} disabled={isQueued} style={{
-          padding: "7px 20px", borderRadius: 8,
-          border: isQueued ? "1px solid var(--border)" : "none",
-          fontSize: "0.86rem", fontWeight: 700, cursor: isQueued ? "not-allowed" : "pointer",
-          background: isQueued ? "var(--surface-2)" : "var(--accent)",
-          color: isQueued ? "var(--text-tertiary)" : "#fff",
-          display: "flex", alignItems: "center", gap: 8,
-        }}>
-          {isQueued ? <><Spinner /> Queued… {formatElapsed(elapsed)}</> : isDone ? "Regenerate" : "Generate"}
-        </button>
+      {/* Window selector */}
+      <div style={{ display: "flex", gap: 6 }}>
+        {NL_WINDOWS.map(w => (
+          <button key={w.id} onClick={() => setWin(w.id)} style={{
+            padding: "6px 14px", borderRadius: 6, border: "1px solid",
+            fontSize: "0.8rem", fontWeight: 600, cursor: "pointer",
+            background:  win === w.id ? "var(--accent-dim)" : "transparent",
+            borderColor: win === w.id ? "var(--accent-border)" : "var(--border)",
+            color:       win === w.id ? "var(--accent)" : "var(--text-secondary)",
+          }}>
+            {w.label}
+          </button>
+        ))}
       </div>
 
-      {/* Queued notice */}
-      {isQueued && (
-        <div style={{ padding: "12px 16px", borderRadius: 8, background: "var(--accent-dim)", border: "1px solid var(--accent-border)", fontSize: "0.82rem", color: "var(--accent)" }}>
-          Generation in progress. Usually takes about 5 minutes. You can close this page and the result will be here when you return.
+      {/* Loading */}
+      {status === "loading" && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--text-tertiary)", fontSize: "0.84rem" }}>
+          <Spinner /> Loading latest newsletter…
+        </div>
+      )}
+
+      {/* Empty */}
+      {status === "empty" && (
+        <div style={{ padding: "20px 18px", textAlign: "center", border: "1px dashed var(--border)", borderRadius: 10, color: "var(--text-tertiary)", fontSize: "0.84rem", lineHeight: 1.6 }}>
+          <div style={{ fontWeight: 600, color: "var(--text-secondary)", marginBottom: 4 }}>Not available yet</div>
+          This newsletter is generated automatically each period. Check back after the next scheduled run.
         </div>
       )}
 
       {/* Error */}
       {status === "error" && (
         <div style={{ padding: "12px 16px", borderRadius: 8, background: "var(--red-dim)", border: "1px solid var(--red-border)", fontSize: "0.82rem", color: "var(--red)" }}>
-          <strong>Failed:</strong> {error}
+          Couldn’t load the newsletter. Please try again.
         </div>
       )}
 
-      {/* Preview */}
-      {isDone && html && (
+      {/* Ready — preview + copy */}
+      {status === "ready" && data?.html && (
         <div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 10, flexWrap: "wrap" }}>
             <span style={{ fontSize: "0.72rem", color: "var(--text-tertiary)" }}>
-              {cached?.sourceCount} sources &middot; {cached?.period?.label}
-              {cached?.generated_at && (
-                <> &middot; generated {new Date(cached.generated_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</>
-              )}
+              {data.sourceCount != null && <>{data.sourceCount} sources · </>}
+              {data.period?.label}
+              {genAt && <> · generated {genAt}</>}
             </span>
             <button onClick={copy} style={{
               display: "flex", alignItems: "center", gap: 6,
@@ -497,7 +356,7 @@ function NewsletterPanel({ secret }) {
           <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
             <iframe
               ref={iframeRef}
-              srcDoc={html}
+              srcDoc={data.html}
               onLoad={onIframeLoad}
               sandbox="allow-same-origin"
               title="Newsletter preview"
@@ -527,7 +386,6 @@ function NewsletterPanel({ secret }) {
           ))}
         </ul>
       </div>
-
     </div>
   );
 }
@@ -553,15 +411,15 @@ export function GeneratePage() {
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <div style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.1em", color: "var(--text-tertiary)", textTransform: "uppercase", marginBottom: 8 }}>
-          Generate
+          Reports
         </div>
         <h1 style={{ margin: 0, fontSize: "1.5rem", fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.2 }}>
           {tab === "slides" ? "Slide Deck" : "Newsletter"}
         </h1>
         <p style={{ margin: "8px 0 0", fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
           {tab === "slides"
-            ? "Generates a .pptx deck on the AI threat landscape for the selected time period. Takes 10–30 minutes. You can close this page while it runs."
-            : "A digest of curated AI threat sources and key insights from the selected time period, ready to send as an email newsletter. Usually ready in about 5 minutes. You can close this page while it runs."}
+            ? "Slide decks on the AI threat landscape are generated automatically each period. Pick a timeframe to download the latest."
+            : "A digest of curated AI threat sources and key insights, generated automatically each period. Pick a timeframe to copy the latest into an email."}
         </p>
       </div>
 
@@ -573,7 +431,7 @@ export function GeneratePage() {
         }}>
           <div style={{ fontSize: "1.4rem", marginBottom: 12 }}>🔒</div>
           <div style={{ fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>Access required</div>
-          Enter a guest or admin code via the lock icon in the nav to generate reports.
+          Enter a guest or admin code via the lock icon in the nav to access reports.
         </div>
       ) : (
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
@@ -598,7 +456,7 @@ export function GeneratePage() {
           <div style={{ padding: "24px 24px" }}>
             {tab === "slides"
               ? <SlidesPanel secret={token} />
-              : <NewsletterPanel secret={token} />}
+              : <NewsletterPanel />}
           </div>
         </div>
       )}

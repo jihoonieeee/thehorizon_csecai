@@ -226,7 +226,7 @@ After render, two blobs are uploaded:
 
 A row is upserted into the `decks` Supabase table with `pptx_url`, `blob_path` (JSON URL), `slide_count`, `source_count`, and the source window dates.
 
-The frontend polls `GET /api/generate-report?list=1` every 20 seconds. When a deck row with a `pptx_url` newer than `triggeredAt` appears, the download button is shown. Downloads are proxied through `GET /api/generate-report?download=1&deck_id=...` since the Blob store is private.
+The dashboard Generate page is **read-only**: on load it calls `GET /api/generate-report?list=1`, picks the newest deck whose `deck_id` ends in `-{window}`, and shows a download button. Downloads are proxied through `GET /api/generate-report?download=1&deck_id=...` (fetched with the bearer token, then saved client-side) since the Blob store is private. There is no user-facing generation trigger — decks are pre-generated on a schedule (see Triggering below).
 
 ---
 
@@ -249,7 +249,17 @@ The frontend polls `GET /api/generate-report?list=1` every 20 seconds. When a de
 
 ## Triggering
 
-**From the dashboard:** Generate page → select period → Generate Slides button → POST `/api/generate-report` → dispatches `generate-slides.yml` workflow via GitHub API.
+**Scheduled (production):** `generate-slides.yml` runs on cron and pre-generates each window into the `decks` table + Blob, so the dashboard offers instant downloads with no user trigger:
+
+| Window | Cron (UTC) | Fires |
+|---|---|---|
+| `month`   | `0 18 1 * *`        | 1st of every month |
+| `quarter` | `0 18 1 1,4,7,10 *` | 1st of each quarter |
+| `year`    | `0 18 1 1 *`        | 1 January |
+
+On overlapping dates (e.g. 1 Jan) GitHub fires one run per matching cron. Runs are idempotent — decks upsert on `deck_id = deck-<date>-<window>`.
+
+**Development / testing only:** run `generate-slides.yml` via *Run workflow* (workflow_dispatch), or `POST /api/generate-report` (gated by `CRON_SECRET`) to dispatch the same workflow on demand. Not exposed in the UI.
 
 **From CLI:**
 ```bash
@@ -258,11 +268,12 @@ node scripts/generateSlides.js --from 2026-07-01 --to 2026-07-22
 node scripts/generateSlides.js --window quarter --skip-qa --dry-run
 ```
 
-**Reporting windows:**
+**Reporting windows** (previous complete calendar period, SGT-anchored — not rolling):
 
-| Option | Days |
+| Option | Window |
 |---|---|
-| `month` | 30 |
-| `quarter` | 90 |
-| `half_year` | 180 |
-| `year` | 365 |
+| `month` | previous complete calendar month |
+| `quarter` | previous complete calendar quarter |
+| `year` | previous complete calendar year |
+
+A `--from YYYY-MM-DD --to YYYY-MM-DD` pair overrides the window with a custom range.
