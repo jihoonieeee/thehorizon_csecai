@@ -13,7 +13,7 @@ The intended audience is cybersecurity professionals, policy analysts, and decis
 - File storage: Vercel Blob for snapshot JSON archives
 - LLM enrichment: OpenAI (primary, gpt-4o-mini) or Gemini (fallback, gemini-2.5-flash)
 - Deployment: Vercel Hobby plan (12 serverless function limit)
-- Scheduling: GitHub Actions — pipeline.yml has three daily runs: 04:00 UTC pre-ingest buffer (12:00 SGT), 16:00 UTC primary (00:00 SGT midnight), 20:00 UTC backup (04:00 SGT); expanded windows on Mondays (7d) and 1st of month (30d)
+- Scheduling: GitHub Actions — pipeline.yml runs the full pipeline three times daily: 04:00 UTC pre-ingest buffer (12:00 SGT, catches fresh arXiv), 16:00 UTC primary (00:00 SGT midnight), 20:00 UTC backup (04:00 SGT); expanded ingest windows on Mondays (7d) and 1st of month (30d); insights only on weekly/monthly/quarterly triggers
 
 
 ## Environment Variables
@@ -158,11 +158,11 @@ End-to-end pipeline order for a manual run:
      node scripts/discoverOperationalSources.js
 
   3. CLASSIFY (L4a–f)
-     node scripts/classify.js [--limit 200] [--sig-limit 100]
+     node scripts/classify.js [--limit 400] [--sig-limit 100]
        Classifies all sources with main_category IS NULL (from steps 1 + 2).
 
   4. EVIDENCE EXTRACTION (L5)
-     node scripts/extractEvidence.js [--limit 150] [--since-hours 26]
+     node scripts/extractEvidence.js [--limit 150] [--since-hours 48]
        Extracts structured evidence for eligible classified sources.
        Omit --since-hours for a full-corpus backfill.
 

@@ -9,9 +9,9 @@ Read this before touching pipeline code. For API endpoints, see `docs/api.md`.
 
 GitHub Actions runs the full pipeline on three daily schedules (all UTC):
 
-- **04:00 UTC** (12:00 SGT) — pre-ingest buffer: connector + web ingest only, no classify/evidence. Runs arXiv during a low-traffic window so results are ready before the primary.
-- **16:00 UTC** (00:00 SGT midnight) — primary daily run: full pipeline including classify and evidence.
-- **20:00 UTC** (04:00 SGT) — backup run: same job chain, 4 hours after the primary. Idempotent — if the primary succeeded, classify and evidence exit in seconds with no LLM calls.
+- **04:00 UTC** (12:00 SGT) — pre-ingest buffer: full pipeline (ingest → classify → rescrape → evidence). Runs arXiv during a low-traffic window; by the time the primary fires at 16:00, fresh arXiv papers are already classified. Classify and evidence are idempotent, so the 16:00 run only processes new sources.
+- **16:00 UTC** (00:00 SGT midnight) — primary daily run: same full pipeline.
+- **20:00 UTC** (04:00 SGT) — backup run: same job chain, 4 hours after the primary. If the primary succeeded, classify and evidence exit in seconds with no LLM calls.
 
 ```
 collect sources  →  rescrape short  →  classify them  →  extract evidence  →  (weekly/monthly/quarterly) generate insights
@@ -64,6 +64,10 @@ the database but excluded from the dashboard, slides, and newsletter.
 ```
 04:00 UTC (pre-ingest buffer) / 16:00 UTC (primary) / 20:00 UTC (backup)
 │
+├─ preflight         (skip check + window + insights flags)
+│
+│  [should_skip=true → all downstream jobs skip immediately]
+│
 ├─ connector-ingest  (scripts/ingest.js)         ─┐  parallel
 ├─ web-ingest        (two scripts, see below)    ─┘
 │
@@ -77,8 +81,19 @@ the database but excluded from the dashboard, slides, and newsletter.
 ├─ evidence          (scripts/extractEvidence.js)
 │
 └─ insights          (scripts/generateDashboardInsights.js)
-                     [weekly / monthly / quarterly only — not on plain daily]
+                     [weekly / monthly / quarterly only — not on plain daily or buffer]
 ```
+
+**Backup skip logic:** the preflight job runs first on every trigger. For the 20:00 backup,
+it queries the GitHub API for any successful run of this workflow since 15:00 UTC today.
+If one exists (the primary succeeded), `should_skip=true` and every downstream job is
+skipped. No connector calls, no Tavily quota, no LLM calls. If the primary failed or was
+dropped by GHA, `should_skip=false` and the backup runs for real.
+
+**No concurrent runs:** the old design had 9 cron entries; on Mondays and month-starts
+multiple crons fired simultaneously (e.g. `0 16 * * *` and `0 16 * * 1` both fire Monday
+at 16:00). There are now exactly 3 cron entries. The ingest window (`--days 3/7/30`) and
+which insights to generate are computed from the current date inside preflight.
 
 ---
 
@@ -352,7 +367,7 @@ Jan/Apr/Jul/Oct 1st. The plain daily run skips this job.
 
 | Time (UTC) | SGT | Trigger | What runs | `--days` |
 |---|---|---|---|---|
-| 04:00 daily | 12:00 | pre-ingest buffer | connector-ingest, web-ingest | 3 |
+| 04:00 daily | 12:00 | pre-ingest buffer | full pipeline (ingest + classify + rescrape + evidence) | 3 |
 | 16:00 daily | 00:00 | primary | connector-ingest, web-ingest, classify, rescrape, evidence | 3 |
 | 20:00 daily | 04:00 | backup | same as primary (idempotent) | 3 |
 | 16:00 Monday | 00:00 Mon | weekly primary | full pipeline + weekly insights | 7 |
@@ -362,7 +377,7 @@ Jan/Apr/Jul/Oct 1st. The plain daily run skips this job.
 | 16:00 Jan/Apr/Jul/Oct 1 | 00:00 | quarterly primary | full pipeline + monthly + quarterly insights | 30 |
 | 20:00 Jan/Apr/Jul/Oct 1 | 04:00 | quarterly backup | same (idempotent) | 30 |
 
-**Note:** the Monday and 1st-of-month crons overlap with the daily crons. On those days, the more specific cron fires with the expanded window. The pre-ingest buffer always uses `--days 3` regardless of day.
+**Note:** there are only 3 cron entries. The window and insights flags are derived from the current date inside preflight, so Monday and month-start behaviour is automatic with no duplicate concurrent runs.
 
 ---
 
