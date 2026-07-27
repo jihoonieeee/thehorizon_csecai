@@ -55,10 +55,9 @@ const WINDOWS = [
   { id: "week",    label: "Last Week"    },
   { id: "month",   label: "Last Month"   },
   { id: "quarter", label: "Last Quarter" },
-  { id: "annual",  label: "2025 Q3 – 2026 Q2" },
 ];
 
-const WINDOW_NOUN = { week: "Week", month: "Month", quarter: "Quarter", annual: "Annual" };
+const WINDOW_NOUN = { week: "Week", month: "Month", quarter: "Quarter" };
 
 const REFRESH_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -839,7 +838,7 @@ export function OverviewPage() {
       {data?.trend?.week_labels?.length > 1 && (
         <>
           <div className="hz-overview-section-title">
-            {data.window === "annual" ? "Monthly source volume" : "Weekly source volume"}
+            Weekly source volume
           </div>
           <div className="hz-trend-panel">
             <TrendChart trend={data.trend} />
