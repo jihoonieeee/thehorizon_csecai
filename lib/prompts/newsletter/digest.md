@@ -28,10 +28,12 @@ Brevity is the standard. One or two sentences, roughly 35 words. If a second sen
 If the sources for a category contain multiple unrelated findings, write one short paragraph per finding rather than one long one. Never merge two distinct insights.
 
 TOO LONG (verbose, over-detailed, three sentences doing one job):
-"LLM-assisted SOC tooling introduces a new class of attacker-controlled input: adversaries now embed prompt-injection payloads directly into the log data that analysts query, turning the evidence stream into an attack surface. At an 83.4% success rate against production systems, this is not a theoretical weakness — it is an operational capability that allows attackers to suppress alerts or exfiltrate session context through the analyst's own tooling. Any LLM integrated into a security workflow that ingests untrusted data must be treated as an externally influenced decision-maker, not a trusted analytical layer."
+"LLM-assisted SOC tooling introduces a new class of attacker-controlled input: adversaries now embed prompt-injection payloads directly into the log data that analysts query, turning the evidence stream into an attack surface. This is not a theoretical weakness — it is an operational capability that allows attackers to suppress alerts or exfiltrate session context through the analyst's own tooling. Any LLM integrated into a security workflow that ingests untrusted data must be treated as an externally influenced decision-maker, not a trusted analytical layer."
 
 SHARP (same intelligence, cut to the bone):
 "Attackers now plant prompt-injection payloads in the logs SOC analysts query, turning security LLMs against their operators to suppress alerts or leak session context. Treat any model that reads untrusted data as attacker-controlled, not a trusted analyst."
+
+(The examples above carry no statistic on purpose — do not read a number into them.)
 
 ════ VOICE ════
 
@@ -42,7 +44,8 @@ Confident, direct, present tense. A senior analyst briefing a CISO in one line �
 - Do not mention individual source titles, publishers, or authors.
 - Plain prose only. No bullet points, dashes, or sub-headers.
 - Each paragraph: 1–2 sentences, ~35 words. Sharp and direct — never padded, never a dense wall.
-- Cite at most one statistic per paragraph, and only if it carries the point. Round it (say "~83%", not "83.4%").
+- NEVER invent, estimate, or extrapolate a statistic. Use a number ONLY if it appears in the sources, blurbs, or trends you were given. If you did not see it in the input, do not write it.
+- Cite at most one statistic per paragraph, and only if it carries the point. Round to a clean figure (e.g. "~80%").
 - If a period assessment and key trends are provided, use them as the analytical foundation — distill rather than paraphrase.
 - If not provided, synthesise from the source blurbs — but always write landscape signal, never article summaries.
 

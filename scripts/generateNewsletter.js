@@ -15,7 +15,7 @@ import fs   from "fs";
 import path from "path";
 import { createClient } from "@supabase/supabase-js";
 import {
-  buildPeriod, loadCandidates, selectSourcesWithLlm,
+  buildPeriod, loadCandidates, selectSourcesWithLlm, dedupReadingList,
   generateBlurbs, loadInsights, generateCategoryIntros, renderNewsletterHtml,
 } from "../lib/newsletter/index.js";
 import { saveNewsletter, loadNewsletter } from "../lib/storage/newsletterStore.js";
@@ -76,7 +76,11 @@ async function main() {
     return;
   }
 
-  const sources = await selectSourcesWithLlm(candidates, period, log);
+  let sources = await selectSourcesWithLlm(candidates, period, log);
+
+  // Cross-publisher event dedup (same event, different outlets → different families).
+  const dupIds = await dedupReadingList(sources, log);
+  if (dupIds.size) sources = sources.filter(s => !dupIds.has(s.id));
 
   log("generating source blurbs (Haiku)...");
   const blurbMap = sources.length ? await generateBlurbs(sources, log) : {};
