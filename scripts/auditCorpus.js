@@ -360,14 +360,23 @@ async function loadBatch() {
     "parent_source_id", "created_at",
   ].join(",");
 
+  // --since/--today filters by created_at (ingestion time), which diverges from
+  // date_published for backfilled/discovered sources. Applying it to a
+  // date_published-ordered window would silently drop recent-but-old-dated
+  // sources, so we push it into the query and page over the whole matching set
+  // ordered by created_at instead of the 200-row window.
+  const baseQuery = () => {
+    let q = sb.from("sources").select(FIELDS).eq("validation_status", "pass");
+    if (SINCE_DATE) return q.gte("created_at", SINCE_DATE).order("created_at", { ascending: false });
+    return q.order("date_published", { ascending: false });
+  };
+
   let rows = [];
-  if (PAGE === null) {
-    // Load full corpus in pages
+  if (PAGE === null || SINCE_DATE) {
+    // Load the full matching set in pages (entire corpus, or everything --since)
     let from = 0;
     while (true) {
-      const { data, error } = await sb.from("sources").select(FIELDS)
-        .eq("validation_status", "pass").order("date_published", { ascending: false })
-        .range(from, from + 499);
+      const { data, error } = await baseQuery().range(from, from + 499);
       if (error) { console.error("load error:", error.message); process.exit(1); }
       if (!data || data.length === 0) break;
       rows.push(...data);
@@ -377,16 +386,13 @@ async function loadBatch() {
   } else {
     const rangeStart = (PAGE - 1) * WINDOW_SIZE;
     const rangeEnd   = rangeStart + WINDOW_SIZE - 1;
-    const { data, error } = await sb.from("sources").select(FIELDS)
-      .eq("validation_status", "pass").order("date_published", { ascending: false })
-      .range(rangeStart, rangeEnd);
+    const { data, error } = await baseQuery().range(rangeStart, rangeEnd);
     if (error) { console.error("load error:", error.message); process.exit(1); }
     rows = data || [];
   }
 
   if (CAT_FILTER)    rows = rows.filter(s => s.main_category === CAT_FILTER);
   if (ORIGIN_FILTER) rows = rows.filter(s => (s.source_origin || s.discovery_route || "").toLowerCase().includes(ORIGIN_FILTER.toLowerCase()));
-  if (SINCE_DATE)    rows = rows.filter(s => (s.created_at || "").slice(0, 10) >= SINCE_DATE);
 
   // Risk-sort then pick the batch window
   rows.sort((a, b) => riskScore(b) - riskScore(a));
@@ -399,7 +405,7 @@ async function loadBatch() {
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 async function main() {
-  const pageLabel = PAGE === null ? "all" : `page ${PAGE}`;
+  const pageLabel = (PAGE === null || SINCE_DATE) ? "all" : `page ${PAGE}`;
   console.log(`\n  The Horizon — Corpus Audit`);
   console.log(`  Batch ${BATCH}  (offset ${OFFSET}–${OFFSET + BATCH_SIZE - 1})  [${pageLabel}]${CAT_FILTER ? `  category=${CAT_FILTER}` : ""}${ORIGIN_FILTER ? `  origin~=${ORIGIN_FILTER}` : ""}${SINCE_DATE ? `  since=${SINCE_DATE}` : ""}`);
   console.log(`  HTTP checks: ${NO_HTTP ? "off" : "on"}   Evidence: ${ALL_EVIDENCE ? "all" : `first ${EV_LIMIT}`}\n`);
