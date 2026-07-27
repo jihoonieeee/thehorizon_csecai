@@ -42,6 +42,17 @@ test("2-digit bare integers are below the specificity threshold (not scrubbed)",
   assert.equal(checkFactGrounding("Compromised 31 packages.", "unrelated grounding").grounded, true);
 });
 
+test("number+unit is specific even at 1-2 digits (lever 1)", () => {
+  // "22 MB" absent from grounding → flagged, even though 22 is 2 digits.
+  assert.equal(checkFactGrounding("one used 22 MB file padding.", "a skill inflated its file size").grounded, false);
+  // present → kept
+  assert.equal(checkFactGrounding("one used 22 MB file padding.", "the skill inflated its file to 22 MB").grounded, true);
+  // time unit
+  assert.equal(checkFactGrounding("ran for 8 hours.", "operated across roughly 14 hours").grounded, false);
+  // a bare 2-digit integer with no unit is still not scrubbed
+  assert.equal(checkFactGrounding("22 packages were affected.", "unrelated").grounded, true);
+});
+
 test("facts with no specific figures are untouched", () => {
   const r = checkFactGrounding("Model registries are now active malware channels.", "unrelated grounding");
   assert.equal(r.grounded, true);
