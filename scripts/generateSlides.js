@@ -234,13 +234,33 @@ async function main() {
     }
   }
 
+  // ── Fetch full_text for every cited source (once) ─────────────────────────
+  // Both the deterministic scrub and the QA gate ground on full_text — the same
+  // basis the insight layer uses — not the ~550-char short_summary. Fetch the
+  // union of cited URLs a single time and share the map.
+  const citedUrls = new Set();
+  for (const cat of activeCategories) {
+    const report = categoryReports[cat];
+    const idx = contexts[cat]?.sourceIndex || {};
+    for (const shift of report?.strategic_shifts || [])
+      for (const ev of shift.supporting_evidence || [])
+        for (const l of ev.cited_sources || []) { const u = idx[l]?.source_url; if (u) citedUrls.add(u); }
+  }
+  const fullTextByUrl = new Map();
+  if (citedUrls.size) {
+    const { data } = await supabase.from("sources").select("url,full_text").in("url", [...citedUrls]);
+    for (const r of data || []) if (r.full_text) fullTextByUrl.set(r.url, r.full_text);
+    log(`  full_text resolved for ${fullTextByUrl.size}/${citedUrls.size} cited sources`);
+  }
+
   // ── Grounding scrub: drop facts with invented/mis-stated figures ──────────
   // Safety net for the prompt's grounding rules — strips a supporting fact whose
-  // specific figures are absent from the insight block + the fact's cited sources.
+  // specific figures are absent from the insight block + the fact's cited sources'
+  // full text.
   for (const cat of activeCategories) {
     const report = categoryReports[cat];
     if (!report) continue;
-    const dropped = scrubSlideReport(report, contexts[cat]);
+    const dropped = scrubSlideReport(report, contexts[cat], fullTextByUrl);
     for (const d of dropped) {
       log(`  ⚠ ${cat}: dropped ungrounded fact [${(d.ungrounded || []).join(", ")}] — "${d.fact?.slice(0, 80)}"`);
     }
@@ -256,7 +276,7 @@ async function main() {
       activeCategories.map(async cat => {
         const report = categoryReports[cat];
         if (!report) return [cat, { issues: [], citation_issue_count: 0, entailment_issue_count: 0 }];
-        const qa = await qaReport(report, contexts[cat].sourceIndex, { skipEntailment: skipQa, supabase });
+        const qa = await qaReport(report, contexts[cat].sourceIndex, { skipEntailment: skipQa, supabase, fullTextByUrl });
         return [cat, qa];
       })
     ),
