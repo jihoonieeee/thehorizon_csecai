@@ -82,11 +82,13 @@ for (const b of bullets) {
   const results = [];
   for (const u of b.urls) {
     const src = byUrl.get(norm(u));
-    if (!src) { results.push({ url: u, r: { supported: null, reason: "not in DB" } }); continue; }
+    if (!src) { results.push({ url: u, r: { verdict: "no_db", reason: "not in DB" } }); continue; }
     results.push({ url: u, r: await checkOne(b.text, src) });
     checked++;
   }
-  const anySupported = results.some(x => x.r?.supported === true);
+  // QA prompt returns verdict ok|correctable|unsupported. A bullet is clean when
+  // at least one cited source fully supports it (verdict "ok"); flag otherwise.
+  const anySupported = results.some(x => x.r?.verdict === "ok");
   if (!anySupported) {
     semantic.push({ ...b, results });
   }
@@ -102,5 +104,5 @@ console.log(`\n-- Phase 2 semantic (bullets where NO cited source supports the c
 if (!semantic.length) console.log("  ✓ every cited bullet is supported by at least one of its cited sources");
 for (const s of semantic) {
   console.log(`\n  [${s.cat}] "${s.text}"`);
-  for (const r of s.results) console.log(`     - ${r.r?.supported} (${r.r?.confidence||"-"}) ${r.url}\n       ${r.r?.reason||""}`);
+  for (const r of s.results) console.log(`     - ${r.r?.verdict || "?"} ${r.url}\n       ${r.r?.reason||""}`);
 }
