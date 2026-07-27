@@ -258,6 +258,15 @@ async function main() {
     if (qa.citation_issue_count > 0)   log(`  ⚠ ${cat}: ${qa.citation_issue_count} citation issues fixed`);
     if (qa.entailment_issue_count > 0) log(`  ⚠ ${cat}: ${qa.entailment_issue_count} entailment failures flagged`);
     if (qa.citation_issue_count === 0 && qa.entailment_issue_count === 0) log(`  ✓ ${cat}: QA passed`);
+    // Surface each flagged bullet so it can be reviewed (spot-check, non-blocking).
+    for (const iss of qa.issues || []) {
+      if (iss.type === "entailment_failure") {
+        log(`      ↳ [${iss.cited}] "${iss.bullet}${iss.bullet?.length >= 100 ? "…" : ""}"`);
+        if (iss.reason) log(`         reason: ${iss.reason}`);
+      } else if (iss.type === "unresolvable_citation") {
+        log(`      ↳ dropped citation ${iss.label} (${iss.context})`);
+      }
+    }
   }
 
   // ── Step 5 (cont): Plan category slides ──────────────────────────────────
