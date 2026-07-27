@@ -14,6 +14,26 @@ Your job: identify the strongest strategic conclusions from this category and pe
 
 The dossier may be preceded by a SELECTION CONTEXT block. When present, it identifies which sources were pre-screened as most valuable and which share a mechanism (clusters). Use this to guide your synthesis — sources listed in the same cluster are candidates for a single strategic shift.
 
+════ INSIGHT-ANCHORED MODE (use when a VALIDATED INSIGHTS block is present) ════
+
+If the input contains a VALIDATED INSIGHTS block, those insights are the period's confirmed analytical conclusions, already reviewed. They are the SPINE of your output. Your job in this mode is to FORMAT them into slides — NOT to re-analyse, re-derive, invent new conclusions, or replace them with your own generalisations.
+
+For each insight, produce one strategic shift:
+- headline    ← tighten "Headline seed" to a 5–10 word newspaper headline (concrete; keep the specific actor/system/event named in the seed — do not abstract it into "guardrails bypassed by design"-style vagueness).
+- takeaway    ← compress "Conclusion" to ≤35 words, plain language, keeping the specific facts (who, what, scale).
+- supporting_evidence ← select the 2–3 sharpest "Key points"; compress each to ≤22 words, one idea each. These must stay concrete and readable — a reader sees them on a slide. Cite the S-labels given in that insight's "Cite" line.
+- maturity    ← use the insight's stated Maturity.
+- confidence  ← use the insight's stated Confidence if given.
+
+Rules in this mode:
+- One shift per insight. Do not merge two insights or split one into two.
+- Produce up to 3 shifts (the strongest insights). If more than 3 insights are provided, drop the weakest by maturity.
+- Preserve every specific: named actors, systems, CVEs, figures, and the epistemic status. Do not soften a concrete finding into an abstraction — vague, hard-to-read headlines are the failure this mode exists to prevent.
+- The maturity gate and epistemic-discipline rules below still apply. Numbers still do not belong in headlines.
+- Use the SOURCE DOSSIER only to (a) resolve citations and (b) populate coverage_gaps with anything material the insights did not cover.
+
+When NO VALIDATED INSIGHTS block is present, fall back to synthesising strategic shifts from the dossier using the rules below.
+
 ════ STRATEGIC SHIFTS ════
 
 Produce two or three strategic shifts. Three is the target when the evidence supports it. Return fewer only when fewer are genuinely warranted — do not pad with weaker material to reach three.
@@ -224,7 +244,7 @@ FRAMING QUESTION: {{framing_question}}
 IN SCOPE:         {{in_scope}}
 OUT OF SCOPE:     {{out_of_scope}}
 
-SOURCE DOSSIER
+{{insights}}SOURCE DOSSIER
 ==============
 {{dossier}}
 

@@ -87,7 +87,26 @@ function resolveTimeframe() {
   }
 
   const period = getCompletedPeriodWindow(win);
-  return { dateFrom: period.date_from, dateTo: period.date_to, label: period.label };
+  return { dateFrom: period.date_from, dateTo: period.date_to, label: period.label, insightKey: period.key };
+}
+
+// Load the period's validated dashboard insights, keyed by category. These anchor
+// the slide content when present (higher-quality synthesis than re-deriving from
+// raw sources). Returns {} when the window has no insights (e.g. the year window,
+// or a custom --from/--to range) — the pipeline then falls back to dossier synthesis.
+async function loadCategoryInsights(supabase, windowKey) {
+  if (!windowKey) return {};
+  const { data, error } = await supabase
+    .from("dashboard_insights")
+    .select("category, points")
+    .eq("window_key", windowKey);
+  if (error) { log(`  ⚠ insight load failed: ${error.message}`); return {}; }
+  const byCat = {};
+  for (const r of data || []) {
+    if (r.category?.startsWith("_")) continue; // skip _period_meta / _newsletter
+    if (r.points?.insights?.length) byCat[r.category] = r.points;
+  }
+  return byCat;
 }
 
 function makeTimeframeLabel(dateFrom, dateTo) {
@@ -110,7 +129,7 @@ function log(msg) { process.stdout.write(`${msg}\n`); }
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const { dateFrom, dateTo, label: timeframeLabel } = resolveTimeframe();
+  const { dateFrom, dateTo, label: timeframeLabel, insightKey } = resolveTimeframe();
   const outPath = path.resolve(argv.out);
   const skipQa  = argv["skip-qa"] ?? false;
   const dryRun  = argv["dry-run"] ?? false;
@@ -183,10 +202,14 @@ async function main() {
   await attachEvidence(supabase, allSelected);
 
   // ── Step 2c: Build category contexts (deterministic) ─────────────────────
-  log("\nStep 2c/6  Building category contexts…");
+  // Anchor on the period's validated insights when available (higher quality
+  // than re-deriving from raw sources); fall back to dossier-only otherwise.
+  const categoryInsights = await loadCategoryInsights(supabase, insightKey);
+  const insightCats = Object.keys(categoryInsights);
+  log(`\nStep 2c/6  Building category contexts… ${insightCats.length ? `(insight-anchored: ${insightCats.join(", ")})` : "(dossier-only — no insights for this window)"}`);
   const contexts = {};
   for (const { cat, selectedSources, clusterContext } of selectionResults) {
-    contexts[cat] = buildCategoryContext(cat, selectedSources, clusterContext);
+    contexts[cat] = buildCategoryContext(cat, selectedSources, clusterContext, categoryInsights[cat] || null);
   }
 
   // ── Step 3: Generate category reports (LLM, parallel) ────────────────────
