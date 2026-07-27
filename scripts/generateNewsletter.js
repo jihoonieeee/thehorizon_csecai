@@ -18,7 +18,7 @@ import {
   buildPeriod, loadCandidates, selectSourcesWithLlm,
   generateBlurbs, loadInsights, generateCategoryIntros, renderNewsletterHtml,
 } from "../lib/newsletter/index.js";
-import { saveNewsletter } from "../lib/storage/newsletterStore.js";
+import { saveNewsletter, loadNewsletter } from "../lib/storage/newsletterStore.js";
 
 const args    = process.argv.slice(2);
 const getArg  = (flag, def) => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : def; };
@@ -28,6 +28,10 @@ const WINDOW  = getArg("--window", "week");
 const ASOF    = getArg("--asof",   null);
 const DRY_RUN = hasFlag("--dry-run");
 const SAVE    = hasFlag("--save");
+// Backup-run guard: exit early (no LLM cost) if a newsletter for THIS period
+// already exists. Lets a scheduled backup run cheaply confirm the primary
+// succeeded and do real work only when it didn't. Implies --save intent.
+const SKIP_IF_EXISTS = hasFlag("--skip-if-exists");
 
 if (!["week", "month"].includes(WINDOW)) {
   console.error("--window must be week | month"); process.exit(1);
@@ -47,6 +51,17 @@ async function main() {
   console.log(`  Window : ${period.label} (${period.date_from} → ${period.date_to})`);
 
   const log = msg => console.log(`  ${msg}`);
+
+  if (SKIP_IF_EXISTS) {
+    const existing = await loadNewsletter(supabase, WINDOW);
+    if (existing?.period?.date_from === period.date_from &&
+        existing.period.date_to   === period.date_to) {
+      log(`already generated for this period (${period.date_from} → ${period.date_to}); skipping.`);
+      console.log();
+      return;
+    }
+    log("no newsletter for this period yet — generating.");
+  }
 
   log("loading candidates...");
   const candidates = await loadCandidates(supabase, period.date_from, period.date_to);
@@ -89,7 +104,7 @@ async function main() {
   console.log(`\n  Done. ${sources.length} sources · ${Object.values(introMap).filter(Boolean).length} category intros`);
   console.log(`  Written to: ${outFile} (${kb} KB)`);
 
-  if (SAVE) {
+  if (SAVE || SKIP_IF_EXISTS) {
     log("saving to Supabase...");
     await saveNewsletter(supabase, {
       window: WINDOW,

@@ -49,6 +49,10 @@ const { values: argv } = parseArgs({
     category:   { type: "string" },
     "skip-qa":  { type: "boolean", default: false },
     "dry-run":  { type: "boolean", default: false },
+    // Backup-run guard: exit early (no LLM cost) if a deck for THIS window's
+    // target period already exists. Lets a scheduled backup confirm the primary
+    // succeeded and regenerate only when it didn't.
+    "skip-if-exists": { type: "boolean", default: false },
     rerender:   { type: "string" },   // path to a saved deck .json — skips all LLM calls
   },
   strict: false,
@@ -119,9 +123,26 @@ async function main() {
   if (dryRun)    log(`  Dry run — no LLM calls or PPTX output`);
   log("");
 
+  const supabase = makeSupabaseClient();
+
+  // ── Backup-run guard ──────────────────────────────────────────────────────
+  // Exit before any LLM work if a deck for this exact window already exists.
+  if (argv["skip-if-exists"] && !singleCat) {
+    const win = argv.window || "custom";
+    const { data, error } = await supabase
+      .from("decks")
+      .select("deck_id")
+      .eq("source_window_start", dateFrom)
+      .eq("source_window_end",   dateTo);
+    if (!error && (data || []).some(d => d.deck_id?.endsWith(`-${win}`))) {
+      log(`Deck already exists for ${win} (${dateFrom} → ${dateTo}); skipping.\n`);
+      return;
+    }
+    log(`No existing ${win} deck for this period — generating.\n`);
+  }
+
   // ── Step 1: Fetch corpus ──────────────────────────────────────────────────
   log("Step 1/6  Fetching sources…");
-  const supabase = makeSupabaseClient();
   const allSources = await fetchSlideCorpus(supabase, dateFrom, dateTo);
   log(`  ${allSources.length} sources fetched`);
 

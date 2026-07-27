@@ -2,9 +2,15 @@ name: Generate Newsletter
 
 # Newsletters are pre-generated on a schedule so the dashboard can show the
 # latest instantly (no on-demand user trigger). Each cron maps to one fixed,
-# previous-complete calendar window (see lib/newsletter buildPeriod). Runs are
-# idempotent: saveNewsletter upserts on window_key × category. On a Monday that
-# is also the 1st, both crons fire and week + month regenerate.
+# previous-complete calendar window (see lib/newsletter buildPeriod). Weekly (7d)
+# and monthly (30d) intervals are both under GitHub's 60-day inactivity
+# auto-disable, so direct crons are fine (no monthly-gating trick needed).
+#
+# Each primary has a backup 4h later that passes --skip-if-exists: if the primary
+# already saved a newsletter for that period, the backup exits in seconds with
+# zero LLM calls; it only regenerates when the primary was dropped. saveNewsletter
+# upserts on window_key × category. On a Monday that is also the 1st, both weekly
+# and monthly crons fire and produce their two separate newsletters.
 #
 # Times are UTC; offset a couple hours after the pipeline's insight runs
 # (16:00 UTC Mon / 1st) so category insights exist. workflow_dispatch remains
@@ -12,8 +18,10 @@ name: Generate Newsletter
 
 on:
   schedule:
-    - cron: '0 18 * * 1'   # weekly  — Monday → previous complete Mon–Sun week
-    - cron: '0 18 1 * *'   # monthly — 1st    → previous complete calendar month
+    - cron: '0 18 * * 1'   # weekly  primary — Monday → previous complete Mon–Sun week
+    - cron: '0 22 * * 1'   # weekly  backup  — Monday, 4h later; --skip-if-exists
+    - cron: '0 18 1 * *'   # monthly primary — 1st    → previous complete calendar month
+    - cron: '0 22 1 * *'   # monthly backup  — 1st, 4h later; --skip-if-exists
   workflow_dispatch:
     inputs:
       window:
@@ -39,19 +47,22 @@ jobs:
 
       - run: npm ci
 
-      # Map a scheduled cron to its window. Empty for workflow_dispatch (falls
-      # back to the dispatch input).
+      # Map a scheduled cron to its window + backup flag. The 22:00 backup crons
+      # pass --skip-if-exists so they only regenerate a dropped primary. Empty
+      # for workflow_dispatch (falls back to the dispatch input, no skip).
       - name: Resolve scheduled window
         id: resolve
         if: github.event_name == 'schedule'
         run: |
           case "${{ github.event.schedule }}" in
-            "0 18 1 * *") echo "window=month" >> "$GITHUB_OUTPUT" ;;
-            *)            echo "window=week"  >> "$GITHUB_OUTPUT" ;;
+            "0 18 1 * *") echo "window=month" >> "$GITHUB_OUTPUT"; echo "skip="                 >> "$GITHUB_OUTPUT" ;;
+            "0 22 1 * *") echo "window=month" >> "$GITHUB_OUTPUT"; echo "skip=--skip-if-exists" >> "$GITHUB_OUTPUT" ;;
+            "0 22 * * 1") echo "window=week"  >> "$GITHUB_OUTPUT"; echo "skip=--skip-if-exists" >> "$GITHUB_OUTPUT" ;;
+            *)            echo "window=week"  >> "$GITHUB_OUTPUT"; echo "skip="                 >> "$GITHUB_OUTPUT" ;;
           esac
 
       - name: Generate and save newsletter
-        run: node scripts/generateNewsletter.js --window ${{ steps.resolve.outputs.window || github.event.inputs.window || 'week' }} --save
+        run: node scripts/generateNewsletter.js --window ${{ steps.resolve.outputs.window || github.event.inputs.window || 'week' }} --save ${{ steps.resolve.outputs.skip }}
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

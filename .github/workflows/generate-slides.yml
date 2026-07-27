@@ -1,23 +1,28 @@
 name: Generate Slides
 
 # Slide decks are pre-generated on a schedule so the dashboard can offer instant
-# downloads (no on-demand user trigger). Each cron maps to one fixed, previous-
-# complete calendar window (see scripts/generateSlides.js → getCompletedPeriodWindow).
-# On overlapping dates (e.g. 1 Jan) GitHub fires one run per matching cron, each
-# with its own github.event.schedule, so month/quarter/year all regenerate.
-# Runs are idempotent: decks upsert on deck_id = deck-<date>-<window>.
+# downloads (no on-demand user trigger). Decks cover fixed, previous-complete
+# calendar windows (see scripts/generateSlides.js → getCompletedPeriodWindow).
 #
-# Times are UTC; offset a few hours after the daily pipeline (16:00 UTC) so the
-# corpus is fully classified. The window covers the PREVIOUS complete period,
-# which was already ingested over prior days, so exact timing is not critical.
+# Cadence: month every month, quarter each Jan/Apr/Jul/Oct, year each Jan. The
+# quarterly (~90d) and yearly (365d) intervals both exceed GitHub's 60-day
+# inactivity auto-disable, so rather than quarterly/yearly crons we fire a single
+# MONTHLY cron and let scripts/dueReportWindows.js decide which windows are due
+# that day — the trigger stays frequent enough to stay enabled, but only does
+# real work at the start of the correct period.
+#
+# Primary at 18:00 UTC (1st); backup at 22:00 UTC (1st, 4h later). The backup
+# passes --skip-if-exists, so if the primary already produced each due deck it
+# exits in seconds with zero LLM calls; it only regenerates windows the primary
+# dropped. Times are UTC; the window covers the PREVIOUS complete period (already
+# ingested over prior days), so exact timing is not critical.
 #
 # workflow_dispatch remains for development/testing only.
 
 on:
   schedule:
-    - cron: '0 18 1 * *'          # monthly deck   — 1st of every month → previous complete month
-    - cron: '0 18 1 1,4,7,10 *'   # quarterly deck — 1st of each quarter → previous complete quarter
-    - cron: '0 18 1 1 *'          # yearly deck    — 1 Jan → previous complete year
+    - cron: '0 18 1 * *'   # primary — 1st of month; generates the windows due that day
+    - cron: '0 22 1 * *'   # backup  — 1st of month, 4h later; --skip-if-exists (only fills gaps)
   workflow_dispatch:
     inputs:
       window:
@@ -46,7 +51,9 @@ jobs:
   slides:
     name: Generate PPTX
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # January generates up to three decks (month + quarter + year) sequentially,
+    # each up to ~30 min; give the job generous headroom.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -57,33 +64,51 @@ jobs:
 
       - run: npm ci
 
-      # Map a scheduled cron to its window. Empty for workflow_dispatch (the
-      # Generate step falls back to the dispatch input).
-      - name: Resolve scheduled window
-        id: resolve
-        if: github.event_name == 'schedule'
+      # Decide which windows to generate and whether this is a backup run.
+      #   scheduled  → windows due today (dueReportWindows.js); backup cron adds --skip-if-exists
+      #   dispatch   → the chosen window, or a __custom__ sentinel for --from/--to
+      - name: Plan run
+        id: plan
         run: |
-          case "${{ github.event.schedule }}" in
-            "0 18 1 1 *")        echo "window=year"    >> "$GITHUB_OUTPUT" ;;
-            "0 18 1 1,4,7,10 *") echo "window=quarter" >> "$GITHUB_OUTPUT" ;;
-            *)                   echo "window=month"   >> "$GITHUB_OUTPUT" ;;
-          esac
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ -n "${{ github.event.inputs.from }}" ] && [ -n "${{ github.event.inputs.to }}" ]; then
+              echo "windows=__custom__" >> "$GITHUB_OUTPUT"
+            else
+              echo "windows=${{ github.event.inputs.window || 'month' }}" >> "$GITHUB_OUTPUT"
+            fi
+            echo "skip=" >> "$GITHUB_OUTPUT"
+          else
+            echo "windows=$(node scripts/dueReportWindows.js)" >> "$GITHUB_OUTPUT"
+            if [ "${{ github.event.schedule }}" = "0 22 1 * *" ]; then
+              echo "skip=--skip-if-exists" >> "$GITHUB_OUTPUT"
+            else
+              echo "skip=" >> "$GITHUB_OUTPUT"
+            fi
+          fi
 
       - name: Generate slides
         run: |
-          ARGS=""
-          if [ -n "${{ github.event.inputs.from }}" ] && [ -n "${{ github.event.inputs.to }}" ]; then
-            ARGS="--from ${{ github.event.inputs.from }} --to ${{ github.event.inputs.to }}"
-          else
-            ARGS="--window ${{ steps.resolve.outputs.window || github.event.inputs.window || 'month' }}"
-          fi
+          COMMON=""
           if [ -n "${{ github.event.inputs.category }}" ]; then
-            ARGS="$ARGS --category ${{ github.event.inputs.category }}"
+            COMMON="$COMMON --category ${{ github.event.inputs.category }}"
           fi
           if [ "${{ github.event.inputs.skip_qa }}" = "true" ]; then
-            ARGS="$ARGS --skip-qa"
+            COMMON="$COMMON --skip-qa"
           fi
-          node scripts/generateSlides.js $ARGS --out output/deck.pptx
+
+          if [ "${{ steps.plan.outputs.windows }}" = "__custom__" ]; then
+            node scripts/generateSlides.js \
+              --from ${{ github.event.inputs.from }} --to ${{ github.event.inputs.to }} \
+              $COMMON --out output/deck-custom.pptx
+          else
+            for w in ${{ steps.plan.outputs.windows }}; do
+              echo "::group::Generating $w deck"
+              node scripts/generateSlides.js \
+                --window "$w" ${{ steps.plan.outputs.skip }} \
+                $COMMON --out "output/deck-$w.pptx"
+              echo "::endgroup::"
+            done
+          fi
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -93,9 +118,10 @@ jobs:
           OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
           LLM_TIMEOUT_MS:            "120000"
 
-      - name: Upload deck
+      - name: Upload decks
         uses: actions/upload-artifact@v4
         with:
-          name: horizon-scan-deck
-          path: output/deck.pptx
+          name: horizon-scan-decks
+          path: output/deck-*.pptx
           retention-days: 30
+          if-no-files-found: ignore
