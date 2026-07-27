@@ -249,17 +249,16 @@ The dashboard Generate page is **read-only**: on load it calls `GET /api/generat
 
 ## Triggering
 
-**Scheduled (production):** `generate-slides.yml` runs on cron and pre-generates each window into the `decks` table + Blob, so the dashboard offers instant downloads with no user trigger:
+**Scheduled (production):** `generate-slides.yml` fires a single **monthly** cron and generates whichever windows are due that day, pre-populating the `decks` table + Blob so the dashboard offers instant downloads with no user trigger:
 
-| Window | Cron (UTC) | Fires |
+| Cron (UTC) | Role | Windows generated |
 |---|---|---|
-| `month`   | `0 18 1 * *`        | 1st of every month |
-| `quarter` | `0 18 1 1,4,7,10 *` | 1st of each quarter |
-| `year`    | `0 18 1 1 *`        | 1 January |
+| `0 18 1 * *` | primary — 1st of every month | `month`; `quarter` on Jan/Apr/Jul/Oct; `year` on Jan |
+| `0 22 1 * *` | backup — 4h later | same, but with `--skip-if-exists` |
 
-On overlapping dates (e.g. 1 Jan) GitHub fires one run per matching cron. Runs are idempotent — decks upsert on `deck_id = deck-<date>-<window>`.
+`scripts/dueReportWindows.js` computes the due windows (SGT-anchored). A monthly trigger is used because quarterly (~90d) and yearly (365d) intervals would exceed GitHub's 60-day inactivity auto-disable; the frequent trigger keeps the workflow enabled while real work happens only at the start of the correct period. The backup regenerates only windows the primary dropped: `--skip-if-exists` exits with zero LLM calls when a deck for the target period already exists. Decks upsert on `deck_id = deck-<date>-<window>`.
 
-**Development / testing only:** run `generate-slides.yml` via *Run workflow* (workflow_dispatch), or `POST /api/generate-report` (gated by `CRON_SECRET`) to dispatch the same workflow on demand. Not exposed in the UI.
+**Development / testing only:** run `generate-slides.yml` via *Run workflow* (workflow_dispatch, pick a window or custom from/to), or `POST /api/generate-report` (gated by `CRON_SECRET`) to dispatch on demand. Not exposed in the UI.
 
 **From CLI:**
 ```bash
