@@ -7,7 +7,7 @@ name: Source Link Audit (dead-link + duplicate prune)
 # are treated as indeterminate and never purge a real source. Curated sources
 # are always protected.
 #
-# Schedule: weekly. Manual runs default to dry-run (report only) for safety.
+# Schedule: daily at 03:00 UTC. Manual runs default to dry-run (report only) for safety.
 
 on:
   schedule:

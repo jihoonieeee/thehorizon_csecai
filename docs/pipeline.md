@@ -7,10 +7,14 @@ Read this before touching pipeline code. For API endpoints, see `docs/api.md`.
 
 ## What the pipeline does
 
-Every day at 22:00 UTC, GitHub Actions runs the full pipeline:
+GitHub Actions runs the full pipeline on three daily schedules (all UTC):
+
+- **04:00 UTC** (12:00 SGT) — pre-ingest buffer: connector + web ingest only, no classify/evidence. Runs arXiv during a low-traffic window so results are ready before the primary.
+- **16:00 UTC** (00:00 SGT midnight) — primary daily run: full pipeline including classify and evidence.
+- **20:00 UTC** (04:00 SGT) — backup run: same job chain, 4 hours after the primary. Idempotent — if the primary succeeded, classify and evidence exit in seconds with no LLM calls.
 
 ```
-collect sources  →  classify them  →  extract evidence  →  (weekly) generate insights
+collect sources  →  rescrape short  →  classify them  →  extract evidence  →  (weekly/monthly/quarterly) generate insights
 ```
 
 Sources come from two places in parallel:
@@ -58,7 +62,7 @@ the database but excluded from the dashboard, slides, and newsletter.
 ## Job chain
 
 ```
-22:00 UTC daily
+04:00 UTC (pre-ingest buffer) / 16:00 UTC (primary) / 20:00 UTC (backup)
 │
 ├─ connector-ingest  (scripts/ingest.js)         ─┐  parallel
 ├─ web-ingest        (two scripts, see below)    ─┘
@@ -67,10 +71,13 @@ the database but excluded from the dashboard, slides, and newsletter.
 │
 ├─ classify          (scripts/classify.js)
 │
+├─ rescrape          (scripts/rescrapeShortSources.js)
+│                    [runs after classify, before evidence]
+│
 ├─ evidence          (scripts/extractEvidence.js)
 │
 └─ insights          (scripts/generateDashboardInsights.js)
-                     [weekly / monthly / quarterly only]
+                     [weekly / monthly / quarterly only — not on plain daily]
 ```
 
 ---
@@ -129,11 +136,11 @@ misses. Sources are saved raw (`main_category=null`) — classify handles all cl
 
 ## Job 2 — Classify (L4a–f)
 
-**Script:** `scripts/classify.js --limit 200 --sig-limit 100`
+**Script:** `scripts/classify.js --limit 400 --sig-limit 100`
 
 This is the core intelligence job. It processes every source with `main_category IS NULL`
 — no time filter, so any backlog from previous failed runs is automatically cleared.
-Runs newest-first, up to `--limit`.
+Runs newest-first, up to `--limit` (400 in CI; override via `workflow_dispatch` input).
 
 The six sub-steps run in order:
 
@@ -254,9 +261,30 @@ children just received a `main_category` and writes back two things:
 
 ---
 
+## Job 2b — Rescrape short sources
+
+**Script:** `scripts/rescrapeShortSources.js --min-chars 600 --limit 200 --purge-failed`
+
+Runs after classify (so `reading_value` is already set) and before evidence (so recovered
+text is available in the same pipeline run). Targets sources classified as
+`essential` or `recommended` whose `full_text` is shorter than 600 characters — typically
+because the connector only fetched an abstract or a truncated feed excerpt.
+
+**Recovery cascade per source:**
+
+1. arXiv preprint URL rewrite (replaces paywall abstract links with the `/abs/` page)
+2. Direct HTTP fetch of the source URL
+3. Jina reader (`r.jina.ai`) — bypasses some paywalls and JS-rendered pages
+4. Tavily content extraction
+
+Sources that fail all four methods are purged from the database (`--purge-failed`). Digest
+children are exempt from purge regardless of text length.
+
+---
+
 ## Job 3 — Evidence extraction (L5)
 
-**Script:** `scripts/extractEvidence.js --limit 150 --since-hours 26`
+**Script:** `scripts/extractEvidence.js --limit 150 --since-hours 48`
 
 **Why this step exists:** the classify step produces summaries and tags. Evidence
 extraction goes deeper: it reads the full source text and pulls out individual, verifiable
@@ -299,7 +327,7 @@ hasn't changed since the last extraction run, the source is skipped entirely. Th
 re-running `extractEvidence.js` safe and cheap — it only does LLM work on new or changed
 sources.
 
-The `--since-hours 26` flag scopes the DB query to recent sources so the daily job doesn't
+The `--since-hours 48` flag scopes the DB query to recent sources so the daily job doesn't
 scan the full corpus. Omit it for a full-corpus backfill.
 
 ---
@@ -322,12 +350,19 @@ Jan/Apr/Jul/Oct 1st. The plain daily run skips this job.
 
 ## Schedule summary
 
-| Day | What runs | `--days` |
-|---|---|---|
-| Every day | connector-ingest, web-ingest, classify, evidence | 3 |
-| Every Monday | + weekly insights | 7 |
-| 1st of month | + monthly insights | 30 |
-| 1st Jan/Apr/Jul/Oct | + monthly + quarterly insights | 30 |
+| Time (UTC) | SGT | Trigger | What runs | `--days` |
+|---|---|---|---|---|
+| 04:00 daily | 12:00 | pre-ingest buffer | connector-ingest, web-ingest | 3 |
+| 16:00 daily | 00:00 | primary | connector-ingest, web-ingest, classify, rescrape, evidence | 3 |
+| 20:00 daily | 04:00 | backup | same as primary (idempotent) | 3 |
+| 16:00 Monday | 00:00 Mon | weekly primary | full pipeline + weekly insights | 7 |
+| 20:00 Monday | 04:00 Mon | weekly backup | full pipeline + weekly insights (idempotent) | 7 |
+| 16:00 1st of month | 00:00 1st | monthly primary | full pipeline + monthly insights | 30 |
+| 20:00 1st of month | 04:00 1st | monthly backup | full pipeline + monthly insights (idempotent) | 30 |
+| 16:00 Jan/Apr/Jul/Oct 1 | 00:00 | quarterly primary | full pipeline + monthly + quarterly insights | 30 |
+| 20:00 Jan/Apr/Jul/Oct 1 | 04:00 | quarterly backup | same (idempotent) | 30 |
+
+**Note:** the Monday and 1st-of-month crons overlap with the daily crons. On those days, the more specific cron fires with the expanded window. The pre-ingest buffer always uses `--days 3` regardless of day.
 
 ---
 
@@ -348,9 +383,9 @@ via the GitHub API). Runs the slide pipeline:
 The frontend polls `GET /api/generate-report?list=1` every 20 seconds after triggering.
 When a new deck row appears, it shows the download button.
 
-### `link-audit.yml` — Dead-link pruning (Monday 03:00 UTC)
+### `link-audit.yml` — Dead-link pruning (daily 03:00 UTC)
 
-Runs before the main pipeline on Mondays. Checks every source URL with HEAD → GET. Only
+Runs every day at 03:00 UTC, before the 04:00 pre-ingest buffer. Checks every source URL with HEAD → GET. Only
 deletes sources with confirmed-dead responses (404/410/DNS failure). Transient errors
 (5xx/429/timeout) are never acted on.
 
@@ -377,9 +412,12 @@ node scripts/ingestOperational.js --days 7 --skip-llm
 node scripts/discoverOperationalSources.js
 
 # 3. Classify everything unclassified
-node scripts/classify.js --limit 200
+node scripts/classify.js --limit 400
 
-# 4. Extract evidence (full corpus, no time window)
+# 3b. Rescrape short sources (optional; CI runs this automatically)
+node scripts/rescrapeShortSources.js --min-chars 600 --limit 200 --purge-failed
+
+# 4. Extract evidence (full corpus backfill — omit --since-hours for manual runs)
 node scripts/extractEvidence.js --limit 150
 
 # 5. Generate insights
@@ -416,6 +454,7 @@ DB edits.
 | `connector-ingest` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `BLOB_READ_WRITE_TOKEN`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `CRON_SECRET` |
 | `web-ingest` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `BLOB_READ_WRITE_TOKEN`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `TAVILY_API_KEY` (×4), `SERPAPI_API_KEY` |
 | `classify` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` |
+| `rescrape` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `JINA_API_KEY`, `TAVILY_API_KEY` |
 | `evidence` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY` |
 | `insights` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY` |
 | `generate-slides` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `BLOB_READ_WRITE_TOKEN`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` |

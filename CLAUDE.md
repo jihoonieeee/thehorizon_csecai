@@ -13,7 +13,7 @@ The intended audience is cybersecurity professionals, policy analysts, and decis
 - File storage: Vercel Blob for snapshot JSON archives
 - LLM enrichment: OpenAI (primary, gpt-4o-mini) or Gemini (fallback, gemini-2.5-flash)
 - Deployment: Vercel Hobby plan (12 serverless function limit)
-- Scheduling: GitHub Actions — pipeline.yml runs daily at 22:00 UTC (06:00 SGT next day)
+- Scheduling: GitHub Actions — pipeline.yml has three daily runs: 04:00 UTC pre-ingest buffer (12:00 SGT), 16:00 UTC primary (00:00 SGT midnight), 20:00 UTC backup (04:00 SGT); expanded windows on Mondays (7d) and 1st of month (30d)
 
 
 ## Environment Variables
@@ -134,7 +134,7 @@ arXiv is the most important API source for research coverage. It runs 6 targeted
 
 The Vercel Hobby plan caps at 12 serverless functions. Current count is exactly 12. Adding any new /api file will require removing an existing one or upgrading the plan.
 
-The daily cron runs at 22:00 UTC which is 06:00 SGT the next day. The reporting window is anchored to 06:00 SGT boundaries, so each day's window covers 06:00 SGT yesterday to 06:00 SGT today.
+The primary daily cron runs at 16:00 UTC (midnight SGT). The reporting window is anchored to 00:00 SGT boundaries, so each day's window covers 00:00 SGT yesterday to 00:00 SGT today. A pre-ingest buffer at 04:00 UTC (12:00 SGT) warms arXiv before the primary run; a backup at 20:00 UTC (04:00 SGT) catches GHA drops.
 
 
 ## Local Development
