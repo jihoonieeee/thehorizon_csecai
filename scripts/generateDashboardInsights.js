@@ -42,6 +42,7 @@ import { sourceSignalScore, isNoiseSource, bySignalThenRecency, partitionBySigna
 import { maturityOf, MATURITY_RANK } from "../lib/pipeline/scoring/maturityLevel.js";
 import { significanceRank } from "../lib/pipeline/scoring/researchSignificance.js";
 import { loadPrompt } from "../lib/prompts/promptLoader.js";
+import { checkFactGrounding } from "../lib/utils/figureGrounding.js";
 import { loadCandidates, selectSourcesWithLlm } from "../lib/newsletter/index.js";
 
 const args     = process.argv.slice(2);
@@ -806,14 +807,26 @@ async function groundExplanationsInCitations(insights, catSources, catLabel) {
 
     bullets.forEach((b, k) => {
       const v = verdicts.find(v => v.index === k);
+      let text = null;
       if (!v || v.verdict === "ok") {
-        finalBullets.push(b);
+        text = b;
       } else if (CORRECTABLE.has(v.verdict) && v.correction) {
-        finalBullets.push(v.correction);
+        text = v.correction;
         corrected_log.push(`[${v.verdict}→corrected] ${(v.reason || "").slice(0, 50)}`);
       } else {
         dropped_log.push(`[${v.verdict}] ${(v.reason || "").slice(0, 50)}`);
+        return;
       }
+      // B: deterministic figure check against the cited sources' FULL TEXT. The
+      // LLM verdict judges whole-bullet plausibility and can miss a single invented
+      // number (e.g. "972 attacks per day" absent from every cited source). Drop
+      // any bullet whose specific figures are not present in citedText.
+      const fg = checkFactGrounding(text, citedText);
+      if (!fg.grounded) {
+        dropped_log.push(`[figure_ungrounded: ${fg.ungrounded.join(", ")}]`);
+        return;
+      }
+      finalBullets.push(text);
     });
 
     if (corrected_log.length)

@@ -256,7 +256,7 @@ async function main() {
       activeCategories.map(async cat => {
         const report = categoryReports[cat];
         if (!report) return [cat, { issues: [], citation_issue_count: 0, entailment_issue_count: 0 }];
-        const qa = await qaReport(report, contexts[cat].sourceIndex, { skipEntailment: skipQa });
+        const qa = await qaReport(report, contexts[cat].sourceIndex, { skipEntailment: skipQa, supabase });
         return [cat, qa];
       })
     ),

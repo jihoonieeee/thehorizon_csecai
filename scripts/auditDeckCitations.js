@@ -49,7 +49,7 @@ for (const b of bullets) {
 // ── Fetch cited sources from DB ────────────────────────────────────────────────
 const allUrls = [...new Set(bullets.flatMap(b => b.urls))];
 const { data: rows } = await sb.from("sources")
-  .select("id,title,url,short_summary,intelligence").in("url", allUrls);
+  .select("id,title,url,short_summary,full_text,intelligence").in("url", allUrls);
 const byUrl = new Map();
 for (const r of rows || []) byUrl.set(norm(r.url), r);
 const ev = await loadEvidence(sb, (rows || []).map(r => r.id));
@@ -60,11 +60,15 @@ const missingInDb = allUrls.filter(u => !byUrl.has(norm(u)));
 
 // ── Phase 2: semantic entailment (each cited source; pass if ANY supports) ──────
 async function checkOne(claim, src) {
+  // Ground against full_text (same basis as the insight + slide QA layers), not
+  // the lossy short_summary. Fall back to summary + evidence when full text is absent.
   const evText = buildEvidenceBlock(evBySrc.get(src.id) || []);
   const user = interpolate(userTmpl, {
     bullet_text: claim, source_title: src.title,
-    source_summary: src.short_summary || "(no summary)",
-    source_evidence: evText ? `\nExtracted evidence items:\n${evText}` : "",
+    source_summary: src.full_text ? "(see source text below)" : (src.short_summary || "(no summary)"),
+    source_evidence: src.full_text
+      ? `\nSource text:\n${src.full_text.slice(0, 6000)}`
+      : (evText ? `\nExtracted evidence items:\n${evText}` : ""),
   });
   try {
     const { result } = await routedLLM(system, user, { task: "source_relevance", requires_json: true });
