@@ -43,6 +43,11 @@ const BATCH_SIZE    = 5;
 const WINDOW_SIZE   = 200;
 const OFFSET        = RAW_OFFSET !== null ? parseInt(RAW_OFFSET, 10) : (BATCH - 1) * BATCH_SIZE;
 const EV_LIMIT      = ALL_EVIDENCE ? 999 : 4;
+// --since YYYY-MM-DD  restrict to sources ingested (created_at) on or after this date
+// --today             shorthand for --since <today's date>
+const SINCE_DATE    = hasFlag("--today")
+  ? new Date().toISOString().slice(0, 10)
+  : getArg("--since", null);
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -352,7 +357,7 @@ async function loadBatch() {
     "claim_extraction_status", "reading_value", "intelligence",
     "source_origin", "discovery_route", "hallucination_risk",
     "needs_review", "starred", "is_curated", "is_digest",
-    "parent_source_id",
+    "parent_source_id", "created_at",
   ].join(",");
 
   let rows = [];
@@ -381,6 +386,7 @@ async function loadBatch() {
 
   if (CAT_FILTER)    rows = rows.filter(s => s.main_category === CAT_FILTER);
   if (ORIGIN_FILTER) rows = rows.filter(s => (s.source_origin || s.discovery_route || "").toLowerCase().includes(ORIGIN_FILTER.toLowerCase()));
+  if (SINCE_DATE)    rows = rows.filter(s => (s.created_at || "").slice(0, 10) >= SINCE_DATE);
 
   // Risk-sort then pick the batch window
   rows.sort((a, b) => riskScore(b) - riskScore(a));
@@ -395,7 +401,7 @@ async function loadBatch() {
 async function main() {
   const pageLabel = PAGE === null ? "all" : `page ${PAGE}`;
   console.log(`\n  The Horizon — Corpus Audit`);
-  console.log(`  Batch ${BATCH}  (offset ${OFFSET}–${OFFSET + BATCH_SIZE - 1})  [${pageLabel}]${CAT_FILTER ? `  category=${CAT_FILTER}` : ""}${ORIGIN_FILTER ? `  origin~=${ORIGIN_FILTER}` : ""}`);
+  console.log(`  Batch ${BATCH}  (offset ${OFFSET}–${OFFSET + BATCH_SIZE - 1})  [${pageLabel}]${CAT_FILTER ? `  category=${CAT_FILTER}` : ""}${ORIGIN_FILTER ? `  origin~=${ORIGIN_FILTER}` : ""}${SINCE_DATE ? `  since=${SINCE_DATE}` : ""}`);
   console.log(`  HTTP checks: ${NO_HTTP ? "off" : "on"}   Evidence: ${ALL_EVIDENCE ? "all" : `first ${EV_LIMIT}`}\n`);
 
   const { batch, totalInWindow } = await loadBatch();
