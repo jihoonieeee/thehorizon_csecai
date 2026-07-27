@@ -60,20 +60,31 @@ function periodWindow(period) {
   };
 }
 
-// Mutation auth: only CRON_SECRET (admin) may edit or delete sources.
-// GEN_TOKEN (guest tier) is intentionally excluded — guests can generate
-// reports but cannot modify the source corpus.
-function authorized(req) {
+// Mutation auth: CRON_SECRET (machine-to-machine) or a Supabase admin session JWT.
+// GEN_TOKEN (guest tier) is intentionally excluded — guests cannot modify the corpus.
+async function authorized(req) {
   const secret = process.env.CRON_SECRET;
+  const auth   = req.headers.authorization || "";
+
+  if (secret && auth === `Bearer ${secret}`) return true;
+
+  // Supabase user session — must have role=admin in user_metadata
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (token) {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (!error && user?.user_metadata?.role === "admin") return true;
+  }
+
+  // Degrade gracefully when CRON_SECRET is not configured (local dev without env)
   if (!secret) return true;
-  const auth = req.headers.authorization || "";
-  return auth === `Bearer ${secret}`;
+
+  return false;
 }
 
 export default async function handler(req, res) {
   // ── Mutations: PATCH (edit publish date) / DELETE (remove source) ────────────
   if (req.method === "PATCH" || req.method === "DELETE") {
-    if (!authorized(req)) return res.status(401).json({ error: "Unauthorized — set the admin secret" });
+    if (!await authorized(req)) return res.status(401).json({ error: "Unauthorized" });
     try {
       const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
       const id = String((req.query?.id ?? body.id) || "").trim();
