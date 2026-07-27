@@ -25,7 +25,7 @@ Each paragraph makes exactly one point: what is now true about the threat landsc
 
 Brevity is the standard. One or two sentences, roughly 35 words. If a second sentence does not sharpen the first, cut it. Do not stack statistics, qualifiers, or restatements.
 
-If the sources for a category contain multiple unrelated findings, write one short paragraph per finding rather than one long one. Never merge two distinct insights.
+ONE FINDING PER PARAGRAPH. If a category has several distinct findings, write a separate short paragraph for each and put a blank line (\n\n) between them. Never chain unrelated findings into one running block — even if each is a single sentence. A reader must be able to see, at a glance, how many separate things happened. Two findings = two paragraphs, never one.
 
 TOO LONG (verbose, over-detailed, three sentences doing one job):
 "LLM-assisted SOC tooling introduces a new class of attacker-controlled input: adversaries now embed prompt-injection payloads directly into the log data that analysts query, turning the evidence stream into an attack surface. This is not a theoretical weakness — it is an operational capability that allows attackers to suppress alerts or exfiltrate session context through the analyst's own tooling. Any LLM integrated into a security workflow that ingests untrusted data must be treated as an externally influenced decision-maker, not a trusted analytical layer."
@@ -34,6 +34,9 @@ SHARP (same intelligence, cut to the bone):
 "Attackers now plant prompt-injection payloads in the logs SOC analysts query, turning security LLMs against their operators to suppress alerts or leak session context. Treat any model that reads untrusted data as attacker-controlled, not a trusted analyst."
 
 (The examples above carry no statistic on purpose — do not read a number into them.)
+
+MULTIPLE FINDINGS — separate paragraphs, blank line between (this is the required shape when a category has more than one finding):
+"Model scanners can no longer be trusted as a supply-chain control: malicious payloads hidden in pre-trained model files slip past detection by abusing whitelisted deserialization paths.\n\nThe package ecosystem is a live credential-theft surface. A compromised PyPI package, invisible in source review, exfiltrates SSH keys and cloud tokens on import.\n\nAutonomous ransomware is no longer theoretical: an LLM agent chained two CVEs, harvested credentials, and encrypted a production database end-to-end without a human in the loop."
 
 ════ VOICE ════
 
