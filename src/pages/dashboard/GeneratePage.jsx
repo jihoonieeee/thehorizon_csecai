@@ -36,13 +36,6 @@ function CheckIcon() {
 
 // ── Formatting helpers ──────────────────────────────────────────────────────────
 
-function fmtGenerated(iso) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  return d.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
-}
-
 // source_window_start / _end are SGT calendar dates ("YYYY-MM-DD").
 function fmtCovered(from, to) {
   if (!from || !to) return null;
@@ -120,7 +113,6 @@ function SlidesPanel({ secret }) {
 
   const periodObj = PERIODS.find(p => p.id === period);
   const covered   = deck && fmtCovered(deck.source_window_start, deck.source_window_end);
-  const genAt     = deck && fmtGenerated(deck.generated_at);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -168,9 +160,10 @@ function SlidesPanel({ secret }) {
             </div>
             <div style={{ fontSize: "0.76rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
               {covered && <>Covers {covered}<br /></>}
-              {deck.source_count != null && <>{deck.source_count} sources · </>}
-              {deck.slide_count != null && <>{deck.slide_count} slides · </>}
-              {genAt && <>generated {genAt}</>}
+              {[
+                deck.source_count != null && `${deck.source_count} sources`,
+                deck.slide_count  != null && `${deck.slide_count} slides`,
+              ].filter(Boolean).join(" · ")}
             </div>
           </div>
 
@@ -289,8 +282,6 @@ function NewsletterPanel() {
     setCopied(true); setTimeout(() => setCopied(false), 2500);
   }
 
-  const genAt = data && fmtGenerated(data.generated_at);
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
@@ -338,7 +329,6 @@ function NewsletterPanel() {
             <span style={{ fontSize: "0.72rem", color: "var(--text-tertiary)" }}>
               {data.sourceCount != null && <>{data.sourceCount} sources · </>}
               {data.period?.label}
-              {genAt && <> · generated {genAt}</>}
             </span>
             <button onClick={copy} style={{
               display: "flex", alignItems: "center", gap: 6,
