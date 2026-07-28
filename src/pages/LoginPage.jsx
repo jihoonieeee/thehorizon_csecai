@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase.js";
 
-export function LoginPage({ mode: initialMode = "signin", linkError = null }) {
+export function LoginPage({ mode: initialMode = "signin" }) {
   const [mode,     setMode]     = useState(initialMode);
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
@@ -31,17 +31,21 @@ export function LoginPage({ mode: initialMode = "signin", linkError = null }) {
     setInfo("Check your inbox — a password reset link is on its way.");
   }
 
-  async function handleReset(e) {
+  async function handleSetup(e) {
     e.preventDefault();
     setError(null);
     if (password !== confirm) { setError("Passwords do not match."); return; }
     if (password.length < 8)  { setError("Password must be at least 8 characters."); return; }
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({ password });
+    // Set new password and clear the first-login flag
+    const { error } = await supabase.auth.updateUser({
+      password,
+      data: { needs_password_setup: false },
+    });
     setLoading(false);
     if (error) { setError(error.message); return; }
     setInfo("Password set — signing you in…");
-    // App.jsx onAuthStateChange fires USER_UPDATED and renders the dashboard
+    // App.jsx re-renders the dashboard once the session reflects the updated metadata
   }
 
   return (
@@ -54,7 +58,6 @@ export function LoginPage({ mode: initialMode = "signin", linkError = null }) {
 
         {mode === "signin" && (
           <form className="hz-login-form" onSubmit={handleSignIn}>
-            {linkError && <div className="hz-login-error">{linkError}</div>}
             <input
               className="hz-auth-input"
               type="email"
@@ -118,9 +121,9 @@ export function LoginPage({ mode: initialMode = "signin", linkError = null }) {
           </form>
         )}
 
-        {mode === "reset" && (
-          <form className="hz-login-form" onSubmit={handleReset}>
-            <p className="hz-login-hint">Set a new password for your account.</p>
+        {mode === "setup" && (
+          <form className="hz-login-form" onSubmit={handleSetup}>
+            <p className="hz-login-hint">Welcome to The Horizon. Set a permanent password to activate your account.</p>
             <input
               className="hz-auth-input"
               type="password"
@@ -140,19 +143,12 @@ export function LoginPage({ mode: initialMode = "signin", linkError = null }) {
               required
             />
             {error && <div className="hz-login-error">{error}</div>}
-            {info && <div className="hz-login-info">{info}</div>}
+            {info  && <div className="hz-login-info">{info}</div>}
             {!info && (
               <button className="hz-login-btn" type="submit" disabled={loading}>
                 {loading ? "Saving…" : "Set password"}
               </button>
             )}
-            <button
-              type="button"
-              className="hz-login-link"
-              onClick={() => { setError(null); setInfo(null); setMode("signin"); }}
-            >
-              Back to sign in
-            </button>
           </form>
         )}
       </div>
