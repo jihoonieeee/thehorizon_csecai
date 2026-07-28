@@ -41,8 +41,8 @@ export default function App() {
 
   if (loading && !recovering) return null;
 
-  // Forgot-password reset link clicked
-  if (recovering) return <LoginPage mode="setup" />;
+  // Forgot-password reset link — use neutral "reset" copy
+  if (recovering) return <LoginPage mode="setup" isReset />;
 
   if (!session) return <LoginPage />;
 

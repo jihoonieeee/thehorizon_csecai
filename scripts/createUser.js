@@ -49,13 +49,16 @@ function printCredentials(email, tempPassword) {
 }
 
 if (resend) {
-  // Reset the needs_password_setup flag and give a fresh temp password
+  const { data: { users } } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+  const existing = users.find(u => u.email === email);
+  if (!existing) { console.error(`User ${email} not found.`); process.exit(1); }
+  // Preserve the user's existing role — don't overwrite it with the CLI default
+  const existingRole = existing.user_metadata?.role ?? role;
   const tempPassword = genTempPassword();
-  const { error } = await supabase.auth.admin.updateUserById(
-    // look up the user first
-    (await supabase.auth.admin.listUsers()).data.users.find(u => u.email === email)?.id,
-    { password: tempPassword, user_metadata: { role, needs_password_setup: true } }
-  );
+  const { error } = await supabase.auth.admin.updateUserById(existing.id, {
+    password: tempPassword,
+    user_metadata: { role: existingRole, needs_password_setup: true },
+  });
   if (error) { console.error("Failed to reset user:", error.message); process.exit(1); }
   printCredentials(email, tempPassword);
   process.exit(0);

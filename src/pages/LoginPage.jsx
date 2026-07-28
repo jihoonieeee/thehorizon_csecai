@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase.js";
 
-export function LoginPage({ mode: initialMode = "signin" }) {
+export function LoginPage({ mode: initialMode = "signin", isReset = false }) {
   const [mode,     setMode]     = useState(initialMode);
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
@@ -123,7 +123,11 @@ export function LoginPage({ mode: initialMode = "signin" }) {
 
         {mode === "setup" && (
           <form className="hz-login-form" onSubmit={handleSetup}>
-            <p className="hz-login-hint">Welcome to The Horizon. Set a permanent password to activate your account.</p>
+            <p className="hz-login-hint">
+              {isReset
+                ? "Set a new password for your account."
+                : "Welcome to The Horizon. Set a permanent password to activate your account."}
+            </p>
             <input
               className="hz-auth-input"
               type="password"
@@ -147,6 +151,15 @@ export function LoginPage({ mode: initialMode = "signin" }) {
             {!info && (
               <button className="hz-login-btn" type="submit" disabled={loading}>
                 {loading ? "Saving…" : "Set password"}
+              </button>
+            )}
+            {error && (
+              <button
+                type="button"
+                className="hz-login-link"
+                onClick={() => supabase.auth.signOut()}
+              >
+                Sign out and start over
               </button>
             )}
           </form>
