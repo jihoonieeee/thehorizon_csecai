@@ -138,14 +138,7 @@ export function LoginPage({ mode: initialMode = "signin" }) {
               onChange={e => setConfirm(e.target.value)}
               required
             />
-            {error && (
-              <>
-                <div className="hz-login-error">{error}</div>
-                <p className="hz-login-hint" style={{ marginTop: 0 }}>
-                  If your link has expired, use <strong>Forgot password?</strong> on the sign-in page to request a new one.
-                </p>
-              </>
-            )}
+            {error && <div className="hz-login-error">{error}</div>}
             {info && <div className="hz-login-info">{info}</div>}
             {!info && (
               <button className="hz-login-btn" type="submit" disabled={loading}>
