@@ -118,7 +118,7 @@ export function LoginPage({ mode: initialMode = "signin" }) {
 
         {mode === "reset" && (
           <form className="hz-login-form" onSubmit={handleReset}>
-            <p className="hz-login-hint">Choose a new password for your account.</p>
+            <p className="hz-login-hint">Welcome to The Horizon. Set a password to activate your account.</p>
             <input
               className="hz-auth-input"
               type="password"
