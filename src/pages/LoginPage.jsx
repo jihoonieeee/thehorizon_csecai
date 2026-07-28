@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase.js";
 
-export function LoginPage({ mode: initialMode = "signin" }) {
+export function LoginPage({ mode: initialMode = "signin", linkError = null }) {
   const [mode,     setMode]     = useState(initialMode);
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
@@ -54,6 +54,7 @@ export function LoginPage({ mode: initialMode = "signin" }) {
 
         {mode === "signin" && (
           <form className="hz-login-form" onSubmit={handleSignIn}>
+            {linkError && <div className="hz-login-error">{linkError}</div>}
             <input
               className="hz-auth-input"
               type="email"

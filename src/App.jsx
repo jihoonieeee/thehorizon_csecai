@@ -11,6 +11,14 @@ function isRecoveryUrl() {
   return params.get("type") === "recovery";
 }
 
+function getLinkError() {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const code = params.get("error_code");
+  if (!code) return null;
+  if (code === "otp_expired") return "Your invite link has expired. Please contact your administrator for a new one.";
+  return params.get("error_description")?.replace(/\+/g, " ") ?? "The link is invalid. Please contact your administrator.";
+}
+
 export default function App() {
   const [session,    setSession]    = useState(null);
   const [loading,    setLoading]    = useState(true);
@@ -41,7 +49,7 @@ export default function App() {
 
   if (loading && !recovering) return null;
   if (recovering) return <LoginPage mode="reset" />;
-  if (!session)   return <LoginPage />;
+  if (!session)   return <LoginPage linkError={getLinkError()} />;
 
   return (
     <AuthContext.Provider value={session}>
