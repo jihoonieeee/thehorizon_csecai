@@ -272,10 +272,9 @@ async function isAuthorized(req) {
   const genToken = process.env.GEN_TOKEN;
   const auth     = req.headers.authorization || "";
 
-  if (!secret) return true;
+  if (!secret) return false;
   if (auth === `Bearer ${secret}`) return true;
   if (genToken && auth === `Bearer ${genToken}`) return true;
-  if (req.headers["x-vercel-cron"] === "1") return true;
 
   // Supabase user session JWT
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";

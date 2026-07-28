@@ -25,7 +25,7 @@
  * deck. Requires GITHUB_PAT (actions:write) on Vercel + the pipeline secrets on
  * the GitHub repo. No local run needed.
  *
- * Authorization: Bearer CRON_SECRET header (or x-vercel-cron: 1).
+ * Authorization: Bearer CRON_SECRET header.
  */
 
 import { loadLatestDeck, listDecks, getDeck } from "../lib/storage/deckStore.js";
@@ -67,10 +67,9 @@ async function isAuthorized(req) {
   const genToken = process.env.GEN_TOKEN;
   const auth     = req.headers.authorization || "";
 
-  if (!secret) return true;
+  if (!secret) return false;
   if (auth === `Bearer ${secret}`) return true;
   if (genToken && auth === `Bearer ${genToken}`) return true;
-  if (req.headers["x-vercel-cron"] === "1") return true;
 
   // Supabase user session JWT (any logged-in user may access reports)
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";

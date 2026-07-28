@@ -75,9 +75,6 @@ async function authorized(req) {
     if (!error && user?.user_metadata?.role === "admin") return true;
   }
 
-  // Degrade gracefully when CRON_SECRET is not configured (local dev without env)
-  if (!secret) return true;
-
   return false;
 }
 

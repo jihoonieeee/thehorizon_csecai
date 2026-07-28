@@ -11,10 +11,8 @@ import { flushPipelineCostToDB } from "../lib/llm/usagePersistence.js";
 function isAuthorized(req) {
   const secret = process.env.CRON_SECRET;
   const auth = req.headers.authorization;
-
-  if (!secret) return true;
-
-  return auth === `Bearer ${secret}` || req.headers["x-vercel-cron"] === "1";
+  if (!secret) return false;
+  return auth === `Bearer ${secret}`;
 }
 
 export default async function handler(req, res) {
