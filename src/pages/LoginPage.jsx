@@ -34,8 +34,9 @@ export function LoginPage({ mode: initialMode = "signin", isReset = false }) {
   async function handleSetup(e) {
     e.preventDefault();
     setError(null);
-    if (password !== confirm) { setError("Passwords do not match."); return; }
-    if (password.length < 8)  { setError("Password must be at least 8 characters."); return; }
+    if (password !== confirm)          { setError("Passwords do not match."); return; }
+    if (password.length < 8)           { setError("Password must be at least 8 characters."); return; }
+    if (!/[^A-Za-z0-9]/.test(password)) { setError("Password must contain at least one symbol (e.g. !@#$%)."); return; }
     setLoading(true);
     // Set new password and clear the first-login flag
     const { error } = await supabase.auth.updateUser({

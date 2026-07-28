@@ -42,12 +42,12 @@ export default function App() {
   if (loading && !recovering) return null;
 
   // Forgot-password reset link — use neutral "reset" copy
-  if (recovering) return <LoginPage mode="setup" isReset />;
+  if (recovering) return <LoginPage key="reset" mode="setup" isReset />;
 
-  if (!session) return <LoginPage />;
+  if (!session) return <LoginPage key="signin" />;
 
   // First-time invite login — temp password, must set a permanent one
-  if (session.user?.user_metadata?.needs_password_setup) return <LoginPage mode="setup" />;
+  if (session.user?.user_metadata?.needs_password_setup) return <LoginPage key="setup" mode="setup" />;
 
   return (
     <AuthContext.Provider value={session}>
