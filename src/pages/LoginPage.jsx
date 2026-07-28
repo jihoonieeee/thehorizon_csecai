@@ -39,8 +39,9 @@ export function LoginPage({ mode: initialMode = "signin" }) {
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
-    if (error) setError(error.message);
-    // On success App.jsx onAuthStateChange fires and re-renders the dashboard
+    if (error) { setError(error.message); return; }
+    setInfo("Password set — signing you in…");
+    // App.jsx onAuthStateChange fires USER_UPDATED and renders the dashboard
   }
 
   return (
@@ -118,7 +119,7 @@ export function LoginPage({ mode: initialMode = "signin" }) {
 
         {mode === "reset" && (
           <form className="hz-login-form" onSubmit={handleReset}>
-            <p className="hz-login-hint">Welcome to The Horizon. Set a password to activate your account.</p>
+            <p className="hz-login-hint">Set a new password for your account.</p>
             <input
               className="hz-auth-input"
               type="password"
@@ -137,9 +138,26 @@ export function LoginPage({ mode: initialMode = "signin" }) {
               onChange={e => setConfirm(e.target.value)}
               required
             />
-            {error && <div className="hz-login-error">{error}</div>}
-            <button className="hz-login-btn" type="submit" disabled={loading}>
-              {loading ? "Saving…" : "Set password"}
+            {error && (
+              <>
+                <div className="hz-login-error">{error}</div>
+                <p className="hz-login-hint" style={{ marginTop: 0 }}>
+                  If your link has expired, use <strong>Forgot password?</strong> on the sign-in page to request a new one.
+                </p>
+              </>
+            )}
+            {info && <div className="hz-login-info">{info}</div>}
+            {!info && (
+              <button className="hz-login-btn" type="submit" disabled={loading}>
+                {loading ? "Saving…" : "Set password"}
+              </button>
+            )}
+            <button
+              type="button"
+              className="hz-login-link"
+              onClick={() => { setError(null); setInfo(null); setMode("signin"); }}
+            >
+              Back to sign in
             </button>
           </form>
         )}
