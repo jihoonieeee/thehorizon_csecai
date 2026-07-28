@@ -1,6 +1,30 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase.js";
 
+const RULES = [
+  { label: "At least 8 characters",      test: p => p.length >= 8 },
+  { label: "One uppercase letter (A–Z)",  test: p => /[A-Z]/.test(p) },
+  { label: "One number (0–9)",            test: p => /[0-9]/.test(p) },
+  { label: "One symbol (!@#$%…)",        test: p => /[^A-Za-z0-9]/.test(p) },
+];
+
+function PasswordRules({ password }) {
+  if (!password) return null;
+  return (
+    <ul style={{ margin: "0", padding: "0", listStyle: "none", display: "flex", flexDirection: "column", gap: "4px" }}>
+      {RULES.map(({ label, test }) => {
+        const ok = test(password);
+        return (
+          <li key={label} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.75rem", color: ok ? "var(--success)" : "var(--text-tertiary)" }}>
+            <span style={{ fontSize: "0.65rem" }}>{ok ? "✓" : "○"}</span>
+            {label}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function LoginPage({ mode: initialMode = "signin", isReset = false }) {
   const [mode,     setMode]     = useState(initialMode);
   const [email,    setEmail]    = useState("");
@@ -38,9 +62,9 @@ export function LoginPage({ mode: initialMode = "signin", isReset = false }) {
   async function handleSetup(e) {
     e.preventDefault();
     setError(null);
-    if (password !== confirm)          { setError("Passwords do not match."); return; }
-    if (password.length < 8)           { setError("Password must be at least 8 characters."); return; }
-    if (!/[^A-Za-z0-9]/.test(password)) { setError("Password must contain at least one symbol (e.g. !@#$%)."); return; }
+    if (password !== confirm)            { setError("Passwords do not match."); return; }
+    const failed = RULES.find(r => !r.test(password));
+    if (failed) { setError(failed.label + " required."); return; }
     setLoading(true);
     // Set new password and clear the first-login flag
     const { error } = await supabase.auth.updateUser({
@@ -142,6 +166,7 @@ export function LoginPage({ mode: initialMode = "signin", isReset = false }) {
               onChange={e => setPassword(e.target.value)}
               required
             />
+            <PasswordRules password={password} />
             <input
               className="hz-auth-input"
               type="password"
