@@ -14,8 +14,12 @@ export function LoginPage({ mode: initialMode = "signin", isReset = false }) {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setError(error.message);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) { setError(error.message); setLoading(false); return; }
+    // First-time invite user — switch to setup immediately, don't wait for App re-render
+    if (data.session?.user?.user_metadata?.needs_password_setup) {
+      setMode("setup");
+    }
     setLoading(false);
   }
 
