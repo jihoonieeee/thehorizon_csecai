@@ -2,20 +2,24 @@
  * Create an invited user account in Supabase Auth (invite-only platform).
  *
  * Usage:
- *   node scripts/createUser.js <email> [role]
+ *   node scripts/createUser.js <email> [role]          — create new user + print invite link
+ *   node scripts/createUser.js <email> [role] --resend — resend invite link for existing user
  *   role: "admin" | "guest" (default: "guest")
  *
- * The user is created with email_confirm=true and a random password.
- * A password-reset link is printed — send it to the user so they can set their own password.
+ * The invite link expires after the OTP TTL configured in the Supabase dashboard
+ * (Authentication → Email → OTP Expiry). Run with --resend to generate a fresh link.
  */
 
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 
-const [,, email, role = "guest"] = process.argv;
+const args  = process.argv.slice(2);
+const email = args.find(a => a.includes("@"));
+const role  = args.find(a => a === "admin" || a === "guest") ?? "guest";
+const resend = args.includes("--resend");
 
-if (!email || !email.includes("@")) {
-  console.error("Usage: node scripts/createUser.js <email> [admin|guest]");
+if (!email) {
+  console.error("Usage: node scripts/createUser.js <email> [admin|guest] [--resend]");
   process.exit(1);
 }
 
@@ -29,6 +33,27 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+async function generateInviteLink(email) {
+  const { data, error } = await supabase.auth.admin.generateLink({
+    type:  "recovery",
+    email,
+    options: { redirectTo: "https://the-horizon-csec.vercel.app" },
+  });
+  if (error) {
+    console.error("Could not generate invite link:", error.message);
+    process.exit(1);
+  }
+  return data.properties.action_link;
+}
+
+if (resend) {
+  const link = await generateInviteLink(email);
+  console.log(`\nFresh invite link for ${email} (send this — the previous link is now invalid):`);
+  console.log(link);
+  process.exit(0);
+}
+
+// Create new user
 const { data, error } = await supabase.auth.admin.createUser({
   email,
   password:      crypto.randomUUID(),
@@ -37,23 +62,19 @@ const { data, error } = await supabase.auth.admin.createUser({
 });
 
 if (error) {
+  if (error.message?.toLowerCase().includes("already been registered")) {
+    console.log(`User ${email} already exists — generating a fresh invite link.`);
+    const link = await generateInviteLink(email);
+    console.log("\nSend this link to the user:");
+    console.log(link);
+    process.exit(0);
+  }
   console.error("Failed to create user:", error.message);
   process.exit(1);
 }
 
 console.log(`Created user: ${data.user.id}  ${email}  role=${role}`);
 
-// Generate a password-reset link so the user can set their own password.
-const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-  type:  "recovery",
-  email,
-  options: { redirectTo: "https://the-horizon-csec.vercel.app" },
-});
-
-if (linkError) {
-  console.warn("Could not generate reset link:", linkError.message);
-  console.log("Send the user to your app and have them use 'Forgot password'.");
-} else {
-  console.log("\nSend this link to the user (expires in 1 hour):");
-  console.log(linkData.properties.action_link);
-}
+const link = await generateInviteLink(email);
+console.log("\nSend this link to the user:");
+console.log(link);
