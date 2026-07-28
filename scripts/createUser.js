@@ -47,6 +47,7 @@ console.log(`Created user: ${data.user.id}  ${email}  role=${role}`);
 const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
   type:  "recovery",
   email,
+  options: { redirectTo: "https://the-horizon-csec.vercel.app" },
 });
 
 if (linkError) {
