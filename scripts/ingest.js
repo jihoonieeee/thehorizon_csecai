@@ -47,6 +47,16 @@ console.log(`  L1–L3 Ingest — ${new Date().toISOString().slice(0, 16)} UTC`)
 console.log(`  Window: ${window.start_sgt.slice(0, 16)} → ${window.end_sgt.slice(0, 16)} SGT  (${DAYS}d / ${period})`);
 console.log(`${"═".repeat(60)}\n`);
 
+// Watchdog: ensures the process always exits cleanly within the GHA job timeout.
+// Prevents exit code 13 ("Unfinished Top-Level Await") which occurs when the
+// event loop drains while a top-level await is still pending — e.g. when all
+// LLM/API calls fail fast (503 outage) and no timers remain to keep the loop alive.
+const WATCHDOG_MS = 55 * 60 * 1000; // 55 min — just under the 60-min GHA job timeout
+const watchdog = setTimeout(() => {
+  console.error(`\n  [watchdog] Ingest exceeded ${WATCHDOG_MS / 60000} min — forcing exit(1)`);
+  process.exit(1);
+}, WATCHDOG_MS);
+
 let runId;
 try {
   runId = await startIngestionRun();
@@ -81,7 +91,9 @@ try {
     console.warn(`  ⚠ Degraded run: ${result.degraded_reasons.join("; ")}`);
   }
   console.log("  Done.\n");
+  clearTimeout(watchdog);
 } catch (err) {
+  clearTimeout(watchdog);
   if (runId) await failIngestionRun(runId, err).catch(() => {});
   console.error(err);
   process.exit(1);
