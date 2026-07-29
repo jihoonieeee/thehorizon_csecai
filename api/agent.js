@@ -578,13 +578,10 @@ export default async function handler(req, res) {
     // so the richer text flows into the citation-relevance QA check too.
     const sourceRefs = await enrichSourcesWithFullText(rawSourceRefs);
 
-    // Fix 6 — partial-coverage signal: when the retrieval pool was much larger than
-    // what the selector chose (≥2×), tell the synthesiser so it can flag that the
-    // answer covers a subset and more sources exist.
+    // Use the selector's own missing[] for coverage gap reporting. A generic
+    // "more sources may exist" note was previously added here but was misleading —
+    // unselected candidates were rejected as irrelevant, not hidden relevant sources.
     const extendedMissing = [...(sel.missing || [])];
-    if (ret.count >= sourceRefs.length * 2 && sourceRefs.length > 0 && sel.coverage === "partial") {
-      extendedMissing.push(`Coverage may be partial: the corpus returned ${ret.count} matching candidates but only ${sourceRefs.length} were selected for this answer. Additional relevant sources may exist.`);
-    }
     // CVE IDs extracted before isGeneral so NVD lookup runs regardless of corpus
     // coverage. A CVE severity query may have no corpus sources but NVD is authoritative.
     const planCveIds = (plan.entities || []).filter(e => /^CVE-\d{4}-\d{4,}$/i.test(e)).map(e => e.toUpperCase()).slice(0, 5);
