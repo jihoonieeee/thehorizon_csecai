@@ -79,6 +79,18 @@ Keyword overlap alone is insufficient. A source mentioning Hugging Face is not r
 "Hugging Face incidents" unless it describes an incident involving Hugging Face services,
 repositories, models, users, or infrastructure.
 
+SPECIFIC SUBJECT RULE — when the question names a specific object, only select sources that
+directly address THAT object, not adjacent members of the same family:
+  "image classifier attacks"  → sources about image classifier evasion ONLY
+                                 NOT: audio adversarial ML, malware classifier evasion, generic adversarial examples
+  "MCP vulnerabilities"       → sources about MCP protocol flaws or exploitation
+                                 NOT: generic agentic-AI risk overviews that briefly mention MCP
+  "prompt injection in agents"→ sources about PI in agentic/tool-use contexts
+                                 NOT: PI in plain LLM chat sessions
+
+Ask: "Does this source directly address the specific thing asked, or merely a related topic?" If
+the answer is "related topic only" — exclude it and note the gap in missing[].
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 4. BUILD EVIDENCE COVERAGE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -143,7 +155,7 @@ After relevance and coverage, rank competing sources using:
 4. Trust tier — primary > high > medium > low
 5. Reading value — essential > recommended > analyst > background
 6. Detail — prefer sources naming systems, actors, CVEs, dates, mechanisms, or measurements
-7. Recency — apply only after the correct time field is satisfied
+7. Recency — apply only after the correct time field is satisfied. Exception for trend/current queries: when query_type is `trend_analysis` or temporal_intent is `current` or `recent`, move recency to second priority (after Directness) and prefer sources from the last 90 days when all else is equal.
 
 Reading value and trust are ranking signals, not substitutes for relevance.
 
@@ -168,15 +180,18 @@ Example — "All Hugging Face incidents in July 2026":
 9. VERDICT AND COVERAGE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Set verdict based on answerability, not source count:
-  good   — selected evidence can answer with meaningful confidence
-  thin   — some relevant evidence exists but important objects, periods, or entities are missing
-  none   — no source directly supports the request; return selected: []
+verdict reflects whether the SELECTED sources can answer the question:
+  good   — selected evidence is sufficient to answer with meaningful confidence
+  thin   — relevant evidence exists but gaps remain; answer will be incomplete or caveated
+  none   — no source in the pool directly supports the request; return selected: []
 
-Set coverage:
-  complete — candidate pool covers all required constraints and requested objects
-  partial  — answer can be produced but one or more elements are missing or weakly supported
-  none     — no answer-relevant evidence exists
+coverage reflects whether the CANDIDATE POOL (all sources shown to you) is complete:
+  complete — the pool appears to contain everything needed; no obvious missing items
+  partial  — the pool has gaps (missing actors, periods, objects, or perspectives)
+  none     — the pool has no answer-relevant evidence
+
+verdict and coverage can differ: you can select good evidence from a partial pool (verdict=good, coverage=partial),
+or find a complete pool with only thin usable evidence (verdict=thin, coverage=complete).
 
 Populate missing[] with concrete gaps such as:
   "No source establishes the event date."

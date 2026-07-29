@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Horizon — User Guide</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Helvetica, Arial, sans-serif;
+      background: #f3f4f6;
+      color: #111827;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .screen-hint {
+      text-align: center;
+      font-size: 11px;
+      color: #9ca3af;
+      padding: 16px;
+      font-style: italic;
+    }
+
+    .page {
+      max-width: 680px;
+      margin: 24px auto 48px;
+      background: #ffffff;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+    }
+
+    .inner { padding: 52px 56px 64px; }
+
+    /* ── Cover ── */
+    .cover {
+      padding: 52px 56px 48px;
+      border-bottom: 1px solid #e5e7eb;
+      margin-bottom: 48px;
+    }
+
+    .cover-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: #9ca3af;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    .cover-title {
+      font-size: 26px;
+      font-weight: 700;
+      color: #111827;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+
+    .cover-sub {
+      font-size: 14px;
+      color: #6b7280;
+    }
+
+    /* ── Section ── */
+    .section { margin-bottom: 52px; }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: #9ca3af;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #111827;
+      letter-spacing: -0.01em;
+      margin-bottom: 16px;
+    }
+
+    .divider {
+      height: 1px;
+      background: #e5e7eb;
+      margin-bottom: 48px;
+    }
+
+    /* ── Body text ── */
+    p {
+      font-size: 14px;
+      color: #374151;
+      line-height: 1.8;
+      margin-bottom: 16px;
+    }
+
+    p:last-child { margin-bottom: 0; }
+
+    /* ── Steps ── */
+    .step {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #111827;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 2px;
+    }
+
+    .step-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #111827;
+      margin-bottom: 4px;
+    }
+
+    .step-desc {
+      font-size: 14px;
+      color: #374151;
+      line-height: 1.75;
+    }
+
+    /* ── Screenshot placeholder ── */
+    .screenshot {
+      background: #f9fafb;
+      border: 1.5px dashed #d1d5db;
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+      margin: 20px 0;
+      gap: 6px;
+      break-inside: avoid;
+    }
+
+    .screenshot-sm { min-height: 100px; }
+
+    .screenshot-icon { font-size: 20px; opacity: 0.25; }
+
+    .screenshot-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #9ca3af;
+    }
+
+    .screenshot-caption { font-size: 11px; color: #d1d5db; }
+
+    /* ── Lists ── */
+    ul.guide-list { list-style: none; padding: 0; margin: 0 0 16px; }
+
+    ul.guide-list li {
+      font-size: 14px;
+      color: #374151;
+      line-height: 1.75;
+      padding: 7px 0 7px 16px;
+      border-bottom: 1px solid #f3f4f6;
+      position: relative;
+    }
+
+    ul.guide-list li:last-child { border-bottom: none; }
+
+    ul.guide-list li::before {
+      content: "·";
+      position: absolute;
+      left: 0;
+      color: #9ca3af;
+      font-weight: 700;
+    }
+
+    /* ── Table ── */
+    .guide-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin-bottom: 16px;
+      break-inside: avoid;
+    }
+
+    .guide-table th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #9ca3af;
+      padding: 0 12px 10px 0;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .guide-table td {
+      padding: 10px 12px 10px 0;
+      border-bottom: 1px solid #f3f4f6;
+      color: #374151;
+      line-height: 1.6;
+      vertical-align: top;
+    }
+
+    .guide-table td:first-child {
+      font-weight: 600;
+      color: #111827;
+      white-space: nowrap;
+      width: 100px;
+    }
+
+    .guide-table tr:last-child td { border-bottom: none; }
+
+    /* ── Colour dots (for maturity/category legend) ── */
+    .dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+
+    /* ── Example queries ── */
+    .example {
+      background: #f9fafb;
+      border-left: 3px solid #e5e7eb;
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-style: italic;
+      color: #6b7280;
+      line-height: 1.65;
+      break-inside: avoid;
+    }
+
+    /* ── Note / callout ── */
+    .note {
+      font-size: 13px;
+      color: #6b7280;
+      line-height: 1.75;
+      padding: 12px 16px;
+      background: #f9fafb;
+      border-radius: 4px;
+      margin-top: 16px;
+      break-inside: avoid;
+    }
+
+    /* ── Inline code ── */
+    code {
+      background: #f3f4f6;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 12px;
+      font-family: "SF Mono", "Fira Code", monospace;
+      color: #111827;
+    }
+
+    /* ── Sub-heading ── */
+    h3 {
+      font-size: 13px;
+      font-weight: 700;
+      color: #111827;
+      margin: 24px 0 10px;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      border-top: 1px solid #e5e7eb;
+      padding: 20px 56px;
+      font-size: 12px;
+      color: #9ca3af;
+      text-align: center;
+    }
+
+    /* ════════════
+       PRINT
+    ════════════ */
+    @media print {
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      body { background: #fff; }
+      .screen-hint { display: none; }
+      .page { box-shadow: none; margin: 0; max-width: 100%; }
+      .cover { page-break-after: always; }
+      .step, .screenshot, .example, .note, .guide-table { break-inside: avoid; }
+      .section-title, h3 { break-after: avoid; }
+      p { orphans: 3; widows: 3; }
+      @page { margin: 18mm 20mm 22mm; }
+      @page :first { margin: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <p class="screen-hint">To save as PDF: Chrome → File → Print → Save as PDF → enable "Background graphics" → Save</p>
+
+  <div class="page">
+
+    <!-- Cover -->
+    <div class="cover">
+      <div class="cover-label">CSEC AI Team · Internal</div>
+      <div class="cover-title">The Horizon</div>
+      <div class="cover-sub">User Guide — AI Threat Intelligence Platform</div>
+    </div>
+
+    <div class="inner">
+
+      <!-- ══════════════════════════════════
+           LOGGING IN
+      ══════════════════════════════════ -->
+      <div class="section">
+        <div class="section-label">Getting Started</div>
+        <div class="section-title">Logging In</div>
+
+        <p>You will receive an email from the CSEC AI Team with your login credentials — your registered email address and a temporary password.</p>
+
+        <div class="step">
+          <div class="step-num">1</div>
+          <div>
+            <div class="step-title">Open the dashboard link</div>
+            <div class="step-desc">Go to the URL provided in the credentials email. You will land on the login page, which shows <strong>The Horizon</strong> branding and a sign-in form.</div>
+          </div>
+        </div>
+
+        <div class="screenshot">
+          <div class="screenshot-icon">🖼</div>
+          <div class="screenshot-label">Screenshot: Login Page</div>
+          <div class="screenshot-caption">Replace with actual screenshot</div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">2</div>
+          <div>
+            <div class="step-title">Sign in with your temporary password</div>
+            <div class="step-desc">Enter your email address and the temporary password from the credentials email, then click <strong>Sign In</strong>.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">3</div>
+          <div>
+            <div class="step-title">Set your permanent password</div>
+            <div class="step-desc">On first login, you are immediately taken to a password setup screen. Create a password that meets the requirements shown — at least 8 characters, one uppercase letter, one number, and one symbol. Enter it twice and click <strong>Set password</strong>. You will be taken directly to the dashboard.</div>
+          </div>
+        </div>
+
+        <div class="screenshot">
+          <div class="screenshot-icon">🖼</div>
+          <div class="screenshot-label">Screenshot: Password Setup Screen</div>
+          <div class="screenshot-caption">Replace with actual screenshot</div>
+        </div>
+
+        <div class="note">
+          If you forget your password later, click <strong>Forgot password?</strong> on the login page and a reset link will be sent to your email. To report login issues, contact the CSEC AI Team at <strong>[email]</strong>.
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ══════════════════════════════════
+           NAVIGATION
+      ══════════════════════════════════ -->
+      <div class="section">
+        <div class="section-label">Dashboard Overview</div>
+        <div class="section-title">Navigation</div>
+
+        <p>After logging in, the dashboard opens to the <strong>Overview</strong> page. The navigation bar at the top provides access to four pages. Your account role (Guest or Admin) is shown in the top-right corner.</p>
+
+        <div class="screenshot screenshot-sm">
+          <div class="screenshot-icon">🖼</div>
+          <div class="screenshot-label">Screenshot: Navigation Bar</div>
+          <div class="screenshot-caption">Replace with actual screenshot</div>
+        </div>
+
+        <table class="guide-table">
+          <thead>
+            <tr><th>Page</th><th>What it's for</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Overview</td>
+              <td>AI threat landscape — category cards with insights, maturity bars, trend chart, top threats, and taxonomy coverage</td>
+            </tr>
+            <tr>
+              <td>Ask Agent</td>
+              <td>Natural-language Q&A against the ingested corpus with streamed, cited answers</td>
+            </tr>
+            <tr>
+              <td>Sources</td>
+              <td>Full source table — browse, filter, search, and drill into individual articles and their extracted intelligence</td>
+            </tr>
+            <tr>
+              <td>Generate</td>
+              <td>Download pre-generated briefing slide decks (PPTX) and copy the latest newsletter for email</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ══════════════════════════════════
+           OVERVIEW
+      ══════════════════════════════════ -->
+      <div class="section">
+        <div class="section-label">Page 1</div>
+        <div class="section-title">Overview</div>
+
+        <p>The main intelligence dashboard. Shows a synthesised view of the AI threat landscape for the selected time window — <strong>Last Week</strong>, <strong>Last Month</strong>, or <strong>Last Quarter</strong>. Use the segmented control at the top right to switch. The refresh button (↺) reloads data on demand; the page also auto-refreshes every 5 minutes.</p>
+
+        <div class="screenshot">
+          <div class="screenshot-icon">🖼</div>
+          <div class="screenshot-label">Screenshot: Overview — Category Cards</div>
+          <div class="screenshot-caption">Replace with actual screenshot</div>
+        </div>
+
+        <h3>Summary stat row</h3>
+        <p>At the top, a row of counts shows the total sources in the window broken down by each threat category, plus an "Other" count for adjacent/defensive sources outside the four offensive categories.</p>
+
+        <h3>Category cards</h3>
+        <p>Four cards — one per threat category — each showing a source count, sparkline trend, evidence maturity bar, a one-sentence posture assessment, and a numbered list of insights. Click any insight to expand it for the full body, supporting bullet points, and clickable source citations.</p>
+
+        <p>The four categories are:</p>
+        <ul class="guide-list">
+          <li><span class="dot" style="background:#3583C9;"></span><strong>Traditional AI Threats</strong> — attacks on ML models: adversarial examples, data poisoning, model extraction, backdoors</li>
+          <li><span class="dot" style="background:#9C62A7;"></span><strong>LLM Threats</strong> — prompt injection, jailbreaks, RAG poisoning, guardrail bypass, data leakage</li>
+          <li><span class="dot" style="background:#19BC9D;"></span><strong>Agentic AI Threats</strong> — autonomous agent abuse, MCP vulnerabilities, tool misuse, coding agent risks</li>
+          <li><span class="dot" style="background:#FFAA22;"></span><strong>AI-Enabled Attacks</strong> — AI used as an attack tool: deepfakes, AI-generated phishing, voice cloning</li>
+        </ul>
+
+        <h3>Evidence maturity bar</h3>
+        <p>Each category card includes a segmented bar showing how mature the evidence is for threats in that category. Click any segment to open a side panel listing the sources at that maturity level.</p>
+
+        <table class="guide-table">
+          <thead><tr><th>Level</th><th>What it means</th></tr></thead>
+          <tbody>
+            <tr><td><span class="dot" style="background:#94a3b8;"></span>Research</td><td>Demonstrated in papers or controlled lab environments only — no adversary use</td></tr>
+            <tr><td><span class="dot" style="background:#3b82f6;"></span>Demonstrated</td><td>Working exploit or PoC exists and is reproducible against a real product</td></tr>
+            <tr><td><span class="dot" style="background:#f59e0b;"></span>Disclosed</td><td>Confirmed vulnerability in a specific product — no working public exploit yet</td></tr>
+            <tr><td><span class="dot" style="background:#ef4444;"></span>Observed</td><td>Confirmed in real-world use against real victims — at least one documented incident</td></tr>
+            <tr><td><span class="dot" style="background:#7f1d1d;"></span>Operational</td><td>In sustained or scaled use by one or more threat actors across multiple incidents</td></tr>
+          </tbody>
+        </table>
+
+        <div class="screenshot">
+          <div class="screenshot-icon">🖼</div>
+          <div class="screenshot-label">Screenshot: Maturity Side Panel</div>
+          <div class="screenshot-caption">Replace with actual screenshot</div>
+        </div>
+
+        <h3>Trend chart</h3>
+        <p>A multi-line weekly source volume chart appears below the category cards, showing ingestion volume per category over time. Useful for spotting emerging spikes in a particular threat area.</p>
+
+        <h3>Top threats</h3>
+        <p>A ranked list of the highest-importance sources in the period, with maturity badge, publisher, date, and category. Click any title to open the original article.</p>
+
+        <h3>Taxonomy coverage</h3>
+        <p>A grouped tag matrix showing how many sources are tagged with each specific technique, organised by category. Click any tag to open a drilldown panel listing the sources for that technique.</p>
+
+        <div class="screenshot">
+          <div class="screenshot-icon">🖼</div>
+          <div class="screenshot-label">Screenshot: Taxonomy Coverage / Tag Drilldown</div>
+          <div class="screenshot-caption">Replace with actual screenshot</div>
+        </div>
+
+        <div class="note">
+          The <strong>Threat Maturity &amp; Reading Value Reference</strong> panel at the top of the page (collapsed by default) defines all maturity levels and reading value labels with examples and signals for each.
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ══════════════════════════════════
+           ASK AGENT
+      ══════════════════════════════════ -->
+      <div class="section">
+        <div class="section-label">Page 2</div>
+        <div class="section-title">Ask Agent</div>
+
+        <p>A chat interface for querying the ingested corpus in natural language. The agent searches the corpus, retrieves relevant evidence, and streams a structured answer with inline source citations. It searches the last 90 days by default — specify a timeframe in your question for broader or narrower results.</p>
+
+        <div class="screenshot">
+          <div class="screenshot-icon">🖼</div>
+          <div class="screenshot-label">Screenshot: Ask Agent — Welcome State with Suggestions</div>
+          <div class="screenshot-caption">Replace with actual screenshot</div>
+        </div>
+
+        <h3>Getting started</h3>
+        <p>On first load, six suggested prompts appear as clickable cards. Click one to send it immediately, or type your own question in the input bar and press <strong>Enter</strong> or the send button (↑).</p>
+
+        <h3>Writing effective questions</h3>
+        <p>Narrow your question by technique, category, actor, or timeframe. Broad questions produce generic answers.</p>
+
+        <div class="example">"What prompt injection techniques have been demonstrated against production LLMs in the last three months?"</div>
+        <div class="example">"Are there documented cases of autonomous AI agents being exploited in the wild?"</div>
+        <div class="example">"What should defenders watch in the next 90 days?"</div>
+        <div class="example">"Tell me about MCP vulnerabilities in the past 90 days"</div>
+
+        <h3>Reading the response</h3>
+        <p>Responses are structured with numbered findings, bold key terms, and inline citation numbers (e.g. <code>[src-1]</code>). Below each answer, clickable <strong>source buttons</strong> link to the original articles. A confidence level and temporal scope are shown below the answer.</p>
+
+        <div class="screenshot">
+          <div class="screenshot-icon">🖼</div>
+          <div class="screenshot-label">Screenshot: Ask Agent — Answer with Citations</div>
+          <div class="screenshot-caption">Replace with actual screenshot</div>
+        </div>
+
+        <p>If the agent answers from general background knowledge rather than the corpus (e.g. if no relevant sources were found), a <strong>"General knowledge — not grounded in the corpus"</strong> badge appears above the response. Treat these answers with additional caution.</p>
+
+        <p>Your conversation history is saved in your browser and persists across sessions. Use <strong>Clear history</strong> at the bottom of the input bar to start fresh.</p>
+
+        <div class="note">
+          The agent does not search the open web. All answers are drawn from ingested and processed sources. Very recent articles (last 24–48 hours) may not yet be in the corpus.
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ══════════════════════════════════
+           SOURCES
+      ══════════════════════════════════ -->
+      <div class="section">
+        <div class="section-label">Page 3</div>
+        <div class="section-title">Sources</div>
+
+        <p>A full table of every ingested and validated source. Use this page to browse the corpus, verify specific articles, or investigate a particular threat area in depth.</p>
+
+        <div class="screenshot">
+          <div class="screenshot-icon">🖼</div>
+          <div class="screenshot-label">Screenshot: Sources Page — Table with Filters</div>
+          <div class="screenshot-caption">Replace with actual screenshot</div>
+        </div>
+
+        <h3>Time period</h3>
+        <p>Use the pill switcher in the top-right to filter by <strong>7 days</strong>, <strong>30 days</strong>, <strong>90 days</strong>, or <strong>All time</strong>.</p>
+
+        <h3>Category tabs</h3>
+        <p>Tabs across the top filter sources by threat category. The count on each tab reflects the current active filters. Selecting a category tab reveals sub-tag filter pills — click one or more to narrow by specific technique.</p>
+
+        <h3>Filters</h3>
+        <ul class="guide-list">
+          <li><strong>Label</strong> — filter by reading value: Essential, Recommended, Analyst, Background</li>
+          <li><strong>Importance</strong> — filter by evidence maturity: Operational, Observed, Disclosed, Demonstrated, Research</li>
+          <li><strong>★ Starred</strong> — show only sources you have starred</li>
+          <li><strong>🚩 Flagged</strong> — show sources marked for review</li>
+          <li><strong>📄 Reports</strong> — show landscape reports and their extracted sub-findings</li>
+        </ul>
+
+        <h3>Sorting</h3>
+        <p>Sort by <strong>Importance</strong> (evidence maturity, highest first), <strong>Newest</strong> (publish date), or <strong>Ingested</strong> (when the source entered the system).</p>
+
+        <h3>Source rows</h3>
+        <p>Each row shows the title (linked to the original article), importance badge, reading value label, publisher, category, up to 3 taxonomy tags, and publish date. Click the <strong>★</strong> to star a source or <strong>⚐</strong> to flag it for review. Click anywhere on the row to expand the detail panel.</p>
+
+        <div class="screenshot">
+          <div class="screenshot-icon">🖼</div>
+          <div class="screenshot-label">Screenshot: Source Row — Expanded Detail Panel</div>
+          <div class="screenshot-caption">Replace with actual screenshot</div>
+        </div>
+
+        <h3>Detail panel</h3>
+        <p>The expanded panel shows the full summary, evidence maturity and reading value, source type, trust tier, taxonomy tags, and the classification rationale. For landscape reports, it also shows extracted attack walkthroughs, critical insights, and observed trends. For MITRE ATLAS case studies, it shows the full attack chain with technique IDs and an optional flow diagram.</p>
+
+        <div class="note">
+          The <strong>Legend</strong> and <strong>Taxonomy</strong> buttons in the top-right open reference panels explaining all labels, maturity levels, and taxonomy tag codes.
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ══════════════════════════════════
+           GENERATE
+      ══════════════════════════════════ -->
+      <div class="section">
+        <div class="section-label">Page 4</div>
+        <div class="section-title">Generate</div>
+
+        <p>Access pre-generated reports. Two tabs: <strong>Slides</strong> and <strong>Newsletter</strong>. Reports are generated automatically on a schedule — there is no on-demand generation trigger in the dashboard.</p>
+
+        <div class="screenshot">
+          <div class="screenshot-icon">🖼</div>
+          <div class="screenshot-label">Screenshot: Generate Page — Slides Tab</div>
+          <div class="screenshot-caption">Replace with actual screenshot</div>
+        </div>
+
+        <h3>Slides</h3>
+        <p>Select a reporting period — <strong>1 Month</strong>, <strong>1 Quarter</strong>, or <strong>1 Year</strong> — to load the latest pre-generated deck for that window. The panel shows the coverage dates, source count, and slide count. Click <strong>↓ Download PPTX</strong> to download the file.</p>
+
+        <p>Each deck includes: executive summary, per-category threat developments and analysis, 3–5 key insights per category, case study slides with attack-chain diagrams, and source citations on every slide. Edit the deck before presenting externally.</p>
+
+        <h3>Newsletter</h3>
+        <p>Select <strong>Past week</strong> or <strong>Past month</strong> to load the latest newsletter for that window. A live preview renders in the panel. Click <strong>Copy for email</strong> to copy the formatted HTML to your clipboard, then paste directly into Gmail or Outlook compose.</p>
+
+        <div class="screenshot">
+          <div class="screenshot-icon">🖼</div>
+          <div class="screenshot-label">Screenshot: Generate Page — Newsletter Tab with Preview</div>
+          <div class="screenshot-caption">Replace with actual screenshot</div>
+        </div>
+
+        <div class="note">
+          If a deck or newsletter shows "Not available yet", it has not been generated for that period yet. Check back after the next scheduled pipeline run.
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ══════════════════════════════════
+           FEEDBACK
+      ══════════════════════════════════ -->
+      <div class="section" style="margin-bottom:0;">
+        <div class="section-label">Support</div>
+        <div class="section-title">Feedback &amp; Issues</div>
+
+        <p>This is an early prototype and all feedback is welcome. Contact the CSEC AI Team at <strong>[email]</strong> to report issues or share observations.</p>
+
+        <p>We are particularly interested in: classification errors, gaps in analytical quality, Ask Agent accuracy (especially wrong or uncited claims), missing sources or feeds, and usability issues.</p>
+      </div>
+
+    </div>
+
+    <div class="footer">The Horizon &nbsp;·&nbsp; CSEC AI Team &nbsp;·&nbsp; Internal</div>
+
+  </div>
+</body>
+</html>

@@ -1,67 +1,81 @@
-# RAG Implementation Plan — The Horizon
+# RAG Implementation Plan — The Horizon (Ask Agent)
 
-Retrieval-Augmented Generation upgrades semantic search from keyword matching
+Retrieval-Augmented Generation upgrades the Ask Agent's search from keyword matching
 (`ilike %term%`) to meaning-based matching. A user asking "how are image classifiers
 attacked" retrieves sources about "adversarial perturbations in vision systems" even
-though no words overlap. This document is the authoritative implementation reference.
+though no words overlap.
+
+**Scope:** ask-agent path only. No pipeline hooks (classify.js, evidenceStore.js,
+generateDashboardInsights.js, pipeline.yml). New sources ingested after the one-time
+backfill won't auto-embed — re-run the backfill script periodically to catch up.
+Pipeline hooks can be wired later as a separate task.
 
 ---
 
 ## 1. Embedding Model
 
-### Options
+**Decision: `gemini-embedding-001` (Google Gemini)**
 
-| Provider | Model | Dims | Price / 1M tokens | In project |
+| Provider | Model | Dims | Token limit | Price |
 |---|---|---|---|---|
-| **OpenAI** | `text-embedding-3-small` | 1536 | $0.02 | Yes — `OPENAI_API_KEY` in all pipeline jobs |
-| OpenAI | `text-embedding-3-large` | 3072 | $0.13 | Yes |
-| OpenAI | `ada-002` (legacy) | 1536 | $0.10 | Yes |
-| Google | `text-embedding-004` | 768 | Free tier then paid | Yes (Gemini), needs separate client |
-| Anthropic | — | — | **No embedding API** | — |
+| **Google** | `gemini-embedding-001` | 3072 | 2,048 | Free tier |
+| Google | `gemini-embedding-2` | 3072 | 8,192 | TBD |
+| OpenAI | `text-embedding-3-small` | 1536 | 8,191 | $0.02/1M tokens |
 
-### Decision: `text-embedding-3-small`
-
-- `OPENAI_API_KEY` already exists in every pipeline job in `pipeline.yml` — zero new secrets
-- $0.02/1M tokens — cheapest paid option; 3-large is 6.5× more expensive
-- 1536 dims fits pgvector ivfflat well at 2–10k vectors
-- Token limit 8,191 comfortably fits `title + full_text[:6000]`
-- Rate limits (tier 1): 3,000 RPM / 1,000,000 TPM — daily pipeline uses ~2%
+`GEMINI_API_KEY` is already set and used for pipeline LLM calls. `gemini-embedding-001`
+is the stable free-tier model (`text-embedding-004` was its old name before Google
+renamed the embedding lineup). Free tier covers the entire backfill (4,960 rows) and
+all ongoing per-query embeds. Input limit 2,048 tokens is well above our typical
+source text (~150 tokens). 3072 dims → hnsw index (better than ivfflat at high dims,
+builds incrementally — no REINDEX step needed after backfill).
 
 ---
 
 ## 2. What to Embed
 
-Three surfaces. Each has a dedicated builder in `lib/agent/embeddings.js`.
+Three surfaces — one per table queried by the Ask Agent.
 
 ### Surface A — `sources` table
 
-**New column:** `embedding vector(1536)`
+**New column:** `embedding vector(3072)`
+
+**Why:** `retrieveRelevant()` currently does `ilike` on title + summary. Semantic
+search catches vocabulary mismatches (e.g. "prompt leakage" ↔ "system-prompt
+extraction") that keyword matching misses.
 
 **Input builder:**
 ```js
 export function sourceEmbedInput(s) {
-  // full_text captures CVEs, numbers, methodology that 2-4 sentence summaries omit.
-  // Fallback chain for sources without full_text (RSS, KEV, GHSA).
-  const body = s.full_text
-    ? s.full_text.slice(0, 6000)
-    : (s.short_summary || s.summary || "");
-  return `${s.title || ""}. ${body}`.trim().slice(0, 8000);
+  // short_summary is the LLM-distilled 2-4 sentence essence — the cleanest
+  // semantic signal. Full text adds noise (references, boilerplate, methodology
+  // detail) that dilutes the embedding. Exact-term lookup (CVEs, technique names)
+  // is already handled by the keyword lane; vector search handles concept mismatch.
+  // RSS/KEV/GHSA sources without short_summary fall back to summary.
+  const body = s.short_summary || s.summary || "";
+  return `${s.title || ""}. ${body}`.trim().slice(0, 2000);
 }
 ```
 
-NOT embedded: `tags` (exact-match filterable via `.contains()`), `main_category`
-(5 values, use `.eq()`), `intelligence` jsonb (redundant), `publisher`/`trust_tier`
-(categorical filters).
+NOT embedded: `full_text` (noisy; keyword lane handles exact terms), `tags`
+(exact-match filterable via `.contains()`), `main_category` (5 values, use
+`.eq()`), `intelligence` jsonb (redundant), `publisher`/`trust_tier` (categorical
+filters).
 
 ### Surface B — `evidence` table
 
-**New column:** `embedding vector(1536)`
+**New column:** `embedding vector(3072)`
+
+**Why:** `getEvidence()` does `ilike` on fact + quote. A user asking "cases where
+agents took unintended real-world actions" misses evidence items that say "agentic
+system executed unauthorized file deletion" — different words, same meaning.
 
 **Primary key warning:** `id = "${source_id}__${evidence_id}"` (compound string).
-`evidence_id` alone is NOT unique across sources. All UPDATE calls must use `id`.
+`evidence_id` alone is NOT unique across sources. All UPDATE calls (backfill) must
+use the compound `id`. SELECT / `.in("evidence_id", ...)` is fine for reads since
+evidence_ids are UUID-like and unique in practice.
 
-**Sentinel warning:** rows where `evidence_id === "__none__"` are placeholders
-with no text — skip them in backfill and embedding writes.
+**Sentinel warning:** rows where `evidence_id === "__none__"` are placeholders with
+no text — skip them in the backfill and in embedding writes.
 
 **Input builder:**
 ```js
@@ -72,33 +86,36 @@ export function evidenceEmbedInput(ev) {
 
 ### Surface C — `dashboard_insights` table
 
-**New column:** `embedding vector(1536)`
+**New column:** `embedding vector(3072)`
+
+**Why:** enables `searchTemporalInsights()` — a new agent tool that answers "how has
+X evolved over time" by finding relevant monthly/weekly analytical snapshots.
 
 **Key warning:** `(window_key, category)` is the unique composite key. There is
 **no surrogate id column**. All UPDATE and SELECT must use both columns.
 
-**`window_key` format warning:** values are `"2026-06"` (monthly YYYY-MM),
-`"2026-W24"` (weekly YYYY-WNN), `"2026-Q2"` (quarterly). These do NOT sort
-chronologically when mixed. The `win` column (`week`|`month`|`quarter`) separates
-types. Always filter by `win` when doing temporal queries. Use `created_at`
-(timestamptz) for date-based ordering and filtering, not `window_key`.
+**`window_key` format warning:** values are `"2026-06"` (monthly), `"2026-W24"`
+(weekly), `"2026-Q2"` (quarterly). These do NOT sort chronologically when mixed.
+Always filter by `win` column to separate types. Use `created_at` (timestamptz) for
+date ordering, not `window_key`.
 
-**Actual `points` v2 schema** (from `generateDashboardInsights.js` lines 1063–1073
-and `database.md:216`). The only fields that exist:
+**Note:** since `generateDashboardInsights.js` is out of scope, new insights won't
+auto-embed. Re-run the backfill after each insight generation run to keep Surface C
+fresh for temporal queries.
+
+**Actual `points` v2 schema** (from `generateDashboardInsights.js`):
 ```
 points.assessment             — one-sentence posture summary
 points.insights[].insight     — full insight sentence
 points.insights[].explanation_points[]
 points.insights[].confidence
-points.evidence_maturity      — { research: N, observed: N, ... }
-points.qa_status
-points.assessment_qa
-points.confidence
-points.confidence_reason
+points.evidence_maturity
+points.qa_status / points.assessment_qa
+points.confidence / points.confidence_reason
 points.findings_basis
 ```
 `landscape_summary` does NOT exist in `dashboard_insights.points`. It exists only
-in the deck blob's `category_analyses` — a different data structure.
+in the deck blob's `category_analyses`.
 
 **Input builder:**
 ```js
@@ -115,27 +132,18 @@ export function insightEmbedInput(categoryLabel, points) {
 
 ### One-time backfill
 
-| Surface | Rows | Avg tokens/row | Total tokens | Cost |
-|---|---|---|---|---|
-| `sources` (full_text or summary fallback) | 2,100 | ~400* | 840k | $0.017 |
-| `evidence` (non-sentinel rows) | ~5,000 | ~95 | 475k | $0.010 |
-| `dashboard_insights` (non-meta rows) | ~200 | ~150 | 30k | $0.001 |
-| **Total** | | | **~1.35M** | **~$0.028** |
-
-\* ~700 arXiv/PDF sources average ~1,500 tokens (full_text); ~1,400 RSS/KEV/GHSA
-sources average ~70 tokens (short_summary fallback). Weighted avg ≈ 540 tokens,
-conservatively estimated at 400 to account for sources with no text.
-
-### Daily ongoing
-
-| Item | Tokens/day | Cost/day |
+| Surface | Rows | Cost |
 |---|---|---|
-| New sources via classify (~50/day) | ~20,000 | $0.0004 |
-| New evidence via extractEvidence (~150 items/day) | ~14,250 | $0.0003 |
-| New insights (weekly, 4 categories) | ~600 avg/day | negligible |
-| Per agent query (1 embed call ~100 tokens) | ~100 | $0.000002 |
+| `sources` (977 non-digest pass) | 977 | Free tier |
+| `evidence` (non-sentinel) | 3,930 | Free tier |
+| `dashboard_insights` (non-meta) | ~47 | Free tier |
+| **Total** | **~4,960** | **$0 (free tier)** |
 
-**Annual ongoing: ~$0.25/year.**
+Gemini free tier: 1,500 RPM. At 50 rows/batch = 100 batches, all within limits.
+
+### Per agent query
+
+One embed call per query (~150 tokens). Free tier. Negligible.
 
 ---
 
@@ -151,30 +159,28 @@ All statements are idempotent.
 create extension if not exists vector;
 
 -- 2. Embedding columns (one per surface)
-alter table sources            add column if not exists embedding vector(1536);
-alter table evidence           add column if not exists embedding vector(1536);
-alter table dashboard_insights add column if not exists embedding vector(1536);
+alter table sources            add column if not exists embedding vector(3072);
+alter table evidence           add column if not exists embedding vector(3072);
+alter table dashboard_insights add column if not exists embedding vector(3072);
 
--- 3. ANN indexes (ivfflat, appropriate for ≤ 100k vectors)
---    Rule of thumb: lists ≈ sqrt(expected row count)
+-- 3. ANN indexes (hnsw — preferred for 3072-dim; builds incrementally, no REINDEX needed)
 create index if not exists idx_sources_embedding
-  on sources using ivfflat (embedding vector_cosine_ops)
-  with (lists = 50);    -- sqrt(2100) ≈ 46
+  on sources using hnsw (embedding vector_cosine_ops)
+  with (m = 16, ef_construction = 64);
 
 create index if not exists idx_evidence_embedding
-  on evidence using ivfflat (embedding vector_cosine_ops)
-  with (lists = 100);   -- sqrt(5000) ≈ 71
+  on evidence using hnsw (embedding vector_cosine_ops)
+  with (m = 16, ef_construction = 64);
 
 create index if not exists idx_dashboard_insights_embedding
-  on dashboard_insights using ivfflat (embedding vector_cosine_ops)
-  with (lists = 15);    -- sqrt(200) ≈ 15
+  on dashboard_insights using hnsw (embedding vector_cosine_ops)
+  with (m = 16, ef_construction = 64);
 
 -- 4. RPC: semantic source search
---    Called by vectorSearchSources() in agentTools.js.
---    Applies identical hard filters to the keyword lane (validation_status,
---    date_confidence, needs_review) so both lanes draw from the same eligible pool.
+--    Applies the same hard filters as retrieveRelevant() so both lanes draw from
+--    the same eligible pool.
 create or replace function match_sources(
-  query_embedding  vector(1536),
+  query_embedding  vector(3072),
   match_threshold  float,
   match_count      int,
   category_filter  text[],
@@ -190,6 +196,7 @@ language sql stable as $$
     and s.validation_status = 'pass'
     and s.date_confidence   = 'exact'
     and not coalesce(s.needs_review, false)
+    and not coalesce(s.is_digest, false)
     and s.main_category = any(category_filter)
     and (date_from_filter is null or s.date_published >= date_from_filter::date)
     and (date_to_filter   is null or s.date_published <= date_to_filter::date)
@@ -199,9 +206,8 @@ language sql stable as $$
 $$;
 
 -- 5. RPC: semantic evidence search
---    Called by vectorSearchEvidence() in agentTools.js.
 create or replace function match_evidence(
-  query_embedding  vector(1536),
+  query_embedding  vector(3072),
   match_threshold  float,
   match_count      int,
   category_filter  text[]
@@ -219,23 +225,20 @@ language sql stable as $$
 $$;
 
 -- 6. RPC: temporal insight search
---    Called by searchTemporalInsights() in agentTools.js.
---
 --    Design notes:
---    a) Identifies rows by (window_key, category) — no surrogate id exists.
+--    a) Identified by (window_key, category) — no surrogate id exists.
 --    b) Date filtering uses created_at (timestamptz), NOT window_key string
 --       comparison. window_key mixes "2026-06" (monthly) and "2026-W24" (weekly)
---       which sort non-chronologically when compared to ISO date strings.
---    c) win_filter separates window types so monthly and weekly insights don't mix.
---       Always pass win_filter="month" for trend questions — monthly windows are
---       more stable than weekly.
+--       which sort non-chronologically.
+--    c) win_filter separates window types. Pass win_filter="month" for trend
+--       questions — monthly windows are more stable than weekly.
 --    d) Results ordered by created_at ASC for chronological evolution view.
 create or replace function match_insights(
-  query_embedding  vector(1536),
+  query_embedding  vector(3072),
   match_threshold  float,
   match_count      int,
-  category_filter  text[]     default null,
-  win_filter       text       default null,
+  category_filter  text[]      default null,
+  win_filter       text        default null,
   date_from_filter timestamptz default null,
   date_to_filter   timestamptz default null
 )
@@ -275,34 +278,33 @@ $$;
 
 ```js
 // lib/agent/embeddings.js
-const MODEL   = "text-embedding-3-small";
-const API_URL = "https://api.openai.com/v1/embeddings";
+const MODEL   = "gemini-embedding-001";
+const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:embedContent`;
 
 export async function embedText(text) {
-  if (!process.env.OPENAI_API_KEY || !text?.trim()) return null;
+  if (!process.env.GEMINI_API_KEY || !text?.trim()) return null;
   try {
-    const res = await fetch(API_URL, {
+    const res = await fetch(`${API_URL}?key=${process.env.GEMINI_API_KEY}`, {
       method:  "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body:   JSON.stringify({ model: MODEL, input: String(text).slice(0, 8000) }),
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        model:    `models/${MODEL}`,
+        taskType: "RETRIEVAL_QUERY",   // agent queries; backfill uses RETRIEVAL_DOCUMENT
+        content:  { parts: [{ text: String(text).slice(0, 6000) }] },
+      }),
       signal: AbortSignal.timeout(12000),
     });
     if (!res.ok) return null;
     const json = await res.json();
-    return json?.data?.[0]?.embedding ?? null;  // float[], length 1536
+    return json?.embedding?.values ?? null;  // float[], length 3072
   } catch {
     return null;  // never throws — all callers treat null as "embed unavailable"
   }
 }
 
 export function sourceEmbedInput(s) {
-  const body = s.full_text
-    ? s.full_text.slice(0, 6000)
-    : (s.short_summary || s.summary || "");
-  return `${s.title || ""}. ${body}`.trim().slice(0, 8000);
+  const body = s.short_summary || s.summary || "";
+  return `${s.title || ""}. ${body}`.trim().slice(0, 2000);
 }
 
 export function evidenceEmbedInput(ev) {
@@ -319,7 +321,7 @@ export function insightEmbedInput(categoryLabel, points) {
 ### `scripts/backfillEmbeddings.js`
 
 One-time run. Skips rows where `embedding IS NOT NULL`. Batches 50 rows, 300ms
-delay between batches to stay within OpenAI tier-1 rate limits.
+delay between batches (OpenAI tier-1 rate limit headroom).
 
 ```
 Usage:
@@ -329,22 +331,23 @@ Usage:
   node scripts/backfillEmbeddings.js --table insights
 
 sources flow:
-  SELECT id, title, full_text, short_summary, summary
+  SELECT id, title, short_summary, summary
   FROM sources
-  WHERE embedding IS NULL AND validation_status = 'pass'
+  WHERE embedding IS NULL AND validation_status = 'pass' AND NOT is_digest
   ORDER BY date_published DESC
   → batch 50 → embedText(sourceEmbedInput(row))
   → UPDATE sources SET embedding = $vec WHERE id = $id
 
 evidence flow:
-  SELECT id, fact, quote
+  SELECT id, evidence_id, fact, quote
   FROM evidence
   WHERE embedding IS NULL AND evidence_id != '__none__'
   ORDER BY id
   → batch 50 → embedText(evidenceEmbedInput(row))
   → UPDATE evidence SET embedding = $vec WHERE id = $id
-  ⚠ id is the compound "${source_id}__${evidence_id}" string, not evidence_id alone.
-    evidenceId is NOT unique across sources. Always UPDATE WHERE id = compound_id.
+  ⚠ id is the compound "${source_id}__${evidence_id}" string — always UPDATE
+    WHERE id = compound_id, never WHERE evidence_id = $2. evidence_id is not
+    unique across sources.
 
 insights flow:
   SELECT window_key, category, window_label, points
@@ -362,9 +365,14 @@ Estimated runtime: ~5 minutes. Cost: ~$0.028.
 
 ## 6. Modified Files
 
+Only two files change. No pipeline scripts are touched.
+
 ### A. `lib/agent/agentTools.js`
 
-**Add static import at the top** (with the existing imports):
+#### Step 1 — Add import
+
+At the top of the file, with the existing imports:
+
 ```js
 import { embedText } from "./embeddings.js";
 ```
@@ -374,7 +382,9 @@ so there is no circular dependency.
 
 ---
 
-**Add `vectorSearchSources()` helper** — place directly above `retrieveRelevant()`:
+#### Step 2 — Add `vectorSearchSources()` helper
+
+Place directly above `retrieveRelevant()`:
 
 ```js
 async function vectorSearchSources(plan, limit) {
@@ -393,15 +403,15 @@ async function vectorSearchSources(plan, limit) {
   });
   if (!data?.length) return [];
 
-  // Fetch full rows for the matched IDs.
-  // SELECT must exactly match the existing retrieveRelevant() query at line 334
-  // so fmtSource() receives all required fields.
+  // Fetch full rows for the matched IDs. SELECT must exactly match the
+  // retrieveRelevant() query so fmtSource() receives all required fields.
   const { data: rows } = await supabase
     .from("sources")
     .select("id,title,parent_title,url,publisher,date_published,main_category,trust_tier,tags,summary,short_summary,source_type,intelligence,reading_value")
     .in("id", data.map(r => r.id))
     .eq("validation_status", "pass")
     .not("needs_review", "is", true)
+    .not("is_digest", "is", true)
     .eq("date_confidence", "exact");
   return rows || [];
 }
@@ -409,42 +419,84 @@ async function vectorSearchSources(plan, limit) {
 
 ---
 
-**Modify `retrieveRelevant()`** — replace the two sequential awaits (lines 370 and
-374) with one `Promise.all` that runs all three queries concurrently:
+#### Step 3 — Modify `retrieveRelevant()`
+
+The current code runs `tq` (tag query) and `q` (keyword query) sequentially. The
+fix hoists `tq` out of the if block so all three queries — keyword, tag, vector —
+run concurrently in one `Promise.all`.
+
+**Current code (lines 357–384):**
 
 ```js
-// REMOVE these two sequential awaits (lines 370 and 374):
-//   const { data: td } = await tq;        ← line 370
-//   const { data, error } = await q;      ← line 374
+// ── CURRENT ──
+let tagData = [];
+if (Array.isArray(plan.taxonomy_tags) && plan.taxonomy_tags.length) {
+  let tq = supabase
+    .from("sources")
+    .select("id,title,...")
+    ...
+    .contains("tags", plan.taxonomy_tags)
+    .limit(want * 3);
+  if (!tf.all_time && tf.date_from) tq = tq.gte("date_published", tf.date_from);
+  if (!tf.all_time && tf.date_to)   tq = tq.lte("date_published", `${tf.date_to}T23:59:59`);
+  const { data: td } = await tq;        // sequential await #1
+  tagData = td || [];
+}
 
-// REPLACE with:
-const tqPromise = (Array.isArray(plan.taxonomy_tags) && plan.taxonomy_tags.length)
-  ? tq
-  : Promise.resolve({ data: null, error: null });
+const { data, error } = await q;         // sequential await #2
+```
 
+**Replace with:**
+
+```js
+// ── NEW ──
+// Build tq outside the if block so it can join the Promise.all below.
+let tq = null;
+if (Array.isArray(plan.taxonomy_tags) && plan.taxonomy_tags.length) {
+  tq = supabase
+    .from("sources")
+    .select("id,title,parent_title,url,publisher,date_published,main_category,trust_tier,tags,summary,short_summary,source_type,intelligence,reading_value")
+    .eq("validation_status", "pass")
+    .not("needs_review", "is", true)
+    .eq("date_confidence", "exact")
+    .in("main_category", plan.category ? [plan.category] : RETRIEVE_CATS)
+    .contains("tags", plan.taxonomy_tags)
+    .limit(want * 3);
+  if (!tf.all_time && tf.date_from) tq = tq.gte("date_published", tf.date_from);
+  if (!tf.all_time && tf.date_to)   tq = tq.lte("date_published", `${tf.date_to}T23:59:59`);
+}
+
+// All three retrieval lanes run concurrently.
 const [
   { data, error },
   { data: td },
   vectorRows,
 ] = await Promise.all([
   q,
-  tqPromise,
+  tq ?? Promise.resolve({ data: null }),
   vectorSearchSources(plan, want * 2).catch(() => []),
 ]);
-tagData = td || [];
+let tagData = td || [];
 if (error) throw new Error(`retrieveRelevant: ${error.message}`);
-
-// In the merge loop that follows (line 380), add vectorRows to the union:
-// CHANGE: for (const s of [...(data || []), ...tagData]) {
-// TO:     for (const s of [...(data || []), ...tagData, ...vectorRows]) {
 ```
 
-This is a performance improvement on top of the RAG addition — the existing
-sequential `tq` → `q` becomes fully parallel.
+Then in the merge loop that immediately follows, add `vectorRows` to the union:
+
+```js
+// CHANGE:
+for (const s of [...(data || []), ...tagData]) {
+// TO:
+for (const s of [...(data || []), ...tagData, ...vectorRows]) {
+```
+
+The deduplication by `s.id` that already exists in the loop handles overlaps
+between the three lanes.
 
 ---
 
-**Add `vectorSearchEvidence()` helper** — place directly above `getEvidence()`:
+#### Step 4 — Add `vectorSearchEvidence()` helper
+
+Place directly above `getEvidence()`:
 
 ```js
 async function vectorSearchEvidence(queryText, categories, limit, validSourceIds = null) {
@@ -464,12 +516,12 @@ async function vectorSearchEvidence(queryText, categories, limit, validSourceIds
   });
   if (!data?.length) return [];
 
-  // No date window — return all matches directly.
+  // No date window — return matched evidence_ids directly.
   if (!validSourceIds) return data.map(r => r.evidence_id);
 
-  // Date-bounded query: fetch source_id for each matched evidence_id (one query),
-  // then keep only items whose source falls within the pre-fetched validSourceIds set.
-  // This avoids skipping vector search entirely for temporal queries.
+  // Date-bounded: fetch source_id for each matched evidence_id in one query,
+  // then keep only items whose source is within the pre-fetched validSourceIds set.
+  // One extra round-trip avoids skipping vector search for temporal queries.
   const validSet = new Set(validSourceIds);
   const { data: rows } = await supabase
     .from("evidence")
@@ -484,32 +536,30 @@ async function vectorSearchEvidence(queryText, categories, limit, validSourceIds
 
 ---
 
-**Modify `getEvidence()`** — replace the sequential `const { data, error } = await q;`
-at line 560 with the parallel block below.
+#### Step 5 — Modify `getEvidence()`
 
-Notes:
-- `ALL_CATS` is already defined at line 495 inside `getEvidence()` — do not redefine it.
-- `validSourceIds` is populated earlier (lines 507–526) when a date range is set. It is
-  passed to `vectorSearchEvidence()` which over-fetches and post-filters by source_id,
-  keeping vector search active even for date-bounded queries.
-- The vector lane is only skipped for specific `evidence_ids` lookups (those are already
-  exact ID fetches that don't benefit from semantic search).
+Replace the single `const { data, error } = await q;` at line 560 with a parallel
+block that runs the keyword query and vector search concurrently.
+
+`ALL_CATS` is already defined at line 495 — do not redefine it. `cats` is derived
+once for both the keyword and vector lanes.
 
 ```js
-// Replace: const { data, error } = await q;   (line 560)
-// With:
+// REMOVE: const { data, error } = await q;   (line 560)
+// REPLACE WITH:
 
 const cats = Array.isArray(categories) && categories.length ? categories : ALL_CATS;
 const [{ data: kwData, error }, vectorEvidenceIds] = await Promise.all([
   q,
-  // Skip only for specific evidence_ids lookups; for all other paths (including
-  // date-bounded queries), pass validSourceIds for post-filtering inside the helper.
+  // Only run vector search for general queries. Specific evidence_id lookups are
+  // already exact ID fetches and don't benefit from semantic expansion.
   (!Array.isArray(evidence_ids) || !evidence_ids.length)
     ? vectorSearchEvidence(query || "", cats, fetchLimit, validSourceIds).catch(() => [])
     : Promise.resolve([]),
 ]);
 
-// Fetch full rows for vector-only evidence IDs. Use a new array — never mutate kwData.
+// Fetch full rows for vector-only evidence IDs (those not already in kwData).
+// Build a new merged array — never mutate the Supabase response object.
 const kwEvidenceIds  = new Set((kwData || []).map(e => e.evidence_id));
 const newVectorEvIds = vectorEvidenceIds.filter(id => !kwEvidenceIds.has(id));
 let vectorEvRows = [];
@@ -521,18 +571,20 @@ if (newVectorEvIds.length) {
   vectorEvRows = vd || [];
 }
 
-// Merge into a new array. Vector results first so grounded keyword evidence
-// (ordered quote_grounded DESC from the query) stays at the top overall.
+// Vector results first so grounded keyword evidence (ordered quote_grounded DESC
+// from the query) stays at the top of the merged list.
 const data = [...vectorEvRows, ...(kwData || [])];
 ```
 
-The rest of `getEvidence()` — `isEvidenceAiRelevant`, `applyDiversityCap`,
-deck blob fallback, return shape — is unchanged. `data` feeds directly into the
-existing `const relevantItems = (data || []).filter(...)` at line 619.
+The rest of `getEvidence()` — `isEvidenceAiRelevant`, `applyDiversityCap`, deck
+blob fallback, return shape — is unchanged. `data` feeds directly into the existing
+`const relevantItems = (data || []).filter(isEvidenceAiRelevant)` that follows.
 
 ---
 
-**Add `searchTemporalInsights()` function** — place below `getEvidence()`:
+#### Step 6 — Add `searchTemporalInsights()` function
+
+Place below `getEvidence()`:
 
 ```js
 async function searchTemporalInsights({ query, categories, win = "month", date_from, date_to, limit = 20 }) {
@@ -552,9 +604,8 @@ async function searchTemporalInsights({ query, categories, win = "month", date_f
   if (error) return { available: false, message: error.message };
   if (!data?.length) return { available: true, windows: [], message: "No matching historical insights." };
 
-  // Fetch all matched rows in ONE batch query using window_key IN (...).
-  // This is a single round-trip regardless of how many rows matched.
-  // We over-fetch (all categories for each window_key) and filter in JS.
+  // Fetch all matched rows in one batch query. Over-fetch by window_key (all
+  // categories for each matched window) and filter in JS to avoid N round-trips.
   const matchedWindowKeys = [...new Set(data.map(r => r.window_key))];
   const { data: rows } = await supabase
     .from("dashboard_insights")
@@ -562,12 +613,12 @@ async function searchTemporalInsights({ query, categories, win = "month", date_f
     .in("window_key", matchedWindowKeys)
     .neq("category", "_period_meta");
 
-  // Build a lookup map keyed by "window_key::category"
+  // Keyed by "window_key::category" — no surrogate id exists.
   const rowMap = new Map(
     (rows || []).map(r => [`${r.window_key}::${r.category}`, r.points])
   );
 
-  // Results are already in chronological order (created_at ASC from RPC).
+  // RPC already ordered by created_at ASC — preserve chronological order.
   const windows = data.map(r => {
     const points = rowMap.get(`${r.window_key}::${r.category}`) || {};
     return {
@@ -578,7 +629,6 @@ async function searchTemporalInsights({ query, categories, win = "month", date_f
       similarity:   Math.round(r.similarity * 100) / 100,
       assessment:   points.assessment || "",
       insights:     (points.insights || []).slice(0, 3).map(i => ({
-        title:      i.title      || "",
         insight:    i.insight    || "",
         confidence: i.confidence || "",
       })),
@@ -591,12 +641,14 @@ async function searchTemporalInsights({ query, categories, win = "month", date_f
 
 ---
 
-**Register the new tool** — add to the `TOOLS` array:
+#### Step 7 — Register in TOOLS and executeTool
+
+Add to the `TOOLS` array:
 
 ```js
 {
   name: "search_temporal_insights",
-  description: "Search the historical record of per-category intelligence assessments to answer questions about how a threat has evolved over time. Returns chronologically ordered snapshots. Use for: 'how has X evolved', 'when did Y emerge', 'compare Q1 vs Q3', 'is Z escalating'.",
+  description: "Search the historical record of per-category intelligence assessments to answer questions about how a threat has evolved over time. Returns chronologically ordered snapshots. Use for: 'how has X evolved', 'when did Y emerge', 'is Z escalating', 'compare Q1 vs Q3'.",
   input_schema: {
     type: "object",
     required: ["query"],
@@ -612,6 +664,7 @@ async function searchTemporalInsights({ query, categories, win = "month", date_f
 ```
 
 Add to `executeTool()` switch:
+
 ```js
 case "search_temporal_insights": return await searchTemporalInsights(input || {});
 ```
@@ -620,18 +673,27 @@ case "search_temporal_insights": return await searchTemporalInsights(input || {}
 
 ### B. `api/agent.js`
 
-**Step 1 — Extend the parallel jobs block** (around line 554, inside the
-`!isGeneral` branch):
+Four changes, all within the `!isGeneral` branch.
+
+#### Step 1 — Add 5th job to the parallel jobs block (around line 562)
+
+The temporal insights job triggers for query types that imply evolution or
+comparison over time. This includes `trend_analysis`, `timeline`, `comparison`,
+and `strategic_assessment` — broader than just trend_analysis to catch questions
+like "compare Q1 vs Q3" (`comparison`) or "what is the current threat landscape"
+(`strategic_assessment`).
 
 ```js
-// Existing 4 jobs:
+// Existing 4 jobs stay unchanged. Add a 5th:
+const TEMPORAL_QUERY_TYPES = new Set(["trend_analysis", "timeline", "comparison", "strategic_assessment"]);
+
 const jobs = [
   executeTool("get_evidence", { ... }).catch(() => null),
-  plan.needs_judgments ? executeTool("get_judgments",  { ... }).catch(() => null) : Promise.resolve(null),
-  plan.needs_trends    ? executeTool("trend_analysis",  { ... }).catch(() => null) : Promise.resolve(null),
-  cveIds.length        ? executeTool("lookup_cve",      { ... }).catch(() => null) : Promise.resolve(null),
-  // ADD 5th job:
-  (plan.query_type === "trend_analysis" || plan.query_type === "timeline")
+  (plan.needs_judgments && !isTightWindow) ? executeTool("get_judgments", { ... }).catch(() => null) : Promise.resolve(null),
+  plan.needs_trends ? executeTool("trend_analysis", { ... }).catch(() => null) : Promise.resolve(null),
+  cveIds.length ? executeTool("lookup_cve", { ... }).catch(() => null) : Promise.resolve(null),
+  // 5th job: temporal insights for evolution/comparison/trend questions
+  TEMPORAL_QUERY_TYPES.has(plan.query_type)
     ? executeTool("search_temporal_insights", {
         query:      query,
         categories: plan.category ? [plan.category] : undefined,
@@ -641,25 +703,23 @@ const jobs = [
       }).catch(() => null)
     : Promise.resolve(null),
 ];
+
 // Update destructuring from 4 to 5 values:
 const [ev, jd, tr, cve, temporalInsights] = await Promise.all(jobs);
 ```
 
-**Step 2 — Add `temporalInsights` parameter to `buildContextMessage()`** (around
-line 374). Change the function signature from:
+#### Step 2 — Update `buildContextMessage()` signature (line 382)
 
 ```js
+// CHANGE:
 function buildContextMessage(query, plan, sources, evidence, judgments, trends, cveResults, selectorMissing = [])
-```
-
-to:
-
-```js
+// TO:
 function buildContextMessage(query, plan, sources, evidence, judgments, trends, cveResults, selectorMissing = [], temporalInsights = null)
 ```
 
-**Step 3 — Add the temporal context block inside `buildContextMessage()`** (after
-the existing `ANALYTICAL JUDGMENTS` block, around line 419):
+#### Step 3 — Add temporal context block inside `buildContextMessage()`
+
+Add after the existing `ANALYTICAL JUDGMENTS` block (around line 427):
 
 ```js
 if (temporalInsights?.available && temporalInsights.windows?.length) {
@@ -674,16 +734,14 @@ if (temporalInsights?.available && temporalInsights.windows?.length) {
 }
 ```
 
-**Step 4 — Update the call site of `buildContextMessage()`** (the one place it's
-called, around line 584):
+#### Step 4 — Update the `buildContextMessage()` call site (line 592)
 
 ```js
-// Change from:
+// CHANGE:
 const userContent = isGeneral
   ? query.trim()
   : buildContextMessage(query, plan, sourceRefs, evidence, judgments, trends, cveResults, sel.missing);
-
-// To:
+// TO:
 const userContent = isGeneral
   ? query.trim()
   : buildContextMessage(query, plan, sourceRefs, evidence, judgments, trends, cveResults, sel.missing, temporalInsights);
@@ -691,170 +749,13 @@ const userContent = isGeneral
 
 ---
 
-### C. `scripts/classify.js`
+## 7. Threshold Reasoning
 
-**Add import at top:**
-```js
-import { embedText, sourceEmbedInput } from "../lib/agent/embeddings.js";
-```
-
-**Add fire-and-forget embed after the L4e update** (after line 181,
-`if (error) console.warn(...)`):
-
-```js
-// After: if (error) console.warn(`  [L4e] ${s.id.slice(0,8)}: ${error.message}`);
-// Add:
-if (!error) {
-  // If the text upgrade ran this iteration, updates.full_text has the new text;
-  // s.full_text still holds the old value. Always prefer the fresher version.
-  const forEmbed = { ...s, full_text: updates.full_text || s.full_text };
-  embedText(sourceEmbedInput(forEmbed))
-    .then(vec => {
-      if (vec) supabase.from("sources").update({ embedding: vec }).eq("id", s.id).then(() => {});
-    })
-    .catch(() => {});
-}
-```
-
-Fire-and-forget because classify processes up to 400 sources with 4-way concurrency
-in a 90-minute CI job. A blocking embed call per source adds ~50-80s of serial wait.
-The backfill script catches any sources the fire-and-forget missed.
-
----
-
-### D. `lib/storage/evidenceStore.js`
-
-**Add import at top:**
-```js
-import { embedText, evidenceEmbedInput } from "../agent/embeddings.js";
-```
-
-Path is correct: from `lib/storage/` to `lib/agent/` is `../agent/`.
-
-**Modify `saveSourceEvidence()` — add embed block before the upsert** (after
-`const rows = (items || []).map(it => itemToRow(it, contentHash));`, before
-`if (!rows.length) { rows.push(...) }`):
-
-```js
-// Embed non-sentinel rows in parallel before upsert.
-// Errors are caught per-item: if one embed fails, the rest still proceed and
-// the row upserts without an embedding. Backfill catches it later.
-try {
-  await Promise.all(
-    rows
-      .filter(r => r.evidence_id !== MARKER_ID && (r.fact || r.quote))
-      .map(async r => {
-        r.embedding = await embedText(evidenceEmbedInput({ fact: r.fact, quote: r.quote }));
-      })
-  );
-} catch { /* non-fatal — upsert proceeds without embeddings */ }
-```
-
-This IS blocking (awaited before upsert). For a typical source with 5–15 evidence
-items this adds ~200ms. All `embedText` calls include a 12s timeout so they cannot
-stall the pipeline indefinitely.
-
----
-
-### E. `scripts/generateDashboardInsights.js`
-
-**Add import at top:**
-```js
-import { embedText, insightEmbedInput } from "../lib/agent/embeddings.js";
-```
-
-**Extract `points` object before the upsert** (currently constructed inline inside
-the upsert call at line 1063). This is required because there is no `points` variable
-in scope otherwise — the embed hook needs to reference it:
-
-```js
-// BEFORE (current code — points is inline, no variable):
-const { error: upErr } = await supabase.from("dashboard_insights").upsert({
-  win: WINDOW, window_key: period.key, window_label: period.label, category: cat.key,
-  points: {
-    schema: "v2", insights: result.insights, assessment: result.assessment, ...
-  },
-  source_count: totalCount,
-}, { onConflict: "window_key,category" });
-
-// AFTER (extract points first, then use it in both upsert and embed):
-const pointsPayload = {
-  schema:            "v2",
-  insights:          result.insights,
-  assessment:        result.assessment,
-  confidence:        result.confidence,
-  confidence_reason: result.confidence_reason,
-  evidence_maturity: result.evidence_maturity,
-  qa_status:         result.qa_status,
-  assessment_qa:     result.assessment_qa,
-  findings_basis:    { facts: fromEvidence, summaries: fromSummary, evidence_sources: evidenceSources },
-};
-
-const { error: upErr } = await supabase.from("dashboard_insights").upsert({
-  win: WINDOW, window_key: period.key, window_label: period.label, category: cat.key,
-  points: pointsPayload,
-  source_count: totalCount,
-}, { onConflict: "window_key,category" });
-
-if (!upErr) {
-  // Update by (window_key, category) — there is no surrogate id column.
-  embedText(insightEmbedInput(cat.label, pointsPayload))
-    .then(vec => {
-      if (!vec) return;
-      supabase
-        .from("dashboard_insights")
-        .update({ embedding: vec })
-        .eq("window_key", period.key)
-        .eq("category",   cat.key)
-        .then(() => {});
-    })
-    .catch(() => {});
-}
-```
-
----
-
-### F. `.github/workflows/pipeline.yml`
-
-**Add `OPENAI_API_KEY` to all three steps of the `insights` job.** The insights job
-currently only carries `ANTHROPIC_API_KEY`. Without this fix, `embedText()` returns
-null immediately on every insight row generated in CI because `OPENAI_API_KEY` is
-not set — embedding silently fails with no error.
-
-```yaml
-      - name: Weekly insights
-        if: ...
-        run: node scripts/generateDashboardInsights.js --window week
-        env:
-          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
-          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}  # ← ADD
-
-      - name: Monthly insights
-        ...
-          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}  # ← ADD
-
-      - name: Quarterly insights
-        ...
-          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}  # ← ADD
-```
-
----
-
-## 7. Where Embeddings Are Used
-
-| Feature | File | Function | Threshold | What gets embedded |
-|---|---|---|---|---|
-| Agent source retrieval | `lib/agent/agentTools.js` | `retrieveRelevant()` | 0.40 | `plan.search_terms.join(" ")` |
-| Agent evidence retrieval | `lib/agent/agentTools.js` | `getEvidence()` | 0.40 | `query` (same expanded terms) |
-| Temporal insight search | `lib/agent/agentTools.js` | `searchTemporalInsights()` | 0.35 | Raw user `query` |
-
-Threshold reasoning:
-- **0.40** for sources/evidence: broad recall is fine — Haiku selector is the precision
-  gate downstream. False positives are ranked low by the JS ranker.
-- **0.35** for insights: formal analytical prose doesn't closely match casual user
-  phrasing; looser threshold prevents valid historical insights from being missed.
+| Surface | Threshold | Why |
+|---|---|---|
+| Sources | 0.40 | Broad recall is fine — the Haiku selector is the precision gate downstream |
+| Evidence | 0.40 | Same rationale; JS diversity cap prevents flooding from one source |
+| Insights | 0.35 | Formal analytical prose doesn't closely match casual phrasing; looser threshold prevents valid historical insights from being missed |
 
 ---
 
@@ -866,115 +767,90 @@ Dependencies flow top to bottom. Do not skip steps.
 STEP 1 — SQL migration
   Create docs/migrations/026_rag_embeddings.sql (copy from §4)
   Run in Supabase dashboard → SQL editor
-  Verify: SELECT column_name FROM information_schema.columns
-            WHERE table_name = 'sources' AND column_name = 'embedding';
-          → 1 row returned
+  Verify:
+    SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'sources' AND column_name = 'embedding';
+    → 1 row returned
 
 STEP 2 — Create lib/agent/embeddings.js
   New file ~40 lines (copy from §5)
-  Verify: node --input-type=module <<'EOF'
-    import { embedText } from './lib/agent/embeddings.js';
-    const v = await embedText('test query');
-    console.log(Array.isArray(v), v?.length);  // true 1536
-  EOF
+  Smoke test:
+    node --input-type=module <<'EOF'
+      import { embedText } from './lib/agent/embeddings.js';
+      const v = await embedText('test query');
+      console.log(Array.isArray(v), v?.length);  // true 3072
+    EOF
 
-STEP 3 — Run backfill
-  Create scripts/backfillEmbeddings.js (implement per spec in §5)
+STEP 3 — Run scripts/backfillEmbeddings.js
   node scripts/backfillEmbeddings.js
-  Runtime: ~5 min. Cost: ~$0.028.
-  Verify:
+  Runtime: ~30s. Cost: ~$0.013.
+  Verify in Supabase SQL editor:
     SELECT COUNT(*) FROM sources WHERE embedding IS NOT NULL;
     SELECT COUNT(*) FROM evidence WHERE embedding IS NOT NULL AND evidence_id != '__none__';
     SELECT COUNT(*) FROM dashboard_insights WHERE embedding IS NOT NULL AND category != '_period_meta';
 
+  Then REINDEX to rebuild centroids from actual data (migration created indexes on empty table):
+    REINDEX INDEX idx_sources_embedding;
+    REINDEX INDEX idx_evidence_embedding;
+    REINDEX INDEX idx_dashboard_insights_embedding;
+
 STEP 4 — Modify lib/agent/agentTools.js
-  a) Add: import { embedText } from "./embeddings.js";
+  a) Add import { embedText } from "./embeddings.js";
   b) Add vectorSearchSources() above retrieveRelevant()
-  c) Modify retrieveRelevant() — replace 2 sequential awaits with Promise.all([q, tqPromise, vectorSearchSources])
-     and add vectorRows to the merge loop
+  c) Modify retrieveRelevant(): hoist tq out of if block, replace 2 sequential
+     awaits with Promise.all([q, tq ?? resolve, vectorSearchSources(...)]),
+     add vectorRows to the merge loop
   d) Add vectorSearchEvidence() above getEvidence()
-  e) Modify getEvidence() — add parallel vector lane, replace data variable with merged array
+  e) Modify getEvidence(): derive cats before the Promise.all, replace single
+     await q with Promise.all([q, vectorSearchEvidence(...)]), build merged
+     data array from vectorEvRows + kwData
   f) Add searchTemporalInsights() below getEvidence()
   g) Add to TOOLS array
   h) Add to executeTool() switch
-  Verify: ask agent a question that uses vocabulary different from source text
-    (e.g. "how are vision models fooled" when sources say "adversarial perturbations")
+  Verify: ask agent a question using vocabulary different from source text
+    e.g. "how are vision models fooled" (sources say "adversarial perturbations")
 
 STEP 5 — Modify api/agent.js
-  a) Add temporal job as 5th element in jobs array
-  b) Update destructuring to [ev, jd, tr, cve, temporalInsights]
-  c) Add temporalInsights parameter to buildContextMessage() signature
-  d) Add HISTORICAL INSIGHT SNAPSHOTS block inside buildContextMessage()
-  e) Update buildContextMessage() call site to pass temporalInsights
-  Verify: ask "how has prompt injection evolved?" — answer should cite past assessment snapshots
-
-STEP 6 — Modify scripts/classify.js
-  a) Add import at top
-  b) Add fire-and-forget embed block after line 181 (after the error warn)
-  Verify: node scripts/classify.js --limit 1
-    then: SELECT id, embedding IS NOT NULL as has_embed FROM sources ORDER BY updated_at DESC LIMIT 1;
-
-STEP 7 — Modify lib/storage/evidenceStore.js
-  a) Add import at top
-  b) Add embed block in saveSourceEvidence() before upsert
-  Verify: node scripts/extractEvidence.js --limit 1 --since-hours 999
-    then: SELECT evidence_id, embedding IS NOT NULL FROM evidence WHERE source_id = (last processed id) LIMIT 5;
-
-STEP 8 — Modify scripts/generateDashboardInsights.js
-  a) Add import at top
-  b) Extract pointsPayload variable from inline upsert
-  c) Add fire-and-forget embed after upsert using window_key + category (not id)
-  Verify: node scripts/generateDashboardInsights.js --window month --force --only llm_threats
-    then: SELECT window_key, category, embedding IS NOT NULL FROM dashboard_insights WHERE category = 'llm_threats';
-
-STEP 9 — Modify .github/workflows/pipeline.yml
-  Add OPENAI_API_KEY to all 3 insight steps
-  Verify: trigger manual workflow_dispatch with run_insights=week
-    check insights job logs — should not show "OPENAI_API_KEY" warnings
+  a) Define TEMPORAL_QUERY_TYPES set above the jobs array
+  b) Add 5th job to jobs array
+  c) Update destructuring to [ev, jd, tr, cve, temporalInsights]
+  d) Add temporalInsights = null param to buildContextMessage() signature
+  e) Add HISTORICAL INSIGHT SNAPSHOTS block inside buildContextMessage()
+  f) Update buildContextMessage() call site to pass temporalInsights
+  Verify: ask "how has prompt injection evolved?" — answer should reference past
+    assessment snapshots without citing them as [src-N]
 ```
 
 ---
 
 ## 9. Graceful Degradation
 
-Every embedding path is non-blocking and returns `null` on failure:
+Every embedding path is non-blocking and returns `null` / `[]` on failure:
 
 - `embedText()` wraps all errors in try/catch and returns `null`
-- `vectorSearchSources()` / `vectorSearchEvidence()` return `[]` when embedding null
-- Both wrapped in `.catch(() => [])` inside `Promise.all`
-- `searchTemporalInsights()` returns `{ available: false }` when embedding null
-- Evidence upsert proceeds when `r.embedding` is `null` — Supabase ignores null
-  fields that have no NOT NULL constraint
-- Source and insight embed calls are fire-and-forget — pipeline does not wait for them
+- `vectorSearchSources()` and `vectorSearchEvidence()` return `[]` when embedding is null
+- Both are wrapped in `.catch(() => [])` inside `Promise.all`
+- `searchTemporalInsights()` returns `{ available: false }` when embedding is null
+- The 5th job in `api/agent.js` is wrapped in `.catch(() => null)`
 
-No new secrets required. Agent and pipeline work keyword-only before backfill completes.
+The keyword lane always runs regardless. The agent works keyword-only before the
+backfill completes or if `GEMINI_API_KEY` is missing.
 
 ---
 
-## 10. Bugs Fixed vs Previous Plan Versions
+## 10. Keeping Embeddings Fresh
 
-| # | Bug | Fix |
-|---|---|---|
-| 1 | `match_insights` returned `id bigint` — no such column | Returns `(window_key, category)` composite |
-| 2 | `searchTemporalInsights` used `.in("id", ...)` follow-up | Now one batch `.in("window_key", keys)` query; lookup by composite key map |
-| 3 | `generateDashboardInsights` embed used `.eq("id", ...)` | Uses `.eq("window_key",...).eq("category",...)` |
-| 4 | `insightEmbedInput` referenced `points.landscape_summary` | Field doesn't exist in v2 schema; uses `points.assessment` + `insights[].insight` |
-| 5 | `match_insights` cast `window_key` to `::date` | `window_key` is not ISO date; date filter now uses `created_at timestamptz` |
-| 6 | Mixed monthly/weekly `window_key` sort non-chronologically | Added `win_filter` param; RPC orders by `created_at` |
-| 7 | Dynamic `await import()` inside every helper call | Top-level static import |
-| 8 | Backfill evidence `UPDATE WHERE evidence_id = $2` | `evidence_id` not unique; must use compound `id` |
-| 9 | `vectorSearchSources` second-query SELECT columns unspecified | Now explicitly lists same columns as `retrieveRelevant()` line 334 |
-| 10 | classify.js embed used stale `s.full_text` after text upgrade | Uses `updates.full_text \|\| s.full_text` |
-| 11 | `retrieveRelevant` — only `q` parallelized, `tq` still sequential | All three (`q`, `tq`, vectorSearch) now in one `Promise.all` |
-| 12 | `getEvidence` — vector search ran sequentially before `q` | Now properly in `Promise.all([q, vectorSearchEvidence(...)])` |
-| 13 | `data.unshift()` mutated Supabase response array | New `data` variable built from spread; original `kwData` untouched |
-| 14 | `generateDashboardInsights` — `points` not in scope for embed | Extracted as `pointsPayload` variable before the upsert call |
-| 15 | `searchTemporalInsights` fired N separate `.maybeSingle()` calls | One batch `.in("window_key", keys)` + JS map lookup |
-| 16 | `buildContextMessage()` signature change never specified | Explicit: add `temporalInsights = null` param + update call site |
-| 17 | `embedText_` alias in generateDashboardInsights | Removed; call `embedText(...)` directly |
-| 18 | Second query in `vectorSearchSources` missing `not needs_review` | Added `.not("needs_review", "is", true)` |
-| 19 | `getEvidence` vector lane ignored `validSourceIds` date gate, returning out-of-window evidence | `vectorSearchEvidence` now accepts `validSourceIds`; over-fetches 4× and post-filters by source_id via one extra query — vector search stays active for all query types |
-| 20 | `ALL_CATS_EV` and `cats` unnecessarily redefined in `getEvidence` outer scope | Use `ALL_CATS` (already defined at line 495) and `cats` derived once before the `Promise.all` |
+Since pipeline hooks are out of scope, new data won't auto-embed. Options:
+
+1. **Manual re-run**: `node scripts/backfillEmbeddings.js` after classify/extract
+   runs. The backfill skips rows with `embedding IS NOT NULL`, so re-running is
+   always safe and cheap (only processes new rows).
+
+2. **Cron script**: add a weekly `node scripts/backfillEmbeddings.js` step to
+   `pipeline.yml` — a thin addition that doesn't touch any pipeline logic.
+
+3. **Pipeline hooks (later)**: wire `embedText` into classify.js and
+   evidenceStore.js for inline embedding at ingest time. Separate task.
 
 ---
 
@@ -984,12 +860,9 @@ No new secrets required. Agent and pipeline work keyword-only before backfill co
 |---|---|---|
 | `docs/migrations/026_rag_embeddings.sql` | New SQL | 3 columns, 3 indexes, 3 RPCs |
 | `lib/agent/embeddings.js` | New JS | OpenAI embed wrapper + 3 input builders |
-| `scripts/backfillEmbeddings.js` | New JS | One-time populate all 3 tables |
-| `lib/agent/agentTools.js` | Modified | vectorSearch helpers, parallel lanes in retrieveRelevant+getEvidence, new temporal tool |
-| `api/agent.js` | Modified | 5th job in Promise.all, buildContextMessage signature + body + call site |
-| `scripts/classify.js` | Modified | Fire-and-forget embed after L4e update |
-| `lib/storage/evidenceStore.js` | Modified | Parallel embed before evidence upsert |
-| `scripts/generateDashboardInsights.js` | Modified | Extract pointsPayload, embed after upsert |
-| `.github/workflows/pipeline.yml` | Modified | OPENAI_API_KEY in insights job (3 steps) |
+| `scripts/backfillEmbeddings.js` | New JS | One-time (and re-runnable) populate all 3 tables |
+| `lib/agent/agentTools.js` | Modified | vectorSearch helpers, parallel lanes in retrieveRelevant + getEvidence, new temporal tool |
+| `api/agent.js` | Modified | 5th job, buildContextMessage signature + temporal block + call site |
 
-**Cost: ~$0.028 one-time. ~$0.25/year ongoing.**
+**Cost: ~$0.028 one-time backfill. ~$0.25/year ongoing (per-query embeds).**
+**No pipeline scripts touched. No new secrets required.**
