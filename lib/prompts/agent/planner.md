@@ -35,20 +35,18 @@ Return ONLY valid JSON. No prose or markdown.
 
   "taxonomy_tags": [],
 
-  "source_types": [],
+  "source_types": [],       // optional: restrict to e.g. ["research_finding","incident_report"]
 
   "temporal": {
     "temporal_intent": "none|recent|current|bounded_period|historical|forward_looking",
     "time_field": "event_date|publication_date|disclosure_date|effective_date|either",
-    "start_date": null,
-    "end_date": null,
-    "scope_label": "all available data",
-    "reasoning_summary": ""
+    "start_date": "YYYY-MM-DD or null",
+    "end_date":   "YYYY-MM-DD or null",
+    "scope_label": "brief human-readable label, e.g. 'last 30 days', 'July 2026', 'since January 2023' — keep under 8 words"
   },
 
-  "needs_judgments": false,
-
-  "needs_trends": false,
+  "needs_judgments": false, // true for strategic_assessment, comparison, timeline
+  "needs_trends": false,    // true for trend_analysis
 
   "must_include": [],
 
@@ -82,9 +80,19 @@ Identify the main retrieval task. Use these types:
 Do not infer strategic_assessment when the user only wants a factual list.
 
 Examples:
-  "All Hugging Face incidents in July 2026"     → incident_enumeration, list, all_matching
-  "What changed in MCP security this quarter?"  → strategic_assessment, assessment, best_evidence
-  "What papers tested jailbreaks against Claude?" → research_lookup, list, all_matching
+  "All Hugging Face incidents in July 2026"            → incident_enumeration, list, all_matching
+  "What changed in MCP security this quarter?"         → strategic_assessment, assessment, best_evidence
+  "What papers tested jailbreaks against Claude?"      → research_lookup, list, all_matching
+  "Is prompt injection activity increasing?"           → trend_analysis (direction = trend)
+  "Is X increasing or decreasing?"                     → trend_analysis
+  "How has deepfake fraud evolved over the past year?" → trend_analysis (evolution over time = trend)
+  "How has X evolved?" / "Has X changed over time?"   → trend_analysis
+  "Which category is growing fastest?"                 → trend_analysis
+  "What's new in AI security this year?"               → strategic_assessment (broad landscape — NOT general_search)
+  "What is the difference between X and Y?"           → comparison (ALWAYS — even when defining both terms is required)
+  "How does X compare to Y?"                           → comparison
+  "X vs Y — which is more dangerous/effective?"        → comparison
+  "What has publisher A published, and how does it compare to publisher B?" → comparison (NOT publisher_lookup when a cross-publisher comparison is requested)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 2 — IDENTIFY THE OBJECTS BEING REQUESTED
@@ -146,23 +154,24 @@ For temporal_intent, use one of: none | recent | current | bounded_period | hist
   "forward_looking"— future orientation: "next 6 months", "what to expect", "outlook"
 
 TEMPORAL RESOLUTION — resolve all relative expressions to exact ISO dates using today={{today}}.
-ALWAYS compute the actual ISO date. Never return null for start_date when a relative window is given.
+ALWAYS compute the actual start_date. Never leave start_date null when a relative window is given.
+Use the exact JSON field names start_date and end_date (not "start" or "end").
 
-  "last two weeks" / "past two weeks"  → start:(today-14d),  end:null,          label:"last 2 weeks"
-  "last week" / "past week"            → start:(today-7d),   end:null,          label:"last week"
-  "last month" / "past month"          → start:(today-30d),  end:null,          label:"last month"
-  "last 90 days" / "recently"          → start:(today-90d),  end:null,          label:"last 90 days"
-  "last N days/weeks/months"           → start:(today-N*unit), end:null,        label:"last N <unit>s"
-  "past 6 months"                      → start:(today-180d), end:null,          label:"last 6 months"
-  "2026 so far" / "this year"          → start:"<YYYY>-01-01", end:null,        label:"<YYYY> year-to-date"
-  "this month"                         → start:first day of THIS calendar month, end:null
-  "this quarter"                       → start:first day of THIS calendar quarter, end:null
-  "since <Month YYYY>"                 → historical, start:first day of that month, end:null
-  "last year"                          → start:"2025-01-01", end:"2025-12-31",  label:"2025"
-  "Q3 2025"                            → start:"2025-07-01", end:"2025-09-30",  label:"Q3 2025"
-  "July 2026" / "in July 2026"         → start:"2026-07-01", end:"2026-07-31",  label:"July 2026"
-  "next 18 months" / forward-looking   → start:(today-180d), end:null,          label:"forward outlook: next 18 months"
-  "how does X work" / no time ref      → temporal_intent:"none", start:null, end:null, label:"all available data"
+  "last two weeks" / "past two weeks"  → start_date:(today-14d),  end_date:null,  scope_label:"last 2 weeks"
+  "last week" / "past week"            → start_date:(today-7d),   end_date:null,  scope_label:"last week"
+  "last month" / "past month"          → start_date:(today-30d),  end_date:null,  scope_label:"last month"
+  "last year" / "past year" / "over the past year" → start_date:(today-365d), end_date:null, scope_label:"last year"
+  "last 90 days" / "recently"          → start_date:(today-90d),  end_date:null,  scope_label:"last 90 days"
+  "last N days/weeks/months"           → start_date:(today-N*unit), end_date:null, scope_label:"last N <unit>s"
+  "past 6 months"                      → start_date:(today-180d), end_date:null,  scope_label:"last 6 months"
+  "2026 so far" / "this year"          → start_date:"<YYYY>-01-01", end_date:null, scope_label:"<YYYY> year-to-date"
+  "this month"                         → start_date: first day of THIS calendar month, end_date:null
+  "this quarter"                       → start_date: first day of THIS calendar quarter, end_date:null
+  "since <Month YYYY>"                 → start_date: first day of that month, end_date:null
+  "Q3 2025"                            → start_date:"2025-07-01", end_date:"2025-09-30", scope_label:"Q3 2025"
+  "July 2026" / "in July 2026"         → start_date:"2026-07-01", end_date:"2026-07-31", scope_label:"July 2026"
+  "next 18 months" / forward-looking   → start_date:(today-180d), end_date:null,  scope_label:"forward outlook: next 18 months"
+  "how does X work" / no time ref      → temporal_intent:"none", start_date:null, end_date:null, scope_label:"all available data"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 5 — DETERMINE EXHAUSTIVENESS
@@ -196,7 +205,7 @@ STEP 7 — GENERATE SEARCH TERMS
 
 Generate search_terms only after interpreting the request. search_terms are LEXICAL RECALL terms
 that may literally appear in source titles or summaries — this is a raw case-insensitive substring
-match; it does NOT normalise hyphens, plurals, spelling, acronyms, or morphology. You must.
+match; it does NOT normalise hyphens, plurals, spelling, acronyms, or morphology.
 
 Use 4–14 terms depending on query type:
   Exact entity or CVE lookup → fewer, narrower terms; preserve exact names
@@ -239,21 +248,11 @@ LEXICAL RECALL RULES:
 6. USER-LANGUAGE PRESERVATION — keep at least one of the user's own phrases verbatim,
    THEN add industry equivalents. Do not over-translate and lose the original wording.
 
-7. AMBIGUOUS QUERIES — when a phrase could mean several attack classes, BROADEN search_terms
-   across all plausible readings but keep category and taxonomy_tags null:
+7. AMBIGUOUS QUERIES — when a phrase has materially different interpretations that would produce
+   different retrieval strategies, broaden search_terms across all plausible readings, avoid a hard
+   category filter, avoid unsupported taxonomy tags, and record the ambiguity in ambiguities[].
    "AI model theft" → ["model extraction","model stealing","model distillation","training data theft","model weights"]
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 8 — RECOGNISE AMBIGUITY WITHOUT LOSING RECALL
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Use ambiguities when a phrase has materially different interpretations that would produce
-different retrieval strategies. Example: "model theft" could mean model extraction, stolen
-weights, credential theft from a model repository, or model distillation.
-In that case: broaden search_terms, avoid a hard category filter, avoid unsupported taxonomy tags,
-and record the ambiguity.
-
-Do not ask a follow-up question unless the request cannot be searched meaningfully without one.
+   Do not ask a follow-up question unless the request cannot be searched meaningfully without one.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SCOPE
@@ -279,7 +278,7 @@ Before returning, verify:
 2. answer_shape matches the requested output (list for enumeration, assessment for strategic).
 3. exhaustive requests ("all", "every") use all_matching.
 4. requested_objects match what the user expects to receive.
-5. every named entity is preserved exactly in entities[]; CVEs formatted as CVE-YYYY-NNNNN.
+5. every named entity is preserved exactly in entities[]; this is critical for downstream retrieval and tool dispatch. Entities to always extract: CVE IDs (CVE-YYYY-NNNNN, required for NVD lookup); AI model names (GPT-4, Claude, Gemini, Llama); tool/framework names (LangChain, vLLM, LlamaIndex, LiteLLM, Hugging Face, GitHub Copilot, Ollama); threat actor names (APT28, Lazarus, Volt Typhoon); named campaigns; organisation names that are the subject of the question.
 6. explicit inclusions and exclusions appear in must_include / must_exclude.
 7. time_field matches the event being queried (event_date for incidents, disclosure_date for CVEs).
 8. incident period filters use event_date, NOT publication_date.

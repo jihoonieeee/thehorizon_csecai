@@ -552,8 +552,13 @@ export default async function handler(req, res) {
       .filter(s => !s.url || !isMarketingBlog(s.url))
       .map((s, i) => ({ ...s, ref: `src-${i + 1}` }));
 
+    // Pass candidateSources.length as the pool count — not ret.count. ret.count
+    // equals ret.sources.length (the post-ranking top-N), so the only difference
+    // between ret.count and candidateSources.length is marketing blogs removed.
+    // Telling the selector "35 of 35" when it sees 33 (2 blogs filtered) is
+    // misleading; the selector IS seeing the full usable pool.
     const sel = candidateSources.length
-      ? await selectSources(query, candidateSources, plan, ret.count)
+      ? await selectSources(query, candidateSources, plan, candidateSources.length)
       : { selected: [], verdict: "none", coverage: "none", missing: [], usage: { input_tokens: 0, output_tokens: 0 } };
     addHaiku(sel.usage);
 
@@ -648,7 +653,7 @@ export default async function handler(req, res) {
       "definition", "vulnerability_lookup", "incident_lookup",
       "entity_history", "research_lookup", "publisher_lookup",
     ]);
-    const briefAnswer = BRIEF_QUERY_TYPES.has(plan.query_type) && plan.query_type !== "comparison";
+    const briefAnswer = BRIEF_QUERY_TYPES.has(plan.query_type); // comparison is intentionally absent from BRIEF_QUERY_TYPES
     const system = isGeneral
       ? buildGeneralSystem(query)
       : buildGroundedSystem(plan.temporal.scope_label, plan.category, sel.verdict === "thin", briefAnswer);
