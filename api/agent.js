@@ -21,13 +21,14 @@
  * instead of the old always-on 4-tool blob. Sonnet input is much smaller.
  */
 
-import { executeTool, retrieveRelevant } from "../lib/agent/agentTools.js";
+import { executeTool, retrieveRelevant, enrichSourcesWithFullText, fetchEvidenceForSources } from "../lib/agent/agentTools.js";
 import { planQuery } from "../lib/agent/queryPlanner.js";
 import { selectSources } from "../lib/agent/agentLlm.js";
 import { verifyAnswer } from "../lib/agent/verifyAnswer.js";
 import { ANTHROPIC_MODELS } from "../lib/llm/taskProfiles.js";
 import { logAgentCostToDB } from "../lib/llm/usagePersistence.js";
 import { loadPrompt, loadPromptRaw, interpolate } from "../lib/prompts/promptLoader.js";
+import { requireAuth } from "../lib/api/requireAuth.js";
 
 // Taxonomy reference — loaded once at cold start, injected as the first cached
 // system block so Sonnet uses precise attack-class definitions (e.g. never
@@ -136,14 +137,18 @@ async function anthropicRequest(body, timeoutMs = 90000) {
 // this block by the prompt). Dropping the So-what/Defenders lines and 1–2 points
 // on lookups is the main output-length (= latency) saving.
 const STRUCTURE_FULL = `STRUCTURE:
-1) "Assessment:" — 2–3 sentences: the real signal, your confidence, anything overhyped or thin.
-2) 3–5 numbered points. Each opens with a short judgement (under 15 words). Sub-bullets ("- ") carry the evidence with [src-N] on each. Most significant point first.
-3) "So what:" — one line: implication or trajectory for the reader.
-4) "Defenders:" — one line: the single most useful action.`;
-const STRUCTURE_BRIEF = `STRUCTURE (keep it tight — this is a direct-lookup question, not a strategic briefing):
-1) "Assessment:" — 1–2 sentences: the direct answer and your confidence.
-2) 2–3 numbered points. Each opens with a short judgement (under 15 words). Sub-bullets ("- ") carry the evidence with [src-N] on each. Most significant first.
-Do NOT add "So what" or "Defenders" lines — go straight from the numbered points to the footer.`;
+1) "Assessment:" — ONE sentence only. The real signal and your confidence. Direct — no hedging clauses, no "it is worth noting".
+2) At most 4 numbered points. Each point has exactly this shape: [judgement line] then [sub-bullets] then [next point]. No text between the judgement and the sub-bullets. No text after the sub-bullets. The judgement line is the header; the sub-bullets carry the evidence. No taxonomy labels, no italic technique descriptions, no explanatory bridge sentences anywhere inside a point.
+3) "So what:" — ONE sentence. No compound sentences.
+4) "Defenders:" — ONE sentence. The single most actionable step.
+
+HARD LIMIT: Under 650 words total (excluding the SCOPE/CONFIDENCE footer). Count as you write. If you reach 500 words before the last point, cut sub-bullets to one per remaining point.`;
+const STRUCTURE_BRIEF = `STRUCTURE (direct lookup — answer the question and stop):
+1) "Assessment:" — ONE sentence. The direct answer and confidence.
+2) At most 3 numbered points. At most 2 sub-bullets per point ("- ") — one specific fact + [src-N] per sub-bullet. One clause per sub-bullet, no narrative explanation.
+Do NOT add "So what" or "Defenders" lines.
+
+WORD BUDGET: Under 300 words. Stop when the question is answered.`;
 
 function buildGroundedSystem(scopeLabel, focusCategory, thin, brief = false) {
   const today = new Date().toISOString().slice(0, 10);
@@ -168,18 +173,19 @@ function parseResponse(text) {
   const lines = text.split("\n");
   const answerLines = [];
   const meta = { confidence: "low", confidence_reason: "", caveat: null, out_of_scope: false };
-  const META_START = /^(SCOPE|CONFIDENCE|CONFIDENCE_REASON|CAVEAT|FOLLOWUP):/i;
+  // Match footer lines with or without Haiku's markdown bold markers (**SCOPE:**).
+  const META_START = /^\*{0,2}(SCOPE|CONFIDENCE|CONFIDENCE_REASON|CAVEAT|FOLLOWUP):\*{0,2}/i;
   for (const line of lines) {
     if (!META_START.test(line)) { answerLines.push(line); continue; }
     // Parse all fields from this line — the LLM sometimes puts them all on one
     // line (e.g. "SCOPE: in_scope CONFIDENCE: high CONFIDENCE_REASON: ... CAVEAT: ...")
     // so a simple startsWith+else-if chain misses everything after the first match.
     if (/SCOPE:/i.test(line)) meta.out_of_scope = /out_of_scope/i.test(line);
-    const confM = line.match(/CONFIDENCE:\s*(high|moderate|low)/i);
+    const confM = line.match(/CONFIDENCE:\*{0,2}\s*(high|moderate|low)/i);
     if (confM) meta.confidence = confM[1].toLowerCase();
-    const crM = line.match(/CONFIDENCE_REASON:\s*(.*?)(?=\s+CAVEAT:|$)/);
+    const crM = line.match(/CONFIDENCE_REASON:\*{0,2}\s*(.*?)(?=\s+\*{0,2}CAVEAT:|$)/);
     if (crM) meta.confidence_reason = crM[1].trim();
-    const cavM = line.match(/CAVEAT:\s*(.*?)(?=\s+SCOPE:|$)/);
+    const cavM = line.match(/CAVEAT:\*{0,2}\s*(.*?)(?=\s+\*{0,2}SCOPE:|$)/);
     if (cavM) { const v = cavM[1].trim(); meta.caveat = v === "null" ? null : (v || null); }
   }
   return { answer: answerLines.join("\n").trim(), ...meta };
@@ -379,7 +385,7 @@ async function findDeadUrls(urls, normalizeUrl) {
 
 // Attach a grounded quote to the source it came from (URL match), so evidence
 // stays tied to a [src-N] rather than floating as a standalone citation.
-function buildContextMessage(query, plan, sources, evidence, judgments, trends, cveResults, selectorMissing = []) {
+function buildContextMessage(query, plan, sources, evidence, judgments, trends, cveResults, selectorMissing = [], temporalInsights = null) {
   const norm = (u) => (u || "").replace(/[.,;:!?/]+$/, "").toLowerCase().replace(/^https?:\/\//, "");
   const quoteByUrl = {};
   for (const ev of (evidence || [])) {
@@ -426,6 +432,17 @@ function buildContextMessage(query, plan, sources, evidence, judgments, trends, 
     parts.push(``, `ANALYTICAL JUDGMENTS from the latest pipeline run (context — not separately citable):`);
     for (const j of judgments.slice(0, 6)) parts.push(`• ${j.judgment}${j.short_takeaway ? ` — ${j.short_takeaway}` : ""}`);
   }
+
+  if (temporalInsights?.available && temporalInsights.windows?.length) {
+    parts.push(``, `HISTORICAL INSIGHT SNAPSHOTS (chronological — how this threat has evolved):`);
+    for (const w of temporalInsights.windows) {
+      parts.push(`• [${w.window_label} — ${w.category}] ${w.assessment}`);
+      for (const ins of w.insights.slice(0, 2)) {
+        if (ins.insight) parts.push(`  - ${ins.insight}`);
+      }
+    }
+    parts.push(`NOTE: These are past analyst assessments, not citable sources. Use to describe evolution. Do NOT cite as [src-N].`);
+  }
   if (trends?.length) {
     parts.push(``, `PUBLICATION RATE DATA — NOT CITABLE, DO NOT QUOTE IN ANSWER. These are article-ingestion counts per week (a measure of research attention, NOT of real-world attack frequency or incident counts). Use only to calibrate relative activity levels between categories:`);
     for (const t of trends.slice(0, 4)) {
@@ -456,6 +473,7 @@ function buildContextMessage(query, plan, sources, evidence, judgments, trends, 
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+  if (!await requireAuth(req)) return res.status(401).json({ error: "Unauthorized" });
 
   const { query, category, history, stream } = req.body || {};
   if (!query?.trim()) return res.status(400).json({ error: "query is required" });
@@ -525,27 +543,60 @@ export default async function handler(req, res) {
     const ret = await retrieveRelevant(plan);
 
     // ── 4. Selector (Haiku) — semantic pick from the candidate pool ───────────
-    const sel = ret.sources.length
-      ? await selectSources(query, ret.sources, plan)
+    // Pre-filter marketing blogs BEFORE passing to the selector so its coverage
+    // verdict reflects the actual usable pool. If we filter after selection the
+    // selector might pick a blog, it gets dropped, and the coverage signal fires
+    // incorrectly (ret.count appears larger than the usable pool).
+    // Renumber refs after filtering so the selector sees a contiguous src-1…src-N.
+    const candidateSources = ret.sources
+      .filter(s => !s.url || !isMarketingBlog(s.url))
+      .map((s, i) => ({ ...s, ref: `src-${i + 1}` }));
+
+    const sel = candidateSources.length
+      ? await selectSources(query, candidateSources, plan, ret.count)
       : { selected: [], verdict: "none", coverage: "none", missing: [], usage: { input_tokens: 0, output_tokens: 0 } };
     addHaiku(sel.usage);
 
     const selectedSet = new Set(sel.selected);
     // Renumber 1..N so [src-N] in the answer always refers to position N in this
-    // array. Without renumbering, [src-7] would mean the 7th retrieval candidate,
-    // not the 7th selected source, making every citation resolve to the wrong article.
-    // Pre-filter marketing blogs HERE before synthesis — if we wait until post-QA
-    // to strip their citations, the prose that referenced them remains in the answer
-    // as orphaned, uncited sentences.
-    const sourceRefs = ret.sources
+    // array — the selector's refs are already contiguous but we renumber again
+    // after filtering to selected-only so synthesis gets a clean 1-indexed list.
+    const rawSourceRefs = candidateSources
       .filter(s => selectedSet.has(s.ref))
-      .filter(s => !s.url || !isMarketingBlog(s.url))
       .map((s, i) => ({ ...s, ref: `src-${i + 1}` }));
-    const isGeneral = sel.verdict === "none" || sourceRefs.length === 0;
 
-    let evidence = [], judgments = [], trends = [], cveResults = [];
+    // Fix 1 — full-text enrichment: replace the 700-char truncated summary with up
+    // to 2000 chars of actual article body for each selected source. Sonnet then
+    // synthesises from real content rather than filling gaps from training memory,
+    // which is the primary cause of hallucinated statistics and campaign names.
+    // Also fixes Fix 5 automatically: addContent() in buildPayload uses s.summary,
+    // so the richer text flows into the citation-relevance QA check too.
+    const sourceRefs = await enrichSourcesWithFullText(rawSourceRefs);
+
+    // Fix 6 — partial-coverage signal: when the retrieval pool was much larger than
+    // what the selector chose (≥2×), tell the synthesiser so it can flag that the
+    // answer covers a subset and more sources exist.
+    const extendedMissing = [...(sel.missing || [])];
+    if (ret.count >= sourceRefs.length * 2 && sourceRefs.length > 0 && sel.coverage === "partial") {
+      extendedMissing.push(`Coverage may be partial: the corpus returned ${ret.count} matching candidates but only ${sourceRefs.length} were selected for this answer. Additional relevant sources may exist.`);
+    }
+    // CVE IDs extracted before isGeneral so NVD lookup runs regardless of corpus
+    // coverage. A CVE severity query may have no corpus sources but NVD is authoritative.
+    const planCveIds = (plan.entities || []).filter(e => /^CVE-\d{4}-\d{4,}$/i.test(e)).map(e => e.toUpperCase()).slice(0, 5);
+
+    let evidence = [], judgments = [], trends = [], cveResults = [], temporalInsights = null;
+
+    // NVD lookup always runs when CVE IDs are present — don't gate it on isGeneral.
+    if (planCveIds.length) {
+      const cveResult = await executeTool("lookup_cve", { cve_ids: planCveIds }).catch(() => null);
+      cveResults = cveResult?.results || [];
+    }
+
+    // isGeneral stays false if we have real NVD hits: CVE data is our grounding source
+    // and we can synthesise a grounded answer even without corpus sources.
+    const isGeneral = (sel.verdict === "none" || sourceRefs.length === 0) && !cveResults.some(r => r.found);
+
     if (!isGeneral) {
-      const cveIds = (plan.entities || []).filter(e => /^CVE-\d{4}-\d{4,}$/i.test(e)).map(e => e.toUpperCase()).slice(0, 5);
       // Use the planner's expanded search terms (domain terminology) rather than
       // the raw user question — prevents evidence retrieval from only matching the
       // user's words and missing sources that use different but equivalent phrasing.
@@ -559,24 +610,45 @@ export default async function handler(req, res) {
         ? Math.round((Date.now() - new Date(evDateFrom).getTime()) / 86400000)
         : Infinity;
       const isTightWindow = !plan.temporal?.all_time && windowDays <= 30;
+      const TEMPORAL_QUERY_TYPES = new Set(["trend_analysis", "timeline", "comparison", "strategic_assessment"]);
       const jobs = [
         executeTool("get_evidence", { query: evidenceQuery, categories: undefined, tags: plan.taxonomy_tags?.length ? plan.taxonomy_tags : undefined, limit: 12, date_from: evDateFrom, date_to: evDateTo }).catch(() => null),
         (plan.needs_judgments && !isTightWindow) ? executeTool("get_judgments", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
         plan.needs_trends ? executeTool("trend_analysis", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
-        cveIds.length ? executeTool("lookup_cve", { cve_ids: cveIds }).catch(() => null) : Promise.resolve(null),
+        // Only fetch temporal insights when the query actually has a time dimension —
+        // timeless strategic questions ("what should defenders prioritise?") have
+        // temporal_intent="none" and gain nothing from historical snapshots.
+        (TEMPORAL_QUERY_TYPES.has(plan.query_type) && plan.temporal?.temporal_intent !== "none")
+          ? executeTool("search_temporal_insights", {
+              query:      query,
+              categories: plan.category ? [plan.category] : undefined,
+              win:        "month",
+              date_from:  plan.temporal?.date_from || undefined,
+              date_to:    plan.temporal?.date_to   || undefined,
+            }).catch(() => null)
+          : Promise.resolve(null),
       ];
-      const [ev, jd, tr, cve] = await Promise.all(jobs);
+      const [ev, jd, tr, ti] = await Promise.all(jobs);
+      temporalInsights = ti;
       evidence   = ev?.evidence_items || [];
       judgments  = jd?.judgments || [];
       trends     = tr?.categories || [];
-      cveResults = cve?.results || [];
     }
 
     // ── 4. Synthesis (Sonnet, streamed) ─────────────────────────────────────────
-    // Simple lookups (no strategic-synthesis need) get the tight structure; only
-    // strategic questions (needs_judgments) get the full 3–5 point briefing. This
-    // shortens output — the dominant synthesis-latency term — on the common case.
-    const briefAnswer = plan.needs_judgments !== true;
+    // Direct-lookup query types (definition, single CVE/incident/paper) get the
+    // tight 2-bullet structure. Analytical query types (trend, strategic, comparison,
+    // timeline, general_search) get the full 3–5 point briefing with So what /
+    // Defenders. Previously this was keyed on needs_judgments, which left
+    // trend_analysis on the brief path despite needing analytical depth.
+    // comparison is explicitly excluded even though it may get classified as
+    // definition or publisher_lookup when the question asks "X vs Y" — comparison
+    // answers require Sonnet + full structure to synthesise across two sides.
+    const BRIEF_QUERY_TYPES = new Set([
+      "definition", "vulnerability_lookup", "incident_lookup",
+      "entity_history", "research_lookup", "publisher_lookup",
+    ]);
+    const briefAnswer = BRIEF_QUERY_TYPES.has(plan.query_type) && plan.query_type !== "comparison";
     const system = isGeneral
       ? buildGeneralSystem(query)
       : buildGroundedSystem(plan.temporal.scope_label, plan.category, sel.verdict === "thin", briefAnswer);
@@ -589,12 +661,20 @@ export default async function handler(req, res) {
 
     const userContent = isGeneral
       ? query.trim()
-      : buildContextMessage(query, plan, sourceRefs, evidence, judgments, trends, cveResults, sel.missing);
+      : buildContextMessage(query, plan, sourceRefs, evidence, judgments, trends, cveResults, extendedMissing, temporalInsights);
     const messages = [...historyMessages, { role: "user", content: userContent }];
-    // AGENT_SYNTH_MODEL (haiku|sonnet) overrides the synthesis model — used for
-    // A/B latency/quality testing and (later) intent-based routing. Defaults to sonnet.
-    const synthModel = ANTHROPIC_MODELS[process.env.AGENT_SYNTH_MODEL] || ANTHROPIC_MODELS.sonnet;
-    const synthBody = { model: synthModel, max_tokens: 4096, system: cachedSystem, messages };
+    // Route brief direct-lookup queries to Haiku (3–4× faster streaming, quality
+    // equivalent for factual answers). Strategic/trend/comparison use Sonnet.
+    // AGENT_SYNTH_MODEL env var overrides both — used for A/B testing.
+    const synthModel = process.env.AGENT_SYNTH_MODEL
+      ? (ANTHROPIC_MODELS[process.env.AGENT_SYNTH_MODEL] || ANTHROPIC_MODELS.sonnet)
+      : BRIEF_QUERY_TYPES.has(plan.query_type)
+        ? ANTHROPIC_MODELS.haiku
+        : ANTHROPIC_MODELS.sonnet;
+    // Token ceiling is a conciseness signal and a stream-timeout safety net.
+    // The word-budget in the prompt is the binding constraint — this is the ceiling.
+    const maxTokens = briefAnswer ? 1200 : 2200;
+    const synthBody = { model: synthModel, max_tokens: maxTokens, system: cachedSystem, messages };
 
     // A leading, un-streamed preamble for the general path so the user immediately
     // sees WHY there are no citations before the general answer arrives.
@@ -689,9 +769,13 @@ export default async function handler(req, res) {
       // clearly-labelled general answer instead of a dead-end block. This also
       // covers the synthesis model mislabelling an in-scope-but-unsourced question
       // as out_of_scope (the planner already confirmed it IS in scope upstream).
+      // Exception: when CVE data from NVD is the grounding source, the answer has
+      // no [src-N] corpus citations — suppress the general-fallback trigger so the
+      // NVD-grounded answer reaches the user.
+      const hasCveGrounding = cveResults.some(r => r.found);
       const wc = cleanAnswer.split(/\s+/).filter(Boolean).length;
       const substantive = wc > 60 || /\b\d/.test(cleanAnswer);
-      if (!isGeneral && dedupedCitations.length === 0 && substantive) {
+      if (!isGeneral && dedupedCitations.length === 0 && substantive && !hasCveGrounding) {
         return await synthGeneralFallback();
       }
 
@@ -703,21 +787,64 @@ export default async function handler(req, res) {
         ...sourceRefs.map(s => `${s.title || ""} ${s.summary || ""}`),
         ...evidence.map(ev => `${ev.fact || ""} ${ev.quote || ""}`),
         ...judgments.map(j => j.judgment || ""),
+        // Include NVD data so CVE IDs sourced from NVD are not falsely stripped
+        // by the ungrounded-CVE check (which only looks at corpus sourceRefs).
+        ...cveResults.filter(r => r.found).map(r => `${r.cve_id} ${r.description || ""} cvss ${r.cvss_score ?? ""} ${r.severity ?? ""}`),
       ].join("\n").toLowerCase();
 
-      const contentQa = qaContent(linkedAnswer, dedupedCitations.length, groundingText, { requireCitations: !isGeneral });
+      // requireCitations: not needed when NVD data is the grounding source (no [src-N] expected).
+      const contentQa = qaContent(linkedAnswer, dedupedCitations.length, groundingText, { requireCitations: !isGeneral && !hasCveGrounding });
       let finalAnswer = contentQa.text;
 
-      // ── Haiku verifier (grounded path only; general answers have no sources) ──
+      // ── Haiku verifier (strategic/trend/complex only — skip for brief lookups) ──
+      // Skipping the verifier on brief queries saves 7–10s with negligible quality
+      // loss: short factual answers have fewer compound claims to fabricate, and
+      // the deterministic QA (CVE grounding, dead-link check) still runs on all paths.
+      //
+      // For strategic queries, pass only the sources actually cited in the answer
+      // (at their full enriched summary text) rather than all selected sources at
+      // truncated text. This ensures the verifier checks each claim against the
+      // specific source it was attributed to, eliminating false positives where a
+      // real finding appears past the truncation point of a shorter summary window.
       let verify = { verdict: "grounded", unsupported: [], contradictions: [], unreconciled: [], ran: false };
       const verifyIssues = [];
       let confidence = parsed.confidence;
-      if (!isGeneral && !parsed.out_of_scope && finalAnswer && sourceRefs.length) {
-        verify = await verifyAnswer({ answer: finalAnswer, sources: localSourceRefs, evidence });
+      const shouldVerify = !isGeneral && !parsed.out_of_scope && finalAnswer
+        && sourceRefs.length && !BRIEF_QUERY_TYPES.has(plan.query_type);
+      if (shouldVerify) {
+        const citedNums = new Set(
+          [...finalAnswer.matchAll(/\[src-(\d+)\]/g)].map(m => parseInt(m[1], 10))
+        );
+        const citedSources = localSourceRefs.filter((_, i) => citedNums.has(i + 1));
+
+        // Fetch evidence items extracted by the pipeline for each cited source.
+        // These are atomic facts + verbatim quotes produced by Layer 5 — far more
+        // precise than a truncated summary window. A claim like "144 packages" or
+        // "88-minute campaign" that sits past char 1600 of the source body WILL
+        // appear in an extracted evidence item, letting the verifier confirm it.
+        const citedSourceIds = citedSources.map(s => s.id).filter(Boolean);
+        const sourceEvidence = citedSourceIds.length
+          ? await fetchEvidenceForSources(citedSourceIds).catch(() => [])
+          : evidence;
+
+        verify = await verifyAnswer({
+          answer:   finalAnswer,
+          sources:  citedSources.length ? citedSources : localSourceRefs,
+          // Prefer source-specific evidence; fall back to query evidence if none found
+          evidence: sourceEvidence.length ? sourceEvidence : evidence,
+        });
         addHaiku(verify.usage);
         if (verify.ran && verify.unsupported.length) {
           verifyIssues.push({ code: "unsupported_claim", severity: "repaired",
             detail: `Fact-check flagged ${verify.unsupported.length} claim(s) not clearly supported by the cited sources: ${verify.unsupported.map(s => `"${s}"`).join("; ")}.` });
+          // 2+ unsupported claims: the answer contains fabricated specifics; cap at moderate.
+          if (verify.unsupported.length >= 2 && confidence === "high") confidence = "moderate";
+          // Fix 2 — append a visible note so the user knows which specific claims
+          // the fact-checker could not trace to any provided source. Mirrors the
+          // unreconciled-contradictions note pattern already in this block.
+          const unsupLines = verify.unsupported.map(u => `- ${u.slice(0, 300)}`).join("\n");
+          const rawUnsupNote = `\n\n**Note — the following specific claims could not be verified against the provided source summaries and may be inaccurate:**\n${unsupLines}`;
+          finalAnswer += rawUnsupNote;
         }
         if (verify.ran && verify.verdict === "weakly_grounded") {
           confidence = "low";
@@ -758,8 +885,8 @@ export default async function handler(req, res) {
         confidence_reason:   isGeneral ? "General answer — no corpus sources matched this question." : parsed.confidence_reason,
         caveat:              parsed.caveat,
         answer_mode:         isGeneral ? "general" : "grounded",
-        retrieval_verdict:   ret.verdict,
-        relevant_source_count: ret.relevant_count,
+        retrieval_verdict:   sel.verdict,
+        relevant_source_count: ret.count,
         planner_method:      plan.planner_method,
         query_type:          plan.query_type || null,
         exhaustiveness:      plan.exhaustiveness || null,

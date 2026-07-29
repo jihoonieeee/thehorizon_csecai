@@ -17,6 +17,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { maturityOf } from "../lib/pipeline/scoring/maturityLevel.js";
 import { readingValueOf } from "../lib/pipeline/scoring/sourceSignal.js";
+import { requireAuth } from "../lib/api/requireAuth.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -79,6 +80,9 @@ async function authorized(req) {
 }
 
 export default async function handler(req, res) {
+  // All methods require a valid Supabase session.
+  if (!await requireAuth(req)) return res.status(401).json({ error: "Unauthorized" });
+
   // ── Mutations: PATCH (edit publish date) / DELETE (remove source) ────────────
   if (req.method === "PATCH" || req.method === "DELETE") {
     if (!await authorized(req)) return res.status(401).json({ error: "Unauthorized" });

@@ -6,6 +6,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchOverview } from "../../api/dashboardApi.js";
+import { useAuth } from "../../AuthContext.jsx";
+import { getSessionToken } from "../../auth.js";
 
 const CAT_COLOR = {
   traditional_ai_threats: "#3583C9",
@@ -687,6 +689,9 @@ function TagDrilldownPanel({ tag, category, tagSources, onClose }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function OverviewPage() {
+  const session = useAuth();
+  const token   = getSessionToken(session);
+
   const [win,        setWin]        = useState("quarter");
   const [data,       setData]       = useState(null);
   const [loading,    setLoading]    = useState(true);
@@ -700,10 +705,10 @@ export function OverviewPage() {
   const load = useCallback((w) => {
     setLoading(true);
     setError(null);
-    fetchOverview(w)
+    fetchOverview(w, token)
       .then(d => { setData(d); setLoading(false); setLastFetch(new Date()); })
       .catch(e => { setError(e.message); setLoading(false); });
-  }, []);
+  }, [token]);
 
   // Initial load and window change
   useEffect(() => {

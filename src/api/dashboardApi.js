@@ -6,12 +6,20 @@ import { MONTHLY_DASHBOARD } from "../mockData/dashboardData.js";
 
 const BASE = "/api";
 
+function authHeader(token) {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 /**
  * Fetch overview data for a given time window.
  * @param {"week"|"month"|"quarter"} win
+ * @param {string} [token] Supabase session token
  */
-export async function fetchOverview(win = "quarter") {
-  const res = await fetch(`${BASE}/dashboard?window=${encodeURIComponent(win)}`, { cache: "no-store" });
+export async function fetchOverview(win = "quarter", token) {
+  const res = await fetch(`${BASE}/dashboard?window=${encodeURIComponent(win)}`, {
+    cache: "no-store",
+    headers: authHeader(token),
+  });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const d = await res.json();
   if (d.error) throw new Error(d.error);
@@ -21,9 +29,10 @@ export async function fetchOverview(win = "quarter") {
 /**
  * Fetch drilldown data for specific IDs.
  * @param {{ claim_ids, evidence_ids, source_ids, analytics_evidence_ids }} ids
+ * @param {string} [token] Supabase session token
  * @returns {Promise<object>}
  */
-export async function fetchDrilldown(ids = {}) {
+export async function fetchDrilldown(ids = {}, token) {
   const params = new URLSearchParams();
   if (ids.claim_ids?.length)             params.set("claim_ids",             ids.claim_ids.join(","));
   if (ids.evidence_ids?.length)          params.set("evidence_ids",          ids.evidence_ids.join(","));
@@ -31,7 +40,9 @@ export async function fetchDrilldown(ids = {}) {
   if (ids.analytics_evidence_ids?.length)params.set("analytics_evidence_ids",ids.analytics_evidence_ids.join(","));
 
   try {
-    const res = await fetch(`${BASE}/dashboard?drilldown=1&${params}`);
+    const res = await fetch(`${BASE}/dashboard?drilldown=1&${params}`, {
+      headers: authHeader(token),
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch {

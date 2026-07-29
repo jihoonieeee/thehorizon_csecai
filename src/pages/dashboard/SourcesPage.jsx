@@ -605,7 +605,7 @@ export function SourcesPage() {
     // No limit param → the API returns the full filtered corpus (paged past the
     // PostgREST 1000-row cap). All faceting below is done client-side.
     const params = new URLSearchParams({ period });
-    fetch(`/api/sources?${params}`)
+    fetch(`/api/sources?${params}`, { headers: { Authorization: `Bearer ${getSessionToken(session)}` } })
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(json => {
         const rows = Array.isArray(json) ? json : (json.sources || []);

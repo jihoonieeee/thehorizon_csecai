@@ -5,6 +5,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../../AuthContext.jsx";
+import { getAccessLevel, getSessionToken } from "../../auth.js";
 
 const SUGGESTIONS = [
   { label: "Most important finding",    prompt: "What's the most important finding right now?" },
@@ -269,7 +270,7 @@ function SourceButton({ c, index }) {
 
 // ── Message ───────────────────────────────────────────────────────────────────
 
-function Message({ msg, onFollowUp }) {
+function Message({ msg, onFollowUp, showCost }) {
   if (msg.role === "user") {
     return (
       <div className="hz-msg-user">
@@ -324,7 +325,7 @@ function Message({ msg, onFollowUp }) {
         {msg.temporal_scope && msg.temporal_scope !== "all available data" && (
           <span className="hz-msg-scope">{msg.temporal_scope}</span>
         )}
-        {msg.token_usage && (
+        {showCost && msg.token_usage && (
           <span
             className="hz-msg-tokens"
             title={`Input: ${msg.token_usage.input_tokens.toLocaleString()} · Output: ${msg.token_usage.output_tokens.toLocaleString()} · ${msg.token_usage.rounds} round${msg.token_usage.rounds !== 1 ? "s" : ""}`}
@@ -373,6 +374,7 @@ function saveHistory(userId, msgs) {
 export function AskAgentPage() {
   const session = useAuth();
   const userId  = session?.user?.id ?? null;
+  const isAdmin = getAccessLevel(session) === "admin";
 
   const [messages, setMessages] = useState(() => loadHistory(userId));
   const [query,    setQuery]    = useState("");
@@ -410,7 +412,10 @@ export function AskAgentPage() {
     try {
       const res = await fetch("/api/agent", {
         method:  "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${getSessionToken(session)}`,
+        },
         body:    JSON.stringify({ query: q, history, stream: true }),
       });
       if (!res.ok || !res.body) {
@@ -519,7 +524,7 @@ export function AskAgentPage() {
       {hasConversation && (
         <div className="hz-chat-window">
           {messages.map((msg, i) => (
-            <Message key={i} msg={msg} onFollowUp={send} />
+            <Message key={i} msg={msg} onFollowUp={send} showCost={isAdmin} />
           ))}
           {loading && (() => {
             // Show "Thinking…" only until the first streamed token lands; once the

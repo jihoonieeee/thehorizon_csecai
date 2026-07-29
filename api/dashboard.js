@@ -22,6 +22,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { getCompletedPeriodWindow } from "../lib/time/reportingWindow.js";
+import { requireAuth } from "../lib/api/requireAuth.js";
 import { computeEvidenceMaturity, deriveConfidence } from "../lib/dashboard/evidenceMaturity.js";
 import { truncateAtWord } from "../lib/utils/truncate.js";
 import { maturityOf, MATURITY_RANK } from "../lib/pipeline/scoring/maturityLevel.js";
@@ -291,6 +292,8 @@ async function isAuthorized(req) {
 }
 
 export default async function handler(req, res) {
+  // All methods require a valid Supabase session.
+  if (!await requireAuth(req)) return res.status(401).json({ error: "Unauthorized" });
 
   // ── POST /api/dashboard — dispatch newsletter generation via GitHub Actions ──
   if (req.method === "POST") {
