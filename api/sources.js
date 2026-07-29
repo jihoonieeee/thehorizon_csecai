@@ -161,6 +161,7 @@ export default async function handler(req, res) {
     const cap     = p.limit ? Math.min(Math.max(parseInt(p.limit, 10) || 0, 0), HARD_CAP) : HARD_CAP;
 
     const { start, end, label } = periodWindow(period);
+    const isAdmin = await authorized(req);
 
     // Build a fresh filtered query for each page (the builder is single-use).
     // `starred` is included only when the column exists (migration 013) — the flag
@@ -171,7 +172,11 @@ export default async function handler(req, res) {
       let q = supabase
         .from("sources")
         .select(starredColAvailable ? `${SELECT_BASE},starred` : SELECT_BASE)
-        .not("validation_status", "eq", "reject")
+        .not("validation_status", "eq", "reject");
+
+      // Non-admin users never see sources flagged for review (uncertain publish
+      // date, unknown source type, missing publisher, etc.)
+      if (!isAdmin) q = q.eq("needs_review", false);
         // Stable ordering (date desc, id asc tiebreak) so .range() paging never
         // skips or double-counts rows that share a publish date.
         .order("date_published", { ascending: false, nullsFirst: false })

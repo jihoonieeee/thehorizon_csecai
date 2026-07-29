@@ -364,6 +364,7 @@ export default async function handler(req, res) {
       .gte("date_published", from)
       .lte("date_published", to)
       .eq("validation_status", "pass")
+      .eq("needs_review", false)
       .order("date_published", { ascending: false }));
 
     // Exclude child sources (extracted sub-findings) from all counts — they are
@@ -449,6 +450,7 @@ export default async function handler(req, res) {
         .select("date_published,main_category")
         .gte("date_published", trendFrom.toISOString().slice(0, 10))
         .eq("validation_status", "pass")
+        .eq("needs_review", false)
         .not("main_category", "is", null)
         .is("parent_source_id", null)
         .order("date_published", { ascending: false });
