@@ -447,7 +447,7 @@ function SourceDetail({ s, isAdmin, onUpdateDate, onConfirmDate, onDelete, onSav
         </div>
       )}
 
-      {mech?.rationale && (
+      {isAdmin && mech?.rationale && (
         <div className="hz-src-detail-field">
           <span className="hz-src-detail-k">Why this classification</span>
           <span className="hz-src-detail-v hz-src-detail-rationale">
@@ -1109,8 +1109,10 @@ export function SourcesPage() {
             onClick={() => { setSortBy("importance"); setPage(1); }}>Importance</button>
           <button className={`hz-seg-btn${sortBy === "date" ? " active" : ""}`}
             onClick={() => { setSortBy("date"); setPage(1); }}>Newest</button>
-          <button className={`hz-seg-btn${sortBy === "ingested" ? " active" : ""}`}
-            onClick={() => { setSortBy("ingested"); setPage(1); }}>Ingested</button>
+          {isAdmin && (
+            <button className={`hz-seg-btn${sortBy === "ingested" ? " active" : ""}`}
+              onClick={() => { setSortBy("ingested"); setPage(1); }}>Ingested</button>
+          )}
         </div>
         <span className="hz-sources-count">
           {loading ? "Loading…" : `${filtered.filter(s => !s.parent_source_id).length.toLocaleString()} source${filtered.filter(s => !s.parent_source_id).length !== 1 ? "s" : ""}`}
@@ -1344,7 +1346,7 @@ export function SourcesPage() {
                             )}
                           </>
                         )}
-                        {s.date_collected && (
+                        {isAdmin && s.date_collected && (
                           <div className="hz-src-date-collected" title="Date ingested into the system">
                             {s.date_collected.slice(0, 10)}
                             <span className="hz-src-date-ingest-label">ingested</span>
