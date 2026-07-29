@@ -1,4 +1,5 @@
 import { supabase } from "../lib/storage/supabaseClient.js";
+import { requireAuth } from "../lib/api/requireAuth.js";
 
 // Aggregate connector_results arrays across many runs into per-connector totals.
 // connector_results can be an array or an object (legacy runs stored an object keyed
@@ -79,6 +80,7 @@ async function sourceTypeBreakdown() {
 }
 
 export default async function handler(req, res) {
+  if (!await requireAuth(req)) return res.status(401).json({ error: "Unauthorized" });
   try {
     const limit = Number(req.query.limit || 30);
     const wantStats = req.query.stats === "1";

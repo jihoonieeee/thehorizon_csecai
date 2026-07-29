@@ -8,6 +8,7 @@
  */
 
 import { getCostHistory } from "../lib/llm/usagePersistence.js";
+import { requireAuth } from "../lib/api/requireAuth.js";
 
 const PROVIDER_LABELS = {
   anthropic:  "Anthropic",
@@ -38,6 +39,7 @@ const CONTEXT_LABELS = {
 };
 
 export default async function handler(req, res) {
+  if (!await requireAuth(req)) return res.status(401).json({ error: "Unauthorized" });
   try {
     const days = Math.min(Number(req.query.days || 30), 365);
     const { rows, by_provider, by_model, by_context, totals } = await getCostHistory(days);
