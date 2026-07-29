@@ -174,14 +174,13 @@ export default async function handler(req, res) {
         .select(starredColAvailable ? `${SELECT_BASE},starred` : SELECT_BASE)
         .not("validation_status", "eq", "reject");
 
-      // Non-admin users never see sources flagged for review (uncertain publish
-      // date, unknown source type, missing publisher, etc.)
       if (!isAdmin) q = q.eq("needs_review", false);
-        // Stable ordering (date desc, id asc tiebreak) so .range() paging never
-        // skips or double-counts rows that share a publish date.
-        .order("date_published", { ascending: false, nullsFirst: false })
-        .order("id", { ascending: true })
-        .range(from, to);
+
+      // Stable ordering (date desc, id asc tiebreak) so .range() paging never
+      // skips or double-counts rows that share a publish date.
+      q = q.order("date_published", { ascending: false, nullsFirst: false })
+           .order("id", { ascending: true })
+           .range(from, to);
 
       if (start) q = q.gte("date_published", start);
       if (end)   q = q.lt("date_published", end);
