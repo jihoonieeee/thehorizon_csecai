@@ -2820,7 +2820,16 @@ a:hover { text-decoration: underline; }
 
 .hz-sources-table-vet .hz-src-row { cursor: pointer; }
 .hz-sources-table-vet .hz-src-row.open td { background: #f6f8fb; }
-.hz-sources-table-vet .hz-src-detail-row td { background: #f6f8fb; padding: 0 16px 16px 40px; border-bottom: 1px solid var(--border); }
+.hz-sources-table-vet .hz-src-detail-row td {
+  background: #f6f8fb;
+  padding: 0 16px 16px 40px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  left: 0;
+  /* Clamp content to the visible scroll area so the panel never requires horizontal scrolling */
+  max-width: calc(100vw - 192px - 20px - 56px);
+  overflow-x: hidden;
+}
 .hz-sources-table-vet .hz-src-detail-row:hover td { background: #f6f8fb; }
 
 /* ── Report group: parent report + child findings ────────────────────────────── */
