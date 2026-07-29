@@ -29,13 +29,13 @@
       box-shadow: 0 2px 16px rgba(0,0,0,0.08);
     }
 
-    .inner { padding: 52px 56px 64px; }
+    .inner { padding: 32px 56px 64px; }
 
     /* ── Cover ── */
     .cover {
-      padding: 52px 56px 48px;
+      padding: 52px 56px 36px;
       border-bottom: 1px solid #e5e7eb;
-      margin-bottom: 48px;
+      margin-bottom: 32px;
     }
 
     .cover-label {
@@ -219,7 +219,7 @@
 
     .guide-table tr:last-child td { border-bottom: none; }
 
-    /* ── Colour dots (for maturity/category legend) ── */
+    /* ── Colour dots ── */
     .dot {
       display: inline-block;
       width: 8px;
@@ -307,9 +307,8 @@
 
     <!-- Cover -->
     <div class="cover">
-      <div class="cover-label">CSEC AI Team · Internal</div>
       <div class="cover-title">The Horizon</div>
-      <div class="cover-sub">User Guide — AI Threat Intelligence Platform</div>
+      <div class="cover-sub">User Guide — AI Threat Intelligence Dashboard</div>
     </div>
 
     <div class="inner">
@@ -321,46 +320,46 @@
         <div class="section-label">Getting Started</div>
         <div class="section-title">Logging In</div>
 
-        <p>You will receive an email from the CSEC AI Team with your login credentials — your registered email address and a temporary password.</p>
+        <p>You will receive an email with your login credentials — your registered email address and a temporary password.</p>
 
         <div class="step">
           <div class="step-num">1</div>
           <div>
             <div class="step-title">Open the dashboard link</div>
-            <div class="step-desc">Go to the URL provided in the credentials email. You will land on the login page, which shows <strong>The Horizon</strong> branding and a sign-in form.</div>
+            <div class="step-desc">Go to the URL from the credentials email. You will land on the login page.</div>
           </div>
-        </div>
-
-        <div class="screenshot">
-          <div class="screenshot-icon">🖼</div>
-          <div class="screenshot-label">Screenshot: Login Page</div>
-          <div class="screenshot-caption">Replace with actual screenshot</div>
         </div>
 
         <div class="step">
           <div class="step-num">2</div>
           <div>
             <div class="step-title">Sign in with your temporary password</div>
-            <div class="step-desc">Enter your email address and the temporary password from the credentials email, then click <strong>Sign In</strong>.</div>
+            <div class="step-desc">Enter your email address and temporary password, then click <strong>Sign In</strong>.</div>
           </div>
+        </div>
+
+        <div class="screenshot screenshot-sm">
+          <div class="screenshot-icon">🖼</div>
+          <div class="screenshot-label">Screenshot: Login Page</div>
+          <div class="screenshot-caption">Replace with actual screenshot</div>
         </div>
 
         <div class="step">
           <div class="step-num">3</div>
           <div>
             <div class="step-title">Set your permanent password</div>
-            <div class="step-desc">On first login, you are immediately taken to a password setup screen. Create a password that meets the requirements shown — at least 8 characters, one uppercase letter, one number, and one symbol. Enter it twice and click <strong>Set password</strong>. You will be taken directly to the dashboard.</div>
+            <div class="step-desc">On first login you are taken directly to a password setup screen. Create a password with at least 8 characters, one uppercase letter, one number, and one symbol. Enter it twice and click <strong>Set password</strong>. You will be taken to the dashboard.</div>
           </div>
         </div>
 
-        <div class="screenshot">
+        <div class="screenshot screenshot-sm">
           <div class="screenshot-icon">🖼</div>
           <div class="screenshot-label">Screenshot: Password Setup Screen</div>
           <div class="screenshot-caption">Replace with actual screenshot</div>
         </div>
 
         <div class="note">
-          If you forget your password later, click <strong>Forgot password?</strong> on the login page and a reset link will be sent to your email. To report login issues, contact the CSEC AI Team at <strong>[email]</strong>.
+          If you forget your password, click <strong>Forgot password?</strong> on the login page and a reset link will be sent to your email. To report login issues, contact the CSEC AI Team at <strong>[email]</strong>.
         </div>
       </div>
 
@@ -373,13 +372,7 @@
         <div class="section-label">Dashboard Overview</div>
         <div class="section-title">Navigation</div>
 
-        <p>After logging in, the dashboard opens to the <strong>Overview</strong> page. The navigation bar at the top provides access to four pages. Your account role (Guest or Admin) is shown in the top-right corner.</p>
-
-        <div class="screenshot screenshot-sm">
-          <div class="screenshot-icon">🖼</div>
-          <div class="screenshot-label">Screenshot: Navigation Bar</div>
-          <div class="screenshot-caption">Replace with actual screenshot</div>
-        </div>
+        <p>After logging in, the dashboard opens to the <strong>Overview</strong> page. The navigation bar at the top provides access to four pages.</p>
 
         <table class="guide-table">
           <thead>
@@ -388,15 +381,15 @@
           <tbody>
             <tr>
               <td>Overview</td>
-              <td>AI threat landscape — category cards with insights, maturity bars, trend chart, top threats, and taxonomy coverage</td>
+              <td>AI threat landscape — per-category insights, evidence maturity, trend chart, top threats, and taxonomy coverage</td>
             </tr>
             <tr>
               <td>Ask Agent</td>
-              <td>Natural-language Q&A against the ingested corpus with streamed, cited answers</td>
+              <td>Natural-language Q&amp;A against the ingested corpus with streamed, cited answers</td>
             </tr>
             <tr>
               <td>Sources</td>
-              <td>Full source table — browse, filter, search, and drill into individual articles and their extracted intelligence</td>
+              <td>Full source table — browse, filter by category and technique, and drill into individual articles</td>
             </tr>
             <tr>
               <td>Generate</td>
@@ -415,7 +408,7 @@
         <div class="section-label">Page 1</div>
         <div class="section-title">Overview</div>
 
-        <p>The main intelligence dashboard. Shows a synthesised view of the AI threat landscape for the selected time window — <strong>Last Week</strong>, <strong>Last Month</strong>, or <strong>Last Quarter</strong>. Use the segmented control at the top right to switch. The refresh button (↺) reloads data on demand; the page also auto-refreshes every 5 minutes.</p>
+        <p>The main intelligence view. Shows the AI threat landscape for the selected time window — <strong>Last Week</strong>, <strong>Last Month</strong>, or <strong>Last Quarter</strong>. Use the segmented control at the top right to switch. The ↺ button reloads data; the page also auto-refreshes every 5 minutes.</p>
 
         <div class="screenshot">
           <div class="screenshot-icon">🖼</div>
@@ -424,21 +417,27 @@
         </div>
 
         <h3>Summary stat row</h3>
-        <p>At the top, a row of counts shows the total sources in the window broken down by each threat category, plus an "Other" count for adjacent/defensive sources outside the four offensive categories.</p>
+        <p>At the top, a row of counts shows total sources in the window broken down by each threat category, plus an "Other" count for adjacent or defensive sources outside the four offensive categories.</p>
 
         <h3>Category cards</h3>
-        <p>Four cards — one per threat category — each showing a source count, sparkline trend, evidence maturity bar, a one-sentence posture assessment, and a numbered list of insights. Click any insight to expand it for the full body, supporting bullet points, and clickable source citations.</p>
+        <p>One card per threat category. Click any insight to expand it for the full body, bullet points, and source citations.</p>
+
+        <div class="screenshot">
+          <div class="screenshot-icon">🖼</div>
+          <div class="screenshot-label">Screenshot: Category Card — Expanded Insight</div>
+          <div class="screenshot-caption">Replace with actual screenshot</div>
+        </div>
 
         <p>The four categories are:</p>
         <ul class="guide-list">
-          <li><span class="dot" style="background:#3583C9;"></span><strong>Traditional AI Threats</strong> — attacks on ML models: adversarial examples, data poisoning, model extraction, backdoors</li>
-          <li><span class="dot" style="background:#9C62A7;"></span><strong>LLM Threats</strong> — prompt injection, jailbreaks, RAG poisoning, guardrail bypass, data leakage</li>
-          <li><span class="dot" style="background:#19BC9D;"></span><strong>Agentic AI Threats</strong> — autonomous agent abuse, MCP vulnerabilities, tool misuse, coding agent risks</li>
-          <li><span class="dot" style="background:#FFAA22;"></span><strong>AI-Enabled Attacks</strong> — AI used as an attack tool: deepfakes, AI-generated phishing, voice cloning</li>
+          <li><span class="dot" style="background:#3583C9;"></span><strong>Traditional AI Threats</strong> — attacks on ML models, e.g. adversarial examples, data poisoning, model extraction, backdoors</li>
+          <li><span class="dot" style="background:#9C62A7;"></span><strong>LLM Threats</strong> — e.g. prompt injection, jailbreaks, RAG poisoning, guardrail bypass, data leakage</li>
+          <li><span class="dot" style="background:#19BC9D;"></span><strong>Agentic AI Threats</strong> — autonomous agent abuse, e.g. MCP vulnerabilities, tool misuse, coding agent risks</li>
+          <li><span class="dot" style="background:#FFAA22;"></span><strong>AI-Enabled Attacks</strong> — AI as an attack tool, e.g. deepfakes, AI-generated phishing, voice cloning</li>
         </ul>
 
         <h3>Evidence maturity bar</h3>
-        <p>Each category card includes a segmented bar showing how mature the evidence is for threats in that category. Click any segment to open a side panel listing the sources at that maturity level.</p>
+        <p>A coloured bar on each card breaks down sources by how well-evidenced they are — from lab research through to threats confirmed in the wild. Click any segment to see the sources behind it.</p>
 
         <table class="guide-table">
           <thead><tr><th>Level</th><th>What it means</th></tr></thead>
@@ -451,29 +450,16 @@
           </tbody>
         </table>
 
-        <div class="screenshot">
-          <div class="screenshot-icon">🖼</div>
-          <div class="screenshot-label">Screenshot: Maturity Side Panel</div>
-          <div class="screenshot-caption">Replace with actual screenshot</div>
-        </div>
-
-        <h3>Trend chart</h3>
-        <p>A multi-line weekly source volume chart appears below the category cards, showing ingestion volume per category over time. Useful for spotting emerging spikes in a particular threat area.</p>
-
         <h3>Top threats</h3>
         <p>A ranked list of the highest-importance sources in the period, with maturity badge, publisher, date, and category. Click any title to open the original article.</p>
 
         <h3>Taxonomy coverage</h3>
-        <p>A grouped tag matrix showing how many sources are tagged with each specific technique, organised by category. Click any tag to open a drilldown panel listing the sources for that technique.</p>
+        <p>A tag matrix showing how many sources are tagged with each specific technique, organised by category. Click any tag to open a panel listing sources for that technique. For a full explanation of all taxonomy codes and technique definitions, go to the Sources page and click the <strong>Taxonomy</strong> button in the top-right.</p>
 
         <div class="screenshot">
           <div class="screenshot-icon">🖼</div>
           <div class="screenshot-label">Screenshot: Taxonomy Coverage / Tag Drilldown</div>
           <div class="screenshot-caption">Replace with actual screenshot</div>
-        </div>
-
-        <div class="note">
-          The <strong>Threat Maturity &amp; Reading Value Reference</strong> panel at the top of the page (collapsed by default) defines all maturity levels and reading value labels with examples and signals for each.
         </div>
       </div>
 
@@ -486,16 +472,25 @@
         <div class="section-label">Page 2</div>
         <div class="section-title">Ask Agent</div>
 
-        <p>A chat interface for querying the ingested corpus in natural language. The agent searches the corpus, retrieves relevant evidence, and streams a structured answer with inline source citations. It searches the last 90 days by default — specify a timeframe in your question for broader or narrower results.</p>
+        <p>A chat interface for querying the ingested corpus in plain language. The agent searches the corpus, retrieves relevant evidence, and streams a structured answer with inline source citations. It searches the last 90 days by default — specify a timeframe in your question for broader or narrower results.</p>
 
         <div class="screenshot">
           <div class="screenshot-icon">🖼</div>
-          <div class="screenshot-label">Screenshot: Ask Agent — Welcome State with Suggestions</div>
+          <div class="screenshot-label">Screenshot: Ask Agent — Welcome State</div>
           <div class="screenshot-caption">Replace with actual screenshot</div>
         </div>
 
         <h3>Getting started</h3>
-        <p>On first load, six suggested prompts appear as clickable cards. Click one to send it immediately, or type your own question in the input bar and press <strong>Enter</strong> or the send button (↑).</p>
+        <p>On first load, six suggested prompts appear as clickable cards:</p>
+        <ul class="guide-list">
+          <li>Most important finding</li>
+          <li>LLM jailbreak trends</li>
+          <li>Agentic AI risks</li>
+          <li>MCP vulnerabilities</li>
+          <li>AI as an attack tool</li>
+          <li>Defender watch list</li>
+        </ul>
+        <p>Click one to send it immediately, or type your own question and press <strong>Enter</strong> or ↑.</p>
 
         <h3>Writing effective questions</h3>
         <p>Narrow your question by technique, category, actor, or timeframe. Broad questions produce generic answers.</p>
@@ -506,7 +501,7 @@
         <div class="example">"Tell me about MCP vulnerabilities in the past 90 days"</div>
 
         <h3>Reading the response</h3>
-        <p>Responses are structured with numbered findings, bold key terms, and inline citation numbers (e.g. <code>[src-1]</code>). Below each answer, clickable <strong>source buttons</strong> link to the original articles. A confidence level and temporal scope are shown below the answer.</p>
+        <p>Responses are structured with numbered findings, bold key terms, and inline citation numbers. Below each answer, source buttons link to the original articles. A confidence level and temporal scope are shown below the response.</p>
 
         <div class="screenshot">
           <div class="screenshot-icon">🖼</div>
@@ -514,12 +509,12 @@
           <div class="screenshot-caption">Replace with actual screenshot</div>
         </div>
 
-        <p>If the agent answers from general background knowledge rather than the corpus (e.g. if no relevant sources were found), a <strong>"General knowledge — not grounded in the corpus"</strong> badge appears above the response. Treat these answers with additional caution.</p>
+        <p>If no relevant sources were found, a <strong>"General knowledge — not grounded in the corpus"</strong> badge appears above the response. Treat these answers with additional caution.</p>
 
-        <p>Your conversation history is saved in your browser and persists across sessions. Use <strong>Clear history</strong> at the bottom of the input bar to start fresh.</p>
+        <p>Conversation history is saved in your browser and persists across sessions. Use <strong>Clear history</strong> at the bottom of the input bar to start fresh.</p>
 
         <div class="note">
-          The agent does not search the open web. All answers are drawn from ingested and processed sources. Very recent articles (last 24–48 hours) may not yet be in the corpus.
+          The agent does not search the open web. All answers are drawn from ingested and processed sources. Very recent articles (last 24–48 hours) may not yet be in the corpus. Dates reflect when a source was published, not necessarily when the underlying incident occurred — a report published this week may describe an incident that occurred earlier.
         </div>
       </div>
 
@@ -532,7 +527,7 @@
         <div class="section-label">Page 3</div>
         <div class="section-title">Sources</div>
 
-        <p>A full table of every ingested and validated source. Use this page to browse the corpus, verify specific articles, or investigate a particular threat area in depth.</p>
+        <p>A full table of every ingested and validated source. Use this page to browse the corpus, verify specific articles, or investigate a particular threat area in depth. The <strong>Legend</strong> and <strong>Taxonomy</strong> buttons in the top-right open reference panels explaining all labels, maturity levels, and taxonomy tag codes.</p>
 
         <div class="screenshot">
           <div class="screenshot-icon">🖼</div>
@@ -544,35 +539,21 @@
         <p>Use the pill switcher in the top-right to filter by <strong>7 days</strong>, <strong>30 days</strong>, <strong>90 days</strong>, or <strong>All time</strong>.</p>
 
         <h3>Category tabs</h3>
-        <p>Tabs across the top filter sources by threat category. The count on each tab reflects the current active filters. Selecting a category tab reveals sub-tag filter pills — click one or more to narrow by specific technique.</p>
+        <p>Tabs across the top filter sources by threat category. Selecting a category reveals sub-tag filter pills — click one or more to narrow by specific technique.</p>
 
         <h3>Filters</h3>
         <ul class="guide-list">
           <li><strong>Label</strong> — filter by reading value: Essential, Recommended, Analyst, Background</li>
           <li><strong>Importance</strong> — filter by evidence maturity: Operational, Observed, Disclosed, Demonstrated, Research</li>
           <li><strong>★ Starred</strong> — show only sources you have starred</li>
-          <li><strong>🚩 Flagged</strong> — show sources marked for review</li>
-          <li><strong>📄 Reports</strong> — show landscape reports and their extracted sub-findings</li>
+          <li><strong>Reports</strong> — show longer reports and their extracted sub-findings</li>
         </ul>
 
         <h3>Sorting</h3>
-        <p>Sort by <strong>Importance</strong> (evidence maturity, highest first), <strong>Newest</strong> (publish date), or <strong>Ingested</strong> (when the source entered the system).</p>
-
-        <h3>Source rows</h3>
-        <p>Each row shows the title (linked to the original article), importance badge, reading value label, publisher, category, up to 3 taxonomy tags, and publish date. Click the <strong>★</strong> to star a source or <strong>⚐</strong> to flag it for review. Click anywhere on the row to expand the detail panel.</p>
-
-        <div class="screenshot">
-          <div class="screenshot-icon">🖼</div>
-          <div class="screenshot-label">Screenshot: Source Row — Expanded Detail Panel</div>
-          <div class="screenshot-caption">Replace with actual screenshot</div>
-        </div>
+        <p>Sort by <strong>Importance</strong> (evidence maturity, highest first) or <strong>Newest</strong> (publish date).</p>
 
         <h3>Detail panel</h3>
-        <p>The expanded panel shows the full summary, evidence maturity and reading value, source type, trust tier, taxonomy tags, and the classification rationale. For landscape reports, it also shows extracted attack walkthroughs, critical insights, and observed trends. For MITRE ATLAS case studies, it shows the full attack chain with technique IDs and an optional flow diagram.</p>
-
-        <div class="note">
-          The <strong>Legend</strong> and <strong>Taxonomy</strong> buttons in the top-right open reference panels explaining all labels, maturity levels, and taxonomy tag codes.
-        </div>
+        <p>Click any row to expand its detail panel, showing the full summary, evidence maturity and reading value, source type, trust tier, taxonomy tags, and classification rationale. For longer reports, it may also show extracted attack walkthroughs, critical insights, and observed trends. This feature is still being developed and content may vary.</p>
       </div>
 
       <div class="divider"></div>
@@ -593,21 +574,23 @@
         </div>
 
         <h3>Slides</h3>
-        <p>Select a reporting period — <strong>1 Month</strong>, <strong>1 Quarter</strong>, or <strong>1 Year</strong> — to load the latest pre-generated deck for that window. The panel shows the coverage dates, source count, and slide count. Click <strong>↓ Download PPTX</strong> to download the file.</p>
+        <p>Select a reporting period — <strong>1 Month</strong>, <strong>1 Quarter</strong>, or <strong>1 Year</strong> — then click <strong>↓ Download PPTX</strong>. Each deck includes an executive summary, per-category threat developments, and key insights with source citations.</p>
 
-        <p>Each deck includes: executive summary, per-category threat developments and analysis, 3–5 key insights per category, case study slides with attack-chain diagrams, and source citations on every slide. Edit the deck before presenting externally.</p>
+        <div class="note">
+          Slides are AI-generated and must be reviewed and edited by a human before use. Verify claims, check citations, and adjust framing as appropriate before presenting or sharing externally.
+        </div>
 
         <h3>Newsletter</h3>
-        <p>Select <strong>Past week</strong> or <strong>Past month</strong> to load the latest newsletter for that window. A live preview renders in the panel. Click <strong>Copy for email</strong> to copy the formatted HTML to your clipboard, then paste directly into Gmail or Outlook compose.</p>
+        <p>Select <strong>Past week</strong> or <strong>Past month</strong> to load the latest newsletter. A live preview renders in the panel. Click <strong>Copy for email</strong> to copy the newsletter to your clipboard, then paste directly into Gmail or Outlook.</p>
 
         <div class="screenshot">
           <div class="screenshot-icon">🖼</div>
-          <div class="screenshot-label">Screenshot: Generate Page — Newsletter Tab with Preview</div>
+          <div class="screenshot-label">Screenshot: Generate Page — Newsletter Tab</div>
           <div class="screenshot-caption">Replace with actual screenshot</div>
         </div>
 
         <div class="note">
-          If a deck or newsletter shows "Not available yet", it has not been generated for that period yet. Check back after the next scheduled pipeline run.
+          If a deck or newsletter shows "Not available yet", it has not been generated for that period. Check back after the next scheduled pipeline run.
         </div>
       </div>
 
@@ -621,13 +604,11 @@
         <div class="section-title">Feedback &amp; Issues</div>
 
         <p>This is an early prototype and all feedback is welcome. Contact the CSEC AI Team at <strong>[email]</strong> to report issues or share observations.</p>
-
-        <p>We are particularly interested in: classification errors, gaps in analytical quality, Ask Agent accuracy (especially wrong or uncited claims), missing sources or feeds, and usability issues.</p>
       </div>
 
     </div>
 
-    <div class="footer">The Horizon &nbsp;·&nbsp; CSEC AI Team &nbsp;·&nbsp; Internal</div>
+    <div class="footer">The Horizon &nbsp;·&nbsp; Internal</div>
 
   </div>
 </body>

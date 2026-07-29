@@ -366,13 +366,16 @@ export default async function handler(req, res) {
       .eq("validation_status", "pass")
       .order("date_published", { ascending: false }));
 
-    const total      = all.length;
-    const highTrust  = all.filter(s => ["primary","high"].includes(s.trust_tier)).length;
+    // Exclude child sources (extracted sub-findings) from all counts — they are
+    // subordinate to their parent report and would double-count if included.
+    const parents   = all.filter(s => !s.parent_source_id);
+    const total      = parents.length;
+    const highTrust  = parents.filter(s => ["primary","high"].includes(s.trust_tier)).length;
 
     // ── 2. Per-category stats + top sources ────────────────────────────────────
     const catMap = {};
     for (const c of CATEGORIES) catMap[c.key] = [];
-    for (const s of all) {
+    for (const s of parents) {
       if (catMap[s.main_category]) catMap[s.main_category].push(s);
     }
 
@@ -447,6 +450,7 @@ export default async function handler(req, res) {
         .gte("date_published", trendFrom.toISOString().slice(0, 10))
         .eq("validation_status", "pass")
         .not("main_category", "is", null)
+        .is("parent_source_id", null)
         .order("date_published", { ascending: false });
       // Annual: bound end at Jun 30 2026. Other windows: always show last 12 weeks from now.
       if (useMonthlyBuckets) q.lte("date_published", "2026-06-30");
@@ -509,7 +513,7 @@ export default async function handler(req, res) {
           summary: s.summary || null,
         }))
       : dedupByFamily(
-          all
+          parents
             .map(rankSource)
             .filter(s => s._rank > 0 && s.main_category && s.main_category !== "unclear_or_adjacent")
             .sort(byRankThenRecency)
@@ -540,7 +544,7 @@ export default async function handler(req, res) {
     for (const t of TAGS) { tagCounts[t.id] = {}; tagDefense[t.id] = {}; tagSources[t.id] = []; }
     for (const c of CATEGORIES) for (const t of TAGS) { tagCounts[t.id][c.key] = 0; tagDefense[t.id][c.key] = 0; }
 
-    for (const s of all) {
+    for (const s of parents) {
       const cat = s.main_category;
       if (!cat) continue;
       const isDefensive = s.intelligence?.is_defensive === true || (s.tags || []).includes("defensive");

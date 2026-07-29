@@ -230,21 +230,22 @@ const NL_WINDOWS = [
   { id: "month", label: "Past month" },
 ];
 
-function NewsletterPanel() {
+function NewsletterPanel({ secret }) {
   const [win, setWin]       = useState("week");
   const [status, setStatus] = useState("loading"); // loading | ready | empty | error
   const [data, setData]     = useState(null);      // { html, period, sourceCount, generated_at }
   const [copied, setCopied] = useState(false);
   const iframeRef           = useRef(null);
 
-  // Fetch the latest pre-generated newsletter for the selected window (public GET).
   useEffect(() => {
     let cancelled = false;
     setStatus("loading"); setData(null); setCopied(false);
 
     (async () => {
       try {
-        const res = await fetch(`/api/dashboard?format=newsletter&window=${win}`);
+        const res = await fetch(`/api/dashboard?format=newsletter&window=${win}`, {
+          headers: { "Authorization": secret ? `Bearer ${secret}` : "" },
+        });
         if (res.status === 404) { if (!cancelled) setStatus("empty"); return; }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const d = await res.json();
@@ -257,7 +258,7 @@ function NewsletterPanel() {
     })();
 
     return () => { cancelled = true; };
-  }, [win]);
+  }, [win, secret]);
 
   const onIframeLoad = useCallback(() => {
     try {
@@ -433,7 +434,7 @@ export function GeneratePage() {
         <div style={{ padding: "24px 24px" }}>
           {tab === "slides"
             ? <SlidesPanel secret={token} />
-            : <NewsletterPanel />}
+            : <NewsletterPanel secret={token} />}
         </div>
       </div>
     </div>

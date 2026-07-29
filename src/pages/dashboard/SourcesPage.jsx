@@ -843,7 +843,7 @@ export function SourcesPage() {
       if (s.parent_source_id) continue;
       if (s.main_category) c[s.main_category] = (c[s.main_category] || 0) + 1;
     }
-    return { counts: c, total: base.length };
+    return { counts: c, total: base.filter(s => !s.parent_source_id).length };
   }, [rowsExcept]);
 
   const labelCounts = useMemo(() => {
