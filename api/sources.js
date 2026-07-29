@@ -96,10 +96,9 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, deleted: id });
       }
 
-      // PATCH — star toggle, publish-date edit, and/or classification edit
-      // (main_category + tags). Any subset of fields may be present.
+      // PATCH — publish-date edit, classification edit (main_category + tags),
+      // needs_review flag, and/or short_summary. Any subset of fields may be present.
       const patch = {};
-      if (typeof body.starred === "boolean") patch.starred = body.starred;
       if (typeof body.needs_review === "boolean") patch.needs_review = body.needs_review;
       if (body.date_published !== undefined) {
         const date = String(body.date_published || "").trim();
@@ -134,7 +133,7 @@ export default async function handler(req, res) {
         patch.short_summary = s || null;
       }
       if (Object.keys(patch).length === 0) {
-        return res.status(400).json({ error: "nothing to update (expected starred, needs_review, date_published, main_category, tags, and/or short_summary)" });
+        return res.status(400).json({ error: "nothing to update (expected needs_review, date_published, main_category, tags, and/or short_summary)" });
       }
       const { error } = await supabase.from("sources").update(patch).eq("id", id);
       if (error) throw new Error(error.message);

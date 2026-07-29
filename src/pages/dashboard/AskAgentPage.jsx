@@ -4,6 +4,7 @@
  */
 
 import { useState, useRef, useEffect } from "react";
+import { useAuth } from "../../AuthContext.jsx";
 
 const SUGGESTIONS = [
   { label: "Most important finding",    prompt: "What's the most important finding right now?" },
@@ -340,11 +341,19 @@ function Message({ msg, onFollowUp }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-const STORAGE_KEY = "hz_chat_history";
+function historyKey(userId) {
+  return userId ? `hz_chat_history:${userId}` : null;
+}
 
-function loadHistory() {
+function agentLogKey(userId) {
+  return userId ? `hz_agent_log:${userId}` : null;
+}
+
+function loadHistory(userId) {
+  const key = historyKey(userId);
+  if (!key) return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     // Drop any message that was mid-stream when the page was closed
@@ -352,16 +361,20 @@ function loadHistory() {
   } catch { return []; }
 }
 
-function saveHistory(msgs) {
+function saveHistory(userId, msgs) {
+  const key = historyKey(userId);
+  if (!key) return;
   try {
-    // Only persist fully-received messages; cap at 200 to avoid quota issues
     const toSave = msgs.filter(m => !m.streaming).slice(-200);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+    localStorage.setItem(key, JSON.stringify(toSave));
   } catch (_) {}
 }
 
 export function AskAgentPage() {
-  const [messages, setMessages] = useState(loadHistory);
+  const session = useAuth();
+  const userId  = session?.user?.id ?? null;
+
+  const [messages, setMessages] = useState(() => loadHistory(userId));
   const [query,    setQuery]    = useState("");
   const [loading,  setLoading]  = useState(false);
   const bottomRef = useRef(null);
@@ -369,10 +382,15 @@ export function AskAgentPage() {
 
   const hasConversation = messages.length > 0;
 
+  // Reload history when the user changes (e.g. someone else logs in on same browser)
+  useEffect(() => {
+    setMessages(loadHistory(userId));
+  }, [userId]);
+
   // Persist history whenever messages change (skip mid-stream updates)
   useEffect(() => {
-    if (!loading) saveHistory(messages);
-  }, [messages, loading]);
+    if (!loading) saveHistory(userId, messages);
+  }, [messages, loading, userId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -457,9 +475,12 @@ export function AskAgentPage() {
           tools:       (done?.tool_calls || []).map(t => t.tool),
           token_usage: done?.token_usage || null,
         };
-        const stored = JSON.parse(localStorage.getItem("hz_agent_log") || "[]");
-        stored.unshift(logEntry);
-        localStorage.setItem("hz_agent_log", JSON.stringify(stored.slice(0, 100)));
+        const key = agentLogKey(userId);
+        if (key) {
+          const stored = JSON.parse(localStorage.getItem(key) || "[]");
+          stored.unshift(logEntry);
+          localStorage.setItem(key, JSON.stringify(stored.slice(0, 100)));
+        }
       } catch (_) {}
     } catch (err) {
       setMessages(prev => [...prev, {
@@ -549,15 +570,13 @@ export function AskAgentPage() {
           <p className="hz-chat-input-hint">
             90-day default · specify timeframe for broader or narrower results
           </p>
-          {hasConversation && (
-            <button
-              className="hz-chat-clear"
-              onClick={() => { setMessages([]); localStorage.removeItem(STORAGE_KEY); }}
-              disabled={loading}
-            >
-              Clear history
-            </button>
-          )}
+          <button
+            className="hz-chat-clear"
+            onClick={() => { setMessages([]); const k = historyKey(userId); if (k) localStorage.removeItem(k); }}
+            disabled={loading}
+          >
+            Clear history
+          </button>
         </div>
       </div>
 

@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
 import { LegendPanel, TaxonomyPanel, TAXONOMY_GROUPS } from "../../components/dashboard/LegendPanel.jsx";
 import { useAuth } from "../../AuthContext.jsx";
 import { getAccessLevel, getSessionToken } from "../../auth.js";
+import { supabase } from "../../lib/supabase.js";
 
 // Build a flat id → label map from the taxonomy so tags render as human-readable names.
 const TAG_LABEL = new Map(
@@ -572,6 +573,7 @@ export function SourcesPage() {
   const session = useAuth();
   const [showLegend,    setShowLegend]    = useState(false);
   const [showTaxonomy,  setShowTaxonomy]  = useState(false);
+  const [bookmarkedIds, setBookmarkedIds] = useState(new Set());
   const [period,      setPeriod]      = useState("all-time");
   const [activeTab,   setActiveTab]   = useState("all");
   const [activeTags,  setActiveTags]  = useState([]);
@@ -589,6 +591,7 @@ export function SourcesPage() {
   const [labelFilter, setLabelFilter] = useState(null);   // filter to one importance label
   const [sortBy,      setSortBy]      = useState("importance"); // "importance" | "date" | "ingested"
   const accessLevel = getAccessLevel(session);
+  const isAdmin = accessLevel === "admin";
   const [busyId,      setBusyId]      = useState(null);   // id of the source mid-mutation
   const [adminMsg,    setAdminMsg]    = useState(null);   // { ok, text } feedback
 
@@ -606,14 +609,27 @@ export function SourcesPage() {
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(json => {
         const rows = Array.isArray(json) ? json : (json.sources || []);
-        setSources(rows);
-        setTotalCount(json.count ?? rows.length);
+        const visible = isAdmin ? rows : rows.filter(s => !s.needs_review);
+        setSources(visible);
+        setTotalCount(json.count ?? visible.length);
         setLoading(false);
       })
       .catch(e => { setError(e.message); setSources([]); setLoading(false); });
   }, [period]);
 
   useEffect(() => { loadSources(); }, [loadSources]);
+
+  // ── Per-user bookmarks — fetch on mount, keyed by session user ───────────────
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    supabase
+      .from("user_bookmarks")
+      .select("source_id")
+      .eq("user_id", session.user.id)
+      .then(({ data }) => {
+        if (data) setBookmarkedIds(new Set(data.map(r => r.source_id)));
+      });
+  }, [session?.user?.id]);
 
   // ── Admin mutations (persist to DB via api/sources.js PATCH/DELETE) ──────────
   const authHeaders = () => ({
@@ -698,22 +714,40 @@ export function SourcesPage() {
       .finally(() => setBusyId(null));
   }, []);
 
-  // Star toggle — persists starred to the DB; optimistic local update. No admin
-  // secret required to READ starred, but the mutation is gated like the others.
+  // Star toggle — per-user bookmarks stored in user_bookmarks table via Supabase
+  // client (RLS ensures each user only touches their own rows). No admin token needed.
   const toggleStar = useCallback((s, e) => {
     if (e) e.stopPropagation();
-    const next = !s.starred;
-    setSources(prev => prev.map(x => x.id === s.id ? { ...x, starred: next } : x));   // optimistic
-    fetch("/api/sources", {
-      method: "PATCH", headers: authHeaders(),
-      body: JSON.stringify({ id: s.id, starred: next }),
-    })
-      .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`); })
-      .catch(err => {
-        setSources(prev => prev.map(x => x.id === s.id ? { ...x, starred: s.starred } : x));   // revert
-        setAdminMsg({ ok: false, text: `Star failed: ${err.message}` });
-      });
-  }, []);
+    if (!session?.user?.id) return;
+    const isBookmarked = bookmarkedIds.has(s.id);
+    // Optimistic update
+    setBookmarkedIds(prev => {
+      const next = new Set(prev);
+      if (isBookmarked) next.delete(s.id); else next.add(s.id);
+      return next;
+    });
+    if (isBookmarked) {
+      supabase.from("user_bookmarks")
+        .delete()
+        .eq("user_id", session.user.id)
+        .eq("source_id", s.id)
+        .then(({ error }) => {
+          if (error) {
+            setBookmarkedIds(prev => { const n = new Set(prev); n.add(s.id); return n; }); // revert
+            setAdminMsg({ ok: false, text: `Star failed: ${error.message}` });
+          }
+        });
+    } else {
+      supabase.from("user_bookmarks")
+        .upsert({ user_id: session.user.id, source_id: s.id })
+        .then(({ error }) => {
+          if (error) {
+            setBookmarkedIds(prev => { const n = new Set(prev); n.delete(s.id); return n; }); // revert
+            setAdminMsg({ ok: false, text: `Star failed: ${error.message}` });
+          }
+        });
+    }
+  }, [session?.user?.id, bookmarkedIds]);
 
   // Flag toggle — marks a source needs_review (distinct from starring). Same
   // persist-with-revert pattern. 🚩 = "come back to this / mis-classified", vs
@@ -765,13 +799,13 @@ export function SourcesPage() {
     category: activeTab === "all" ? null : (s => s.main_category === activeTab),
     label:    labelFilter ? (s => s.label === labelFilter) : null,
     tier:     tierFilter ? (s => s.maturity === tierFilter) : null,
-    starred:  starredOnly ? (s => s.starred) : null,
+    starred:  starredOnly ? (s => bookmarkedIds.has(s.id)) : null,
     flagged:  flaggedOnly ? (s => s.needs_review) : null,
     // Reports filter: show digest parent reports AND all their children together.
     reports:  reportsOnly ? (s => s.is_report || !!s.parent_source_id) : null,
     tags:     activeTags.length ? (s => activeTags.every(t => s.tags?.includes(t))) : null,
     search:   searchPred,
-  }), [activeTab, labelFilter, tierFilter, starredOnly, flaggedOnly, reportsOnly, activeTags, searchPred]);
+  }), [activeTab, labelFilter, tierFilter, starredOnly, flaggedOnly, reportsOnly, activeTags, searchPred, bookmarkedIds]);
 
   // Rows passing every predicate EXCEPT the named one (for that facet's counts).
   const rowsExcept = useCallback((exceptKey) => {
@@ -826,7 +860,7 @@ export function SourcesPage() {
     return c;
   }, [rowsExcept]);
 
-  const starredCount  = useMemo(() => rowsExcept("starred").filter(s => s.starred).length, [rowsExcept]);
+  const starredCount  = useMemo(() => rowsExcept("starred").filter(s => bookmarkedIds.has(s.id)).length, [rowsExcept, bookmarkedIds]);
   const flaggedCount  = useMemo(() => rowsExcept("flagged").filter(s => s.needs_review).length, [rowsExcept]);
   const reportsCount  = useMemo(() => rowsExcept("reports").filter(s => s.is_report).length, [rowsExcept]);
 
@@ -1040,14 +1074,16 @@ export function SourcesPage() {
           >
             ★ Starred{starredCount ? <span className="hz-tier-chip-count">{starredCount}</span> : null}
           </button>
-          {/* Flagged filter — sources marked needs_review (manual 🚩 or pipeline). */}
-          <button
-            className={`hz-tier-chip hz-flag-chip${flaggedOnly ? " active" : ""}`}
-            onClick={() => { setFlaggedOnly(v => !v); setPage(1); setExpandedId(null); }}
-            title="Show only flagged sources (needs review) — count reflects the other active filters"
-          >
-            🚩 Flagged{flaggedCount ? <span className="hz-tier-chip-count">{flaggedCount}</span> : null}
-          </button>
+          {/* Flagged filter — admin only */}
+          {isAdmin && (
+            <button
+              className={`hz-tier-chip hz-flag-chip${flaggedOnly ? " active" : ""}`}
+              onClick={() => { setFlaggedOnly(v => !v); setPage(1); setExpandedId(null); }}
+              title="Show only flagged sources (needs review) — count reflects the other active filters"
+            >
+              🚩 Flagged{flaggedCount ? <span className="hz-tier-chip-count">{flaggedCount}</span> : null}
+            </button>
+          )}
           {/* Reports filter — digest parent reports + their child findings. */}
           <button
             className={`hz-tier-chip hz-report-chip${reportsOnly ? " active" : ""}`}
@@ -1165,19 +1201,21 @@ export function SourcesPage() {
                       <td className="hz-src-star-cell">
                         <div className="hz-src-mark-btns">
                           <button
-                            className={`hz-star-btn${s.starred ? " on" : ""}`}
-                            title={s.starred ? "Starred — click to unstar" : "Star this source"}
+                            className={`hz-star-btn${bookmarkedIds.has(s.id) ? " on" : ""}`}
+                            title={bookmarkedIds.has(s.id) ? "Bookmarked — click to remove" : "Bookmark this source"}
                             onClick={(e) => toggleStar(s, e)}
                           >
-                            {s.starred ? "★" : "☆"}
+                            {bookmarkedIds.has(s.id) ? "★" : "☆"}
                           </button>
-                          <button
-                            className={`hz-flag-btn${s.needs_review ? " on" : ""}`}
-                            title={s.needs_review ? "Flagged for review — click to clear" : "Flag this source for review"}
-                            onClick={(e) => toggleFlag(s, e)}
-                          >
-                            {s.needs_review ? "🚩" : "⚐"}
-                          </button>
+                          {isAdmin && (
+                            <button
+                              className={`hz-flag-btn${s.needs_review ? " on" : ""}`}
+                              title={s.needs_review ? "Flagged for review — click to clear" : "Flag this source for review"}
+                              onClick={(e) => toggleFlag(s, e)}
+                            >
+                              {s.needs_review ? "🚩" : "⚐"}
+                            </button>
+                          )}
                         </div>
                       </td>
                       <td>
