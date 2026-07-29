@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Horizon — Account &amp; User Guide</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Helvetica, Arial, sans-serif;
+      background: #f3f4f6;
+      color: #111827;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .screen-hint {
+      text-align: center;
+      font-size: 11px;
+      color: #9ca3af;
+      padding: 16px;
+      font-style: italic;
+    }
+
+    .page {
+      max-width: 680px;
+      margin: 24px auto 48px;
+      background: #ffffff;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+    }
+
+    /* ── Credentials header ── */
+    .header {
+      padding: 48px 56px 40px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .header-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: #9ca3af;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    .header-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: #111827;
+      letter-spacing: -0.02em;
+      margin-bottom: 10px;
+    }
+
+    .header-sub {
+      font-size: 14px;
+      color: #374151;
+      line-height: 1.75;
+      margin-bottom: 28px;
+    }
+
+    /* ── Credentials box ── */
+    .creds-box {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+
+    .creds-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #9ca3af;
+      margin-bottom: 14px;
+    }
+
+    .creds-row {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .creds-row:last-child { margin-bottom: 0; }
+
+    .creds-key {
+      font-size: 12px;
+      font-weight: 600;
+      color: #6b7280;
+      min-width: 80px;
+      flex-shrink: 0;
+    }
+
+    .creds-val {
+      font-size: 14px;
+      font-weight: 600;
+      color: #111827;
+      font-family: "SF Mono", "Fira Code", monospace;
+      letter-spacing: 0.01em;
+    }
+
+    /* ── Dashboard link ── */
+    .dashboard-link {
+      display: block;
+      background: #111827;
+      color: #ffffff;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 13px 20px;
+      border-radius: 8px;
+      text-align: center;
+      letter-spacing: 0.01em;
+    }
+
+    .dashboard-link:hover { background: #1f2937; }
+
+    .dashboard-url {
+      font-size: 12px;
+      color: #9ca3af;
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    .dashboard-url a {
+      color: #6b7280;
+      text-decoration: none;
+    }
+
+    .first-login-note {
+      font-size: 13px;
+      color: #6b7280;
+      line-height: 1.7;
+      padding: 12px 16px;
+      background: #f9fafb;
+      border-radius: 4px;
+      margin-top: 16px;
+    }
+
+    /* ── Guide divider ── */
+    .guide-start {
+      padding: 32px 56px 0;
+      border-top: 1px solid #e5e7eb;
+      margin-top: 0;
+    }
+
+    .guide-start-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: #9ca3af;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .guide-start-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #111827;
+      letter-spacing: -0.01em;
+      margin-bottom: 24px;
+    }
+
+    /* ── Guide body ── */
+    .inner { padding: 0 56px 64px; }
+
+    .section { margin-bottom: 48px; }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: #9ca3af;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #111827;
+      letter-spacing: -0.01em;
+      margin-bottom: 16px;
+    }
+
+    .divider {
+      height: 1px;
+      background: #e5e7eb;
+      margin-bottom: 48px;
+    }
+
+    p {
+      font-size: 14px;
+      color: #374151;
+      line-height: 1.8;
+      margin-bottom: 16px;
+    }
+
+    p:last-child { margin-bottom: 0; }
+
+    .step {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #111827;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 2px;
+    }
+
+    .step-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #111827;
+      margin-bottom: 4px;
+    }
+
+    .step-desc {
+      font-size: 14px;
+      color: #374151;
+      line-height: 1.75;
+    }
+
+    ul.guide-list { list-style: none; padding: 0; margin: 0 0 16px; }
+
+    ul.guide-list li {
+      font-size: 14px;
+      color: #374151;
+      line-height: 1.75;
+      padding: 7px 0 7px 16px;
+      border-bottom: 1px solid #f3f4f6;
+      position: relative;
+    }
+
+    ul.guide-list li:last-child { border-bottom: none; }
+
+    ul.guide-list li::before {
+      content: "·";
+      position: absolute;
+      left: 0;
+      color: #9ca3af;
+      font-weight: 700;
+    }
+
+    .guide-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .guide-table th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #9ca3af;
+      padding: 0 12px 10px 0;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .guide-table td {
+      padding: 10px 12px 10px 0;
+      border-bottom: 1px solid #f3f4f6;
+      color: #374151;
+      line-height: 1.6;
+      vertical-align: top;
+    }
+
+    .guide-table td:first-child {
+      font-weight: 600;
+      color: #111827;
+      white-space: nowrap;
+      width: 100px;
+    }
+
+    .guide-table tr:last-child td { border-bottom: none; }
+
+    .dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    .example {
+      background: #f9fafb;
+      border-left: 3px solid #e5e7eb;
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-style: italic;
+      color: #6b7280;
+      line-height: 1.65;
+    }
+
+    .note {
+      font-size: 13px;
+      color: #6b7280;
+      line-height: 1.75;
+      padding: 12px 16px;
+      background: #f9fafb;
+      border-radius: 4px;
+      margin-top: 16px;
+    }
+
+    h3 {
+      font-size: 13px;
+      font-weight: 700;
+      color: #111827;
+      margin: 24px 0 10px;
+    }
+
+    .footer {
+      border-top: 1px solid #e5e7eb;
+      padding: 20px 56px;
+      font-size: 12px;
+      color: #9ca3af;
+      text-align: center;
+    }
+
+    @media print {
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      body { background: #fff; }
+      .screen-hint { display: none; }
+      .page { box-shadow: none; margin: 0; max-width: 100%; }
+      .header { page-break-after: avoid; }
+      .guide-start { page-break-before: always; }
+      .divider { page-break-after: always; }
+      .step, .example, .note, .guide-table { break-inside: avoid; }
+      .section-title, h3 { break-after: avoid; }
+      p { orphans: 3; widows: 3; }
+      .dashboard-link { background: #111827 !important; color: #fff !important; }
+      @page { margin: 18mm 20mm 22mm; size: A4; }
+    }
+  </style>
+</head>
+<body>
+
+  <p class="screen-hint">To save as PDF: Chrome → File → Print → Save as PDF → enable "Background graphics" → Save</p>
+
+  <div class="page">
+
+    <!-- Credentials section -->
+    <div class="header">
+      <div class="header-label">The Horizon</div>
+      <div class="header-title">Thank you for signing up!</div>
+      <div class="header-sub">
+        Your access to the AI threat intelligence dashboard has been set up.
+        Log in with the credentials below and follow the steps to set your password.
+      </div>
+
+      <div class="creds-box">
+        <div class="creds-label">Login credentials</div>
+        <div class="creds-row">
+          <span class="creds-key">Email</span>
+          <span class="creds-val">[RECIPIENT_EMAIL]</span>
+        </div>
+        <div class="creds-row">
+          <span class="creds-key">Password</span>
+          <span class="creds-val">[TEMP_PASSWORD]</span>
+        </div>
+      </div>
+
+      <a class="dashboard-link" href="https://the-horizon-csec.vercel.app/">Open The Horizon →</a>
+
+      <div class="first-login-note">
+        On first login you will be prompted to set a permanent password — at least 8 characters,
+        one uppercase letter, one number, and one symbol.
+        Contact <strong>[ADMIN_EMAIL]</strong> if you have any trouble accessing the dashboard.
+      </div>
+    </div>
+
+    <!-- User guide -->
+    <div class="guide-start">
+      <div class="guide-start-title" style="font-size:22px;">User Guide</div>
+    </div>
+
+    <div class="inner">
+
+      <!-- LOGGING IN -->
+      <div class="section">
+        <div class="section-label">Getting Started</div>
+        <div class="section-title">Logging In</div>
+
+        <p>You will receive your login credentials at the top of this document — your registered email address and a temporary password.</p>
+
+        <table style="width:100%;margin-bottom:20px;border-collapse:collapse;"><tr>
+      <td style="width:28px;vertical-align:top;padding-top:2px;">
+        <span style="display:inline-block;width:22px;height:22px;border-radius:50%;background:#111827;color:#fff;font-size:11px;font-weight:700;text-align:center;line-height:22px;">1</span>
+      </td>
+      <td style="vertical-align:top;padding-left:12px;">
+        <div style="font-size:14px;font-weight:600;color:#111827;margin-bottom:4px;">Open the dashboard link</div>
+        <div style="font-size:14px;color:#374151;line-height:1.75;">Go to the URL above. You will land on the login page.</div>
+      </td>
+    </tr></table>
+
+        <table style="width:100%;margin-bottom:20px;border-collapse:collapse;"><tr>
+      <td style="width:28px;vertical-align:top;padding-top:2px;">
+        <span style="display:inline-block;width:22px;height:22px;border-radius:50%;background:#111827;color:#fff;font-size:11px;font-weight:700;text-align:center;line-height:22px;">2</span>
+      </td>
+      <td style="vertical-align:top;padding-left:12px;">
+        <div style="font-size:14px;font-weight:600;color:#111827;margin-bottom:4px;">Sign in with your temporary password</div>
+        <div style="font-size:14px;color:#374151;line-height:1.75;">Enter your email address and temporary password, then click <strong>Sign In</strong>.</div>
+      </td>
+    </tr></table>
+
+        <table style="width:100%;margin-bottom:20px;border-collapse:collapse;"><tr>
+      <td style="width:28px;vertical-align:top;padding-top:2px;">
+        <span style="display:inline-block;width:22px;height:22px;border-radius:50%;background:#111827;color:#fff;font-size:11px;font-weight:700;text-align:center;line-height:22px;">3</span>
+      </td>
+      <td style="vertical-align:top;padding-left:12px;">
+        <div style="font-size:14px;font-weight:600;color:#111827;margin-bottom:4px;">Set your permanent password</div>
+        <div style="font-size:14px;color:#374151;line-height:1.75;">On first login you are taken directly to a password setup screen. Create a password with at least 8 characters, one uppercase letter, one number, and one symbol. Enter it twice and click <strong>Set password</strong>. You will be taken to the dashboard.</div>
+      </td>
+    </tr></table>
+
+        <div class="note">
+          If you forget your password, click <strong>Forgot password?</strong> on the login page and a reset link will be sent to your email. To report login issues, contact <strong>[ADMIN_EMAIL]</strong>.
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- NAVIGATION -->
+      <div class="section">
+        <div class="section-label">Dashboard Overview</div>
+        <div class="section-title">Navigation</div>
+
+        <p>After logging in, the dashboard opens to the <strong>Overview</strong> page. The navigation bar at the top provides access to four pages.</p>
+
+        <table class="guide-table">
+          <thead><tr><th>Page</th><th>What it's for</th></tr></thead>
+          <tbody>
+            <tr><td>Overview</td><td>AI threat landscape — per-category insights, evidence maturity, trend chart, top threats, and taxonomy coverage</td></tr>
+            <tr><td>Ask Agent</td><td>Natural-language Q&amp;A against the ingested corpus with streamed, cited answers</td></tr>
+            <tr><td>Sources</td><td>Full source table — browse, filter by category and technique, and drill into individual articles</td></tr>
+            <tr><td>Generate</td><td>Download pre-generated briefing slide decks (PPTX) and copy the latest newsletter for email</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- OVERVIEW -->
+      <div class="section">
+        <div class="section-label">Page 1</div>
+        <div class="section-title">Overview</div>
+
+        <p>The main intelligence view. Shows the AI threat landscape for the selected time window — <strong>Last Week</strong>, <strong>Last Month</strong>, or <strong>Last Quarter</strong>. Use the segmented control at the top right to switch. The ↺ button reloads data; the page also auto-refreshes every 5 minutes.</p>
+
+        <h3>Category cards</h3>
+        <p>One card per threat category. Click any insight to expand it for the full body, bullet points, and source citations.</p>
+
+        <p>The four categories are:</p>
+        <ul class="guide-list">
+          <li><span class="dot" style="background:#3583C9;"></span><strong>Traditional AI Threats</strong> — attacks on ML models, e.g. adversarial examples, data poisoning, model extraction, backdoors</li>
+          <li><span class="dot" style="background:#9C62A7;"></span><strong>LLM Threats</strong> — e.g. prompt injection, jailbreaks, RAG poisoning, guardrail bypass, data leakage</li>
+          <li><span class="dot" style="background:#19BC9D;"></span><strong>Agentic AI Threats</strong> — autonomous agent abuse, e.g. MCP vulnerabilities, tool misuse, coding agent risks</li>
+          <li><span class="dot" style="background:#FFAA22;"></span><strong>AI-Enabled Attacks</strong> — AI as an attack tool, e.g. deepfakes, AI-generated phishing, voice cloning</li>
+        </ul>
+
+        <h3>Evidence maturity bar</h3>
+        <p>A coloured bar on each card breaks down sources by how well-evidenced they are — from lab research through to threats confirmed in the wild. Click any segment to see the sources behind it.</p>
+
+        <table class="guide-table">
+          <thead><tr><th>Level</th><th>What it means</th></tr></thead>
+          <tbody>
+            <tr><td><span class="dot" style="background:#94a3b8;"></span>Research</td><td>Demonstrated in papers or controlled lab environments only — no adversary use</td></tr>
+            <tr><td><span class="dot" style="background:#3b82f6;"></span>Demonstrated</td><td>Working exploit or PoC exists and is reproducible against a real product</td></tr>
+            <tr><td><span class="dot" style="background:#f59e0b;"></span>Disclosed</td><td>Confirmed vulnerability in a specific product — no working public exploit yet</td></tr>
+            <tr><td><span class="dot" style="background:#ef4444;"></span>Observed</td><td>Confirmed in real-world use against real victims — at least one documented incident</td></tr>
+            <tr><td><span class="dot" style="background:#7f1d1d;"></span>Operational</td><td>In sustained or scaled use by one or more threat actors across multiple incidents</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Top threats</h3>
+        <p>A ranked list of the highest-importance sources in the period, with maturity badge, publisher, date, and category. Click any title to open the original article.</p>
+
+        <h3>Taxonomy coverage</h3>
+        <p>A tag matrix showing how many sources are tagged with each specific technique, organised by category. Click any tag to open a panel listing sources for that technique. For a full explanation of all taxonomy codes and technique definitions, go to the Sources page and click the <strong>Taxonomy</strong> button in the top-right.</p>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ASK AGENT -->
+      <div class="section">
+        <div class="section-label">Page 2</div>
+        <div class="section-title">Ask Agent</div>
+
+        <p>A chat interface for querying the ingested corpus in plain language. The agent searches the corpus, retrieves relevant evidence, and streams a structured answer with inline source citations. It searches the last 90 days by default — specify a timeframe in your question for broader or narrower results.</p>
+
+        <h3>Getting started</h3>
+        <p>On first load, six suggested prompts appear as clickable cards:</p>
+        <ul class="guide-list">
+          <li>Most important finding</li>
+          <li>LLM jailbreak trends</li>
+          <li>Agentic AI risks</li>
+          <li>MCP vulnerabilities</li>
+          <li>AI as an attack tool</li>
+          <li>Defender watch list</li>
+        </ul>
+        <p>Click one to send it immediately, or type your own question and press <strong>Enter</strong> or ↑.</p>
+
+        <h3>Writing effective questions</h3>
+        <p>Narrow your question by technique, category, actor, or timeframe. Broad questions produce generic answers.</p>
+
+        <div class="example">"What prompt injection techniques have been demonstrated against production LLMs in the last three months?"</div>
+        <div class="example">"Are there documented cases of autonomous AI agents being exploited in the wild?"</div>
+        <div class="example">"What should defenders watch in the next 90 days?"</div>
+        <div class="example">"Tell me about MCP vulnerabilities in the past 90 days"</div>
+
+        <h3>Reading the response</h3>
+        <p>Responses are structured with numbered findings, bold key terms, and inline citation numbers. Below each answer, source buttons link to the original articles. A confidence level and temporal scope are shown below the response.</p>
+
+        <p>If no relevant sources were found, a <strong>"General knowledge — not grounded in the corpus"</strong> badge appears above the response. Treat these answers with additional caution.</p>
+
+        <p>Conversation history is saved in your browser and persists across sessions. Use <strong>Clear history</strong> at the bottom of the input bar to start fresh.</p>
+
+        <div class="note">
+          <strong>Note</strong><br />
+          The agent does not search the open web — all answers are drawn from ingested and processed sources.<br /><br />
+          Very recent articles (last 24–48 hours) may not yet be in the corpus.<br /><br />
+          Dates reflect when a source was published, not necessarily when the underlying incident occurred — a report published this week may describe an incident that occurred earlier.
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- SOURCES -->
+      <div class="section">
+        <div class="section-label">Page 3</div>
+        <div class="section-title">Sources</div>
+
+        <p>A full table of every ingested and validated source. Use this page to browse the corpus, verify specific articles, or investigate a particular threat area in depth. The <strong>Legend</strong> and <strong>Taxonomy</strong> buttons in the top-right open reference panels explaining all labels, maturity levels, and taxonomy tag codes.</p>
+
+        <h3>Time period</h3>
+        <p>Use the pill switcher in the top-right to filter by <strong>7 days</strong>, <strong>30 days</strong>, <strong>90 days</strong>, or <strong>All time</strong>.</p>
+
+        <h3>Category tabs</h3>
+        <p>Tabs across the top filter sources by threat category. Selecting a category reveals sub-tag filter pills — click one or more to narrow by specific technique.</p>
+
+        <h3>Filters</h3>
+        <ul class="guide-list">
+          <li><strong>Label</strong> — filter by reading value: Essential, Recommended, Analyst, Background</li>
+          <li><strong>Importance</strong> — filter by evidence maturity: Operational, Observed, Disclosed, Demonstrated, Research</li>
+          <li><strong>★ Starred</strong> — show only sources you have starred</li>
+          <li><strong>Reports</strong> — show longer reports and their extracted sub-findings</li>
+        </ul>
+
+        <h3>Sorting</h3>
+        <p>Sort by <strong>Importance</strong> (evidence maturity, highest first) or <strong>Newest</strong> (publish date).</p>
+
+        <h3>Detail panel</h3>
+        <p>Click any row to expand its detail panel, showing the full summary, evidence maturity and reading value, source type, trust tier, taxonomy tags, and classification rationale. For longer reports, it may also show extracted attack walkthroughs, critical insights, and observed trends. This feature is still being developed and content may vary.</p>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- GENERATE -->
+      <div class="section">
+        <div class="section-label">Page 4</div>
+        <div class="section-title">Generate</div>
+
+        <p>Access pre-generated reports. Two tabs: <strong>Slides</strong> and <strong>Newsletter</strong>. Reports are generated automatically on a schedule — there is no on-demand generation trigger in the dashboard.</p>
+
+        <h3>Slides</h3>
+        <p>Select a reporting period — <strong>1 Month</strong>, <strong>1 Quarter</strong>, or <strong>1 Year</strong> — then click <strong>↓ Download PPTX</strong>. Each deck includes an executive summary, per-category threat developments, and key insights with source citations.</p>
+
+        <div class="note">
+          Slides are AI-generated and must be reviewed and edited by a human before use. Verify claims, check citations, and adjust framing as appropriate before presenting or sharing externally.
+        </div>
+
+        <h3>Newsletter</h3>
+        <p>Select <strong>Past week</strong> or <strong>Past month</strong> to load the latest newsletter. A live preview renders in the panel. Click <strong>Copy for email</strong> to copy the newsletter to your clipboard, then paste directly into Gmail or Outlook.</p>
+
+        <div class="note">
+          If a deck or newsletter shows "Not available yet", it has not been generated for that period. Check back after the next scheduled pipeline run.
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- FEEDBACK -->
+      <div class="section" style="margin-bottom:0;">
+        <div class="section-label">Support</div>
+        <div class="section-title">Feedback &amp; Issues</div>
+        <p>This is an early prototype and all feedback is welcome. Contact <strong>[ADMIN_EMAIL]</strong> to report issues or share observations.</p>
+      </div>
+
+    </div>
+
+    <div class="footer">The Horizon &nbsp;·&nbsp; Internal</div>
+
+  </div>
+</body>
+</html>
