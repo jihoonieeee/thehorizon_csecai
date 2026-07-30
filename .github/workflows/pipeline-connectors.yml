@@ -1,0 +1,149 @@
+name: Pipeline — Connectors (RSS + APIs)
+
+# Runs all structured connectors (RSS feeds, CISA KEV, LLM Discovery) — NOT arXiv.
+# arXiv is a separate workflow (pipeline-arxiv.yml) that runs only at 04:00 UTC.
+#
+# Schedule (UTC; SGT = UTC+8):
+#   04:00 — always runs (first slot of the day)
+#   16:00 — skips if this workflow already succeeded today
+#   20:00 — skips if this workflow already succeeded today
+#
+# Skip logic is per-workflow: only checks pipeline-connectors.yml runs, so a
+# classify failure downstream never causes connectors to re-fetch the same sources.
+
+on:
+  schedule:
+    - cron: '0 4 * * *'    # 12:00 SGT noon
+    - cron: '0 16 * * *'   # 00:00 SGT midnight (primary)
+    - cron: '0 20 * * *'   # 04:00 SGT (backup)
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Lookback window in days (3 / 7 / 30)'
+        default: '3'
+      skip_web_ingest:
+        description: 'Skip web discovery'
+        type: boolean
+        default: false
+
+permissions:
+  actions: read
+
+jobs:
+  preflight:
+    name: Preflight
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.check.outputs.should_skip }}
+      days:        ${{ steps.window.outputs.days }}
+    steps:
+      - name: Skip if already succeeded today
+        id: check
+        run: |
+          # 04:00 is always the first connector run of the day — never skip.
+          # 16:00 and 20:00 skip if this workflow already succeeded since midnight UTC.
+          # Manual dispatches never skip.
+          if [ "${{ github.event_name }}" != "schedule" ] || \
+             [ "${{ github.event.schedule }}" = "0 4 * * *" ]; then
+            echo "should_skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          TODAY=$(date -u +%Y-%m-%d)
+          CUTOFF="${TODAY}T00:00:00Z"
+          COUNT=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/pipeline-connectors.yml/runs?status=success&per_page=20" \
+            --jq "[.workflow_runs[] | select(.created_at > \"$CUTOFF\")] | length")
+          if [ "$COUNT" -gt 0 ]; then
+            echo "should_skip=true" >> "$GITHUB_OUTPUT"
+            echo "Connectors already succeeded today since $CUTOFF — skipping."
+          else
+            echo "should_skip=false" >> "$GITHUB_OUTPUT"
+            echo "No successful connector run found since $CUTOFF — proceeding."
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Determine ingest window
+        id: window
+        run: |
+          if [ -n "${{ github.event.inputs.days }}" ]; then
+            echo "days=${{ github.event.inputs.days }}" >> "$GITHUB_OUTPUT"
+          else
+            DAY_OF_WEEK=$(date -u +%u)
+            DAY_OF_MONTH=$(date -u +%-d)
+            if [ "$DAY_OF_MONTH" = "1" ]; then
+              echo "days=30" >> "$GITHUB_OUTPUT"
+            elif [ "$DAY_OF_WEEK" = "1" ]; then
+              echo "days=7"  >> "$GITHUB_OUTPUT"
+            else
+              echo "days=3"  >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+  connector-ingest:
+    name: L1–L3 Connector ingest (RSS + APIs)
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: needs.preflight.outputs.should_skip != 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Run connector ingest
+        run: node scripts/ingest.js --days ${{ needs.preflight.outputs.days }} --skip-arxiv
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BLOB_READ_WRITE_TOKEN:     ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          CRON_SECRET:               ${{ secrets.CRON_SECRET }}
+
+  web-ingest:
+    name: Web discovery ingest
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    continue-on-error: true
+    if: |
+      needs.preflight.outputs.should_skip != 'true' &&
+      github.event.inputs.skip_web_ingest != 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Tavily/SerpAPI + sitemaps
+        run: node scripts/ingestOperational.js --days 7 --skip-llm
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BLOB_READ_WRITE_TOKEN:     ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
+          TAVILY_API_KEY:            ${{ secrets.TAVILY_API_KEY }}
+          TAVILY_API_KEY_2:          ${{ secrets.TAVILY_API_KEY_2 }}
+          TAVILY_API_KEY_3:          ${{ secrets.TAVILY_API_KEY_3 }}
+          TAVILY_API_KEY_4:          ${{ secrets.TAVILY_API_KEY_4 }}
+          SERPAPI_API_KEY:           ${{ secrets.SERPAPI_API_KEY }}
+          EVA_API_KEY:               ${{ secrets.EVA_API_KEY }}
+          WEB_DISCOVERY_ENABLED:     "1"
+
+      - name: Claude web_search discovery
+        run: node scripts/discoverOperationalSources.js --max-queries 4 --concurrency 2
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          WEB_DISCOVERY_ENABLED:     "1"

@@ -1,0 +1,98 @@
+name: Pipeline — arXiv ingest
+
+# arXiv-only ingest. Runs once per day at 04:00 UTC (the low-traffic window).
+# Kept separate from RSS connectors because arXiv's 90s startup delay +
+# multi-query rate-limiting takes up to 55 min — running it inside
+# pipeline-connectors.yml would block or time out the fast RSS jobs.
+#
+# continue-on-error is set at the job level so a timeout (watchdog → exit 1)
+# marks this workflow as succeeded from GHA's perspective, which prevents
+# pipeline-arxiv.yml from re-running at 04:00 tomorrow thinking today's run failed.
+# The ingestion_run DB row is marked failed by the watchdog before exit.
+
+on:
+  schedule:
+    - cron: '0 4 * * *'    # 12:00 SGT — only slot arXiv runs
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Lookback window in days (3 / 7 / 30)'
+        default: '3'
+
+permissions:
+  actions: read
+
+jobs:
+  preflight:
+    name: Preflight
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.check.outputs.should_skip }}
+      days:        ${{ steps.window.outputs.days }}
+    steps:
+      - name: Skip if already succeeded today
+        id: check
+        run: |
+          # Manual dispatches never skip.
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "should_skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          TODAY=$(date -u +%Y-%m-%d)
+          CUTOFF="${TODAY}T00:00:00Z"
+          COUNT=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/pipeline-arxiv.yml/runs?status=success&per_page=10" \
+            --jq "[.workflow_runs[] | select(.created_at > \"$CUTOFF\")] | length")
+          if [ "$COUNT" -gt 0 ]; then
+            echo "should_skip=true" >> "$GITHUB_OUTPUT"
+            echo "arXiv already succeeded today since $CUTOFF — skipping."
+          else
+            echo "should_skip=false" >> "$GITHUB_OUTPUT"
+            echo "No successful arXiv run found since $CUTOFF — proceeding."
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Determine ingest window
+        id: window
+        run: |
+          if [ -n "${{ github.event.inputs.days }}" ]; then
+            echo "days=${{ github.event.inputs.days }}" >> "$GITHUB_OUTPUT"
+          else
+            DAY_OF_WEEK=$(date -u +%u)
+            DAY_OF_MONTH=$(date -u +%-d)
+            if [ "$DAY_OF_MONTH" = "1" ]; then
+              echo "days=30" >> "$GITHUB_OUTPUT"
+            elif [ "$DAY_OF_WEEK" = "1" ]; then
+              echo "days=7"  >> "$GITHUB_OUTPUT"
+            else
+              echo "days=3"  >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+  arxiv-ingest:
+    name: arXiv ingest (L1–L3)
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    if: needs.preflight.outputs.should_skip != 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Run arXiv ingest
+        run: node scripts/ingest.js --days ${{ needs.preflight.outputs.days }} --arxiv-only
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BLOB_READ_WRITE_TOKEN:     ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          CRON_SECRET:               ${{ secrets.CRON_SECRET }}
+          ARXIV_INITIAL_DELAY_MS:    "90000"

@@ -7,10 +7,14 @@
  * persists the snapshot to Supabase. Duplicate URLs are silently upserted.
  *
  * Usage:
- *   node scripts/ingest.js [--days N]
+ *   node scripts/ingest.js [--days N] [--skip-arxiv]
  *
  * Options:
- *   --days N   Lookback window in days (default 3; max 30).
+ *   --days N      Lookback window in days (default 3; max 30).
+ *   --skip-arxiv  Skip the arXiv connector. Used in connector-ingest (RSS/APIs)
+ *                 since arXiv runs as its own separate job (arxiv-ingest).
+ *   --arxiv-only  Run only the arXiv connector, skip all RSS feeds and other
+ *                 API connectors. Used by the arxiv-ingest GHA job.
  */
 
 import "dotenv/config";
@@ -24,9 +28,11 @@ import {
 } from "../lib/storage/ingestionRunStore.js";
 import { flushCostBuffer } from "../lib/llm/usagePersistence.js";
 
-const args   = process.argv.slice(2);
-const getArg = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i + 1] ? args[i + 1] : d; };
-const DAYS   = Math.min(parseInt(getArg("--days", "3"), 10), 30);
+const args        = process.argv.slice(2);
+const getArg      = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i + 1] ? args[i + 1] : d; };
+const DAYS        = Math.min(parseInt(getArg("--days", "3"), 10), 30);
+const SKIP_ARXIV  = args.includes("--skip-arxiv");
+const ARXIV_ONLY  = args.includes("--arxiv-only");
 
 createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY); // validate env early
 
@@ -45,6 +51,8 @@ const window = {
 console.log(`\n${"═".repeat(60)}`);
 console.log(`  L1–L3 Ingest — ${new Date().toISOString().slice(0, 16)} UTC`);
 console.log(`  Window: ${window.start_sgt.slice(0, 16)} → ${window.end_sgt.slice(0, 16)} SGT  (${DAYS}d / ${period})`);
+if (ARXIV_ONLY)  console.log(`  Mode: arXiv only (--arxiv-only)`);
+if (SKIP_ARXIV)  console.log(`  arXiv: skipped (--skip-arxiv)`);
 console.log(`${"═".repeat(60)}\n`);
 
 // Watchdog: ensures the process always exits cleanly within the GHA job timeout.
@@ -52,15 +60,22 @@ console.log(`${"═".repeat(60)}\n`);
 // event loop drains while a top-level await is still pending — e.g. when all
 // LLM/API calls fail fast (503 outage) and no timers remain to keep the loop alive.
 const WATCHDOG_MS = 55 * 60 * 1000; // 55 min — just under the 60-min GHA job timeout
-const watchdog = setTimeout(() => {
+const watchdog = setTimeout(async () => {
   console.error(`\n  [watchdog] Ingest exceeded ${WATCHDOG_MS / 60000} min — forcing exit(1)`);
+  if (runId) {
+    await failIngestionRun(runId, new Error("Watchdog timeout: ingest exceeded time limit")).catch(() => {});
+  }
   process.exit(1);
 }, WATCHDOG_MS);
 
 let runId;
 try {
   runId = await startIngestionRun();
-  const result = await collectRawSources(window, { enrichArxivFullText: true });
+  const result = await collectRawSources(window, {
+    enrichArxivFullText: true,
+    skipArxiv:  SKIP_ARXIV,
+    arxivOnly:  ARXIV_ONLY,
+  });
 
   const snapshot = {
     generated_at:                new Date().toISOString(),

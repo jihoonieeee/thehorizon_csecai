@@ -1,0 +1,199 @@
+name: Pipeline — Classify + Evidence + Insights
+
+# Runs classify (L4), rescrape, evidence (L5), and dashboard insights.
+# Fires ~30–60 min after each ingest window closes, giving connectors and arXiv
+# time to finish before classify starts.
+#
+# Schedule (UTC; SGT = UTC+8):
+#   05:30 — after the 04:00 connector + arXiv window (arXiv watchdog exits by 04:55)
+#   17:00 — after the 16:00 connector window (RSS finishes in ~10 min)
+#   21:00 — after the 20:00 connector window (backup slot)
+#
+# No skip check: classify gates on main_category IS NULL so it exits in seconds
+# when there is nothing new to process — re-running is never wasteful.
+# Insights generation is idempotent (window_key × category dedup in DB).
+#
+# Insights are generated at 17:00 and 21:00 on weekly/monthly/quarterly triggers.
+# The 05:30 slot never generates insights (equivalent to the old pre-ingest buffer).
+
+on:
+  schedule:
+    - cron: '30 5 * * *'   # after 04:00 connectors + arXiv
+    - cron: '0 17 * * *'   # after 16:00 connectors
+    - cron: '0 21 * * *'   # after 20:00 connectors (backup)
+  workflow_dispatch:
+    inputs:
+      classify_limit:
+        description: 'Max sources to classify (default 400)'
+        default: '400'
+      sig_limit:
+        description: 'Max significance LLM calls (default 100)'
+        default: '100'
+      evidence_limit:
+        description: 'Max sources for evidence extraction (default 150)'
+        default: '150'
+      run_insights:
+        description: 'Generate dashboard insights (week|month|quarter|all)'
+        type: string
+        default: ''
+
+permissions:
+  actions: read
+
+jobs:
+  preflight:
+    name: Preflight — insights flags
+    runs-on: ubuntu-latest
+    outputs:
+      run_weekly:    ${{ steps.flags.outputs.run_weekly }}
+      run_monthly:   ${{ steps.flags.outputs.run_monthly }}
+      run_quarterly: ${{ steps.flags.outputs.run_quarterly }}
+    steps:
+      - name: Compute insights flags
+        id: flags
+        run: |
+          RUN_INPUT="${{ github.event.inputs.run_insights }}"
+          SCHEDULE="${{ github.event.schedule }}"
+
+          if [ -n "$RUN_INPUT" ]; then
+            echo "$RUN_INPUT" | grep -qE 'week|all'    && W=true || W=false
+            echo "$RUN_INPUT" | grep -qE 'month|all'   && M=true || M=false
+            echo "$RUN_INPUT" | grep -qE 'quarter|all' && Q=true || Q=false
+          elif [ "$SCHEDULE" = "30 5 * * *" ]; then
+            # 05:30 slot mirrors the old pre-ingest buffer — no insights
+            W=false; M=false; Q=false
+          else
+            # 17:00 and 21:00 slots generate insights on weekly/monthly/quarterly days
+            DAY_OF_WEEK=$(date -u +%u)
+            DAY_OF_MONTH=$(date -u +%-d)
+            MONTH=$(date -u +%-m)
+            [ "$DAY_OF_WEEK"  = "1" ] && W=true || W=false
+            [ "$DAY_OF_MONTH" = "1" ] && M=true || M=false
+            if [ "$DAY_OF_MONTH" = "1" ] && \
+               ([ "$MONTH" = "1" ] || [ "$MONTH" = "4" ] || \
+                [ "$MONTH" = "7" ] || [ "$MONTH" = "10" ]); then
+              Q=true
+            else
+              Q=false
+            fi
+          fi
+          echo "run_weekly=$W"    >> "$GITHUB_OUTPUT"
+          echo "run_monthly=$M"   >> "$GITHUB_OUTPUT"
+          echo "run_quarterly=$Q" >> "$GITHUB_OUTPUT"
+
+  classify:
+    name: L4 Classify
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Run classify (L4a–f)
+        run: |
+          node scripts/classify.js \
+            --limit ${{ github.event.inputs.classify_limit || '400' }} \
+            --sig-limit ${{ github.event.inputs.sig_limit || '100' }}
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+
+  rescrape:
+    name: Rescrape short sources
+    needs: classify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: always() && needs.classify.result == 'success'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Rescrape short sources + purge failures
+        run: node scripts/rescrapeShortSources.js --min-chars 600 --limit 200 --purge-failed
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          JINA_API_KEY:              ${{ secrets.JINA_API_KEY }}
+          TAVILY_API_KEY:            ${{ secrets.TAVILY_API_KEY }}
+
+  evidence:
+    name: L5 Evidence extraction
+    needs: [classify, rescrape]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: always() && needs.classify.result == 'success' && (needs.rescrape.result == 'success' || needs.rescrape.result == 'failure')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Run evidence extraction (L5)
+        run: |
+          node scripts/extractEvidence.js \
+            --limit ${{ github.event.inputs.evidence_limit || '150' }} \
+            --since-hours 48
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
+
+  insights:
+    name: Dashboard insights
+    needs: [preflight, evidence]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: |
+      always() &&
+      needs.evidence.result == 'success' && (
+        needs.preflight.outputs.run_weekly    == 'true' ||
+        needs.preflight.outputs.run_monthly   == 'true' ||
+        needs.preflight.outputs.run_quarterly == 'true'
+      )
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Weekly insights
+        if: needs.preflight.outputs.run_weekly == 'true'
+        run: node scripts/generateDashboardInsights.js --window week
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Monthly insights
+        if: needs.preflight.outputs.run_monthly == 'true'
+        run: node scripts/generateDashboardInsights.js --window month
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Quarterly insights
+        if: needs.preflight.outputs.run_quarterly == 'true'
+        run: node scripts/generateDashboardInsights.js --window quarter
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
