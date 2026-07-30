@@ -97,6 +97,14 @@ directly address THAT object, not adjacent members of the same family:
 Ask: "Does this source directly address the specific thing asked, or merely a related topic?" If
 the answer is "related topic only" — exclude it and note the gap in missing[].
 
+SCAN-SOURCE RULE — when requested_objects contains "incident" and does NOT include "research",
+sources typed research_finding, benchmark_evaluation, or capability_demonstration may only be
+selected when they directly describe a specific named incident, exploitation event, or confirmed
+victim. A scan-result source that reports aggregate statistics ("X models found unsafe") without
+describing a discrete incident may be selected only as supplementary context — never as the
+primary evidence for an incident point. If the only available evidence for a topic is a scan
+source, report the gap in missing[] rather than selecting it as an incident source.
+
 ENTITY ROLE RULE — when the query plan includes "entity_role: victim" or "entity_role: weapon",
 apply directional filtering on top of the subject rule above:
 

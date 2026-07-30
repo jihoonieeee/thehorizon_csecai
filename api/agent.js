@@ -138,7 +138,7 @@ async function anthropicRequest(body, timeoutMs = 90000) {
 // on lookups is the main output-length (= latency) saving.
 const STRUCTURE_FULL = `STRUCTURE:
 1) "Assessment:" — ONE sentence only. The real signal and your confidence. Direct — no hedging clauses, no "it is worth noting".
-2) At most 4 numbered points. Each point has exactly this shape: [judgement line] then [sub-bullets] then [next point]. No text between the judgement and the sub-bullets. No text after the sub-bullets. The judgement line is the header; the sub-bullets carry the evidence. No taxonomy labels, no italic technique descriptions, no explanatory bridge sentences anywhere inside a point.
+2) At most 4 numbered points. Each point has exactly this shape: [judgement line] then [sub-bullets] then [next point]. No text between the judgement and the sub-bullets. No text after the sub-bullets. The judgement line is the header; the sub-bullets carry the evidence. No taxonomy labels, no italic technique descriptions, no explanatory bridge sentences anywhere inside a point. The judgement line itself must carry a [src-N] citation if it contains any specific claim, date, named actor, or product — do not leave it uncited.
 Order numbered points by descending operational impact — most severe or significant item first. Primary ordering signal: source maturity shown in context (operational > observed > disclosed > demonstrated > research). When maturity is absent, use source type as proxy (incident / threat_intelligence before research_finding / benchmark_evaluation / capability_demonstration). Recency is the tiebreaker when impact is equal.
 3) "So what:" — ONE sentence. No compound sentences.
 4) "Defenders:" — ONE sentence. The single most actionable step.
@@ -146,7 +146,7 @@ Order numbered points by descending operational impact — most severe or signif
 HARD LIMIT: Under 650 words total (excluding the SCOPE/CONFIDENCE footer). Count as you write. If you reach 500 words before the last point, cut sub-bullets to one per remaining point.`;
 const STRUCTURE_BRIEF = `STRUCTURE (direct lookup — answer the question and stop):
 1) "Assessment:" — ONE sentence. The direct answer and confidence.
-2) At most 3 numbered points. At most 2 sub-bullets per point ("- ") — one specific fact + [src-N] per sub-bullet. One clause per sub-bullet, no narrative explanation.
+2) At most 3 numbered points. At most 2 sub-bullets per point ("- ") — one specific fact + [src-N] per sub-bullet. One clause per sub-bullet, no narrative explanation. The numbered judgement line itself must carry a [src-N] if it contains any specific claim, date, named actor, or product.
 Do NOT add "So what" or "Defenders" lines.
 
 WORD BUDGET: Under 300 words. Stop when the question is answered.`;
@@ -769,12 +769,15 @@ export default async function handler(req, res) {
 
       const citationQa = qaCitations(cleanAnswer, dedupedCitations, sourceContentByUrl, deadUrls, normalizeUrl);
       dedupedCitations = citationQa.citations;
-      // Start from sourceRefs (already has non-selected sources nulled),
-      // then additionally null out anything the dead-link / relevance QA dropped.
-      let localSourceRefs = sourceRefs;
-      if (citationQa.removedUrls.size) {
-        localSourceRefs = sourceRefs.map(s => s?.url && citationQa.removedUrls.has(normalizeUrl(s.url)) ? { ...s, url: null } : s);
-      }
+      // Null localSourceRefs entries for any source not in the final dedupedCitations set.
+      // This covers both URL-dedup removals (step 2) and QA-dedup removals (qaCitations),
+      // ensuring text markers and source buttons stay in sync — a [src-N] badge in the
+      // answer text only survives stripUnlinkedMarkers if its sourceRefs entry has a URL,
+      // and that URL is only present when the source made it through both dedup passes.
+      const survivingRefs = new Set(dedupedCitations.map(c => c.ref));
+      let localSourceRefs = sourceRefs.map((s, i) =>
+        survivingRefs.has(`[src-${i + 1}]`) ? s : { ...s, url: null }
+      );
 
       // No on-topic source survived relevance QA → the retrieved sources shared
       // keywords but didn't address the question. Gracefully hand off to a
@@ -871,9 +874,26 @@ export default async function handler(req, res) {
         // Pass the note through stripUnlinkedMarkers so any [src-N] refs it contains only
         // appear if the source still has a live URL after QA.
         if (verify.ran && verify.unreconciled.length) {
-          const noteLines = verify.unreconciled.map(u => `- ${u}`).join("\n");
+          // Backstop scrub: remove QA-annotation phrases that slip through despite the
+          // prompt instruction. Haiku occasionally regresses to reviewer language.
+          const cleanedUnreconciled = verify.unreconciled
+            .map(u => u
+              .replace(/\bThe\s+ANSWER\b[^.]*\.\s*/gi, "")
+              .replace(/\bThis\s+(?:response|chatbot|answer)\b[^.]*\.\s*/gi, "")
+              .replace(/\bReaders?\s+should\b[^.]*\.\s*/gi, "")
+              .replace(/\bThe\s+(?:chatbot|model)\b[^.]*\.\s*/gi, "")
+              .trim()
+            )
+            .filter(Boolean);
+          const noteLines = cleanedUnreconciled.map(u => `- ${u}`).join("\n");
           const rawNote = `\n\n**Note — sources conflict on the following point(s):**\n${noteLines}`;
-          finalAnswer += stripUnlinkedMarkers(rawNote, localSourceRefs);
+          // Apply bounds guard before stripUnlinkedMarkers — verifier may cite [src-N]
+          // numbers that don't exist in the pool (e.g. it used internal numbering).
+          const guardedNote = rawNote.replace(/\[src-(\d+)\]/g, (m, n) => {
+            const num = parseInt(n, 10);
+            return (num >= 1 && num <= localSourceRefs.length) ? m : "";
+          });
+          finalAnswer += stripUnlinkedMarkers(guardedNote, localSourceRefs);
           verifyIssues.push({ code: "unreconciled_contradiction", severity: "repaired",
             detail: `Added reconciliation note for ${verify.unreconciled.length} source contradiction(s) not acknowledged in the original answer.` });
         }

@@ -45,8 +45,11 @@ the named entity was used as the attack instrument against a different target. W
 note is absent, this rule does not apply.
 
 NO UNSUPPORTED PRECEDENCE — Never assert "first", "unprecedented", "largest", or any
-historical comparative unless a cited source explicitly makes that assertion. Write
-"widely described as unprecedented [src-N]" if a source says so; otherwise omit.
+historical comparative unless a cited source explicitly uses those words. A citation
+does not authorise inferring precedence: if [src-N] describes an event without calling
+it "first" or "unprecedented", you may not add those words even with the citation.
+Write "widely described as unprecedented [src-N]" only when the source text itself
+contains that characterisation; otherwise omit the precedence claim entirely.
 
 NO TAXONOMY CODES IN ANSWER — Do not include attack-class codes (LLM03, ASI02, AE08,
 etc.) anywhere in the answer. They are Horizon's internal classification schema, not
@@ -64,9 +67,10 @@ SOURCE TYPE — The source context includes a "type:" field per source. Sources 
 research_finding, benchmark_evaluation, or capability_demonstration report aggregate
 measurements, lab experiments, or capability proofs — not discrete real-world incidents.
 Do not use a statistic from a research_finding ("352,000 suspicious models found") as
-evidence that a specific incident occurred or that a campaign was active in the
-timeframe. Use sources typed incident, threat_intelligence, or exploit_disclosure for
-incident claims.
+evidence that a specific incident occurred or that a campaign was active in the timeframe.
+Use sources typed incident, threat_intelligence, or exploit_disclosure for incident claims.
+If a scan statistic is genuinely relevant, place it in a separate standalone sentence after
+the incident facts — never as a sub-bullet inside an incident-narrative numbered point.
 
 NO META-STATEMENTS — do not describe the source retrieval process in your answer. Never write sentences like "all remaining candidates were research demonstrations", "no sources addressed this directly", "the remaining pool consisted of…", or "the only available sources were…". Those mechanics belong in the system's gap-reporting, not in the analyst answer. If coverage is thin, say so in one sentence about the evidence itself: "Only one confirmed incident falls in this window" — not about the source pool.
 

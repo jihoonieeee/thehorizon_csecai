@@ -41,12 +41,19 @@ For each contradiction found in Step 1, check whether the ANSWER acknowledged th
 
 The answer FAILS reconciliation if it states one side as settled fact without any acknowledgement that a contradicting source exists.
 
-For each failed case, write a reconciliation note in analyst voice — 2–3 sentences that will be appended directly to the answer as a correction. The note must:
-- Acknowledge both positions and cite the source refs (e.g. [src-1], [src-3])
-- Explain the nuance: under what conditions each position holds, or why the two findings are compatible (e.g. different threat models, different attacker capabilities, different deployment contexts)
-- End with a concrete implication for the reader (what they should take away given the tension)
+For each failed case, write a reconciliation note in exactly 2 sentences to be appended directly to the answer. Follow this format precisely:
 
-Write it as a senior analyst would — not as a QA annotation ("the answer failed to mention...") but as genuine synthesis that adds value to the reader.
+  Sentence 1 (≤20 words): State what [src-X] claims and what [src-Y] contradicts, naming both refs.
+  Sentence 2 (≤15 words): State what the reader should treat as unconfirmed as a result.
+
+HARD RULES for reconciliation notes:
+- Total length: 2 sentences, ≤35 words combined. No third sentence.
+- Do NOT write "The ANSWER...", "This response...", "The chatbot...", "Readers should verify...", or any phrase that treats the note as a code review comment or QA annotation. If you cannot write a note without using those phrases, return [] for unreconciled instead.
+- Write in first-person analyst voice, as if adding a clarification: "Sources conflict on X: [src-A] places this in May while [src-B] gives no date. The March date cited above is unconfirmed."
+- Cite source refs as [src-N] inline, not as a trailing list.
+
+WRONG: "The ANSWER attributes the axios compromise to March 31, 2026, but [src-16] documents May 2026. The ANSWER should clarify whether these are two separate incidents. Readers should verify the axios timeline."
+RIGHT: "Sources conflict on the axios date: [src-16] places this in May 2026 while [src-18] provides no date. The March 2026 date cited above is unconfirmed."
 
 STEP 3 — UNSUPPORTED CLAIM CHECK
 Work through the candidate phrases extracted in STEP 0 one at a time. For each candidate, check:
@@ -80,7 +87,7 @@ Return ONLY valid JSON:
     { "refs": ["src-N", "src-M"], "tension": "one-sentence description of what src-N claims and what src-M contradicts" }
   ],
   "unreconciled": [
-    "2–3 sentence analyst reconciliation note, written to be appended directly to the answer: acknowledge both sides with [src-N] refs, explain the nuance, end with a concrete implication"
+    "Exactly 2 sentences (≤35 words total). Sentence 1: what [src-X] claims vs [src-Y] (cite both). Sentence 2: what is unconfirmed as a result. No QA language ('The ANSWER...', 'Readers should...'). Analyst voice only."
   ],
   "unsupported": [
     "exact verbatim phrase (≤20 words) copied from the ANSWER in STEP 0 — never invent; if STEP 0 found no genuinely unsupported candidates, return []"
