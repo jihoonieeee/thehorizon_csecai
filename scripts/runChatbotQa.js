@@ -33,9 +33,18 @@ const ONLY_CAT = getArg("--category");
 const ONLY_IDS = getArg("--id")?.split(",").map(s => s.trim());
 const JSON_OUT = getArg("--json");
 
-for (const k of ["ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]) {
+for (const k of ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]) {
   if (!process.env[k]) { console.error(`Missing env: ${k}. This runner needs live keys.`); process.exit(1); }
 }
+// The chatbot runs on the platform seam (Gemini). Require a usable key.
+if (!process.env.PLATFORM_AI_API_KEY && !process.env.GEMINI_API_KEY) {
+  console.error("Missing LLM key: set PLATFORM_AI_API_KEY or GEMINI_API_KEY."); process.exit(1);
+}
+// requireAuth (api/agent.js) rejects unauthenticated requests. Use the dev bypass:
+// set AGENT_TEST_TOKEN and send it as the bearer token. Never reachable in prod
+// (guarded by VERCEL_ENV !== "production" in requireAuth).
+const AGENT_TEST_TOKEN = process.env.AGENT_TEST_TOKEN || "dev-qa-token";
+process.env.AGENT_TEST_TOKEN = AGENT_TEST_TOKEN;
 if (ONLY_CAT && !CATEGORY_KEYS.includes(ONLY_CAT)) {
   console.error(`Unknown --category. Valid: ${CATEGORY_KEYS.join(", ")}`); process.exit(1);
 }
@@ -45,11 +54,20 @@ function makeRes() {
   return { _status: 200, _json: null, status(c) { this._status = c; return this; }, json(o) { this._json = o; return this; }, setHeader() {}, write() {}, end() {} };
 }
 
-async function askAgent(question) {
+async function askAgent(question, { requestedCategory } = {}) {
   const res = makeRes();
-  await handler({ method: "POST", body: { query: question, stream: false } }, res);
+  const req = {
+    method: "POST",
+    headers: { authorization: `Bearer ${AGENT_TEST_TOKEN}` },
+    // Pass requestedCategory so category-specific cases use the dashboard's
+    // category filter, matching how real users invoke the chatbot.
+    body: { query: question, stream: false, ...(requestedCategory ? { category: requestedCategory } : {}) },
+  };
+  const t0 = Date.now();
+  await handler(req, res);
+  const ms = Date.now() - t0;
   if (!res._json || res._json.error) throw new Error(res._json?.error || `HTTP ${res._status}`);
-  return res._json;
+  return { payload: res._json, ms };
 }
 
 const cases = TEST_CASES
@@ -60,22 +78,28 @@ const V_COLOR = { Excellent: "\x1b[32m", Acceptable: "\x1b[33m", Fail: "\x1b[31m
 const RESET = "\x1b[0m";
 const tally = { Excellent: 0, Acceptable: 0, Fail: 0, Error: 0 };
 const report = [];
+let totalCost = 0;          // summed estimated_cost_usd across cases
+const latencies = [];       // ms per successful case
+const models = new Set();   // synthesis models actually used (sanity: gemini-only)
 
 console.log(`\nRunning ${cases.length} chatbot QA case(s)...\n`);
 
 for (const tc of cases) {
-  let payload, verdict, results = [], err = null;
+  let payload, verdict, results = [], err = null, ms = null;
   try {
-    payload = await askAgent(tc.question);
+    ({ payload, ms } = await askAgent(tc.question, { requestedCategory: tc.requestedCategory }));
     results = evaluateCase(tc, payload);
     verdict = verdictFor(results);
   } catch (e) {
     err = e.message; verdict = "Error";
   }
   tally[verdict] = (tally[verdict] || 0) + 1;
+  const cost = payload?.token_usage?.estimated_cost_usd || 0;
+  if (!err) { totalCost += cost; if (ms != null) latencies.push(ms); if (payload?.token_usage?.model) models.add(payload.token_usage.model); }
 
   const color = V_COLOR[verdict] || "";
-  console.log(`${color}[${verdict}]${RESET} ${tc.id} (${tc.category})  ${tc.question}`);
+  const meta = err ? "" : `  \x1b[90m(${(ms/1000).toFixed(1)}s · $${cost.toFixed(4)})${RESET}`;
+  console.log(`${color}[${verdict}]${RESET} ${tc.id} (${tc.category})  ${tc.question}${meta}`);
   if (err) {
     console.log(`      error: ${err}`);
   } else {
@@ -89,16 +113,30 @@ for (const tc of cases) {
     }
   }
   report.push({ id: tc.id, category: tc.category, question: tc.question, verdict, error: err,
+    latency_ms: ms, cost_usd: cost, token_usage: payload?.token_usage,
     results, answer: payload?.answer, citations: payload?.citations, source_refs: payload?.source_refs,
     confidence: payload?.confidence, temporal_scope: payload?.temporal_scope,
     qa_pass: payload?.qa_pass, qa_blocked: payload?.qa_blocked });
 }
 
+// Cost + latency stats.
+const okCount = latencies.length;
+const sorted = [...latencies].sort((a, b) => a - b);
+const pct = (p) => sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))] : 0;
+const median = pct(0.5), p95 = pct(0.95);
+const avgCost = okCount ? totalCost / okCount : 0;
+
 console.log(`\n${"─".repeat(60)}`);
 console.log(`  Excellent: ${tally.Excellent}   Acceptable: ${tally.Acceptable}   Fail: ${tally.Fail}   Error: ${tally.Error}`);
+console.log(`  Cost: $${totalCost.toFixed(4)} total · $${avgCost.toFixed(4)}/query   Latency: ${(median/1000).toFixed(1)}s median · ${(p95/1000).toFixed(1)}s p95`);
+console.log(`  Models used: ${[...models].join(", ") || "n/a"}`);
 console.log(`${"─".repeat(60)}\n`);
 
-if (JSON_OUT) { writeFileSync(JSON_OUT, JSON.stringify({ generated_at: new Date().toISOString(), tally, report }, null, 2)); console.log(`Wrote ${JSON_OUT}\n`); }
+if (JSON_OUT) {
+  const summary = { tally, total_cost_usd: totalCost, avg_cost_usd: avgCost, median_latency_ms: median, p95_latency_ms: p95, models_used: [...models] };
+  writeFileSync(JSON_OUT, JSON.stringify({ generated_at: new Date().toISOString(), summary, report }, null, 2));
+  console.log(`Wrote ${JSON_OUT}\n`);
+}
 
 // Non-zero exit if anything hard-failed, so CI/manual runs can gate on it.
 process.exit(tally.Fail > 0 || tally.Error > 0 ? 1 : 0);

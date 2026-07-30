@@ -25,7 +25,7 @@ import { executeTool, retrieveRelevant, enrichSourcesWithFullText, fetchEvidence
 import { planQuery } from "../lib/agent/queryPlanner.js";
 import { selectSources } from "../lib/agent/agentLlm.js";
 import { verifyAnswer } from "../lib/agent/verifyAnswer.js";
-import { ANTHROPIC_MODELS } from "../lib/llm/taskProfiles.js";
+import { platformChat, estimateCostUsd, modelForTier, platformConfig } from "../lib/llm/platformProvider.js";
 import { logAgentCostToDB } from "../lib/llm/usagePersistence.js";
 import { loadPrompt, loadPromptRaw, interpolate } from "../lib/prompts/promptLoader.js";
 import { requireAuth } from "../lib/api/requireAuth.js";
@@ -35,14 +35,12 @@ import { requireAuth } from "../lib/api/requireAuth.js";
 // conflates LLM01 prompt injection with LLM11 jailbreaks).
 const TAXONOMY_CONTEXT = loadPromptRaw("agent/taxonomy");
 
-const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
-const ANTHROPIC_VERSION = "2023-06-01";
-
-// USD per 1M tokens.
-const PRICING = {
-  sonnet: { input: 3.00, output: 15.00 },
-  haiku:  { input: 1.00, output:  5.00 },
-};
+// Concrete models the platform seam maps our tiers to (resolved once at cold
+// start). Used for cost accounting + the token_usage.model field. Provider and
+// key are swappable via PLATFORM_AI_* env vars — see lib/llm/platformProvider.js.
+const PLATFORM_PROVIDER = platformConfig().provider;
+const CHEAP_MODEL       = modelForTier("cheap",     PLATFORM_PROVIDER);
+const SYNTH_MODEL       = modelForTier("synthesis", PLATFORM_PROVIDER);
 
 const CATEGORY_LABELS = {
   traditional_ai_threats: "Traditional AI Threats",
@@ -51,81 +49,9 @@ const CATEGORY_LABELS = {
   ai_enabled_threats:     "AI-Enabled Threats",
 };
 
-// ── Anthropic transport ─────────────────────────────────────────────────────────
-
-async function anthropicStream(body, onText, timeoutMs = 90000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(ANTHROPIC_API_URL, {
-      method:  "POST",
-      signal:  controller.signal,
-      headers: {
-        "Content-Type":      "application/json",
-        "x-api-key":         process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": ANTHROPIC_VERSION,
-      },
-      body: JSON.stringify({ ...body, stream: true }),
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`Anthropic HTTP ${res.status}: ${text.slice(0, 300)}`);
-    }
-    const reader  = res.body.getReader();
-    const decoder = new TextDecoder();
-    const usage   = { input_tokens: 0, output_tokens: 0 };
-    let buf = "";
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split("\n");
-      buf = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith("data:")) continue;
-        const data = line.slice(5).trim();
-        if (!data || data === "[DONE]") continue;
-        let evt; try { evt = JSON.parse(data); } catch { continue; }
-        if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") onText(evt.delta.text);
-        else if (evt.type === "message_start") usage.input_tokens = evt.message?.usage?.input_tokens || 0;
-        else if (evt.type === "message_delta") usage.output_tokens = evt.usage?.output_tokens || usage.output_tokens;
-      }
-    }
-    clearTimeout(timer);
-    return usage;
-  } catch (err) {
-    clearTimeout(timer);
-    if (err.name === "AbortError") throw new Error(`Anthropic stream timed out after ${timeoutMs}ms`);
-    throw err;
-  }
-}
-
-async function anthropicRequest(body, timeoutMs = 90000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(ANTHROPIC_API_URL, {
-      method:  "POST",
-      signal:  controller.signal,
-      headers: {
-        "Content-Type":      "application/json",
-        "x-api-key":         process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": ANTHROPIC_VERSION,
-      },
-      body: JSON.stringify(body),
-    });
-    clearTimeout(timer);
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`Anthropic HTTP ${res.status}: ${text.slice(0, 300)}`);
-    }
-    return await res.json();
-  } catch (err) {
-    clearTimeout(timer);
-    if (err.name === "AbortError") throw new Error(`Anthropic request timed out after ${timeoutMs}ms`);
-    throw err;
-  }
-}
+// LLM transport now lives in lib/llm/platformProvider.js (platformChat), which
+// handles streaming + buffered calls for whichever provider PLATFORM_AI_PROVIDER
+// selects. The chatbot no longer talks to any vendor API directly.
 
 // ── System prompts ──────────────────────────────────────────────────────────────
 
@@ -492,21 +418,27 @@ export default async function handler(req, res) {
 
   const streaming = stream === true;
   const sse = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
-  const usageTotals = { sonnet_in: 0, sonnet_out: 0, haiku_in: 0, haiku_out: 0 };
-  const addHaiku = (u) => { usageTotals.haiku_in += u?.input_tokens || 0; usageTotals.haiku_out += u?.output_tokens || 0; };
+  // Provider-agnostic accounting: sum tokens + USD across every platform call,
+  // pricing each by the concrete model it actually used.
+  const usage = { in: 0, out: 0, costUsd: 0, synthModel: SYNTH_MODEL };
+  const record = (inTok, outTok, model) => {
+    usage.in  += inTok  || 0;
+    usage.out += outTok || 0;
+    usage.costUsd += estimateCostUsd({ model, inputTokens: inTok || 0, outputTokens: outTok || 0 });
+  };
+  const recordSynth = (inTok, outTok, model) => {
+    record(inTok, outTok, model);
+    if (model) usage.synthModel = model;  // track actual synthesis model used
+  };
+  // Helper calls (planner/selector/verifier) run on the cheap tier and return
+  // { input_tokens, output_tokens } — price them at the cheap model.
+  const addCheap = (u) => record(u?.input_tokens, u?.output_tokens, CHEAP_MODEL);
 
-  function costUsd() {
-    return (usageTotals.sonnet_in / 1e6) * PRICING.sonnet.input
-         + (usageTotals.sonnet_out / 1e6) * PRICING.sonnet.output
-         + (usageTotals.haiku_in / 1e6) * PRICING.haiku.input
-         + (usageTotals.haiku_out / 1e6) * PRICING.haiku.output;
-  }
+  function costUsd() { return usage.costUsd; }
   function tokenUsage(mode) {
-    const total_in = usageTotals.sonnet_in + usageTotals.haiku_in;
-    const total_out = usageTotals.sonnet_out + usageTotals.haiku_out;
     return {
-      input_tokens: total_in, output_tokens: total_out, total_tokens: total_in + total_out,
-      estimated_cost_usd: costUsd(), model: ANTHROPIC_MODELS.sonnet, rounds: 1, mode,
+      input_tokens: usage.in, output_tokens: usage.out, total_tokens: usage.in + usage.out,
+      estimated_cost_usd: usage.costUsd, model: usage.synthModel, rounds: 1, mode,
     };
   }
 
@@ -533,7 +465,7 @@ export default async function handler(req, res) {
 
     // ── 1. Plan (Haiku) ──────────────────────────────────────────────────────────
     const { plan, usage: planUsage } = await planQuery(query);
-    addHaiku(planUsage);
+    addCheap(planUsage);
     if (category && CATEGORY_LABELS[category]) plan.category = category;  // explicit dashboard filter wins
 
     // ── 2. Out of scope → decline, no LLM, no sources ───────────────────────────
@@ -546,7 +478,7 @@ export default async function handler(req, res) {
         retrieval_verdict: "n/a", qa_issues: [], qa_pass: true, qa_blocked: false,
         temporal_scope: plan.temporal.scope_label, token_usage: tokenUsage("out_of_scope"),
       };
-      logAgentCostToDB({ inputTokens: usageTotals.haiku_in, outputTokens: usageTotals.haiku_out, rounds: 0, costUsd: costUsd() }).catch(() => {});
+      logAgentCostToDB({ inputTokens: usage.in, outputTokens: usage.out, rounds: 0, costUsd: costUsd() }).catch(() => {});
       if (streaming) { sse({ type: "delta", text: msg }); sse({ type: "done", ...payload }); res.end(); return; }
       return res.status(200).json(payload);
     }
@@ -585,7 +517,7 @@ export default async function handler(req, res) {
     const sel = candidateSources.length
       ? await selectSources(query, candidateSources, plan, candidateSources.length, evidenceBySrcId)
       : { selected: [], verdict: "none", coverage: "none", missing: [], usage: { input_tokens: 0, output_tokens: 0 } };
-    addHaiku(sel.usage);
+    addCheap(sel.usage);
 
     const selectedSet = new Set(sel.selected);
     // Renumber 1..N so [src-N] in the answer always refers to position N in this
@@ -690,18 +622,24 @@ export default async function handler(req, res) {
       ? query.trim()
       : buildContextMessage(query, plan, sourceRefs, evidence, judgments, trends, cveResults, extendedMissing, temporalInsights);
     const messages = [...historyMessages, { role: "user", content: userContent }];
-    // Route brief direct-lookup queries to Haiku (3–4× faster streaming, quality
-    // equivalent for factual answers). Strategic/trend/comparison use Sonnet.
-    // AGENT_SYNTH_MODEL env var overrides both — used for A/B testing.
-    const synthModel = process.env.AGENT_SYNTH_MODEL
-      ? (ANTHROPIC_MODELS[process.env.AGENT_SYNTH_MODEL] || ANTHROPIC_MODELS.sonnet)
+    // Route brief direct-lookup queries to the cheap tier (faster, quality
+    // equivalent for factual answers). Strategic/trend/comparison use synthesis.
+    // AGENT_SYNTH_TIER env var overrides both — used for A/B testing.
+    const synthTier = process.env.AGENT_SYNTH_TIER
+      ? process.env.AGENT_SYNTH_TIER
       : BRIEF_QUERY_TYPES.has(plan.query_type)
-        ? ANTHROPIC_MODELS.haiku
-        : ANTHROPIC_MODELS.sonnet;
+        ? "cheap"
+        : "synthesis";
     // Token ceiling is a conciseness signal and a stream-timeout safety net.
     // The word-budget in the prompt is the binding constraint — this is the ceiling.
-    const maxTokens = briefAnswer ? 1200 : 2200;
-    const synthBody = { model: synthModel, max_tokens: maxTokens, system: cachedSystem, messages };
+    // On Gemini, maxOutputTokens also covers thinking tokens, so the full-answer
+    // ceiling is raised and thinking is bounded (1024) to guarantee answer room;
+    // brief answers run on Flash with thinking disabled (thinkingBudget 0).
+    const maxTokens = briefAnswer ? 1200 : 3000;
+    const synthArgs = {
+      tier: synthTier, system: cachedSystem, messages, maxTokens,
+      thinkingBudget: briefAnswer ? 0 : 1024,
+    };
 
     // A leading, un-streamed preamble for the general path so the user immediately
     // sees WHY there are no citations before the general answer arrives.
@@ -719,17 +657,16 @@ export default async function handler(req, res) {
         { type: "text", text: TAXONOMY_CONTEXT, cache_control: { type: "ephemeral" } },
         { type: "text", text: buildGeneralSystem(query), cache_control: { type: "ephemeral" } },
       ];
-      const gResp = await anthropicRequest({
-        model: ANTHROPIC_MODELS.sonnet, max_tokens: 2048, system: gSys,
+      const gResp = await platformChat({
+        tier: "synthesis", maxTokens: 3000, thinkingBudget: 1024, system: gSys,
         messages: [...historyMessages, { role: "user", content: query.trim() }],
       });
-      usageTotals.sonnet_in  += gResp.usage?.input_tokens  || 0;
-      usageTotals.sonnet_out += gResp.usage?.output_tokens || 0;
-      const gRaw = gResp.content.find(b => b.type === "text")?.text || "(No answer generated)";
+      recordSynth(gResp.inputTokens, gResp.outputTokens, gResp.model);
+      const gRaw = gResp.text || "(No answer generated)";
       const gp = parseResponse(gRaw);
       gp.answer = harvestAndCleanAnswer(normalizeCitationMarkers(gp.answer)).text;
       const preamble = "I found sources that share keywords but none that actually address this question, so I can't ground an answer in our corpus. Here's a general, best-effort answer from background knowledge — treat it as general context, not a corpus-verified finding.\n\n";
-      logAgentCostToDB({ inputTokens: usageTotals.sonnet_in + usageTotals.haiku_in, outputTokens: usageTotals.sonnet_out + usageTotals.haiku_out, rounds: 1, costUsd: costUsd() }).catch(() => {});
+      logAgentCostToDB({ inputTokens: usage.in, outputTokens: usage.out, rounds: 1, costUsd: costUsd() }).catch(() => {});
       return {
         answer: preamble + gp.answer, citations: [], source_refs: [],
         confidence: "low", confidence_reason: "No corpus sources addressed this specific question; general answer.",
@@ -887,7 +824,7 @@ export default async function handler(req, res) {
           // Prefer source-specific evidence; fall back to query evidence if none found
           evidence: sourceEvidence.length ? sourceEvidence : evidence,
         });
-        addHaiku(verify.usage);
+        addCheap(verify.usage);
         if (verify.ran && verify.unsupported.length) {
           verifyIssues.push({ code: "unsupported_claim", severity: "repaired",
             detail: `Fact-check flagged ${verify.unsupported.length} claim(s) not clearly supported by the cited sources: ${verify.unsupported.map(s => `"${s}"`).join("; ")}.` });
@@ -945,7 +882,7 @@ export default async function handler(req, res) {
       if (generalPreamble && !blocked) finalAnswer = generalPreamble + finalAnswer;
 
       const qaIssues = qaFindings.map(i => i.detail);
-      logAgentCostToDB({ inputTokens: usageTotals.sonnet_in + usageTotals.haiku_in, outputTokens: usageTotals.sonnet_out + usageTotals.haiku_out, rounds: 1, costUsd: costUsd() }).catch(() => {});
+      logAgentCostToDB({ inputTokens: usage.in, outputTokens: usage.out, rounds: 1, costUsd: costUsd() }).catch(() => {});
 
       return {
         answer:              finalAnswer,
@@ -981,13 +918,13 @@ export default async function handler(req, res) {
       if (generalPreamble) sse({ type: "delta", text: generalPreamble });
       let fullText = "", emitted = 0;
       try {
-        const usage = await anthropicStream(synthBody, (delta) => {
+        const r = await platformChat({ ...synthArgs, stream: true, onText: (delta) => {
           fullText += delta;
           const vis = visible(fullText);
           if (vis.length > emitted) { sse({ type: "delta", text: vis.slice(emitted) }); emitted = vis.length; }
-        });
-        usageTotals.sonnet_in += usage.input_tokens || 0;
-        usageTotals.sonnet_out += usage.output_tokens || 0;
+        } });
+        recordSynth(r.inputTokens, r.outputTokens, r.model);
+        if (!fullText) fullText = r.text || "";
         const payload = await buildPayload(fullText);
         // The 'done' answer already includes the preamble; the preamble text was
         // streamed separately above, so strip it from the streamed-answer field to
@@ -1001,10 +938,9 @@ export default async function handler(req, res) {
     }
 
     // ── Buffered path ────────────────────────────────────────────────────────────
-    const resp = await anthropicRequest(synthBody);
-    usageTotals.sonnet_in += resp.usage?.input_tokens || 0;
-    usageTotals.sonnet_out += resp.usage?.output_tokens || 0;
-    const rawText = resp.content.find(b => b.type === "text")?.text || "(No answer generated)";
+    const resp = await platformChat({ ...synthArgs, stream: false });
+    recordSynth(resp.inputTokens, resp.outputTokens, resp.model);
+    const rawText = resp.text || "(No answer generated)";
     return res.status(200).json(await buildPayload(rawText));
 
   } catch (err) {

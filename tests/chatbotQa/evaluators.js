@@ -68,6 +68,13 @@ const INSUFFICIENT_EVIDENCE = [
   /\bcannot\s+(?:confirm|verify|substantiate|find)\b/i,
   /\bthe\s+(?:corpus|database|data|dataset)\s+(?:does\s*n['o]?t|doesn['o]?t|do\s+not|does\s+not)\s+(?:contain|include|have|show|support)\b/i,
   /\bno\s+such\s+(?:evidence|claim|incident|report)\b/i,
+  /\bnot\s+specified\s+in\s+(?:the\s+)?(?:available|current|provided|our)?\s*(?:intelligence|sources?|corpus|data)\b/i,
+  /\b(?:the\s+)?(?:available|provided|current)\s+(?:intelligence|sources?|corpus|data)\s+(?:does?\s+not|do\s+not|doesn['o]?t|don['o]?t)\s+(?:specify|include|contain|report|provide|state|confirm|detail|mention)\b/i,
+  /\bhave?\s+not\s+been\s+(?:reported|confirmed|specified|disclosed|documented)\s+(?:by|in)\s+(?:the\s+)?(?:available|provided|current)?\s*(?:sources?|intelligence|corpus|data)\b/i,
+  /\b(?:the\s+)?(?:available|provided|current)\s+(?:intelligence|sources?|corpus|data)\s+do\s+not\s+(?:state|mention|detail|confirm|disclose)\b/i,
+  /\bnot\s+have\s+\w+(?:\s+\w+){0,8}\s+reported\s+in\s+the\s+(?:provided|available|current)\s+sources?\b/i,
+  /\bis\s+not\s+(?:confirmed|reported|specified|documented|stated|disclosed)\s+(?:by|in)\s+(?:the\s+)?(?:available|provided|current|our)?\s*(?:sources?|intelligence|corpus|data)\b/i,
+  /\b(?:the\s+)?sources?\s+do\s+not\s+(?:confirm|state|report|specify|mention|contain|include|detail)\b/i,
   // api/agent.js block message + validation phrasing:
   /\bcan['o]?t\s+give\s+a\s+reliable\s+answer\b/i,
   /\bno\s+cited\s+sources?\s+survived\b/i,
@@ -149,9 +156,17 @@ export function evalBreadthOfEvidence(payload, { min = 2 } = {}) {
   return R("breadth", true, distinct >= min, `${distinct} distinct sources (need ≥${min}).`);
 }
 
-/** No ellipses or placeholder tokens (slide-ready cleanliness). */
+/** No ellipses or placeholder tokens (slide-ready cleanliness).
+ * Strips quoted spans first so "placeholder text" cited from a source document
+ * ("…placeholder text…") doesn't produce a false positive. */
 export function evalNoEllipsesOrPlaceholders(payload) {
-  const m = (payload.answer || "").match(ELLIPSIS_PLACEHOLDER);
+  // Remove content inside typographic quotes and parenthetical asides that are
+  // quoting a source title/text — the word "placeholder" there is a factual cite,
+  // not a template artifact. We still catch it in raw prose.
+  const stripped = (payload.answer || "")
+    .replace(/[""][^""]{0,300}[""]/g, '""')   // "quoted spans"
+    .replace(/\(".*?"\)/g, '()');              // ("title like this")
+  const m = stripped.match(ELLIPSIS_PLACEHOLDER);
   return R("no_placeholders", true, !m, m ? `Placeholder/ellipsis found: "${m[0]}"` : "Clean.");
 }
 

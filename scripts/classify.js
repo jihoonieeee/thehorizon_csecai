@@ -333,7 +333,7 @@ async function main() {
       const toDateFix = children.filter(c => parent.date_published && c.date_published !== parent.date_published);
       if (toDateFix.length) {
         await supabase.from("sources")
-          .update({ date_published: parent.date_published, date_confidence: parent.date_confidence || "exact" })
+          .update({ date_published: parent.date_published, date_confidence: parent.date_confidence || "estimated" })
           .in("id", toDateFix.map(c => c.id));
         dateFixes += toDateFix.length;
       }

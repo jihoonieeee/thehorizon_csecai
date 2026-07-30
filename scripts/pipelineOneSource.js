@@ -2,8 +2,10 @@
 /**
  * pipelineOneSource.js — run the full L4a–L5 pipeline on specific source IDs.
  *
- * Defaults to LLM_PROVIDER_ORDER=anthropic; override by setting the env var first.
- *   e.g. LLM_PROVIDER_ORDER=gemini node scripts/pipelineOneSource.js <id>
+ * Provider is controlled by env vars (LLM_ONLY_GEMINI, LLM_PROVIDER_ORDER).
+ * When running locally with a .env file those are already set. Pass them
+ * explicitly if running without dotenv:
+ *   LLM_ONLY_GEMINI=1 node scripts/pipelineOneSource.js <id>
  *
  * Usage:
  *   node scripts/pipelineOneSource.js <id1> [id2 ...]
@@ -11,12 +13,10 @@
  * Runs:
  *   L4a  detectDigest + fanOutDigest  — split roundups into children
  *   L4b  understandAllSources         — classify + short_summary + tags
- *   L4c  qaClassificationLLM          — cross-model QA (skipped: Anthropic-only mode)
+ *   L4c  qaClassificationLLM          — cross-model QA verifier
  *   L4e  scoring pass                 — reading_value, importance, date upgrade
  *   L5   extractAllEvidence           — evidence items saved to evidence table
  */
-
-if (!process.env.LLM_PROVIDER_ORDER) process.env.LLM_PROVIDER_ORDER = "anthropic";
 
 import "dotenv/config";
 import { createClient }              from "@supabase/supabase-js";
@@ -51,9 +51,10 @@ const { data: sources, error: loadErr } = await sb
 if (loadErr) { console.error("Load error:", loadErr.message); process.exit(1); }
 if (!sources?.length) { console.error("No sources found for IDs:", IDS); process.exit(1); }
 
+const _providerLabel = process.env.LLM_ONLY_GEMINI ? "Gemini (locked)" : (process.env.LLM_PROVIDER_ORDER?.split(",")[0] || "default");
 console.log(`\n${"═".repeat(W)}`);
 console.log(`  Pipeline run — ${new Date().toISOString().slice(0,16)} UTC`);
-console.log(`  Provider: Anthropic (Claude Sonnet)  Sources: ${sources.length}`);
+console.log(`  Provider: ${_providerLabel}  Sources: ${sources.length}`);
 console.log(`  IDs: ${IDS.join(", ")}`);
 console.log(`${"═".repeat(W)}\n`);
 

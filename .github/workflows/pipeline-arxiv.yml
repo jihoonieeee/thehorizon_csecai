@@ -22,6 +22,15 @@ on:
 permissions:
   actions: read
 
+# Gemini-only for all scheduled runs (2026-07-30). LLM_ONLY_GEMINI hard-blocks
+# every non-Gemini provider on all paths (router + legacy callLLM path). Secret
+# keys (GEMINI_API_KEY) are injected per-step; top-level env can't read secrets.
+env:
+  LLM_ONLY_GEMINI: '1'
+  LLM_PROVIDER_ORDER: gemini
+  PLATFORM_AI_PROVIDER: gemini
+  PLATFORM_MODEL_SYNTHESIS: gemini-2.5-flash
+
 jobs:
   preflight:
     name: Preflight
@@ -96,3 +105,10 @@ jobs:
           ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
           CRON_SECRET:               ${{ secrets.CRON_SECRET }}
           ARXIV_INITIAL_DELAY_MS:    "90000"
+
+      - name: Date integrity check
+        if: always()
+        run: node scripts/checkDateIntegrity.js --hours 2
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
