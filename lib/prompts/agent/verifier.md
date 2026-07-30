@@ -87,7 +87,7 @@ Return ONLY valid JSON:
     { "refs": ["src-N", "src-M"], "tension": "one-sentence description of what src-N claims and what src-M contradicts" }
   ],
   "unreconciled": [
-    "Exactly 2 sentences (≤35 words total). Sentence 1: what [src-X] claims vs [src-Y] (cite both). Sentence 2: what is unconfirmed as a result. No QA language ('The ANSWER...', 'Readers should...'). Analyst voice only."
+    "Sources conflict on [topic]: [src-X] says [claim A] while [src-Y] says [claim B]. The [specific claim] above is unconfirmed."
   ],
   "unsupported": [
     "exact verbatim phrase (≤20 words) copied from the ANSWER in STEP 0 — never invent; if STEP 0 found no genuinely unsupported candidates, return []"
