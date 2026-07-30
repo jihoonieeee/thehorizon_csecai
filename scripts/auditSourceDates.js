@@ -87,15 +87,23 @@ const DATE_META_SELECTORS = [
   /<time[^>]+datetime=["']([^"']+)["']/i,
   /itemprop=["']datePublished["'][^>]*(?:datetime|content)=["']([^"']+)["']/i,
 ];
+// Use local calendar date when the raw string has an explicit timezone offset,
+// to avoid UTC-conversion shifting the editorial publish date by 1 day.
+function extractLocalDate(raw) {
+  if (!raw) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const withTz = raw.match(/^(\d{4}-\d{2}-\d{2})T[\d:.]+[+-]\d{2}:?\d{2}$/);
+  if (withTz) return withTz[1];
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+
 function metaDateFromHtml(html) {
   for (const re of DATE_META_SELECTORS) {
     const m = re.exec(html);
     if (m?.[1]) {
-      const d = new Date(m[1]);
-      if (!isNaN(d.getTime())) {
-        const iso = d.toISOString().slice(0, 10);
-        if (iso >= "2010-01-01" && iso <= new Date(Date.now() + DAY).toISOString().slice(0, 10)) return iso;
-      }
+      const iso = extractLocalDate(m[1]);
+      if (iso && iso >= "2010-01-01" && iso <= new Date(Date.now() + DAY).toISOString().slice(0, 10)) return iso;
     }
   }
   return null;
@@ -133,7 +141,12 @@ function compare(stored, ev) {
   const sd = new Date(stored);
   const sy = sd.getUTCFullYear(), sm = sd.getUTCMonth() + 1, sD = sd.getUTCDate();
   if (ev.iso) {
-    const diff = Math.abs(new Date(ev.iso) - sd) / DAY;
+    // Compare as calendar dates (YYYY-MM-DD) to avoid noon-UTC vs midnight-UTC rounding artifacts.
+    // A stored timestamp of T12:00:00Z and a URL date of YYYY-MM-DD (parsed as T00:00:00Z) differ
+    // by 12 hours — Math.round(0.5)=1 would flag this as a 1-day error when the dates match.
+    const storedDate = stored.slice(0, 10);
+    if (storedDate === ev.iso) return { flag: false, diffDays: 0 };
+    const diff = Math.abs(new Date(ev.iso) - new Date(storedDate)) / DAY;
     return diff > TOL_DAYS ? { flag: true, diffDays: Math.round(diff) } : { flag: false, diffDays: Math.round(diff) };
   }
   // partial URL/title date

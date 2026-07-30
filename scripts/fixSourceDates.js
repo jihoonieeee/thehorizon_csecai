@@ -144,18 +144,26 @@ function extractMonthDate(html) {
   return iso;
 }
 
+// Use local calendar date when the raw string has an explicit timezone offset,
+// preventing UTC-conversion from shifting editorial publish dates by 1 day.
+function extractLocalDate(raw) {
+  if (!raw) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const withTz = raw.match(/^(\d{4}-\d{2}-\d{2})T[\d:.]+[+-]\d{2}:?\d{2}$/);
+  if (withTz) return withTz[1];
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+
 function extractDateFromHtml(html) {
   // 1. Try structured meta/JSON-LD first (most reliable)
   for (const re of DATE_META_SELECTORS) {
     const m = re.exec(html);
     if (m?.[1]) {
-      const d = new Date(m[1]);
-      if (!isNaN(d.getTime())) {
-        const iso = d.toISOString().slice(0, 10);
-        // Sanity: must be between 2010 and today+1
-        if (iso >= "2010-01-01" && iso <= new Date(Date.now()+86400000).toISOString().slice(0,10)) {
-          return iso;
-        }
+      const iso = extractLocalDate(m[1]);
+      // Sanity: must be between 2010 and today+1
+      if (iso && iso >= "2010-01-01" && iso <= new Date(Date.now()+86400000).toISOString().slice(0,10)) {
+        return iso;
       }
     }
   }
