@@ -11,9 +11,13 @@ The intended audience is cybersecurity professionals, policy analysts, and decis
 - Backend: Vercel serverless functions in /api (Node.js ESM)
 - Database: Supabase (PostgreSQL) via @supabase/supabase-js with service role key
 - File storage: Vercel Blob for snapshot JSON archives
-- LLM enrichment: OpenAI (primary, gpt-4o-mini) or Gemini (fallback, gemini-2.5-flash)
+- LLM: Gemini-only (gemini-2.5-flash for pipeline bulk; chatbot synthesis also on Flash). All LLM traffic gated by `LLM_ONLY_GEMINI=1`. Swappable via `PLATFORM_AI_*` env vars — see `lib/llm/platformProvider.js`.
 - Deployment: Vercel Hobby plan (12 serverless function limit)
-- Scheduling: GitHub Actions — pipeline.yml runs the full pipeline three times daily: 04:00 UTC pre-ingest buffer (12:00 SGT, catches fresh arXiv), 16:00 UTC primary (00:00 SGT midnight), 20:00 UTC backup (04:00 SGT); expanded ingest windows on Mondays (7d) and 1st of month (30d); insights only on weekly/monthly/quarterly triggers
+- Scheduling: GitHub Actions — **three** separate workflows:
+    - `pipeline-connectors.yml` — L1–L3 RSS/API ingest (04:00 / 16:00 / 20:00 UTC)
+    - `pipeline-arxiv.yml`      — arXiv ingest only (04:00 UTC)
+    - `pipeline-classify.yml`   — L4 classify + L5 evidence + insights (05:30 / 17:00 / 21:00 UTC)
+  Expanded windows on Mondays (7d) and 1st of month (30d). Insights only on weekly/monthly/quarterly triggers.
 
 
 ## Environment Variables
@@ -22,13 +26,20 @@ SUPABASE_URL — Supabase project URL
 SUPABASE_SERVICE_ROLE_KEY — service role key (bypasses row-level security)
 BLOB_READ_WRITE_TOKEN — Vercel Blob token for snapshot archives
 CRON_SECRET — bearer token required for all admin/mutation API endpoints
-OPENAI_API_KEY — used for source enrichment (gpt-4o-mini); primary LLM
-GEMINI_API_KEY — fallback LLM (gemini-2.5-flash); free tier is 20 req/day
-ANTHROPIC_API_KEY — frontier analysis layers + web_search (evidence/discovery fallback)
+GEMINI_API_KEY — primary LLM key (gemini-2.5-flash); also GEMINI_API_KEY_2 for rotation
+ANTHROPIC_API_KEY — kept for web_search discovery fallback only; not used for pipeline LLM
 TAVILY_API_KEY (+ _2.._4) — Layer 1B web discovery: primary search provider (returns page content)
 SERPAPI_API_KEY — Layer 1B web discovery: Google/Scholar/News breadth provider
 WEB_DISCOVERY_ENABLED=1 — opt-in switch for the Layer 1B/1C web-discovery branch
 WEB_DISCOVERY_PROVIDER — optional: force tavily | serpapi | anthropic
+
+LLM routing env vars (set in .env and CI workflow env: blocks):
+LLM_ONLY_GEMINI=1         — hard lock: no non-Gemini calls on any path
+LLM_PROVIDER_ORDER=gemini — router provider order
+PLATFORM_AI_PROVIDER=gemini          — chatbot platform seam provider
+PLATFORM_MODEL_SYNTHESIS=gemini-2.5-flash — chatbot synthesis model
+LLM_DAILY_TOKEN_BUDGET    — router budget guard (500K connectors/arXiv, 2M classify)
+AGENT_TEST_TOKEN          — dev-only auth bypass for chatbot QA harness (never in prod)
 
 
 ## Repository Structure
@@ -47,7 +58,7 @@ WEB_DISCOVERY_PROVIDER — optional: force tavily | serpapi | anthropic
     /lib/pipeline/slides     — Layers 7–8: slide planning, deck build, PPTX render, diagrams, slide QA
     /lib/pipeline/*.js       — root orchestration: runPipeline.js, layerQa.js, dashboard.js
   /lib/config   — controlled vocabularies: sourceTypes, categories, tags
-  /lib/llm      — LLM provider abstraction (callLLM.js, OpenAI/Gemini rotation)
+  /lib/llm      — LLM provider abstraction: platformProvider.js (chatbot seam), llmRouter.js (pipeline task routing), callLLM.js (legacy), taskProfiles.js (per-task model assignment)
   /lib/prompts  — prompt templates used by pipeline layers
   /lib/schemas  — source object shape definitions and validation helpers
   /lib/storage  — Supabase client, snapshot persistence, Vercel Blob
@@ -142,6 +153,18 @@ The primary daily cron runs at 16:00 UTC (midnight SGT). The reporting window is
 npm run dev — starts Vite dev server on :5173 (frontend only)
 npx vercel dev — starts full local environment with API functions on :3000 (use this)
 
+Provider smoke test (re-run after any key/model change):
+  node scripts/checkLlmProvider.js [--stream]
+
+Chatbot QA harness (62 cases, ~$0.017/query on Flash):
+  node scripts/runChatbotQa.js [--category hallucination_resistance] [--json report.json]
+
+Post-run date audit:
+  node scripts/checkDateIntegrity.js [--hours=N]
+
+Post-run health summary (also runs automatically in CI):
+  node scripts/ingestRunSummary.js
+
 
 ## Operational Scripts (run locally — mirrors the GitHub Actions pipeline)
 
@@ -183,3 +206,23 @@ Other useful scripts:
   node scripts/understandCorpus.js                    — recovery: re-classify sources with claim_extraction_status=NULL
 
 scripts/archive/ — one-time data-fix and superseded scripts (kept for reference)
+
+
+## Key Design Decisions (continued)
+
+LLM routing: all pipeline and chatbot LLM calls go through a two-layer stack:
+  1. `lib/llm/platformProvider.js` — chatbot seam. `platformChat({ tier, ... })` resolves
+     the active provider/model from PLATFORM_AI_* env and handles streaming/buffered calls.
+     Swap providers by changing three env vars; no code changes. Currently: Gemini Flash.
+  2. `lib/llm/llmRouter.js` — pipeline task-aware routing. Each task in taskProfiles.js
+     declares its preferred provider and Gemini tier. LLM_ONLY_GEMINI=1 collapses all
+     tasks to Gemini regardless of task profile preference.
+
+Date integrity: `validateDateIntegrity()` in eligibilityFlags.js runs at ingest time on
+every source, catching collection-bleed (scrape timestamp stored as publish date) and future
+dates. Sources with uncertain dates are flagged needs_review=true and excluded from period
+reports and the chatbot until upgradeDate() can recover the date from full_text at classify time.
+
+Chatbot auth bypass (dev only): set AGENT_TEST_TOKEN in .env.local, pass it as
+`Authorization: Bearer <token>`. requireAuth checks VERCEL_ENV !== "production" before
+honouring this bypass — it is unreachable in Vercel deployments.
