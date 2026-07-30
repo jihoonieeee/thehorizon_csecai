@@ -118,7 +118,7 @@ apply directional filtering on top of the subject rule above:
     instrument against a different target. Exclude sources where it is the victim.
 
 Mixed-role sources (entity was both targeted and abused within the same incident) qualify for
-victim queries; note the dual role in reasoning[].
+victim queries; note the dual role in the reasoning field.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 4. BUILD EVIDENCE COVERAGE
@@ -245,6 +245,8 @@ Before returning verify:
 8. Source count fits the query type (no padding, no arbitrary cap for all_matching).
 9. Exhaustive requests were not silently reduced to representative examples.
 10. Verdict reflects evidence coverage, not source count.
+11. SCAN-SOURCE RULE: if requested_objects is incident-only, no research_finding/benchmark_evaluation/capability_demonstration source was selected as primary incident evidence.
+12. ENTITY ROLE RULE: if entity_role is set in the query plan, directional filtering was applied and only sources matching that role were selected.
 
 Return JSON only.
 ```

@@ -767,13 +767,31 @@ export default async function handler(req, res) {
       const citedRefUrls = [...citedRefIdx].map(i => sourceRefs[i]?.url).filter(Boolean);
       const deadUrls = await findDeadUrls([...dedupedCitations.map(c => c.url), ...citedRefUrls], normalizeUrl);
 
-      const citationQa = qaCitations(cleanAnswer, dedupedCitations, sourceContentByUrl, deadUrls, normalizeUrl);
+      // Build a rewrite map: duplicate [src-N] refs that share a URL with an earlier
+      // citation are rewritten to point at the first (canonical) ref for that URL.
+      // e.g. if [src-2] and [src-5] share a URL, [src-5] → [src-2] in answer text.
+      // This keeps citations visible and clickable rather than silently dropping them.
+      const urlToCanonicalRef = new Map();
+      const refRewriteMap = new Map();
+      for (const c of citations) {
+        const url = c.url ? normalizeUrl(c.url) : null;
+        if (!url) continue;
+        if (!urlToCanonicalRef.has(url)) {
+          urlToCanonicalRef.set(url, c.ref);
+        } else if (urlToCanonicalRef.get(url) !== c.ref) {
+          refRewriteMap.set(c.ref, urlToCanonicalRef.get(url));
+        }
+      }
+      // Apply ref rewrites to the clean answer before further processing.
+      const rewrittenAnswer = refRewriteMap.size
+        ? cleanAnswer.replace(/\[src-(\d+)\]/g, (m) => refRewriteMap.get(m) || m)
+        : cleanAnswer;
+
+      const citationQa = qaCitations(rewrittenAnswer, dedupedCitations, sourceContentByUrl, deadUrls, normalizeUrl);
       dedupedCitations = citationQa.citations;
       // Null localSourceRefs entries for any source not in the final dedupedCitations set.
-      // This covers both URL-dedup removals (step 2) and QA-dedup removals (qaCitations),
-      // ensuring text markers and source buttons stay in sync — a [src-N] badge in the
-      // answer text only survives stripUnlinkedMarkers if its sourceRefs entry has a URL,
-      // and that URL is only present when the source made it through both dedup passes.
+      // After QA, some sources are removed; nulling their URL causes stripUnlinkedMarkers
+      // to clean up their [src-N] badges, keeping text and buttons in sync.
       const survivingRefs = new Set(dedupedCitations.map(c => c.ref));
       let localSourceRefs = sourceRefs.map((s, i) =>
         survivingRefs.has(`[src-${i + 1}]`) ? s : { ...s, url: null }
@@ -788,8 +806,8 @@ export default async function handler(req, res) {
       // no [src-N] corpus citations — suppress the general-fallback trigger so the
       // NVD-grounded answer reaches the user.
       const hasCveGrounding = cveResults.some(r => r.found);
-      const wc = cleanAnswer.split(/\s+/).filter(Boolean).length;
-      const substantive = wc > 60 || /\b\d/.test(cleanAnswer);
+      const wc = rewrittenAnswer.split(/\s+/).filter(Boolean).length;
+      const substantive = wc > 60 || /\b\d/.test(rewrittenAnswer);
       if (!isGeneral && dedupedCitations.length === 0 && substantive && !hasCveGrounding) {
         return await synthGeneralFallback();
       }
@@ -797,7 +815,8 @@ export default async function handler(req, res) {
       // Drop [src-N] markers whose source QA de-linked (dead/marketing/off-topic)
       // so the prose shows no orphan non-clickable numbers — only real links remain.
       // Pre-pass: strip markers whose index exceeds the source pool (hallucinated refs).
-      const bounded = cleanAnswer.replace(/\[src-(\d+)\]/g, (m, n) => {
+      // Use rewrittenAnswer so duplicate-ref rewrites (e.g. [src-5]→[src-2]) carry through.
+      const bounded = rewrittenAnswer.replace(/\[src-(\d+)\]/g, (m, n) => {
         const num = parseInt(n, 10);
         return (num >= 1 && num <= localSourceRefs.length) ? m : "";
       });
@@ -859,9 +878,8 @@ export default async function handler(req, res) {
             detail: `Fact-check flagged ${verify.unsupported.length} claim(s) not clearly supported by the cited sources: ${verify.unsupported.map(s => `"${s}"`).join("; ")}.` });
           // 2+ unsupported claims: the answer contains fabricated specifics; cap at moderate.
           if (verify.unsupported.length >= 2 && confidence === "high") confidence = "moderate";
-          // Fix 2 — append a visible note so the user knows which specific claims
-          // the fact-checker could not trace to any provided source. Mirrors the
-          // unreconciled-contradictions note pattern already in this block.
+          // Append a visible note listing claims the fact-checker could not trace
+          // to any provided source summary or EV line.
           const unsupLines = verify.unsupported.map(u => `- ${u.slice(0, 300)}`).join("\n");
           const rawUnsupNote = `\n\n**Note — the following specific claims could not be verified against the provided source summaries and may be inaccurate:**\n${unsupLines}`;
           finalAnswer += rawUnsupNote;

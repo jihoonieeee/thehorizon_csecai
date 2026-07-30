@@ -44,7 +44,7 @@ The answer FAILS reconciliation if it states one side as settled fact without an
 For each failed case, write a reconciliation note in exactly 2 sentences to be appended directly to the answer. Follow this format precisely:
 
   Sentence 1 (≤20 words): State what [src-X] claims and what [src-Y] contradicts, naming both refs.
-  Sentence 2 (≤15 words): State what the reader should treat as unconfirmed as a result.
+  Sentence 2 (≤15 words): State which specific claim above is unconfirmed as a result.
 
 HARD RULES for reconciliation notes:
 - Total length: 2 sentences, ≤35 words combined. No third sentence.
