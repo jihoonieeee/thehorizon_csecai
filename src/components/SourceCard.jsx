@@ -22,11 +22,7 @@ export function SourceCard({ source, featured = false }) {
     ? source.ai_specificity_score
     : null;
 
-  const previewText =
-    source.short_summary ||
-    source.summary ||
-    source.full_text ||
-    "";
+  const previewText = source.short_summary || "";
   const maxLen = featured ? 600 : 380;
 
   return (

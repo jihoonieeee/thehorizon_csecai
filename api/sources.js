@@ -224,7 +224,7 @@ export default async function handler(req, res) {
           ...rest,
           date_collected: collected_date || null,
           label: rv ?? readingValueOf(s) ?? null,
-          short_summary:  s.short_summary || s.analyst_brief || s.summary || null,
+          short_summary:  s.short_summary || s.analyst_brief || null,
           analyst_brief:  s.analyst_brief || null,
           // Editorial audience fit — set by Layer 3 LLM.
           reading_value:  readingValueOf(s) ?? null,       // essential|recommended|analyst|background

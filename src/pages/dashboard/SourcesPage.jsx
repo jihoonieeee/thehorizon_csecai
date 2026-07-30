@@ -385,7 +385,7 @@ function AtlasChainPanel({ atlas }) {
 function SourceDetail({ s, isAdmin, onUpdateDate, onConfirmDate, onDelete, onSaveClassification, onSaveSummary, knownTags, busy }) {
   const imp  = s.importance || {};
   const mech = s.mechanism || null;
-  const full = s.short_summary || s.summary;
+  const full = s.short_summary || "";
   const domainTag = t => /^(TAI|LLM|ASI|AE)\d/.test(t);
   const [dateVal, setDateVal] = useState((s.date_published || "").slice(0, 10));
   const dirty = dateVal && dateVal !== (s.date_published || "").slice(0, 10);
@@ -1256,10 +1256,10 @@ export function SourcesPage() {
                                 }
                               </>
                             )}
-                            {(s.short_summary || s.summary) && (
+                            {s.short_summary && (
                               <div className="hz-src-summary">
-                                {(s.short_summary || s.summary).slice(0, 150)}
-                                {(s.short_summary || s.summary).length > 150 ? "…" : ""}
+                                {s.short_summary.slice(0, 150)}
+                                {s.short_summary.length > 150 ? "…" : ""}
                               </div>
                             )}
                           </div>
