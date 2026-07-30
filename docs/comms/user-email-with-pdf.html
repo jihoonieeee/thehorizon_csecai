@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Horizon — Account Credentials</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Helvetica, Arial, sans-serif;
+      background: #f3f4f6;
+      color: #111827;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .screen-hint {
+      text-align: center;
+      font-size: 11px;
+      color: #9ca3af;
+      padding: 16px;
+      font-style: italic;
+    }
+
+    .page {
+      max-width: 680px;
+      margin: 24px auto 48px;
+      background: #ffffff;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+    }
+
+    .header {
+      padding: 48px 56px 40px;
+    }
+
+    .header-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: #9ca3af;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    .header-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: #111827;
+      letter-spacing: -0.02em;
+      margin-bottom: 10px;
+    }
+
+    .header-sub {
+      font-size: 14px;
+      color: #374151;
+      line-height: 1.75;
+      margin-bottom: 28px;
+    }
+
+    .creds-box {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+
+    .creds-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #9ca3af;
+      margin-bottom: 14px;
+    }
+
+    .creds-row {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .creds-row:last-child { margin-bottom: 0; }
+
+    .creds-key {
+      font-size: 12px;
+      font-weight: 600;
+      color: #6b7280;
+      min-width: 80px;
+      flex-shrink: 0;
+    }
+
+    .creds-val {
+      font-size: 14px;
+      font-weight: 600;
+      color: #111827;
+      font-family: "SF Mono", "Fira Code", monospace;
+      letter-spacing: 0.01em;
+    }
+
+    .dashboard-link {
+      display: block;
+      background: #111827;
+      color: #ffffff;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 13px 20px;
+      border-radius: 8px;
+      text-align: center;
+      letter-spacing: 0.01em;
+    }
+
+    .first-login-note {
+      font-size: 13px;
+      color: #6b7280;
+      line-height: 1.7;
+      padding: 12px 16px;
+      background: #f9fafb;
+      border-radius: 4px;
+      margin-top: 16px;
+    }
+
+    .divider {
+      height: 1px;
+      background: #e5e7eb;
+      margin: 0 56px;
+    }
+
+    .inner {
+      padding: 32px 56px 48px;
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: #9ca3af;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #111827;
+      letter-spacing: -0.01em;
+      margin-bottom: 12px;
+    }
+
+    p {
+      font-size: 14px;
+      color: #374151;
+      line-height: 1.8;
+      margin-bottom: 0;
+    }
+
+    .attachment-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-top: 32px;
+    }
+
+    .attachment-icon {
+      font-size: 20px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .attachment-text {
+      font-size: 13px;
+      color: #374151;
+      line-height: 1.7;
+    }
+
+    .attachment-text strong {
+      color: #111827;
+      display: block;
+      font-size: 13px;
+      margin-bottom: 2px;
+    }
+
+    .footer {
+      border-top: 1px solid #e5e7eb;
+      padding: 20px 56px;
+      font-size: 12px;
+      color: #9ca3af;
+      text-align: center;
+    }
+
+    @media print {
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      body { background: #fff; }
+      .screen-hint { display: none; }
+      .page { box-shadow: none; margin: 0; max-width: 100%; }
+      .dashboard-link { background: #111827 !important; color: #fff !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <p class="screen-hint">To use: open in browser → Select All (⌘A) → Copy → Paste into Gmail or Outlook.</p>
+
+  <div class="page">
+
+    <div class="header">
+      <div class="header-label">The Horizon</div>
+      <div class="header-title">Thank you for signing up!</div>
+      <div class="header-sub">
+        Your access to the AI threat intelligence dashboard has been set up.
+        Log in with the credentials below and follow the steps in the attached user guide to get started.
+      </div>
+
+      <div class="creds-box">
+        <div class="creds-label">Login credentials</div>
+        <div class="creds-row">
+          <span class="creds-key">Email</span>
+          <span class="creds-val">[RECIPIENT_EMAIL]</span>
+        </div>
+        <div class="creds-row">
+          <span class="creds-key">Password</span>
+          <span class="creds-val">[TEMP_PASSWORD]</span>
+        </div>
+      </div>
+
+      <a class="dashboard-link" href="https://the-horizon-csec.vercel.app/">Open The Horizon →</a>
+
+      <div class="first-login-note">
+        On first login you will be prompted to set a permanent password. Contact <strong>[ADMIN_EMAIL]</strong> if you have any trouble accessing the dashboard.
+      </div>
+
+      <div class="attachment-note">
+        <div class="attachment-icon">📎</div>
+        <div class="attachment-text">
+          <strong>User Guide (attached)</strong>
+          The attached PDF walks through each feature of the dashboard — logging in, the Overview, Ask Agent, Sources, and Generate pages.
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="inner">
+      <div class="section-label">Support</div>
+      <div class="section-title">Feedback &amp; Issues</div>
+      <p>This is an early prototype and all feedback is welcome. Contact <strong>[ADMIN_EMAIL]</strong> to report issues or share observations.</p>
+    </div>
+
+    <div class="footer">The Horizon &nbsp;·&nbsp; Internal</div>
+
+  </div>
+</body>
+</html>
