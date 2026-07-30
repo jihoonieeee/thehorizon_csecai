@@ -1388,7 +1388,7 @@ export function SourcesPage() {
           <span className="hz-page-info">
             {page} / {totalPages}
             <span className="hz-page-info-range">
-              &nbsp;({(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, grouped.length)} of {grouped.length})
+              &nbsp;({(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, grouped.length)} of {filtered.filter(s => !s.parent_source_id).length})
             </span>
           </span>
           <button
