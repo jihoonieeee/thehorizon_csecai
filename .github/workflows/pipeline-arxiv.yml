@@ -30,6 +30,8 @@ env:
   LLM_PROVIDER_ORDER: gemini
   PLATFORM_AI_PROVIDER: gemini
   PLATFORM_MODEL_SYNTHESIS: gemini-2.5-flash
+  # arXiv L3 validation only (~50–200 sources). 500K is a generous ceiling.
+  LLM_DAILY_TOKEN_BUDGET: '500000'
 
 jobs:
   preflight:
@@ -109,6 +111,13 @@ jobs:
       - name: Date integrity check
         if: always()
         run: node scripts/checkDateIntegrity.js --hours 2
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: Run health summary
+        if: always()
+        run: node scripts/ingestRunSummary.js
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
