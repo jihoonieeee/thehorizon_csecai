@@ -79,6 +79,12 @@ Keyword overlap alone is insufficient. A source mentioning Hugging Face is not r
 "Hugging Face incidents" unless it describes an incident involving Hugging Face services,
 repositories, models, users, or infrastructure.
 
+Adjacency is not relevance. A source about malicious content planted in a different platform's
+registry (e.g. ClawHub, npm, PyPI) is NOT an incident involving Hugging Face even if the source
+discusses AI supply-chain themes in the same breath. The named entity must be the direct platform,
+service, infrastructure, or user-base that was attacked or affected — not a thematically related
+system in the same ecosystem. Apply this strictly for all named entities, not just Hugging Face.
+
 SPECIFIC SUBJECT RULE — when the question names a specific object, only select sources that
 directly address THAT object, not adjacent members of the same family:
   "image classifier attacks"  → sources about image classifier evasion ONLY
@@ -90,6 +96,21 @@ directly address THAT object, not adjacent members of the same family:
 
 Ask: "Does this source directly address the specific thing asked, or merely a related topic?" If
 the answer is "related topic only" — exclude it and note the gap in missing[].
+
+ENTITY ROLE RULE — when the query plan includes "entity_role: victim" or "entity_role: weapon",
+apply directional filtering on top of the subject rule above:
+
+  entity_role: victim — select only sources where the named entity is the primary affected party:
+    its infrastructure, platform, users, models, library, registry, or service was compromised,
+    exploited, or attacked. Exclude sources where the entity appears as the attack tool, delivery
+    mechanism, or comparison point. A source about an AI tool being abused to attack a third party
+    is NOT a victim source for that tool.
+
+  entity_role: weapon — select only sources where the named entity was used as the attack
+    instrument against a different target. Exclude sources where it is the victim.
+
+Mixed-role sources (entity was both targeted and abused within the same incident) qualify for
+victim queries; note the dual role in reasoning[].
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 4. BUILD EVIDENCE COVERAGE

@@ -29,8 +29,8 @@ function renderInline(text, sourceRefs) {
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(text.slice(last, m.index));
     if (m[1] !== undefined) {
-      // **bold**
-      parts.push(<strong key={m.index}>{m[1]}</strong>);
+       // **bold** — recurse so [src-N] inside a bolded heading are converted too
+      parts.push(<strong key={m.index}>{renderInline(m[1], sourceRefs)}</strong>);
     } else {
       // [src-N] inline citation
       const n = parseInt(m[2], 10);
@@ -152,7 +152,7 @@ function StructuredText({ text, sourceRefs }) {
         // Legacy section heading (THREAT 1:, KEY SOURCES:, all-caps)
         if (lines.length === 1 && isHeading(lines[0])) {
           const hText = lines[0].replace(/\*\*/g, "");
-          return <div key={bi} className="hz-response-heading">{hText}</div>;
+          return <div key={bi} className="hz-response-heading">{renderInline(hText, sourceRefs)}</div>;
         }
 
         // Exploitation status badge line

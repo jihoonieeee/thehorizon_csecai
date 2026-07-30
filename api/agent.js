@@ -139,6 +139,7 @@ async function anthropicRequest(body, timeoutMs = 90000) {
 const STRUCTURE_FULL = `STRUCTURE:
 1) "Assessment:" — ONE sentence only. The real signal and your confidence. Direct — no hedging clauses, no "it is worth noting".
 2) At most 4 numbered points. Each point has exactly this shape: [judgement line] then [sub-bullets] then [next point]. No text between the judgement and the sub-bullets. No text after the sub-bullets. The judgement line is the header; the sub-bullets carry the evidence. No taxonomy labels, no italic technique descriptions, no explanatory bridge sentences anywhere inside a point.
+Order numbered points by descending operational impact — most severe or significant item first. Primary ordering signal: source maturity shown in context (operational > observed > disclosed > demonstrated > research). When maturity is absent, use source type as proxy (incident / threat_intelligence before research_finding / benchmark_evaluation / capability_demonstration). Recency is the tiebreaker when impact is equal.
 3) "So what:" — ONE sentence. No compound sentences.
 4) "Defenders:" — ONE sentence. The single most actionable step.
 
@@ -424,6 +425,15 @@ function buildContextMessage(query, plan, sources, evidence, judgments, trends, 
     if (readable.length) {
       parts.push(`EXCLUSION CONSTRAINT: The user explicitly asked to exclude: ${readable.join(", ")}. Do not cite or feature these in the answer.`);
     }
+  }
+
+  // Surface entity role so the ENTITY ROLE rule in the system prompt activates.
+  // The note references the question direction only — not the expanded entity list —
+  // so it stays coherent for category-term queries ("AI programming tools" etc.).
+  if (plan.entity_role === "victim") {
+    parts.push(`ENTITY ROLE (victim): The question asks about incidents where the entity named in the question is the PRIMARY TARGET or VICTIM — the platform, service, library, or infrastructure that was attacked. Only describe incidents where that entity was directly affected. Do not describe incidents where it was the attack instrument or where only a related adjacent system was affected.`);
+  } else if (plan.entity_role === "weapon") {
+    parts.push(`ENTITY ROLE (weapon): The question asks about incidents where the entity named in the question was used AS THE ATTACK TOOL against a different target. Only describe incidents where it was the instrument of attack. Do not describe incidents where it is the victim.`);
   }
 
   parts.push(``, `RELEVANT SOURCES (cite as [src-N]):`, srcBlock);
@@ -783,7 +793,12 @@ export default async function handler(req, res) {
 
       // Drop [src-N] markers whose source QA de-linked (dead/marketing/off-topic)
       // so the prose shows no orphan non-clickable numbers — only real links remain.
-      const linkedAnswer = stripUnlinkedMarkers(cleanAnswer, localSourceRefs);
+      // Pre-pass: strip markers whose index exceeds the source pool (hallucinated refs).
+      const bounded = cleanAnswer.replace(/\[src-(\d+)\]/g, (m, n) => {
+        const num = parseInt(n, 10);
+        return (num >= 1 && num <= localSourceRefs.length) ? m : "";
+      });
+      const linkedAnswer = stripUnlinkedMarkers(bounded, localSourceRefs);
 
       const groundingText = [
         ...sourceRefs.map(s => `${s.title || ""} ${s.summary || ""}`),

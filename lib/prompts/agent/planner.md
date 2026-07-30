@@ -37,6 +37,8 @@ Return ONLY valid JSON. No prose or markdown.
 
   "source_types": [],       // optional: restrict to e.g. ["research_finding","incident_report"]
 
+  "entity_role": "victim|weapon|null",   // victim = named entity is the target; weapon = named entity is the attack tool; null = no directional constraint
+
   "temporal": {
     "temporal_intent": "none|recent|current|bounded_period|historical|forward_looking",
     "time_field": "event_date|publication_date|disclosure_date|effective_date|either",
@@ -127,6 +129,28 @@ Put explicit exclusions in must_exclude.
       → must_exclude: ["LLM11_jailbreak_safety_bypass"]
 
 Do not weaken or discard explicit constraints while generating broader search terms.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3B — DETECT ENTITY ROLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Detect whether the question specifies a directional role for the named entity.
+
+  "victim" — the entity is being attacked, targeted, compromised, or affected.
+    Signals: "targeted", "attacked", "breached", "exploited in", "vulnerability in",
+    "incidents targeting X", "attacks on X", "compromise of X", "affecting X".
+    Example: "Which incidents targeted AI coding tools?" → victim
+
+  "weapon" — the entity is used to conduct an attack against a different target.
+    Signals: "using AI to attack", "AI-powered attack", "AI-assisted attack",
+    "used AI agents to compromise", "attacks using X".
+    Example: "Which attacks used AI coding assistants to exfiltrate data?" → weapon
+
+  null — no clear directional signal. Default for: "incidents involving X",
+    "what happened to/with X", "summarise compromises connected to X",
+    "what has X been used for", or any query where both directions plausibly apply.
+
+Set entity_role only when the directional signal is unambiguous. Default to null.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 4 — RESOLVE TIME CORRECTLY
@@ -254,6 +278,25 @@ LEXICAL RECALL RULES:
    "AI model theft" → ["model extraction","model stealing","model distillation","training data theft","model weights"]
    Do not ask a follow-up question unless the request cannot be searched meaningfully without one.
 
+8. CATEGORY-TERM EXPANSION — when the query names a tool category rather than a specific product,
+   expand it to the named tools in that category. Add to both search_terms and entities[].
+   Prioritise the most distinctive names; total search_terms must stay under 14.
+
+   "AI coding assistant" / "AI programming tool" / "AI developer tool" →
+     Claude Code, Cursor, Windsurf, GitHub Copilot, Codeium, Tabnine, Devin, Aider
+
+   "LLM proxy" / "LLM gateway" / "LLM middleware" →
+     LiteLLM, vLLM, LlamaIndex, LangChain, Ollama
+
+   "model registry" / "model hub" / "model repository" →
+     Hugging Face, ClawHub, PyPI, npm
+
+   "AI workflow builder" / "AI orchestration" →
+     Langflow, Flowise, CrewAI
+
+   "MCP server" / "MCP tool" →
+     Model Context Protocol, MCP, tool invocation, function calling
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SCOPE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -278,7 +321,7 @@ Before returning, verify:
 2. answer_shape matches the requested output (list for enumeration, assessment for strategic).
 3. exhaustive requests ("all", "every") use all_matching.
 4. requested_objects match what the user expects to receive.
-5. every named entity is preserved exactly in entities[]; this is critical for downstream retrieval and tool dispatch. Entities to always extract: CVE IDs (CVE-YYYY-NNNNN, required for NVD lookup); AI model names (GPT-4, Claude, Gemini, Llama); tool/framework names (LangChain, vLLM, LlamaIndex, LiteLLM, Hugging Face, GitHub Copilot, Ollama); threat actor names (APT28, Lazarus, Volt Typhoon); named campaigns; organisation names that are the subject of the question.
+5. every named entity is preserved exactly in entities[]; this is critical for downstream retrieval and tool dispatch. Entities to always extract: CVE IDs (CVE-YYYY-NNNNN, required for NVD lookup); AI model names (GPT-4, Claude, Gemini, Llama); tool/framework names (LangChain, vLLM, LlamaIndex, LiteLLM, LangFlow, Hugging Face, GitHub Copilot, Claude Code, Cursor, Windsurf, Ollama); threat actor names (APT28, Lazarus, Volt Typhoon); named campaigns; organisation names that are the subject of the question.
 6. explicit inclusions and exclusions appear in must_include / must_exclude.
 7. time_field matches the event being queried (event_date for incidents, disclosure_date for CVEs).
 8. incident period filters use event_date, NOT publication_date.
@@ -286,7 +329,8 @@ Before returning, verify:
 10. category and taxonomy filters are not so narrow they exclude boundary sources; null when unsure.
 11. search terms improve recall: acronyms have expansions, important concepts have lexical variants.
 12. ambiguities are recorded when they would materially change the retrieval strategy.
-13. the JSON contains no prose outside the schema.
+13. entity_role is set when the question clearly specifies the named entity as victim or weapon; null otherwise.
+14. the JSON contains no prose outside the schema.
 
 Return the JSON object only.
 ```
