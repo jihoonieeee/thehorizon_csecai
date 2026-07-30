@@ -21,7 +21,7 @@
  * instead of the old always-on 4-tool blob. Sonnet input is much smaller.
  */
 
-import { executeTool, retrieveRelevant, enrichSourcesWithFullText, fetchEvidenceForSources } from "../lib/agent/agentTools.js";
+import { executeTool, retrieveRelevant, enrichSourcesWithFullText, fetchEvidenceForSources, fetchEvidenceForCandidates } from "../lib/agent/agentTools.js";
 import { planQuery } from "../lib/agent/queryPlanner.js";
 import { selectSources } from "../lib/agent/agentLlm.js";
 import { verifyAnswer } from "../lib/agent/verifyAnswer.js";
@@ -561,13 +561,26 @@ export default async function handler(req, res) {
       .filter(s => !s.url || !isMarketingBlog(s.url))
       .map((s, i) => ({ ...s, ref: `src-${i + 1}` }));
 
+    // Pre-fetch evidence facts for all candidate sources so the selector can see
+    // atomic facts extracted from the source body (beyond the 1000-char summary).
+    // Grouped by source_id in JS; sources without L5 extraction get no facts line.
+    const candidateIds = candidateSources.map(s => s.id).filter(Boolean);
+    const candidateEvidenceRows = candidateIds.length
+      ? await fetchEvidenceForCandidates(candidateIds).catch(() => [])
+      : [];
+    const evidenceBySrcId = {};
+    for (const ev of candidateEvidenceRows) {
+      if (!evidenceBySrcId[ev.source_id]) evidenceBySrcId[ev.source_id] = [];
+      if (evidenceBySrcId[ev.source_id].length < 3) evidenceBySrcId[ev.source_id].push(ev);
+    }
+
     // Pass candidateSources.length as the pool count — not ret.count. ret.count
     // equals ret.sources.length (the post-ranking top-N), so the only difference
     // between ret.count and candidateSources.length is marketing blogs removed.
     // Telling the selector "35 of 35" when it sees 33 (2 blogs filtered) is
     // misleading; the selector IS seeing the full usable pool.
     const sel = candidateSources.length
-      ? await selectSources(query, candidateSources, plan, candidateSources.length)
+      ? await selectSources(query, candidateSources, plan, candidateSources.length, evidenceBySrcId)
       : { selected: [], verdict: "none", coverage: "none", missing: [], usage: { input_tokens: 0, output_tokens: 0 } };
     addHaiku(sel.usage);
 

@@ -16,6 +16,13 @@ You will receive:
 2. A structured query plan describing intent, requested objects, entities, taxonomy, temporal constraints, inclusions, exclusions, answer shape, and exhaustiveness.
 3. A candidate source pool.
 
+EVIDENCE FACTS — some sources include a "facts:" line containing up to 3 atomic facts
+extracted from the source body by the pipeline's analysis layer. These facts are
+authoritative — they come from the source text itself, beyond the truncated summary.
+Use them to assess whether a source covers the requested object, entity, or time period
+when the summary alone is insufficient. A source without a "facts:" line has not yet
+been through the extraction layer; assess it from its summary alone.
+
 Your job is to select the smallest evidence set that can answer the request completely and faithfully.
 
 This is not a general ranking task. Select a source only when it contributes a specific fact, event, measurement, explanation, or independent corroboration that the answer requires.
