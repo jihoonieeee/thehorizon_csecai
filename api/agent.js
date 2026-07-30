@@ -399,8 +399,11 @@ function buildContextMessage(query, plan, sources, evidence, judgments, trends, 
     const typePart  = s.source_type ? ` | type: ${s.source_type}` : "";
     const readPart  = s.reading_value && s.reading_value !== "background" ? ` | reading: ${s.reading_value}` : "";
     const matPart   = s.maturity ? ` | maturity: ${s.maturity}` : "";
-    // Title on the first line so it can't be skimmed past during source selection.
-    return `[${s.ref}] TITLE: ${s.title}\n  ${s.publisher || "?"} — ${s.date || "n.d."} (${s.trust_tier || "unknown"} trust${typePart}${readPart}${matPart})\n  ${s.summary || ""}${q ? `\n  quote: "${q}"` : ""}`;
+    // event_date: when the underlying incident/event occurred (may differ from pub date).
+    // Shown explicitly so Sonnet can distinguish "published this week about an older event"
+    // from "event occurred this week" when applying the TEMPORAL CONSTRAINT.
+    const eventPart = s.event_date ? ` | event_date: ${s.event_date}` : "";
+    return `[${s.ref}] TITLE: ${s.title}\n  ${s.publisher || "?"} — pub: ${s.date || "n.d."}${eventPart} (${s.trust_tier || "unknown"} trust${typePart}${readPart}${matPart})\n  ${s.summary || ""}${q ? `\n  quote: "${q}"` : ""}`;
   }).join("\n\n");
 
   const parts = [
