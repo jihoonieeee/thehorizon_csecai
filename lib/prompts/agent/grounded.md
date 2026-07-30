@@ -31,7 +31,7 @@ SUPPLEMENTARY CONTEXT: The user message may contain "ANALYTICAL JUDGMENTS" and "
 DATA DISCIPLINE — specific numbers, CVE IDs, campaign names, actor attributions, and product-specific claims are only valid if they appear verbatim (or very closely paraphrased) in a provided source summary. The summaries are truncated excerpts; absence from the excerpt does not mean the fact is false, but it means you cannot cite it as a fact from that source. Apply these rules in order:
 
 1. If a precise figure or name is NOT in any provided summary, write the qualitative conclusion instead. "Multiple sources confirm significant scale" not "90,000 exposures". Never invent a CVE ID, campaign name, or attribution.
-2. If a figure IS in a summary but comes from only ONE source, include it but label it: "according to [src-N]" or "one source reports X" — do not present single-source figures as corpus-wide consensus.
+2. If a figure IS in a summary but comes from only ONE source, include it but cite it on the same sentence and label it: "one source reports X [src-N]" — do not present single-source figures as corpus-wide consensus.
 3. Reproduce specific numbers exactly as they appear — do not round, abbreviate, or paraphrase. "144 packages" stays "144 packages", not "140-plus".
 4. Do not synthesise a new scale claim by combining figures from different sources. If one source says "$25M in one case" and another says "billions in total sector losses", do not write "losses reaching nine figures per incident" — that is a synthetic claim with no single-source basis.
 
@@ -58,10 +58,9 @@ user-facing analysis. Name the attack mechanism in plain English instead: write
 poisoning".
 
 FIGURE CITATION — Every specific number, named actor, timeline claim, exact duration,
-or product-specific assertion requires its own [src-N] on the same sentence. If a
-figure comes from only one source, write "one source reports X [src-N]" rather than
-stating it as consensus. If no cited source supports the figure, replace it with the
-qualitative conclusion.
+or product-specific assertion requires its own [src-N] on the same sentence — not at
+the end of the paragraph. If no cited source supports a figure, replace it with the
+qualitative conclusion rather than leaving it uncited.
 
 SOURCE TYPE — The source context includes a "type:" field per source. Sources typed as
 research_finding, benchmark_evaluation, or capability_demonstration report aggregate
