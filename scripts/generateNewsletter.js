@@ -17,6 +17,7 @@ import { createClient } from "@supabase/supabase-js";
 import {
   buildPeriod, loadCandidates, selectSourcesWithLlm, dedupReadingList,
   generateBlurbs, loadInsights, generateCategoryIntros, renderNewsletterHtml,
+  loadTopSourcesFromInsights,
 } from "../lib/newsletter/index.js";
 import { saveNewsletter, loadNewsletter } from "../lib/storage/newsletterStore.js";
 
@@ -76,7 +77,10 @@ async function main() {
     return;
   }
 
-  let sources = await selectSourcesWithLlm(candidates, period, log);
+  // Reuse insights top_sources when available (insights ran first this period),
+  // skipping a duplicate Sonnet selection call on the same candidate pool.
+  let sources = await loadTopSourcesFromInsights(supabase, period.key, log);
+  if (!sources) sources = await selectSourcesWithLlm(candidates, period, log);
 
   // Cross-publisher event dedup (same event, different outlets → different families).
   const dupIds = await dedupReadingList(sources, log);

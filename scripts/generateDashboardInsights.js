@@ -37,7 +37,8 @@ import {
   deriveConfidence,
   maturityShortLine,
 } from "../lib/dashboard/evidenceMaturity.js";
-import { persistCallCost, setCurrentRunId } from "../lib/llm/usagePersistence.js";
+import { setCurrentRunId } from "../lib/llm/usagePersistence.js";
+import { routedLLM } from "../lib/llm/llmRouter.js";
 import { sourceSignalScore, isNoiseSource, bySignalThenRecency, partitionBySignal, readingValueOf } from "../lib/pipeline/scoring/sourceSignal.js";
 import { maturityOf, MATURITY_RANK } from "../lib/pipeline/scoring/maturityLevel.js";
 import { significanceRank } from "../lib/pipeline/scoring/researchSignificance.js";
@@ -83,91 +84,14 @@ const CATEGORIES = [
 
 const tagLabel = (id) => getTag(id)?.label || id;
 
-// ── Generic Anthropic JSON call ────────────────────────────────────────────────
-// This script calls the Anthropic API directly (not via llmRouter), so it must
-// persist its own cost events — otherwise dashboard-insight spend is invisible in
-// llm_cost_log. Every call logs its token usage under a `task` context.
+// ── LLM helper ────────────────────────────────────────────────────────────────
+// All generation calls go through routedLLM so LLM_ONLY_GEMINI=1 routes them
+// to Gemini (Gemini Flash by task profile) and provider failover is automatic.
+// Cost tracking is handled internally by routedLLM; no manual persistCallCost needed.
 
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-// Transient: a 60–90s timeout/abort, or a retryable HTTP status (429 rate-limit,
-// 5xx, 529 overloaded). These spiked under API load and caused whole insight
-// sets to fall back; retry with backoff instead.
-function isRetryable(err) {
-  if (!err) return false;
-  if (err.name === "TimeoutError" || err.name === "AbortError") return true;
-  if (/aborted|timeout|fetch failed|ECONNRESET|ETIMEDOUT|network/i.test(err.message || "")) return true;
-  return [429, 500, 502, 503, 504, 529].includes(err.status);
-}
-
-async function callAnthropic({ system, user, model, maxTokens = 1200, task = "dashboard_insight", retries = 3 }) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
-
-  const usedModel = model || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
-
-  let lastErr;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        // 90s: the combined insights call returns large JSON with internal reasoning
-        // and were tripping a 60s cap under API load.
-        signal: AbortSignal.timeout(90000),
-        headers: {
-          "Content-Type":      "application/json",
-          "x-api-key":         apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model:      usedModel,
-          max_tokens: maxTokens,
-          // Cache the (per-stage-identical) system prompt so the 4 category calls
-          // that share it re-read at ~0.1x. Only long prompts clear the cache
-          // minimum; short ones silently don't cache (harmless).
-          system: system && system.length >= 4000
-            ? [{ type: "text", text: system, cache_control: { type: "ephemeral" } }]
-            : system,
-          messages: [{ role: "user", content: user }],
-        }),
-      });
-
-      if (!res.ok) {
-        const t = await res.text().catch(() => "");
-        const e = new Error(`Anthropic ${res.status}: ${t.slice(0, 200)}`);
-        e.status = res.status;
-        throw e;
-      }
-      const data = await res.json();
-
-      // Persist cost (fire-and-forget; never let logging break generation).
-      try {
-        persistCallCost({
-          task,
-          provider:     "anthropic",
-          model:        usedModel,
-          inputTokens:  data.usage?.input_tokens  || 0,
-          outputTokens: data.usage?.output_tokens || 0,
-          cacheReadTokens:     data.usage?.cache_read_input_tokens     || 0,
-          cacheCreationTokens: data.usage?.cache_creation_input_tokens || 0,
-        });
-      } catch { /* ignore */ }
-
-      const text = data.content?.[0]?.text?.trim() || "";
-      return extractJson(text);
-    } catch (err) {
-      lastErr = err;
-      if (attempt < retries && isRetryable(err)) {
-        // Exponential backoff with jitter: ~2s, 4s, 8s.
-        const wait = Math.round(2000 * 2 ** attempt * (0.8 + Math.random() * 0.4));
-        console.log(`  [anthropic] ${task} ${err.name === "TimeoutError" ? "timeout" : (err.message || "").slice(0, 40)} — retry ${attempt + 1}/${retries} in ${wait}ms`);
-        await sleep(wait);
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw lastErr;
+async function callLlm(system, user, task) {
+  const { result } = await routedLLM(system, user, { task, requires_json: true });
+  return result; // null when all providers fail; callers must handle gracefully
 }
 
 // Robust JSON extraction from an LLM response. Handles the common malformations
@@ -292,7 +216,6 @@ const QA_SYSTEM = loadPrompt("insights/insight-qa").system;
 
 async function qaInsights(insights, maturity, catLabel, status = {}) {
   status.ran = false;
-  if (!process.env.ANTHROPIC_API_KEY) { status.reason = "no_api_key"; return insights; }
   const user = `Category: ${catLabel}
 Reporting date: ${REPORT_DATE}. A CVE year is only "future-dated" if AFTER this date. CVEs from ${REPORT_YEAR} and earlier are current.
 Evidence maturity: ${maturityShortLine(maturity)} (total ${maturity.total})
@@ -304,17 +227,13 @@ Run the validation checklist. Return a verdict for every index.`;
 
   let verdicts;
   try {
-    const out = await callAnthropic({
-      system: QA_SYSTEM, user, task: "dashboard_insight_qa",
-      model: process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
-      maxTokens: 1200,
-    });
-    verdicts = out.verdicts;
+    const out = await callLlm(QA_SYSTEM, user, "dashboard_insight_qa");
+    verdicts = out?.verdicts;
     if (!Array.isArray(verdicts)) throw new Error("no verdicts");
     status.ran = true;
   } catch (err) {
     status.reason = "error";
-    console.log(`  [QA] check failed (${err.message.slice(0, 50)}) — keeping all`);
+    console.log(`  [QA] check failed (${(err.message || "provider unavailable").slice(0, 50)}) — keeping all`);
     return insights;
   }
 
@@ -571,7 +490,6 @@ const ASSESS_QA_SYSTEM = loadPrompt("insights/assessment-qa").system;
 async function qaAssessment(assessment, insights, maturity, status = {}) {
   status.ran = false;
   if (!assessment) { status.reason = "empty"; return { keep: true, corrected: null }; }
-  if (!process.env.ANTHROPIC_API_KEY) { status.reason = "no_api_key"; return { keep: true, corrected: null }; }
   const user = `Evidence maturity: ${maturityShortLine(maturity)} (total ${maturity.total})
 
 VALIDATED INSIGHTS (already QA-passed — the assessment must be consistent with these):
@@ -582,11 +500,8 @@ ASSESSMENT to verify:
 
 Return the verdict.`;
   try {
-    const out = await callAnthropic({
-      system: ASSESS_QA_SYSTEM, user, task: "dashboard_assessment_qa",
-      model: process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
-      maxTokens: 300,
-    });
+    const out = await callLlm(ASSESS_QA_SYSTEM, user, "dashboard_assessment_qa");
+    if (!out) { status.reason = "error"; return { keep: true, corrected: null }; }
     status.ran = true;
     const verdict = out.verdict || "ok";
     if (verdict === "ok") return { keep: true, corrected: null };
@@ -661,7 +576,6 @@ Return the attributions.`;
 export async function attributeSources(insights, catSources, windowLabel, catLabel) {
   const withEmpty = insights.map(p => ({ ...p, sources: [] }));
   if (!insights.length || !catSources?.length) return withEmpty;
-  if (!process.env.ANTHROPIC_API_KEY) return withEmpty;
 
   // Candidate pool: sources with real summaries, ranked by combined signal
   // (importance reality + research significance + trust), maturity, then recency —
@@ -678,15 +592,12 @@ export async function attributeSources(insights, catSources, windowLabel, catLab
 
   let attributions = [];
   try {
-    const out = await callAnthropic({
-      system: ATTRIBUTION_SYSTEM, task: "dashboard_attribution",
-      // Attribution is a matching task (pick supporting source numbers) — Haiku
-      // handles it well at a fraction of Sonnet's cost.
-      model: process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
-      user: buildAttributionPrompt(catLabel, windowLabel, insights, ranked),
-      maxTokens: 700,
-    });
-    attributions = Array.isArray(out.attributions) ? out.attributions : [];
+    const out = await callLlm(
+      ATTRIBUTION_SYSTEM,
+      buildAttributionPrompt(catLabel, windowLabel, insights, ranked),
+      "dashboard_attribution",
+    );
+    attributions = Array.isArray(out?.attributions) ? out.attributions : [];
   } catch {
     return withEmpty;
   }
@@ -735,73 +646,87 @@ export async function attributeSources(insights, catSources, windowLabel, catLab
 }
 
 // ── Citation grounding: keep only bullets the CITED sources actually support ────
-// Runs AFTER attribution. Each explanation bullet is checked against ONLY the
-// insight's cited sources (not the whole corpus). This catches the failure where a
-// bullet drifts to a DIFFERENT source's finding ("A second attack, FloatDoor…"),
-// which the pool-wide fact-check missed because that fact was real elsewhere in the
-// window. Unsupported bullets are dropped; if the insight's explanation collapses,
-// the whole insight is removed — a headline whose walkthrough can't be grounded in
-// its own citations is not trustworthy.
+// Runs AFTER attribution. Batches ALL insights for a category into ONE DB fetch
+// and ONE LLM call (was: one DB fetch + one LLM call per insight → 12–16 calls/run).
+// Each insight's bullets are verified only against that insight's cited sources.
+// Unsupported bullets are dropped; insights whose walkthroughs collapse are removed.
 async function groundExplanationsInCitations(insights, catSources, catLabel) {
-  if (!process.env.ANTHROPIC_API_KEY) return insights;
   const normUrl = (u) => String(u || "").toLowerCase()
     .replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[?#].*$/, "").replace(/\/+$/, "");
   const byUrl = new Map();
   for (const s of (catSources || [])) if (s.url) byUrl.set(normUrl(s.url), s);
 
-  const kept = [];
-  for (const p of insights) {
+  // Separate insights that have bullets + resolvable citations from trivial cases.
+  // result[i] = null  → insight removed by grounding
+  // result[i] = obj   → insight kept (may be original or grounded version)
+  const result = new Array(insights.length).fill(undefined);
+  const toGround = []; // { origIdx, p, bullets, cited }
+
+  for (let i = 0; i < insights.length; i++) {
+    const p = insights[i];
     const bullets = Array.isArray(p.explanation_points) ? p.explanation_points.filter(Boolean) : [];
-    if (!bullets.length) { kept.push(p); continue; }
+    if (!bullets.length) { result[i] = p; continue; }
 
     const cited = (p.sources || []).map(c => byUrl.get(normUrl(c.url))).filter(Boolean);
     if (!cited.length) {
-      // No resolvable cited-source text — can't ground the walkthrough. Keep the
-      // (already headline-QA'd) insight but drop the unverifiable elaboration.
-      kept.push({ ...p, explanation_points: [], explanation: "", explanation_qa: "no_citations" });
+      result[i] = { ...p, explanation_points: [], explanation: "", explanation_qa: "no_citations" };
       continue;
     }
+    toGround.push({ origIdx: i, p, bullets, cited });
+  }
 
-    // Ground against the cited source's FULL TEXT (abstract/body), not its number-free
-    // summary. For digest children (parent_source_id set), also include the parent's
-    // full text — children have thin text (700-900 chars) but the insight bullets
-    // reference facts only present in the parent report (10k-20k chars).
-    const { data: fullRows } = await supabase.from("sources")
-      .select("id,full_text,parent_source_id").in("id", cited.map(s => s.id));
-    const fullById = Object.fromEntries((fullRows || []).map(r => [r.id, r]));
+  if (!toGround.length) return insights.map((p, i) => result[i] ?? p);
 
-    // Collect parent IDs needed for thin children
-    const parentIds = [...new Set((fullRows || []).map(r => r.parent_source_id).filter(Boolean))];
-    const parentRows = parentIds.length
-      ? (await supabase.from("sources").select("id,full_text").in("id", parentIds)).data || []
-      : [];
-    const parentTextById = Object.fromEntries(parentRows.map(r => [r.id, r.full_text || ""]));
+  // ── One DB round-trip for ALL cited source full_text across all insights ─────
+  const allCitedIds = [...new Set(toGround.flatMap(g => g.cited.map(s => s.id)))];
+  const { data: fullRows } = await supabase.from("sources")
+    .select("id,full_text,parent_source_id").in("id", allCitedIds);
+  const fullById = Object.fromEntries((fullRows || []).map(r => [r.id, r]));
 
-    const citedText = cited.map((s, i) => {
+  const parentIds = [...new Set((fullRows || []).map(r => r.parent_source_id).filter(Boolean))];
+  const parentTextById = {};
+  if (parentIds.length) {
+    const { data: parentRows } = await supabase.from("sources")
+      .select("id,full_text").in("id", parentIds);
+    for (const r of parentRows || []) parentTextById[r.id] = r.full_text || "";
+  }
+
+  // Build cited text and bullet user-sections for each insight
+  const groundItems = toGround.map(({ origIdx, p, bullets, cited }) => {
+    const citedText = cited.map((s, j) => {
       const row = fullById[s.id];
-      let body = (row?.full_text || summaryText(s));
-      // Supplement thin child text with parent text
+      let body = row?.full_text || summaryText(s);
       if (row?.parent_source_id && body.length < 2000) {
-        const parentText = parentTextById[row.parent_source_id] || "";
-        if (parentText) body = body + "\n\n[Parent report context]\n" + parentText;
+        const pt = parentTextById[row.parent_source_id] || "";
+        if (pt) body = body + "\n\n[Parent report context]\n" + pt;
       }
-      return `[S${i + 1}] ${titleOf(s.title)} — ${body.slice(0, 4000)}`;
+      return `[S${j + 1}] ${titleOf(s.title)} — ${body.slice(0, 4000)}`;
     }).join("\n\n");
-    let verdicts;
-    try {
-      const out = await callAnthropic({
-        system: CITE_GROUND_SYSTEM, task: "dashboard_citation_grounding",
-        model: process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
-        user: `Insight: ${p.insight}\n\nCITED SOURCES (the only allowed scope):\n${citedText}\n\nBULLETS:\n${bullets.map((b, i) => `[${i}] ${b}`).join("\n")}\n\nVerdict for every bullet index. For unsupported and coherence_drift verdicts, provide a correction field.`,
-        maxTokens: 1400,
-      });
-      verdicts = Array.isArray(out.verdicts) ? out.verdicts : null;
-    } catch { verdicts = null; }
-    if (!verdicts) { kept.push(p); continue; }
+    return { origIdx, p, bullets, citedText };
+  });
 
-    // Build final bullet list: ok → keep, correctable → use correction, fatal → drop
-    const CORRECTABLE = new Set(["unsupported", "coherence_drift"]);
-    const FATAL       = new Set(["contradicts", "entity_drift", "redundant"]);
+  // ── One batched LLM call for the whole category ───────────────────────────────
+  const userPrompt = groundItems.map(({ origIdx, p, bullets, citedText }) =>
+    `=== INSIGHT [${origIdx}] ===\nInsight: ${p.insight}\n\nCITED SOURCES for insight [${origIdx}]:\n${citedText}\n\nBULLETS for insight [${origIdx}]:\n${bullets.map((b, k) => `[${k}] ${b}`).join("\n")}`
+  ).join("\n\n");
+
+  let insightVerdicts = null;
+  try {
+    const out = await callLlm(CITE_GROUND_SYSTEM, userPrompt, "dashboard_citation_grounding");
+    insightVerdicts = Array.isArray(out?.insights) ? out.insights : null;
+  } catch { insightVerdicts = null; }
+
+  // ── Process verdicts per insight ──────────────────────────────────────────────
+  const CORRECTABLE = new Set(["unsupported", "coherence_drift"]);
+
+  for (const { origIdx, p, bullets, citedText } of groundItems) {
+    // If LLM call failed entirely, keep insight unchanged
+    if (!insightVerdicts) { result[origIdx] = p; continue; }
+
+    const entry = insightVerdicts.find(v => v.insight_index === origIdx);
+    const verdicts = entry?.verdicts;
+    if (!verdicts) { result[origIdx] = p; continue; }
+
     const finalBullets = [];
     const corrected_log = [], dropped_log = [];
 
@@ -817,10 +742,9 @@ async function groundExplanationsInCitations(insights, catSources, catLabel) {
         dropped_log.push(`[${v.verdict}] ${(v.reason || "").slice(0, 50)}`);
         return;
       }
-      // B: deterministic figure check against the cited sources' FULL TEXT. The
-      // LLM verdict judges whole-bullet plausibility and can miss a single invented
-      // number (e.g. "972 attacks per day" absent from every cited source). Drop
-      // any bullet whose specific figures are not present in citedText.
+      // Deterministic figure check: drop any bullet whose specific figures are
+      // absent from the cited sources' full text (catches invented numbers the
+      // LLM verdict accepted at plausibility level).
       const fg = checkFactGrounding(text, citedText);
       if (!fg.grounded) {
         dropped_log.push(`[figure_ungrounded: ${fg.ungrounded.join(", ")}]`);
@@ -836,18 +760,20 @@ async function groundExplanationsInCitations(insights, catSources, catLabel) {
 
     if (finalBullets.length < 2) {
       console.log(`  [QA:citation] REMOVED insight — only ${finalBullets.length} bullet(s) survived grounding: ${p.insight.slice(0, 55)}`);
+      result[origIdx] = null; // mark removed
       continue;
     }
-    kept.push({ ...p, explanation_points: finalBullets, explanation: finalBullets.join(" "), explanation_qa: "citation_grounded" });
+    result[origIdx] = { ...p, explanation_points: finalBullets, explanation: finalBullets.join(" "), explanation_qa: "citation_grounded" };
   }
-  return kept;
+
+  // Return in original order, dropping removed insights (result[i] === null)
+  return result.filter(Boolean);
 }
 
 // ── Top sources ────────────────────────────────────────────────────────────────
 // Uses the same candidate loading and editorial selection as the newsletter so the
 // dashboard Overview and the newsletter always surface the same sources for the period.
 async function selectTopSources(supabase, period) {
-  if (!process.env.ANTHROPIC_API_KEY) return null;
   try {
     const candidates = await loadCandidates(supabase, period.date_from, period.date_to);
     if (candidates.length < 3) return null;
@@ -879,13 +805,12 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs, leadFl
   const totalCount = maturitySrcs.length; // canonical = all validated sources (matches the card)
 
   // Single call: findings → insights (mechanism grouping is internal reasoning).
-  // maxTokens sized for 2–4 insights with 4–6 bullets each plus internal reasoning.
-  const out = await callAnthropic({
-    system: INSIGHTS_SYSTEM, task: "dashboard_insights",
-    user: buildInsightsPrompt(cat.label, windowLabel, findings, leadFlags, maturity, confidence),
-    maxTokens: 3200,
-  });
-  let insights = Array.isArray(out.insights) ? out.insights : [];
+  const out = await callLlm(
+    INSIGHTS_SYSTEM,
+    buildInsightsPrompt(cat.label, windowLabel, findings, leadFlags, maturity, confidence),
+    "dashboard_insights",
+  );
+  let insights = Array.isArray(out?.insights) ? out.insights : [];
   insights = insights
     .filter(p => p && typeof p.insight === "string" && p.insight.trim().length > 15)
     .map(p => {
@@ -923,7 +848,7 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs, leadFl
 
   const emptyResult = () => ({
     insights: [], assessment: null, assessment_qa: "not_generated",
-    qa_status: insightQa.ran ? "passed" : (insightQa.reason === "no_api_key" ? "skipped_no_key" : "degraded"),
+    qa_status: insightQa.ran ? "passed" : "degraded",
     confidence: confidence.level, confidence_reason: confidence.reason,
     evidence_maturity: maturity, removed: beforeQa,
   });
@@ -944,7 +869,7 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs, leadFl
 
   // QA the category ASSESSMENT sentence itself — it drives period-over-period
   // comparison, so it must be grounded too. (Previously stored un-audited.)
-  let assessment = (out.assessment || "").trim() || null;
+  let assessment = (out?.assessment || "").trim() || null;
   let assessment_qa = "not_generated";
   if (assessment) {
     const aStatus = {};
@@ -963,9 +888,7 @@ async function generateCategory(cat, windowLabel, findings, maturitySrcs, leadFl
   }
 
   // Roll up an overall QA status the dashboard can display honestly.
-  const qa_status = insightQa.ran
-    ? "passed"
-    : (insightQa.reason === "no_api_key" ? "skipped_no_key" : "degraded");
+  const qa_status = insightQa.ran ? "passed" : "degraded";
 
   return {
     insights,

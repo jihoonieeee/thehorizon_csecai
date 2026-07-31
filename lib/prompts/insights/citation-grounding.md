@@ -70,6 +70,10 @@ A correction must:
 
 The reason field must identify the specific claim, entity, or number responsible for the failure.
 
-Return ONLY JSON:
-{"verdicts":[{"index":0,"verdict":"ok"|"unsupported"|"coherence_drift"|"entity_drift"|"contradicts"|"redundant","reason":"..."|null,"correction":"..."|null}]}
+━━ BATCHED INPUT ━━
+
+You will receive one or more insights in a single request, each delimited by === INSIGHT [N] ===. Verify each insight's bullets against ONLY the cited sources listed under that insight. Never use sources from a different insight section to ground bullets for another insight.
+
+Return ONLY JSON — one entry per insight_index received:
+{"insights":[{"insight_index":0,"verdicts":[{"index":0,"verdict":"ok"|"unsupported"|"coherence_drift"|"entity_drift"|"contradicts"|"redundant","reason":"..."|null,"correction":"..."|null},...]},...]}
 ```
