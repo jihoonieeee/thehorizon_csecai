@@ -29,14 +29,14 @@ on:
 permissions:
   actions: read
 
-# Gemini-only for all scheduled runs (2026-07-30). LLM_ONLY_GEMINI hard-blocks
-# every non-Gemini provider on all paths (router + legacy callLLM path). Secret
-# keys (GEMINI_API_KEY) are injected per-step; top-level env can't read secrets.
+# Platform AI key (OpenAI-compatible) for all LLM calls. Secret keys are
+# injected per-step; top-level env can't read secrets.
 env:
-  LLM_ONLY_GEMINI: '1'
-  LLM_PROVIDER_ORDER: gemini
-  PLATFORM_AI_PROVIDER: gemini
-  PLATFORM_MODEL_SYNTHESIS: gemini-2.5-flash
+  LLM_ONLY_GEMINI: '0'
+  LLM_PROVIDER_ORDER: openai
+  PLATFORM_AI_PROVIDER: openai-compatible
+  PLATFORM_AI_BASE_URL: https://api.openai.com/v1
+  PLATFORM_MODEL_SYNTHESIS: gpt-4o
   # L3 validation only (~200–400 sources × ~400 tokens). 500K is a 3–4× ceiling.
   # The router warns at 80% and throws at 100% — set to 0 to disable.
   LLM_DAILY_TOKEN_BUDGET: '500000'
@@ -112,9 +112,8 @@ jobs:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BLOB_READ_WRITE_TOKEN:     ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
-          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
-          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY:            ${{ secrets.PLATFORM_AI_API_KEY }}
+          PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
           CRON_SECRET:               ${{ secrets.CRON_SECRET }}
 
       - name: Date integrity check
@@ -154,9 +153,8 @@ jobs:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BLOB_READ_WRITE_TOKEN:     ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
-          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
-          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_KEY:            ${{ secrets.PLATFORM_AI_API_KEY }}
+          PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
           TAVILY_API_KEY:            ${{ secrets.TAVILY_API_KEY }}
           TAVILY_API_KEY_2:          ${{ secrets.TAVILY_API_KEY_2 }}
           TAVILY_API_KEY_3:          ${{ secrets.TAVILY_API_KEY_3 }}
@@ -170,6 +168,6 @@ jobs:
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
-          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY:            ${{ secrets.PLATFORM_AI_API_KEY }}
+          PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
           WEB_DISCOVERY_ENABLED:     "1"
