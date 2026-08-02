@@ -101,6 +101,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BLOB_READ_WRITE_TOKEN:     ${{ secrets.BLOB_READ_WRITE_TOKEN }}
           GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY_2:          ${{ secrets.GEMINI_API_KEY_2 }}
           ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
           CRON_SECRET:               ${{ secrets.CRON_SECRET }}
           ARXIV_INITIAL_DELAY_MS:    "90000"

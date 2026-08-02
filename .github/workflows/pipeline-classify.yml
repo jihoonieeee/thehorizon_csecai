@@ -115,6 +115,7 @@ jobs:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY_2:          ${{ secrets.GEMINI_API_KEY_2 }}
           ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
 
   rescrape:
@@ -162,6 +163,7 @@ jobs:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY_2:          ${{ secrets.GEMINI_API_KEY_2 }}
           ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
 
   insights:
@@ -191,6 +193,7 @@ jobs:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY_2:          ${{ secrets.GEMINI_API_KEY_2 }}
 
       - name: Monthly insights
         if: needs.preflight.outputs.run_monthly == 'true'
@@ -199,6 +202,7 @@ jobs:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY_2:          ${{ secrets.GEMINI_API_KEY_2 }}
 
       - name: Quarterly insights
         if: needs.preflight.outputs.run_quarterly == 'true'
@@ -207,6 +211,7 @@ jobs:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY_2:          ${{ secrets.GEMINI_API_KEY_2 }}
 
       - name: Run health summary
         if: always()
