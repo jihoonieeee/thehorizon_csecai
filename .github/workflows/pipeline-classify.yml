@@ -77,11 +77,13 @@ jobs:
             DAY_OF_WEEK=$(date -u +%u)
             DAY_OF_MONTH=$(date -u +%-d)
             MONTH=$(date -u +%-m)
+            # Last day of current month (SGT anchor: last day UTC = 1st SGT next morning)
+            LAST_DAY_OF_MONTH=$(date -u -d "$(date -u +%Y-%m-01) +1 month -1 day" +%-d)
             [ "$DAY_OF_WEEK"  = "1" ] && W=true || W=false
-            [ "$DAY_OF_MONTH" = "1" ] && M=true || M=false
-            if [ "$DAY_OF_MONTH" = "1" ] && \
-               ([ "$MONTH" = "1" ] || [ "$MONTH" = "4" ] || \
-                [ "$MONTH" = "7" ] || [ "$MONTH" = "10" ]); then
+            [ "$DAY_OF_MONTH" = "$LAST_DAY_OF_MONTH" ] && M=true || M=false
+            if [ "$M" = "true" ] && \
+               ([ "$MONTH" = "3" ] || [ "$MONTH" = "6" ] || \
+                [ "$MONTH" = "9" ] || [ "$MONTH" = "12" ]); then
               Q=true
             else
               Q=false

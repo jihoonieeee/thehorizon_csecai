@@ -18,10 +18,10 @@ name: Generate Newsletter
 
 on:
   schedule:
-    - cron: '0 18 * * 1'   # weekly  primary — Monday → previous complete Mon–Sun week
-    - cron: '0 22 * * 1'   # weekly  backup  — Monday, 4h later; --skip-if-exists
-    - cron: '0 18 1 * *'   # monthly primary — 1st    → previous complete calendar month
-    - cron: '0 22 1 * *'   # monthly backup  — 1st, 4h later; --skip-if-exists
+    - cron: '0 18 * * 1'    # weekly  primary — Monday 18:00 UTC (02:00 SGT Tue)
+    - cron: '0 22 * * 1'    # weekly  backup  — Monday 22:00 UTC (06:00 SGT Tue); --skip-if-exists
+    - cron: '0 23 28-31 * *' # monthly primary — last day of month 23:00 UTC (07:00 SGT 1st)
+    - cron: '0 3 1 * *'     # monthly backup  — 1st 03:00 UTC (11:00 SGT); --skip-if-exists
   workflow_dispatch:
     inputs:
       window:
@@ -54,14 +54,23 @@ jobs:
         id: resolve
         if: github.event_name == 'schedule'
         run: |
+          # Guard: monthly cron fires days 28-31; only proceed on the actual last day
+          LAST_DAY=$(date -u -d "$(date -u +%Y-%m-01) +1 month -1 day" +%-d)
+          TODAY=$(date -u +%-d)
           case "${{ github.event.schedule }}" in
-            "0 18 1 * *") echo "window=month" >> "$GITHUB_OUTPUT"; echo "skip="                 >> "$GITHUB_OUTPUT" ;;
-            "0 22 1 * *") echo "window=month" >> "$GITHUB_OUTPUT"; echo "skip=--skip-if-exists" >> "$GITHUB_OUTPUT" ;;
+            "0 23 28-31 * *")
+              if [ "$TODAY" != "$LAST_DAY" ]; then
+                echo "window=skip" >> "$GITHUB_OUTPUT"; echo "skip=" >> "$GITHUB_OUTPUT"
+              else
+                echo "window=month" >> "$GITHUB_OUTPUT"; echo "skip=" >> "$GITHUB_OUTPUT"
+              fi ;;
+            "0 3 1 * *")  echo "window=month" >> "$GITHUB_OUTPUT"; echo "skip=--skip-if-exists" >> "$GITHUB_OUTPUT" ;;
             "0 22 * * 1") echo "window=week"  >> "$GITHUB_OUTPUT"; echo "skip=--skip-if-exists" >> "$GITHUB_OUTPUT" ;;
-            *)            echo "window=week"  >> "$GITHUB_OUTPUT"; echo "skip="                 >> "$GITHUB_OUTPUT" ;;
+            *)             echo "window=week"  >> "$GITHUB_OUTPUT"; echo "skip="                 >> "$GITHUB_OUTPUT" ;;
           esac
 
       - name: Generate and save newsletter
+        if: steps.resolve.outputs.window != 'skip'
         run: node scripts/generateNewsletter.js --window ${{ steps.resolve.outputs.window || github.event.inputs.window || 'week' }} --save ${{ steps.resolve.outputs.skip }}
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}

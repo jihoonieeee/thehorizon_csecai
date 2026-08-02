@@ -21,8 +21,8 @@ name: Generate Slides
 
 on:
   schedule:
-    - cron: '0 18 1 * *'   # primary — 1st of month; generates the windows due that day
-    - cron: '0 22 1 * *'   # backup  — 1st of month, 4h later; --skip-if-exists (only fills gaps)
+    - cron: '0 23 28-31 * *' # primary — last day of month 23:00 UTC (07:00 SGT 1st)
+    - cron: '0 3 1 * *'     # backup  — 1st 03:00 UTC (11:00 SGT); --skip-if-exists
   workflow_dispatch:
     inputs:
       window:
@@ -78,15 +78,24 @@ jobs:
             fi
             echo "skip=" >> "$GITHUB_OUTPUT"
           else
-            echo "windows=$(node scripts/dueReportWindows.js)" >> "$GITHUB_OUTPUT"
-            if [ "${{ github.event.schedule }}" = "0 22 1 * *" ]; then
-              echo "skip=--skip-if-exists" >> "$GITHUB_OUTPUT"
-            else
+            # Guard: primary cron fires days 28-31; only proceed on the actual last day
+            LAST_DAY=$(date -u -d "$(date -u +%Y-%m-01) +1 month -1 day" +%-d)
+            TODAY=$(date -u +%-d)
+            if [ "${{ github.event.schedule }}" = "0 23 28-31 * *" ] && [ "$TODAY" != "$LAST_DAY" ]; then
+              echo "windows=skip" >> "$GITHUB_OUTPUT"
               echo "skip=" >> "$GITHUB_OUTPUT"
+            else
+              echo "windows=$(node scripts/dueReportWindows.js)" >> "$GITHUB_OUTPUT"
+              if [ "${{ github.event.schedule }}" = "0 3 1 * *" ]; then
+                echo "skip=--skip-if-exists" >> "$GITHUB_OUTPUT"
+              else
+                echo "skip=" >> "$GITHUB_OUTPUT"
+              fi
             fi
           fi
 
       - name: Generate slides
+        if: steps.plan.outputs.windows != 'skip'
         run: |
           COMMON=""
           if [ -n "${{ github.event.inputs.category }}" ]; then
