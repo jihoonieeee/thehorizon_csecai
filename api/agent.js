@@ -66,9 +66,8 @@ const STRUCTURE_FULL = `STRUCTURE:
 1) "Assessment:" — ONE sentence only. The real signal and your confidence. Direct — no hedging clauses, no "it is worth noting".
 2) At most 4 numbered points. Order them by descending operational impact — most severe or significant item first. Primary ordering signal: source maturity shown in context (operational > observed > disclosed > demonstrated > research); when maturity is absent, use source type as proxy (incident / threat_intelligence before research_finding / benchmark_evaluation / capability_demonstration); recency is the tiebreaker when impact is equal. Each point has exactly this shape: [judgement line] then [sub-bullets] then [next point]. No text between the judgement and the sub-bullets. No text after the sub-bullets. The judgement line is the header; the sub-bullets carry the evidence. No taxonomy labels, no italic technique descriptions, no explanatory bridge sentences anywhere inside a point. The judgement line itself must carry a [src-N] citation if it contains any specific claim, date, named actor, or product — do not leave it uncited.
 3) "So what:" — ONE sentence. No compound sentences.
-4) "Defenders:" — ONE sentence. The single most actionable step.
 
-HARD LIMIT: Under 650 words total (excluding the SCOPE/CONFIDENCE footer). Count as you write. If you reach 500 words before the last point, cut sub-bullets to one per remaining point.`;
+HARD LIMIT: Under 500 words total (excluding the SCOPE/CONFIDENCE footer). Count as you write. If you reach 400 words before the last point, cut sub-bullets to one per remaining point.`;
 const STRUCTURE_BRIEF = `STRUCTURE (direct lookup — answer the question and stop):
 1) "Assessment:" — ONE sentence. The direct answer and confidence.
 2) At most 3 numbered points. At most 2 sub-bullets per point ("- ") — one specific fact + [src-N] per sub-bullet. One clause per sub-bullet, no narrative explanation. The numbered judgement line itself must carry a [src-N] if it contains any specific claim, date, named actor, or product.
@@ -635,7 +634,7 @@ export default async function handler(req, res) {
     // On Gemini, maxOutputTokens also covers thinking tokens, so the full-answer
     // ceiling is raised and thinking is bounded (1024) to guarantee answer room;
     // brief answers run on Flash with thinking disabled (thinkingBudget 0).
-    const maxTokens = briefAnswer ? 1200 : 3000;
+    const maxTokens = briefAnswer ? 1200 : 2000;
     const synthArgs = {
       tier: synthTier, system: cachedSystem, messages, maxTokens,
       thinkingBudget: briefAnswer ? 0 : 1024,
