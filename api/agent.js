@@ -192,7 +192,7 @@ const QA_STOPWORDS = new Set([
   "then","than","also","been","being","such","other","more","most","some","any",
   "when","where","while","because","after","before","over","under","between",
 ]);
-function qaContentTokens(s) {
+export function qaContentTokens(s) {
   const words = String(s || "").toLowerCase().match(/[a-z0-9]{4,}/g) || [];
   return new Set(words.filter(w => !QA_STOPWORDS.has(w)));
 }
