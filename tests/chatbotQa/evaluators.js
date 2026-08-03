@@ -135,12 +135,18 @@ export function detectCategories(payload) {
 
 const R = (id, applicable, pass, detail) => ({ id, applicable, pass, detail });
 
-/** Factual claims must be backed by a citation (inline [src-N] or a citation entry). */
+/** Factual claims must be backed by a citation (inline [src-N] or a citation entry).
+ *  Brief-path answers (vulnerability_lookup etc.) use STRUCTURE_BRIEF which puts
+ *  citations in sub-bullets rather than always inline — check citations[] presence
+ *  rather than inline markers alone for those cases. */
 export function evalEvidenceForClaims(payload) {
   const answer = payload.answer || "";
   const hasFactual = FACTUAL_MARKERS.test(answer);
   if (!hasFactual) return R("evidence_for_claims", false, null, "No hard factual markers to check.");
-  const cited = inlineRefs(answer).length > 0 || (payload.citations || []).length > 0;
+  // Brief answers cite via citations[] even when inline [src-N] may be absent.
+  const hasCitations = (payload.citations || []).length > 0;
+  const hasInline    = inlineRefs(answer).length > 0;
+  const cited = hasCitations || hasInline;
   return R("evidence_for_claims", true, cited,
     cited ? "Factual claims carry citations." : "Factual claims present with NO citation.");
 }
@@ -286,6 +292,7 @@ export function evalNoCategoryDrift(payload, { requestedCategory, tolerance = 0.
  */
 export function evalAnswerStructure(payload) {
   if (isRefusal(payload)) return R("answer_structure", false, null, "N/A — refusal/general/out_of_scope.");
+  if (isBriefAnswer(payload)) return R("answer_structure", false, null, `N/A — brief ${payload.query_type} query uses compact structure.`);
   const answer = payload.answer || "";
   const words = answer.split(/\s+/).filter(Boolean).length;
   if (words < 60) return R("answer_structure", false, null, "N/A — answer too short to require structure.");
@@ -299,14 +306,23 @@ export function evalAnswerStructure(payload) {
     pass ? "Assessment line + numbered points present." : `Missing: ${missing}.`);
 }
 
+// Query types that use STRUCTURE_BRIEF — no So what: required, inline [src-N] optional.
+const BRIEF_QUERY_TYPES = new Set([
+  "definition", "vulnerability_lookup", "incident_lookup",
+  "entity_history", "research_lookup", "publisher_lookup",
+]);
+function isBriefAnswer(payload) {
+  return BRIEF_QUERY_TYPES.has(payload?.query_type);
+}
+
 /**
  * Substantive grounded answers (>150 words) must end with a "So what:" line.
- * Brief/lookup answers are exempt (they use the STRUCTURE_BRIEF template which
- * explicitly omits it). Missing So what on a strategic answer means the analyst
- * implication is left for the reader to infer.
+ * Brief/lookup answers are exempt (STRUCTURE_BRIEF template omits it).
+ * Missing So what on a strategic answer means the analyst implication is left for the reader.
  */
 export function evalSoWhatPresent(payload) {
   if (isRefusal(payload)) return R("so_what_present", false, null, "N/A — refusal/general/out_of_scope.");
+  if (isBriefAnswer(payload)) return R("so_what_present", false, null, `N/A — brief ${payload.query_type} query, So what not required.`);
   const answer = payload.answer || "";
   const words  = answer.split(/\s+/).filter(Boolean).length;
   if (words < 150) return R("so_what_present", false, null, "N/A — short/lookup answer, So what not expected.");
