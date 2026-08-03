@@ -75,16 +75,19 @@ Do NOT add "So what" or "Defenders" lines.
 
 WORD BUDGET: Under 300 words. Stop when the question is answered.`;
 
-function buildGroundedSystem(scopeLabel, focusCategory, thin, brief = false) {
+function buildGroundedSystem(scopeLabel, focusCategory, thin, brief = false, queryType = null) {
   const today = new Date().toISOString().slice(0, 10);
   const catNote = focusCategory
     ? `\nThe question is about ${CATEGORY_LABELS[focusCategory]}; keep the answer within that category.`
+    : "";
+  const trendNote = queryType === "trend_analysis"
+    ? `\nTREND REQUIREMENT: The Assessment line MUST state an explicit direction — "increasing", "decreasing", "stable", or "insufficient data to determine direction". A list of incidents with no directional claim is a failure.`
     : "";
   const thinNote = thin
     ? `\nCoverage is THIN — only a small number of relevant sources were found. Say so plainly and keep confidence at most moderate.`
     : "";
   const structureNote = brief ? STRUCTURE_BRIEF : STRUCTURE_FULL;
-  return interpolate(loadPrompt("agent/grounded").system, { today, scopeLabel, catNote, thinNote, structureNote });
+  return interpolate(loadPrompt("agent/grounded").system, { today, scopeLabel, catNote, thinNote, trendNote, structureNote });
 }
 
 function buildGeneralSystem(query) {
@@ -614,7 +617,7 @@ export default async function handler(req, res) {
     const briefAnswer = BRIEF_QUERY_TYPES.has(plan.query_type); // comparison is intentionally absent from BRIEF_QUERY_TYPES
     const system = isGeneral
       ? buildGeneralSystem(query)
-      : buildGroundedSystem(plan.temporal.scope_label, plan.category, sel.verdict === "thin", briefAnswer);
+      : buildGroundedSystem(plan.temporal.scope_label, plan.category, sel.verdict === "thin", briefAnswer, plan.query_type);
     // Taxonomy block: 9KB payload sent on every call. Only inject for analytical
     // query types that actually need precise taxonomy labels. Brief lookups and
     // general queries don't benefit from it and it adds network overhead through proxy.
