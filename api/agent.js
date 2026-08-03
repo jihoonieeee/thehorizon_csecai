@@ -639,6 +639,7 @@ export default async function handler(req, res) {
     const synthArgs = {
       tier: synthTier, system: cachedSystem, messages, maxTokens,
       thinkingBudget: briefAnswer ? 0 : 1024,
+      timeoutMs: 180000,
     };
 
     // A leading, un-streamed preamble for the general path so the user immediately
