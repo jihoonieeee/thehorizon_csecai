@@ -27,7 +27,7 @@ Final chunk carries `"llmaas"` metadata (guardrails/sentinel scores) — safe to
 
 ## Embeddings
 
-Endpoint: `POST /v1/embeddings`
+Endpoint: `POST /platform/models/v1/embeddings`
 
 ```json
 // Request

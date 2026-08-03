@@ -2,20 +2,23 @@
 /**
  * backfillEmbeddings.js — one-time (and re-runnable) RAG embedding backfill
  *
- * Populates the `embedding` column for all three RAG surfaces using Google's
- * gemini-embedding-001 (3072 dimensions). Each batch of 50 rows is sent as a
- * single batchEmbedContents call, then DB updates run concurrently.
- * 300ms pause between batches stays within free-tier rate limits.
+ * Populates the `embedding` column for all three RAG surfaces using
+ * text-embedding-3-large (3072 dimensions) via the GovTech AI Platform.
+ * Each batch of 50 rows is sent as a single /v1/embeddings call, then DB
+ * updates run concurrently. 300ms pause between batches respects rate limits.
  *
  * Prerequisites: run docs/migrations/026_rag_embeddings.sql first.
  *
- * Safe to re-run — rows with an existing embedding are skipped.
+ * Safe to re-run — rows with an existing embedding are skipped unless --force
+ * is passed. Use --force when migrating from a different embedding model (it
+ * nulls all existing embeddings first so everything is re-generated).
  *
  * Usage:
- *   node scripts/backfillEmbeddings.js                # all surfaces in order
+ *   node scripts/backfillEmbeddings.js                       # all surfaces
  *   node scripts/backfillEmbeddings.js --table sources
  *   node scripts/backfillEmbeddings.js --table evidence
  *   node scripts/backfillEmbeddings.js --table insights
+ *   node scripts/backfillEmbeddings.js --force               # re-embed all
  *
  * Input builders here must stay in sync with lib/agent/embeddings.js.
  */
@@ -28,8 +31,8 @@ const sb = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
-if (!process.env.GEMINI_API_KEY) {
-  console.error("GEMINI_API_KEY is not set.");
+if (!process.env.PLATFORM_AI_API_KEY) {
+  console.error("PLATFORM_AI_API_KEY is not set.");
   process.exit(1);
 }
 
@@ -39,6 +42,7 @@ const args     = process.argv.slice(2);
 const tableArg = args.includes("--table")
   ? args[args.indexOf("--table") + 1]
   : (args.find(a => a.startsWith("--table=")) || "").split("=")[1] || null;
+const FORCE = args.includes("--force");
 
 const RUN_SOURCES  = !tableArg || tableArg === "sources";
 const RUN_EVIDENCE = !tableArg || tableArg === "evidence";
@@ -72,38 +76,31 @@ function insightEmbedInput(category, points) {
   return text.length >= 30 ? text : null;
 }
 
-// ── Gemini batch embed ────────────────────────────────────────────────────────
-// Uses batchEmbedContents — one API call for up to 100 texts.
-// Response `embeddings` array is ordered identically to `requests` (no index field).
-//
-// taskType=RETRIEVAL_DOCUMENT tunes the embedding space for content being indexed.
-// The per-query call in lib/agent/embeddings.js uses RETRIEVAL_QUERY instead.
-// Using matched task types meaningfully improves cosine similarity scores.
+// ── Platform batch embed ──────────────────────────────────────────────────────
+// Uses the GovTech platform /v1/embeddings endpoint (OpenAI-compatible).
+// Accepts an array of strings; response data[] is ordered by index field.
 
-const EMBED_MODEL = "gemini-embedding-001";
-const EMBED_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:batchEmbedContents`;
+const EMBED_MODEL = "text-embedding-3-large";
+const BASE_URL    = (process.env.PLATFORM_API_BASE_URL || "https://api-public.ai.tech.gov.sg").replace(/\/$/, "");
+const EMBED_URL   = `${BASE_URL}/platform/models/v1/embeddings`;
 
 async function embedBatch(texts) {
   if (!texts.length) return [];
-  const res = await fetch(`${EMBED_URL}?key=${process.env.GEMINI_API_KEY}`, {
+  const res = await fetch(EMBED_URL, {
     method:  "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      requests: texts.map(text => ({
-        model:    `models/${EMBED_MODEL}`,
-        taskType: "RETRIEVAL_DOCUMENT",
-        content:  { parts: [{ text }] },
-      })),
-    }),
-    signal: AbortSignal.timeout(30000),
+    headers: { "Content-Type": "application/json", "x-api-key": process.env.PLATFORM_AI_API_KEY },
+    body:    JSON.stringify({ model: EMBED_MODEL, input: texts }),
+    signal:  AbortSignal.timeout(30000),
   });
   if (!res.ok) {
     const err = await res.text().catch(() => res.status);
-    throw new Error(`Gemini ${res.status}: ${String(err).slice(0, 120)}`);
+    throw new Error(`Platform ${res.status}: ${String(err).slice(0, 120)}`);
   }
   const json = await res.json();
-  // embeddings[] is in the same order as requests[] — index directly.
-  return (json.embeddings || []).map(e => e.values);
+  // data[] items carry an index field — sort by index before extracting vectors
+  // so the output array aligns with the input texts array regardless of API ordering.
+  const sorted = (json.data || []).slice().sort((a, b) => a.index - b.index);
+  return sorted.map(d => d.embedding);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -296,12 +293,25 @@ async function backfillInsights() {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 const start = Date.now();
-console.log(`\nRAG Embedding Backfill — ${new Date().toISOString().slice(0, 16)} UTC`);
-console.log(`Model: ${EMBED_MODEL} (3072-dim)  Tables: ${[
+const tables = [
   RUN_SOURCES  && "sources",
   RUN_EVIDENCE && "evidence",
   RUN_INSIGHTS && "insights",
-].filter(Boolean).join(", ")}`);
+].filter(Boolean);
+
+console.log(`\nRAG Embedding Backfill — ${new Date().toISOString().slice(0, 16)} UTC`);
+console.log(`Model: ${EMBED_MODEL} (3072-dim)  Tables: ${tables.join(", ")}${FORCE ? "  [--force: re-embedding all rows]" : ""}`);
+
+// --force: null existing embeddings so the skip-if-present guard re-processes them.
+if (FORCE) {
+  console.log("\nClearing existing embeddings...");
+  const clears = [];
+  if (RUN_SOURCES)  clears.push(sb.from("sources").update({ embedding: null }).not("embedding", "is", null).then(({ error }) => { if (error) throw new Error(`clear sources: ${error.message}`); }));
+  if (RUN_EVIDENCE) clears.push(sb.from("evidence").update({ embedding: null }).not("embedding", "is", null).then(({ error }) => { if (error) throw new Error(`clear evidence: ${error.message}`); }));
+  if (RUN_INSIGHTS) clears.push(sb.from("dashboard_insights").update({ embedding: null }).not("embedding", "is", null).then(({ error }) => { if (error) throw new Error(`clear insights: ${error.message}`); }));
+  await Promise.all(clears);
+  console.log("  Done — all existing embeddings cleared.");
+}
 
 try {
   if (RUN_SOURCES)  await backfillSources();
@@ -314,4 +324,4 @@ try {
 
 const elapsed = ((Date.now() - start) / 1000).toFixed(1);
 console.log(`\nCompleted in ${elapsed}s`);
-console.log(`\nDone. hnsw indexes were updated incrementally — no REINDEX needed.`);
+console.log(`\nDone. Sequential scan handles ANN at current corpus size — no REINDEX needed.`);
