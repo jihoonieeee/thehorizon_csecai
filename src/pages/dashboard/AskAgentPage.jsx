@@ -465,6 +465,19 @@ export function AskAgentPage() {
               answer_mode:         e.answer_mode          || null,
               streaming:           false,
             });
+            // Phase 2: run verifier in the background — separate Vercel call
+            // so synthesis completes within 10s. Patches answer if issues found.
+            if (e.answer && e.answer_mode === "grounded" && (e.source_refs || []).length) {
+              fetch("/api/agent-verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getSessionToken(session)}` },
+                body: JSON.stringify({ answer: e.answer, sources: e.source_refs || [], evidence: [] }),
+              }).then(r => r.ok ? r.json() : null).then(v => {
+                if (!v?.ran || !v.unsupported?.length) return;
+                const note = `\n\n**Note — the following specific claims could not be verified against the provided source summaries and may be inaccurate:**\n${v.unsupported.map(u => `- ${u}`).join("\n")}`;
+                setLast(prev => ({ ...prev, content: prev.content + note }));
+              }).catch(() => {});
+            }
           } else if (e.type === "error") {
             throw new Error(e.error);
           }

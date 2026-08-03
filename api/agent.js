@@ -810,8 +810,8 @@ export default async function handler(req, res) {
       let verify = { verdict: "grounded", unsupported: [], contradictions: [], unreconciled: [], ran: false };
       const verifyIssues = [];
       let confidence = parsed.confidence;
-      const shouldVerify = !isGeneral && !parsed.out_of_scope && finalAnswer
-        && sourceRefs.length && !BRIEF_QUERY_TYPES.has(plan.query_type);
+      // Verifier moved to /api/agent-verify (phase 2 call from client).
+      const shouldVerify = false;
       if (shouldVerify) {
         const citedNums = new Set(
           [...finalAnswer.matchAll(/\[src-(\d+)\]/g)].map(m => parseInt(m[1], 10))
@@ -831,7 +831,6 @@ export default async function handler(req, res) {
         verify = await verifyAnswer({
           answer:   finalAnswer,
           sources:  citedSources.length ? citedSources : localSourceRefs,
-          // Prefer source-specific evidence; fall back to query evidence if none found
           evidence: sourceEvidence.length ? sourceEvidence : evidence,
         });
         addCheap(verify.usage);
