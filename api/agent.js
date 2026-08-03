@@ -73,6 +73,8 @@ const STRUCTURE_BRIEF = `STRUCTURE (direct lookup — answer the question and st
 2) At most 3 numbered points. At most 2 sub-bullets per point ("- ") — one specific fact + [src-N] per sub-bullet. One clause per sub-bullet, no narrative explanation. The numbered judgement line itself must carry a [src-N] if it contains any specific claim, date, named actor, or product.
 Do NOT add "So what" or "Defenders" lines.
 
+CITATION REQUIREMENT: Every factual claim, named entity, date, version number, or CVE ID MUST have a [src-N] citation. If sources are provided, cite at least one. An answer with factual claims and no citations is invalid.
+
 WORD BUDGET: Under 300 words. Stop when the question is answered.`;
 
 function buildGroundedSystem(scopeLabel, focusCategory, thin, brief = false, queryType = null) {
