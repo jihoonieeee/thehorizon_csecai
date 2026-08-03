@@ -122,10 +122,12 @@ jobs:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BLOB_READ_WRITE_TOKEN:     ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
-          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_API_KEY_2:          ${{ secrets.GEMINI_API_KEY_2 }}
-          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
+          PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
+          LLM_PROVIDER_ORDER:        platform
+          PLATFORM_AI_PROVIDER:      platform_ai
+          PLATFORM_PIPELINE_MODEL:   gpt-5.4
+          PLATFORM_MODEL_SYNTHESIS:  gpt-5.4
+          PLATFORM_API_BASE_URL:     https://api-public.ai.tech.gov.sg
           LLM_TIMEOUT_MS:            "120000"
 
       - name: Upload decks

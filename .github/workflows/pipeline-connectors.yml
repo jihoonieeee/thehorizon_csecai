@@ -29,12 +29,12 @@ on:
 permissions:
   actions: read
 
-# Gemini-only until GovTech Platform AI endpoint path is confirmed.
 env:
-  LLM_ONLY_GEMINI: '1'
-  LLM_PROVIDER_ORDER: gemini
-  PLATFORM_AI_PROVIDER: gemini
-  PLATFORM_MODEL_SYNTHESIS: gemini-2.5-flash
+  LLM_PROVIDER_ORDER:       platform
+  PLATFORM_AI_PROVIDER:     platform_ai
+  PLATFORM_PIPELINE_MODEL:  gpt-5.4
+  PLATFORM_MODEL_SYNTHESIS: gpt-5.4
+  PLATFORM_API_BASE_URL:    https://api-public.ai.tech.gov.sg
   # L3 validation only (~200–400 sources × ~400 tokens). 500K is a 3–4× ceiling.
   # The router warns at 80% and throws at 100% — set to 0 to disable.
   LLM_DAILY_TOKEN_BUDGET: '500000'
@@ -110,9 +110,7 @@ jobs:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BLOB_READ_WRITE_TOKEN:     ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_API_KEY_2:          ${{ secrets.GEMINI_API_KEY_2 }}
-          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
           CRON_SECRET:               ${{ secrets.CRON_SECRET }}
 
       - name: Date integrity check
@@ -152,9 +150,7 @@ jobs:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BLOB_READ_WRITE_TOKEN:     ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
-          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_API_KEY_2:          ${{ secrets.GEMINI_API_KEY_2 }}
+          PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
           TAVILY_API_KEY:            ${{ secrets.TAVILY_API_KEY }}
           TAVILY_API_KEY_2:          ${{ secrets.TAVILY_API_KEY_2 }}
           TAVILY_API_KEY_3:          ${{ secrets.TAVILY_API_KEY_3 }}
@@ -168,7 +164,5 @@ jobs:
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
-          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_API_KEY_2:          ${{ secrets.GEMINI_API_KEY_2 }}
+          PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
           WEB_DISCOVERY_ENABLED:     "1"

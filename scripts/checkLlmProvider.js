@@ -11,8 +11,10 @@
  *   node scripts/checkLlmProvider.js --stream   # also exercise the streaming path
  *
  * Env:
- *   PLATFORM_AI_PROVIDER  gemini | openai-compatible | anthropic   (default gemini)
- *   PLATFORM_AI_API_KEY   the key
+ *   PLATFORM_AI_PROVIDER  platform_ai | gemini | openai-compatible | anthropic   (default gemini)
+ *   PLATFORM_AI_API_KEY   key for platform_ai (x-api-key auth, https://api-public.ai.tech.gov.sg)
+ *   PLATFORM_API_BASE_URL base URL override for platform_ai
+ *   PLATFORM_AI_API_KEY   key for other providers
  *   PLATFORM_AI_BASE_URL  base URL for openai-compatible gateways
  */
 

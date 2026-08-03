@@ -40,12 +40,12 @@ on:
 permissions:
   actions: read
 
-# Gemini-only until GovTech Platform AI endpoint path is confirmed.
 env:
-  LLM_ONLY_GEMINI: '1'
-  LLM_PROVIDER_ORDER: gemini
-  PLATFORM_AI_PROVIDER: gemini
-  PLATFORM_MODEL_SYNTHESIS: gemini-2.5-flash
+  LLM_PROVIDER_ORDER:       platform
+  PLATFORM_AI_PROVIDER:     platform_ai
+  PLATFORM_PIPELINE_MODEL:  gpt-5.4
+  PLATFORM_MODEL_SYNTHESIS: gpt-5.4
+  PLATFORM_API_BASE_URL:    https://api-public.ai.tech.gov.sg
   # L4 classify (~400 sources × ~1500 tokens) + L5 evidence (~150 sources × ~2500 tokens)
   # + insights synthesis (~4 categories). 2M is a ~2× ceiling on a full run.
   LLM_DAILY_TOKEN_BUDGET: '2000000'
@@ -114,9 +114,7 @@ jobs:
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_API_KEY_2:          ${{ secrets.GEMINI_API_KEY_2 }}
-          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
 
   rescrape:
     name: Rescrape short sources
@@ -162,9 +160,7 @@ jobs:
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_API_KEY_2:          ${{ secrets.GEMINI_API_KEY_2 }}
-          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
 
   insights:
     name: Dashboard insights
@@ -192,8 +188,7 @@ jobs:
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_API_KEY_2:          ${{ secrets.GEMINI_API_KEY_2 }}
+          PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
 
       - name: Monthly insights
         if: needs.preflight.outputs.run_monthly == 'true'
@@ -201,8 +196,7 @@ jobs:
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_API_KEY_2:          ${{ secrets.GEMINI_API_KEY_2 }}
+          PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
 
       - name: Quarterly insights
         if: needs.preflight.outputs.run_quarterly == 'true'
@@ -210,8 +204,7 @@ jobs:
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          GEMINI_API_KEY:            ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_API_KEY_2:          ${{ secrets.GEMINI_API_KEY_2 }}
+          PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
 
       - name: Run health summary
         if: always()

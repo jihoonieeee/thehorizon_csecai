@@ -24,13 +24,20 @@ import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { appendFileSync } from "node:fs";
 
-const args = Object.fromEntries(
-  process.argv.slice(2).filter(a => a.startsWith("--")).map(a => {
-    const [k, v] = a.slice(2).split("=");
-    return [k, v ?? true];
-  })
-);
-const HOURS = parseInt(args.hours || "3", 10);
+const args = {};
+const _argv = process.argv.slice(2);
+for (let _i = 0; _i < _argv.length; _i++) {
+  if (!_argv[_i].startsWith("--")) continue;
+  const _eq = _argv[_i].indexOf("=");
+  if (_eq !== -1) {
+    args[_argv[_i].slice(2, _eq)] = _argv[_i].slice(_eq + 1);
+  } else {
+    const _next = _argv[_i + 1];
+    if (_next !== undefined && !_next.startsWith("--")) { args[_argv[_i].slice(2)] = _next; _i++; }
+    else args[_argv[_i].slice(2)] = true;
+  }
+}
+const HOURS = parseInt(args.hours, 10) || 3;
 const BLEED_MINUTES = 10;
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
