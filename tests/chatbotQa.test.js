@@ -94,6 +94,11 @@ test("no_fake_scores: qualitative confidence passes", () => {
 test("no_fake_scores: CVSS score is allowed", () => {
   isPass(evalNoFakeScores({ answer: "The flaw carries a CVSS score of 9.8 (Critical)." }));
 });
+test("no_fake_scores: model version list 'Sonnet 4.6/5, Opus 4.8' is not a fake score", () => {
+  // "4.6/5" here means Claude Sonnet versions 4.6 and 5, not a 4.6-out-of-5 rating.
+  // The comma+capital-letter lookahead distinguishes version lists from scores.
+  isPass(evalNoFakeScores({ answer: "RCE was demonstrated in Claude Code CLI (Sonnet 4.6/5, Opus 4.8) using prompt injection." }));
+});
 test("no_fake_scores: 8/10 risk score fails", () => {
   isFail(evalNoFakeScores({ answer: "We rate this a risk score of 8/10." }));
 });

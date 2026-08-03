@@ -42,7 +42,7 @@ const MALFORMED_CITATION = /\[src-(?!\d+\])[^\]]{0,40}\]/i;
 const FAKE_SCORE = [
   /\bconfidence\b[^.\n]{0,24}?\b\d{1,3}(?:\.\d+)?\s*(?:%|\/\s*\d+|out of\s*\d+)/i,
   /\b(?:risk|threat|priority|relevance|severity|impact)\s+score\s*(?:[:=]|of|is)?\s*\d/i,
-  /\b\d{1,2}(?:\.\d)?\s*\/\s*(?:5|10|100)\b(?!\s*(?:am|pm))/,   // 8/10, 7.5/100 (not times)
+  /\b\d{1,2}(?:\.\d)?\s*\/\s*(?:5|10|100)\b(?!\s*(?:am|pm|,\s*[A-Z]))/,   // 8/10, 7.5/100 (not times; not "4.6/5, Opus 4.8" model-version lists)
   /\bscored?\s+(?:it\s+)?(?:a\s+)?\d{1,3}(?:\.\d+)?\s*(?:%|\/)/i,
 ];
 
