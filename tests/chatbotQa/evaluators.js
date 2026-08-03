@@ -82,10 +82,14 @@ const INSUFFICIENT_EVIDENCE = [
 ];
 
 // A refusal / unknown-handled response: the agent either structurally blocked the
-// answer (qa_blocked) or used insufficient-evidence language. Used everywhere a
-// refusal should exempt an answer from citation/breadth expectations.
+// answer (qa_blocked), used insufficient-evidence language, OR correctly routed to
+// the general fallback (answer_mode === "general"). The general fallback fires when
+// corpus retrieval finds nothing on-topic — for hallucination-trap questions this
+// IS the correct handling, and the fallback preamble explicitly labels the answer
+// as ungrounded general knowledge rather than a corpus-verified finding.
 function isRefusal(payload) {
   if (payload?.qa_blocked === true) return true;
+  if (payload?.answer_mode === "general") return true;
   return anyMatch(INSUFFICIENT_EVIDENCE, payload?.answer || "");
 }
 

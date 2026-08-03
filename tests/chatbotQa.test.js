@@ -142,6 +142,17 @@ test("handles_unknown: agent QA block (qa_blocked) counts as handled", () => {
   // Exact shape api/agent.js emits when its QA layer blocks a fabricated answer.
   isPass(evalHandlesUnknown({ qa_blocked: true, citations: [], answer: "I can't give a reliable answer to this from the current corpus. The automated quality check flagged: no cited source survived validation. Try rephrasing so the answer can be grounded in verified sources." }));
 });
+test("handles_unknown: answer_mode=general counts as handled (hallucination trap → correct fallback)", () => {
+  // The general fallback fires when corpus retrieval finds nothing for a fabricated
+  // scenario. The fallback preamble labels it as ungrounded general knowledge, which
+  // IS the correct handling — isRefusal() must recognise it so we don't false-fail.
+  isPass(evalHandlesUnknown({ answer_mode: "general", citations: [], answer: "I found sources that share keywords but none that actually address this question, so I can't ground an answer in our corpus. Here's a general, best-effort answer from background knowledge — treat it as general context, not a corpus-verified finding. The corpus has material on AI supply chain threats but nothing tying LiteLLM to a China–Singapore attack." }));
+});
+test("handles_unknown: grounded answer without refusal language fails (non-determinism catch)", () => {
+  // A grounded (non-general) answer with no refusal language should still fail —
+  // the model should refuse for hallucination traps, not answer confidently.
+  isFail(evalHandlesUnknown({ answer_mode: "grounded", citations: [{ ref: "[src-1]" }], answer: "LiteLLM was exploited in several supply chain attacks across Asia Pacific." }));
+});
 
 // fabricated specifics
 test("no_fabricated_specifics: refusal passes even if term named", () => {

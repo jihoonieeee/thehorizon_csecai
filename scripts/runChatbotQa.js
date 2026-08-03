@@ -14,11 +14,15 @@
  * Requires: ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
  *
  * Usage:
- *   node scripts/runChatbotQa.js                 # all cases
+ *   node scripts/runChatbotQa.js                      # all cases
  *   node scripts/runChatbotQa.js --category hallucination_resistance
  *   node scripts/runChatbotQa.js --id BR-01,HR-01
- *   node scripts/runChatbotQa.js --verbose       # print each answer
- *   node scripts/runChatbotQa.js --json out.json # also write machine-readable report
+ *   node scripts/runChatbotQa.js --verbose            # print each answer (400 chars)
+ *   node scripts/runChatbotQa.js --verbose-full       # print each answer (full text)
+ *   node scripts/runChatbotQa.js --json out.json      # also write machine-readable report
+ *   node scripts/runChatbotQa.js --delay 2000         # ms to wait between cases (default 2000)
+ *                                                     # prevents Supabase connection exhaustion
+ *                                                     # on full 62-case runs; use 0 for --id runs
  */
 import "dotenv/config";
 import { writeFileSync } from "node:fs";
@@ -28,10 +32,15 @@ import { evaluateCase, verdictFor } from "../tests/chatbotQa/evaluators.js";
 
 const args    = process.argv.slice(2);
 const getArg  = (f) => { const i = args.indexOf(f); return i >= 0 ? args[i + 1] : null; };
-const VERBOSE = args.includes("--verbose");
+const VERBOSE      = args.includes("--verbose") || args.includes("--verbose-full");
+const VERBOSE_FULL = args.includes("--verbose-full");
 const ONLY_CAT = getArg("--category");
 const ONLY_IDS = getArg("--id")?.split(",").map(s => s.trim());
 const JSON_OUT = getArg("--json");
+// Inter-case delay prevents Supabase HTTP keep-alive sockets from exhausting the
+// connection pool on full 62-case runs. Defaults to 2 s; pass --delay 0 for
+// targeted --id runs where connection exhaustion is not a risk.
+const INTER_CASE_DELAY = parseInt(getArg("--delay") ?? "2000", 10);
 
 for (const k of ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]) {
   if (!process.env[k]) { console.error(`Missing env: ${k}. This runner needs live keys.`); process.exit(1); }
@@ -108,15 +117,19 @@ for (const tc of cases) {
       else if (r.pass === null && r.applicable) console.log(`      ? ${r.id}: ${r.detail}`);
     }
     if (VERBOSE) {
-      console.log(`      answer: ${(payload.answer || "").replace(/\s+/g, " ").slice(0, 400)}`);
-      console.log(`      citations: ${(payload.citations || []).length} | confidence: ${payload.confidence} | scope: ${payload.temporal_scope}`);
+      const answerText = (payload.answer || "").replace(/\s+/g, " ");
+      console.log(`      answer: ${VERBOSE_FULL ? answerText : answerText.slice(0, 400)}`);
+      console.log(`      mode: ${payload.answer_mode || "?"} | citations: ${(payload.citations || []).length} | confidence: ${payload.confidence} | scope: ${payload.temporal_scope}`);
     }
   }
   report.push({ id: tc.id, category: tc.category, question: tc.question, verdict, error: err,
     latency_ms: ms, cost_usd: cost, token_usage: payload?.token_usage,
     results, answer: payload?.answer, citations: payload?.citations, source_refs: payload?.source_refs,
     confidence: payload?.confidence, temporal_scope: payload?.temporal_scope,
+    answer_mode: payload?.answer_mode, retrieval_verdict: payload?.retrieval_verdict,
     qa_pass: payload?.qa_pass, qa_blocked: payload?.qa_blocked });
+
+  if (INTER_CASE_DELAY > 0) await new Promise(r => setTimeout(r, INTER_CASE_DELAY));
 }
 
 // Cost + latency stats.
