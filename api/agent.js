@@ -298,12 +298,10 @@ export async function urlIsBroken(url) {
   }
 }
 async function findDeadUrls(urls, normalizeUrl) {
-  const distinct = [...new Set(urls.filter(Boolean))];
-  if (!distinct.length) return new Set();
-  const verdicts = await Promise.all(distinct.map(u => urlIsBroken(u)));
-  const dead = new Set();
-  distinct.forEach((u, i) => { if (verdicts[i]) dead.add(normalizeUrl(u)); });
-  return dead;
+  // Disabled — URL liveness checks add 5-8s after synthesis and push past
+  // Vercel's 10s function limit. Sources come from a curated DB; dead links
+  // are rare enough that the latency cost is not worth it.
+  return new Set();
 }
 
 // ── Grounding context builder ────────────────────────────────────────────────────
@@ -513,9 +511,14 @@ export default async function handler(req, res) {
     // between ret.count and candidateSources.length is marketing blogs removed.
     // Telling the selector "35 of 35" when it sees 33 (2 blogs filtered) is
     // misleading; the selector IS seeing the full usable pool.
-    const sel = candidateSources.length
-      ? await selectSources(query, candidateSources, plan, candidateSources.length, evidenceBySrcId)
-      : { selected: [], verdict: "none", coverage: "none", missing: [], usage: { input_tokens: 0, output_tokens: 0 } };
+    // Skip selector LLM call for small pools — saves one cheap call (~3-9s).
+    // With ≤ 10 candidates, just pass all through; synthesis cites only relevant ones.
+    const SELECTOR_THRESHOLD = 10;
+    const sel = candidateSources.length === 0
+      ? { selected: [], verdict: "none", coverage: "none", missing: [], usage: { input_tokens: 0, output_tokens: 0 } }
+      : candidateSources.length <= SELECTOR_THRESHOLD
+        ? { selected: candidateSources.map(s => s.ref), verdict: "good", coverage: "complete", missing: [], usage: { input_tokens: 0, output_tokens: 0 } }
+        : await selectSources(query, candidateSources, plan, candidateSources.length, evidenceBySrcId);
     addCheap(sel.usage);
 
     const selectedSet = new Set(sel.selected);
@@ -610,12 +613,19 @@ export default async function handler(req, res) {
     const system = isGeneral
       ? buildGeneralSystem(query)
       : buildGroundedSystem(plan.temporal.scope_label, plan.category, sel.verdict === "thin", briefAnswer);
-    // Taxonomy block first: it's large, static, and caches across all requests.
-    // The dynamic system prompt is second — it changes per query (category/scope/thin).
-    const cachedSystem = [
-      { type: "text", text: TAXONOMY_CONTEXT, cache_control: { type: "ephemeral" } },
-      { type: "text", text: system, cache_control: { type: "ephemeral" } },
-    ];
+    // Taxonomy block: 9KB payload sent on every call. Only inject for analytical
+    // query types that actually need precise taxonomy labels. Brief lookups and
+    // general queries don't benefit from it and it adds network overhead through proxy.
+    const TAXONOMY_QUERY_TYPES = new Set([
+      "trend_analysis", "strategic_assessment", "comparison", "timeline",
+    ]);
+    const needsTaxonomy = TAXONOMY_QUERY_TYPES.has(plan.query_type) && !isGeneral;
+    const cachedSystem = needsTaxonomy
+      ? [
+          { type: "text", text: TAXONOMY_CONTEXT, cache_control: { type: "ephemeral" } },
+          { type: "text", text: system, cache_control: { type: "ephemeral" } },
+        ]
+      : [{ type: "text", text: system, cache_control: { type: "ephemeral" } }];
 
     const userContent = isGeneral
       ? query.trim()
@@ -800,8 +810,9 @@ export default async function handler(req, res) {
       let verify = { verdict: "grounded", unsupported: [], contradictions: [], unreconciled: [], ran: false };
       const verifyIssues = [];
       let confidence = parsed.confidence;
-      const shouldVerify = !isGeneral && !parsed.out_of_scope && finalAnswer
-        && sourceRefs.length && !BRIEF_QUERY_TYPES.has(plan.query_type);
+      // Verifier disabled — saves one LLM call (~3-9s) to stay within Vercel
+      // 10s function limit. Re-enable when running on Pro (60s limit).
+      const shouldVerify = false;
       if (shouldVerify) {
         const citedNums = new Set(
           [...finalAnswer.matchAll(/\[src-(\d+)\]/g)].map(m => parseInt(m[1], 10))
