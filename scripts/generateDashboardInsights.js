@@ -30,6 +30,7 @@
 
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
+import { embedNewRows } from "../lib/pipeline/embedNewRows.js";
 import { getCompletedPeriodWindow } from "../lib/time/reportingWindow.js";
 import { getTag } from "../lib/config/taxonomyRegistry.js";
 import {
@@ -1051,5 +1052,6 @@ import { fileURLToPath } from "url";
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   main()
     .then(() => flushCostBuffer())
+    .then(() => embedNewRows(supabase, ["insights"]))
     .catch(err => { console.error("\nFATAL:", err.message); process.exit(1); });
 }

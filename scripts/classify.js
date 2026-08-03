@@ -27,6 +27,7 @@
 
 import "dotenv/config";
 import { createClient }          from "@supabase/supabase-js";
+import { embedNewRows }          from "../lib/pipeline/embedNewRows.js";
 import { understandAllSources }  from "../lib/pipeline/understand/understandSource.js";
 import { qaClassificationLLM }   from "../lib/pipeline/understand/qaClassification.js";
 import { detectDigest, fanOutDigest } from "../lib/pipeline/ingest/digestFanout.js";
@@ -359,4 +360,5 @@ async function main() {
 
 main()
   .then(() => flushCostBuffer())
+  .then(() => embedNewRows(supabase, ["sources"]))
   .catch(err => { console.error(err); process.exit(1); });

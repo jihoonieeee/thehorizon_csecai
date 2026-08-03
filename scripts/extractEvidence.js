@@ -30,6 +30,7 @@ import { createClient }      from "@supabase/supabase-js";
 import { extractAllEvidence } from "../lib/pipeline/extraction/extractEvidence.js";
 import { getEvidenceHashes, contentHashOf } from "../lib/storage/evidenceStore.js";
 import { flushCostBuffer }   from "../lib/llm/usagePersistence.js";
+import { embedNewRows }      from "../lib/pipeline/embedNewRows.js";
 
 const args   = process.argv.slice(2);
 const getArg = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i + 1] ? args[i + 1] : d; };
@@ -113,3 +114,4 @@ if (stale.length - batch.length > 0) {
 console.log();
 
 await flushCostBuffer().catch(() => {});
+await embedNewRows(sb, ["evidence"]);
