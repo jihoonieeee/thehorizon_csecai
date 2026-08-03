@@ -292,14 +292,22 @@ function Message({ msg, onFollowUp, showCost }) {
           General knowledge — not grounded in the corpus
         </div>
       )}
+      {msg.retrieval_verdict === "thin" && msg.answer_mode !== "general" && !msg.streaming && (
+        <div className="hz-answer-mode-badge hz-answer-mode-thin" title="Fewer than 3 sources matched this question — answer may be incomplete.">
+          Limited sources — answer may be incomplete
+        </div>
+      )}
       <div className="hz-msg-assistant-content">
         <StructuredText text={msg.content} sourceRefs={msg.source_refs} />
       </div>
 
       {msg.citations?.length > 0 && (() => {
+        const sorted = [...msg.citations].sort((a, b) =>
+          (parseInt(a.ref?.match(/\d+/)?.[0] || 0, 10)) - (parseInt(b.ref?.match(/\d+/)?.[0] || 0, 10))
+        );
         const isAIID = (c) => c.url?.includes("incidentdatabase.ai") || /ai incident database/i.test(c.publisher || "");
-        const main = msg.citations.filter(c => !isAIID(c));
-        const aiid = msg.citations.filter(c => isAIID(c));
+        const main = sorted.filter(c => !isAIID(c));
+        const aiid = sorted.filter(c => isAIID(c));
         return (
           <div className="hz-source-row">
             <span className="hz-source-row-label">Sources</span>
@@ -465,6 +473,7 @@ export function AskAgentPage() {
               qa_issues:           e.qa_issues            || [],
               qa_pass:             e.qa_pass !== false,
               answer_mode:         e.answer_mode          || null,
+              retrieval_verdict:   e.retrieval_verdict    || null,
               streaming:           false,
             });
             // Phase 2: run verifier in the background — separate Vercel call

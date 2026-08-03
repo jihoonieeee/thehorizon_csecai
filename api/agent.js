@@ -181,14 +181,16 @@ function extractCitations(text, sourceRefs) {
 
 // ── Deterministic QA (unchanged) ────────────────────────────────────────────────
 
+// Purely grammatical/functional stopwords. Security-domain terms (threat, attack,
+// model, etc.) were previously included but caused the bag-of-words relevance
+// check to fail on legitimately cited sources that share only those terms with
+// the answer — they are now kept so genuine overlap is detected.
 const QA_STOPWORDS = new Set([
   "the","and","for","are","with","that","this","from","into","what","how","why",
   "does","is","of","to","a","in","on","an","about","which","were","was","has",
   "have","can","could","would","should","their","they","there","these","those",
   "then","than","also","been","being","such","other","more","most","some","any",
   "when","where","while","because","after","before","over","under","between",
-  "threat","threats","attack","attacks","source","sources","security","model",
-  "models","system","systems","data","using","used","use","risk","risks",
 ]);
 function qaContentTokens(s) {
   const words = String(s || "").toLowerCase().match(/[a-z0-9]{4,}/g) || [];
@@ -461,7 +463,7 @@ export default async function handler(req, res) {
     }
 
     // ── 1. Plan (Haiku) ──────────────────────────────────────────────────────────
-    const { plan, usage: planUsage } = await planQuery(query);
+    const { plan, usage: planUsage } = await planQuery(query, { history: historyMessages });
     addCheap(planUsage);
     if (category && CATEGORY_LABELS[category]) plan.category = category;  // explicit dashboard filter wins
 
