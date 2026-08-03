@@ -84,8 +84,9 @@ const EMBED_MODEL = "text-embedding-3-large";
 const BASE_URL    = (process.env.PLATFORM_API_BASE_URL || "https://api-public.ai.tech.gov.sg").replace(/\/$/, "");
 const EMBED_URL   = `${BASE_URL}/platform/models/v1/embeddings`;
 
-async function embedBatch(texts) {
+async function embedBatch(texts, attempt = 0) {
   if (!texts.length) return [];
+  const MAX_RETRIES = 4;
   const res = await fetch(EMBED_URL, {
     method:  "POST",
     headers: { "Content-Type": "application/json", "x-api-key": process.env.PLATFORM_AI_API_KEY },
@@ -93,6 +94,13 @@ async function embedBatch(texts) {
     signal:  AbortSignal.timeout(30000),
   });
   if (!res.ok) {
+    // Retry on rate-limit or transient server errors with exponential backoff.
+    if ((res.status === 429 || res.status === 503) && attempt < MAX_RETRIES) {
+      const wait = (attempt + 1) * 5000;
+      process.stdout.write(`\n  [embed] ${res.status} — retrying in ${wait / 1000}s (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+      await sleep(wait);
+      return embedBatch(texts, attempt + 1);
+    }
     const err = await res.text().catch(() => res.status);
     throw new Error(`Platform ${res.status}: ${String(err).slice(0, 120)}`);
   }
@@ -303,13 +311,44 @@ console.log(`\nRAG Embedding Backfill — ${new Date().toISOString().slice(0, 16
 console.log(`Model: ${EMBED_MODEL} (3072-dim)  Tables: ${tables.join(", ")}${FORCE ? "  [--force: re-embedding all rows]" : ""}`);
 
 // --force: null existing embeddings so the skip-if-present guard re-processes them.
+// Evidence is large (4k+ rows) so clears in pages of 500 IDs to avoid statement timeout.
+// Sources (~1k) and insights (~53) are small enough for a single UPDATE each.
+async function clearEmbeddingsPaged(table, idCol) {
+  // Fetch all IDs first, then update in small IN-list chunks (50 at a time).
+  // A single large UPDATE hits the statement timeout; a single large IN clause
+  // hits PostgREST's URL length limit — small chunks avoid both.
+  const CHUNK = 50;
+  const allIds = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await sb.from(table).select(idCol).not("embedding", "is", null).range(from, from + 999);
+    if (error) throw new Error(`clear ${table} fetch: ${error.message}`);
+    if (!data?.length) break;
+    allIds.push(...data.map(r => r[idCol]));
+    if (data.length < 1000) break;
+  }
+  if (!allIds.length) return;
+  for (let i = 0; i < allIds.length; i += CHUNK) {
+    const chunk = allIds.slice(i, i + CHUNK);
+    const { error } = await sb.from(table).update({ embedding: null }).in(idCol, chunk);
+    if (error) throw new Error(`clear ${table}: ${error.message}`);
+    process.stdout.write(`\r  ${table}: cleared ${Math.min(i + CHUNK, allIds.length)}/${allIds.length} rows...`);
+  }
+  process.stdout.write(`\r  ${table}: cleared ${allIds.length} rows        \n`);
+}
+
 if (FORCE) {
   console.log("\nClearing existing embeddings...");
-  const clears = [];
-  if (RUN_SOURCES)  clears.push(sb.from("sources").update({ embedding: null }).not("embedding", "is", null).then(({ error }) => { if (error) throw new Error(`clear sources: ${error.message}`); }));
-  if (RUN_EVIDENCE) clears.push(sb.from("evidence").update({ embedding: null }).not("embedding", "is", null).then(({ error }) => { if (error) throw new Error(`clear evidence: ${error.message}`); }));
-  if (RUN_INSIGHTS) clears.push(sb.from("dashboard_insights").update({ embedding: null }).not("embedding", "is", null).then(({ error }) => { if (error) throw new Error(`clear insights: ${error.message}`); }));
-  await Promise.all(clears);
+  if (RUN_SOURCES) {
+    const { error } = await sb.from("sources").update({ embedding: null }).not("embedding", "is", null);
+    if (error) throw new Error(`clear sources: ${error.message}`);
+    console.log("  sources: cleared");
+  }
+  if (RUN_EVIDENCE) await clearEmbeddingsPaged("evidence", "id");
+  if (RUN_INSIGHTS) {
+    const { error } = await sb.from("dashboard_insights").update({ embedding: null }).not("embedding", "is", null);
+    if (error) throw new Error(`clear insights: ${error.message}`);
+    console.log("  dashboard_insights: cleared");
+  }
   console.log("  Done — all existing embeddings cleared.");
 }
 
