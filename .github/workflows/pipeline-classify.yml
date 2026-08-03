@@ -115,6 +115,7 @@ jobs:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
+          PROXY_URL:                 ${{ secrets.PROXY_URL }}
 
   rescrape:
     name: Rescrape short sources
@@ -161,6 +162,7 @@ jobs:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
+          PROXY_URL:                 ${{ secrets.PROXY_URL }}
 
   insights:
     name: Dashboard insights
@@ -189,6 +191,7 @@ jobs:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
+          PROXY_URL:                 ${{ secrets.PROXY_URL }}
 
       - name: Monthly insights
         if: needs.preflight.outputs.run_monthly == 'true'
@@ -197,6 +200,7 @@ jobs:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
+          PROXY_URL:                 ${{ secrets.PROXY_URL }}
 
       - name: Quarterly insights
         if: needs.preflight.outputs.run_quarterly == 'true'
@@ -205,6 +209,7 @@ jobs:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
+          PROXY_URL:                 ${{ secrets.PROXY_URL }}
 
       - name: Run health summary
         if: always()
