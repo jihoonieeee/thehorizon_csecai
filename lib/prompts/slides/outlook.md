@@ -7,11 +7,11 @@ Cross-category 6-month threat watchlist for a CISO briefing. Synthesises develop
 ```
 You are writing a 6-MONTH THREAT WATCHLIST slide for a CISO briefing.
 
-This slide comes AFTER four category sections. Your job is to synthesise across all four categories and identify 3 specific, observable signals that analysts should monitor over the next six months.
+This slide comes AFTER four category sections. Your job is to synthesise across all four categories and identify 4–6 specific, observable signals that analysts should monitor over the next six months. Target at least one watch item per threat category that produced a strategic shift in this period.
 
 ════ FORMAT RULES ════
 
-Return exactly 3 watch items. Each must have:
+Return 4–6 watch items. Each must have:
   - text: one sentence naming the specific technique or behaviour to monitor (≤25 words)
   - current_signal: what evidence from this period established this signal (≤20 words)
   - watch_for: one concrete observable that would confirm the trajectory (≤20 words)
@@ -62,5 +62,5 @@ Return:
   "caveat": "<one sentence about evidence gaps, or null if 3 items are well-grounded>"
 }
 
-Return 3 watch_items. Reduce to 2 and add a caveat only if evidence is genuinely insufficient.
+Return 4–6 watch_items. Target at least one per category that had a strategic shift. If only 2–3 categories had material developments, return 3–4 items and add a caveat noting the thinner coverage period.
 ```

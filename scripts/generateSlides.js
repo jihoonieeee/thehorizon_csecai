@@ -352,6 +352,61 @@ async function main() {
     }
   }
 
+  // ── Retry categories where the LLM call returned empty (once, sequential) ──
+  // Promise.allSettled swallows null LLM responses as fulfilled-but-empty.
+  // Retry gives transient platform errors a second chance before the category
+  // is silently absent from the deck.
+  const emptyDueToLlm = activeCategories.filter(cat => {
+    const rep = categoryReports[cat];
+    return rep &&
+      (rep.strategic_shifts || []).length === 0 &&
+      (rep.coverage_gaps || []).some(g => g.includes("LLM call returned empty"));
+  });
+  if (emptyDueToLlm.length) {
+    log(`\n  Retrying ${emptyDueToLlm.length} empty category report(s)…`);
+    for (const cat of emptyDueToLlm) {
+      const retry = await generateCategoryReport(cat, contexts[cat], timeframeLabel, dateFrom, dateTo);
+      if ((retry.strategic_shifts || []).length > 0) {
+        categoryReports[cat] = retry;
+        log(`  ✓ ${cat}: retry succeeded (${retry.strategic_shifts.length} shifts)`);
+      } else {
+        log(`  ✗ ${cat}: retry still empty — category will be absent from deck`);
+      }
+    }
+  }
+
+  // ── Maturity ceiling enforcement (deterministic, post-LLM) ───────────────
+  // The category-report prompt has maturity rules but LLMs occasionally assign
+  // operational_campaign to research-only shifts. Cap maturity based on the
+  // actual evidence tiers of the cited sources.
+  function capShiftMaturity(shift, sourceIndex) {
+    const MAT_RANK = {
+      operational_campaign: 5, adversary_adoption: 4, observed_exploitation: 3,
+      disclosed_vulnerability: 2, research_demonstration: 1,
+    };
+    const labels = (shift.supporting_evidence || []).flatMap(e => e.cited_sources || []);
+    if (!labels.length) return shift;
+    const hasOperational = labels.some(l =>
+      ["realized", "proven"].includes(sourceIndex[l]?.importance_tier)
+    );
+    if (!hasOperational && (MAT_RANK[shift.maturity] || 0) >= 3) {
+      log(`  ↳ capped maturity: ${shift.headline?.slice(0, 60)} (${shift.maturity} → disclosed_vulnerability)`);
+      return {
+        ...shift,
+        maturity:   "disclosed_vulnerability",
+        confidence: shift.confidence === "high" ? "moderate" : shift.confidence,
+      };
+    }
+    return shift;
+  }
+
+  for (const cat of activeCategories) {
+    const report = categoryReports[cat];
+    if (!report) continue;
+    const idx = contexts[cat]?.sourceIndex || {};
+    report.strategic_shifts = (report.strategic_shifts || []).map(s => capShiftMaturity(s, idx));
+  }
+
   // ── Fetch full_text for every cited source (once) ─────────────────────────
   // Both the deterministic scrub and the QA gate ground on full_text — the same
   // basis the insight layer uses — not the ~550-char short_summary. Fetch the
@@ -421,6 +476,21 @@ async function main() {
         log(`      ↳ dropped citation ${iss.label} (${iss.context})`);
       }
     }
+  }
+
+  // ── Post-QA gate: drop shifts that lost all evidence bullets ────────────
+  // qaReport entailment may drop every bullet from a shift. A shift with zero
+  // supporting_evidence is assertion without evidence — remove it before
+  // planCategorySlides runs so it never reaches the deck.
+  for (const cat of activeCategories) {
+    const report = categoryReports[cat];
+    if (!report) continue;
+    const before = (report.strategic_shifts || []).length;
+    report.strategic_shifts = (report.strategic_shifts || [])
+      .filter(s => (s.supporting_evidence || []).length >= 1);
+    const dropped = before - report.strategic_shifts.length;
+    if (dropped > 0)
+      log(`  ✗ ${cat}: dropped ${dropped} shift(s) with no evidence after QA`);
   }
 
   // ── Step 5 (cont): Plan category slides ──────────────────────────────────
