@@ -290,7 +290,9 @@ export function evalAnswerStructure(payload) {
   const words = answer.split(/\s+/).filter(Boolean).length;
   if (words < 60) return R("answer_structure", false, null, "N/A — answer too short to require structure.");
   const hasAssessment   = /\bAssessment\s*:/i.test(answer);
-  const hasNumberedPt   = /^\s*\*{0,2}\s*\d+[.)]\s+\S/m.test(answer);
+  // Match both plain "1. " and bold "**1.** " markdown formats.
+  // The model uses **N.** (closing asterisks after the period) so we allow \*{0,2} after [.)].
+  const hasNumberedPt   = /^\s*\*{0,2}\s*\d+[.)]\*{0,2}\s+\S/m.test(answer);
   const pass = hasAssessment && hasNumberedPt;
   const missing = [!hasAssessment && "Assessment: line", !hasNumberedPt && "numbered points"].filter(Boolean).join(", ");
   return R("answer_structure", true, pass,

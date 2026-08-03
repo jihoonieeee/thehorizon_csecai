@@ -695,7 +695,19 @@ export default async function handler(req, res) {
     async function buildPayload(rawText) {
       const parsed = parseResponse(rawText || "(No answer generated)");
       parsed.answer = normalizeCitationMarkers(parsed.answer);
-      const normalizeUrl = (u) => u?.replace(/[.,;:!?/]+$/, "").toLowerCase().replace(/^https?:\/\//, "");
+      // Normalise URLs for dedup: strip scheme, trailing punctuation, and common
+      // CDN/staging subdomain prefixes so variant URLs of the same article collapse
+      // to one key. Handles:
+      //   "origin-unit42.paloaltonetworks.com/foo" → "unit42.paloaltonetworks.com/foo"
+      //   "www.example.com/foo" → "example.com/foo"
+      const normalizeUrl = (u) => {
+        if (!u) return u;
+        return u.replace(/[.,;:!?/]+$/, "")
+                .toLowerCase()
+                .replace(/^https?:\/\//, "")
+                .replace(/^origin-/, "")          // CDN "origin-X" subdomain prefix → X
+                .replace(/^(?:www|m|amp)\./, ""); // strip common www./m./amp. prefixes
+      };
 
       const retrievedUrls = new Set([
         ...sourceRefs.map(s => normalizeUrl(s.url)),
