@@ -446,16 +446,30 @@ async function main() {
     // 3. Attribution cap: state-actor/APT claim not sourced from a major TI publisher.
     // Uses isMajorTISource (URL patterns only) — avoids trust_tier=primary mis-tags
     // on aggregators and news outlets from bypassing the cap.
+    // When cap fires: confidence → low, maturity → disclosed_vulnerability max,
+    // takeaway prefixed with "Reporting suggests". Preserves proper-noun capitalisation
+    // by only lowercasing the first char when it would produce "china" → avoid that
+    // by keeping the original case for the second word onward.
     const bulletText = (s.supporting_evidence || []).map(e => e.fact || "").join(" ");
     if (ATTRIBUTION_RE.test(bulletText) || ATTRIBUTION_RE.test(s.takeaway || "")) {
       const anyMajorTI = labels.some(l => isMajorTISource(sourceIndex[l]?.source_url || ""));
       if (!anyMajorTI && s.confidence !== "low") {
-        log(`  ↳ attribution cap: ${s.headline?.slice(0, 55)} — no major TI source, confidence → low`);
-        const hedgedTakeaway = s.takeaway?.startsWith("Reporting suggests") ||
-                               s.takeaway?.startsWith("Unverified")
-          ? s.takeaway
-          : `Reporting suggests ${s.takeaway?.charAt(0).toLowerCase()}${s.takeaway?.slice(1)}`;
-        s = { ...s, confidence: "low", takeaway: hedgedTakeaway };
+        log(`  ↳ attribution cap: ${s.headline?.slice(0, 55)} — no major TI source, confidence → low, maturity ≤ disclosed_vulnerability`);
+        let hedgedTakeaway = s.takeaway || "";
+        if (!hedgedTakeaway.startsWith("Reporting suggests") && !hedgedTakeaway.startsWith("Unverified")) {
+          // Lowercase only a leading single-word article/pronoun, not proper nouns.
+          // If the takeaway starts with a proper noun (capital letter that isn't I/A),
+          // keep it capitalized to avoid "china-aligned" artifacts.
+          const firstWord = hedgedTakeaway.split(" ")[0] || "";
+          const safeFirstChar = /^[A-Z]{2,}/.test(firstWord) || /^[A-Z][a-z]{2,}/.test(firstWord)
+            ? hedgedTakeaway   // starts with proper noun — don't lowercase
+            : hedgedTakeaway.charAt(0).toLowerCase() + hedgedTakeaway.slice(1);
+          hedgedTakeaway = `Reporting suggests ${safeFirstChar}`;
+        }
+        const cappedMaturity = (MAT_RANK[s.maturity] || 0) > 2
+          ? "disclosed_vulnerability"
+          : s.maturity;
+        s = { ...s, confidence: "low", maturity: cappedMaturity, takeaway: hedgedTakeaway };
       }
     }
 
@@ -558,12 +572,14 @@ async function main() {
     }
   }
 
-  // ── Steps 4+5: QA + Outlook + Overview in parallel ───────────────────────
-  log("\nSteps 4+5/6  QA checks + Outlook + Overview (parallel)…");
+  // ── Step 4: QA + Outlook in parallel ────────────────────────────────────
+  // Overview is generated AFTER QA + post-QA gate so it only references shifts
+  // that will actually appear in the deck. Outlook is independent of QA results
+  // so it stays in this parallel batch.
+  log("\nStep 4/6  QA checks + Outlook (parallel)…");
   const allReports = activeCategories.map(c => categoryReports[c]).filter(Boolean);
 
-  // Skip cross-category slides in single-category debug mode — they'd misrepresent the deck
-  const [qaResultPairs, outlookRaw, overviewRaw] = await Promise.all([
+  const [qaResultPairs, outlookRaw] = await Promise.all([
     Promise.all(
       activeCategories.map(async cat => {
         const report = categoryReports[cat];
@@ -573,7 +589,6 @@ async function main() {
       })
     ),
     singleCat ? Promise.resolve(null) : generateOutlookSlide(allReports, timeframeLabel, dateFrom, dateTo),
-    singleCat ? Promise.resolve(null) : generateOverviewSlide(allReports, timeframeLabel, dateFrom, dateTo),
   ]);
 
   const qaResults = Object.fromEntries(qaResultPairs);
@@ -647,6 +662,13 @@ async function main() {
       }
     }
   }
+
+  // ── Step 4b: Overview — generated after QA + gate so it only sees deck-visible shifts ──
+  log("\nStep 4b/6  Generating overview (post-QA)…");
+  const postQaReports = activeCategories.map(c => categoryReports[c]).filter(Boolean);
+  const overviewRaw = singleCat
+    ? null
+    : await generateOverviewSlide(postQaReports, timeframeLabel, dateFrom, dateTo);
 
   // ── Step 5 (cont): Plan category slides ──────────────────────────────────
   log("\nStep 5/6  Planning slides…");
