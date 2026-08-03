@@ -673,7 +673,7 @@ export default async function handler(req, res) {
         { type: "text", text: buildGeneralSystem(query), cache_control: { type: "ephemeral" } },
       ];
       const gResp = await platformChat({
-        tier: "synthesis", maxTokens: 3000, thinkingBudget: 1024, system: gSys,
+        tier: "synthesis", maxTokens: 8000, thinkingBudget: 1024, system: gSys,
         messages: [...historyMessages, { role: "user", content: query.trim() }],
       });
       recordSynth(gResp.inputTokens, gResp.outputTokens, gResp.model);

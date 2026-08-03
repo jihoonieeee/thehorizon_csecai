@@ -11,7 +11,7 @@ The intended audience is cybersecurity professionals, policy analysts, and decis
 - Backend: Vercel serverless functions in /api (Node.js ESM)
 - Database: Supabase (PostgreSQL) via @supabase/supabase-js with service role key
 - File storage: Vercel Blob for snapshot JSON archives
-- LLM: Pipeline uses Gemini via `llmRouter.js` (gated by `LLM_ONLY_GEMINI=1`). Chatbot uses GovTech AI Platform (`platform_ai` provider) via `platformProvider.js` — `gemini-2.5-flash-lite` for cheap calls (planner/selector/verifier), `azure.claude-sonnet-4-6` for synthesis. Swappable via `PLATFORM_AI_*` env vars — see `lib/llm/platformProvider.js`.
+- LLM: Pipeline uses Gemini via `llmRouter.js` (gated by `LLM_ONLY_GEMINI=1`). Chatbot uses GovTech AI Platform (`platform_ai` provider) via `platformProvider.js` — `gemini-2.5-flash` for cheap calls (planner/selector/verifier), `azure.claude-sonnet-5` for synthesis. Swappable via `PLATFORM_AI_*` env vars — see `lib/llm/platformProvider.js`.
 - Deployment: Vercel Hobby plan (12 serverless function limit)
 - Scheduling: GitHub Actions — **three** separate workflows:
     - `pipeline-connectors.yml` — L1–L3 RSS/API ingest (04:00 / 16:00 / 20:00 UTC)
