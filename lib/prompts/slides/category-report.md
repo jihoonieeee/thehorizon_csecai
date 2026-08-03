@@ -141,39 +141,66 @@ Confidence:
 
 ════ SHIFT QUALIFICATION GATE ════
 
-A strategic shift must clear this gate before being included in the deck:
+A strategic shift must clear ALL THREE gates before being included in the deck:
 
-REQUIRED: the shift's maturity must be disclosed_vulnerability or higher.
+GATE 1 — MATURITY: the shift's maturity must be disclosed_vulnerability or higher.
 
 A shift whose ONLY supporting evidence is research_demonstration (lab results,
 academic papers, controlled benchmarks, PoC without a named CVE or real-world
-context) does NOT qualify as a strategic shift for an executive deck. It is not
-a current threat — it is a signal that a threat may emerge.
+context) does NOT qualify as a strategic shift for an executive deck.
 
 If research-only findings exist:
 - Do NOT include them as a strategic shift.
 - Add them to coverage_gaps[] as: "Research signal: [one sentence describing
   the technique] — no operational evidence this period."
 
-Exception: ONLY if the ENTIRE dossier contains zero sources at
-disclosed_vulnerability or higher anywhere in the category — meaning there is
-genuinely no operational incident, no advisory, no named CVE, and no confirmed
-PoC on real deployed infrastructure across all sources provided — may you include
-one research shift labelled research_demonstration with confidence low and a
-takeaway that explicitly states this is theoretical. This exception does NOT
-apply if even one shift in the category clears the gate. A category with one
-strong operational shift and several research papers should produce one shift,
-not one operational shift plus one research shift using the exception.
+Exception A (no operational evidence): ONLY if the ENTIRE dossier contains zero
+sources at disclosed_vulnerability or higher — meaning there is genuinely no
+operational incident, no advisory, no named CVE, and no confirmed PoC on real
+deployed infrastructure — may you include one research shift labelled
+research_demonstration with confidence low and a takeaway that explicitly states
+this is theoretical. This exception does NOT apply if even one shift in the
+category clears Gate 1.
+
+Exception B (broken assumption): A research finding may appear as a shift at
+research_demonstration with confidence low even when the category has operational
+content, IF the finding has a non-null broken_assumption field AND the assumption
+broken applies to currently deployed production systems (not theoretical future
+systems). Limit: at most one such exception shift per category per deck. The
+takeaway must explicitly begin: "Research demonstrates that [assumption] can be
+broken, though no confirmed in-the-wild exploitation has been reported."
+
+GATE 2 — STRATEGIC RELEVANCE: the shift must do at least ONE of the following:
+  (a) Introduce an attack class, mechanism, or surface not previously documented at scale
+  (b) Break a previously held security assumption — a control defenders trusted is now demonstrably fallible
+  (c) Show meaningful scale or speed acceleration of a known threat
+  (d) Demonstrate state-actor or advanced persistent threat capability development
+
+A shift that ONLY updates practitioner-level TTPs — an attacker using new branding
+(e.g. AI-themed lure images), a new malware family name, or a new tool that uses
+an existing mechanism — without introducing any of (a)–(d) above does NOT qualify.
+Place it in coverage_gaps[] as: "Operational signal: [brief description]."
+
+GATE 3 — ATTRIBUTION CREDIBILITY: when a shift asserts named state-actor, nation-state,
+or APT group attribution, confidence must be low unless at least one cited source is
+a primary intelligence report from a government agency or major threat intelligence
+firm (CISA, NCSC, CSA, Google TAG/GTIG, Microsoft MSTIC, CrowdStrike, Mandiant,
+Unit 42, Recorded Future, SentinelOne Labs, Secureworks, MITRE ATT&CK reporting).
+Cyware daily briefings, news aggregators, and general security news publications
+are NOT primary intelligence sources for attribution purposes. If attribution rests
+only on secondary sources: set confidence to low, and begin the takeaway with
+"Reporting suggests" or "Unverified intelligence indicates" rather than stating
+the attribution as confirmed fact.
+
+THIN COVERAGE: when only one shift is supportable after applying these gates, produce
+that one shift and set category_summary to explicitly acknowledge thin coverage:
+e.g. "One confirmed operational finding this period; [describe what was limited]."
+Do not manufacture a second shift to appear comprehensive.
 
 ORDER: list strategic_shifts from HIGHEST to LOWEST maturity in the output JSON
 (operational_campaign → adversary_adoption → observed_exploitation →
 disclosed_vulnerability → research_demonstration). This ensures the strongest
 evidence reaches the deck when a cap is applied downstream.
-
-This gate exists because an executive briefing slide implies near-term
-operational relevance. A research paper about poisoning robot training data
-does not belong on the same slide as a confirmed active campaign — even if both
-are technically in the same threat category.
 
 ════ EPISTEMIC DISCIPLINE ════
 
@@ -232,8 +259,11 @@ Before returning, verify:
 11. The category_summary is ≤20 words and names the defining threat pattern, not a generic observation.
 12. Each takeaway is exactly one sentence with no full stop mid-sentence.
 13. If any source in a shift contains "in the wild", "in-the-wild", or "real-world exploitation", the maturity is at least observed_exploitation.
-14. Every included shift has maturity of disclosed_vulnerability or higher — unless the ENTIRE dossier has no such evidence (exception). If any shift has operational/advisory evidence, no research_demonstration shift appears.
+14. Every included shift has maturity of disclosed_vulnerability or higher — unless the ENTIRE dossier has no such evidence (Exception A), or a single broken-assumption research finding qualifies under Exception B.
 15. strategic_shifts are ordered highest maturity first in the JSON output.
+16. No shift asserts state-actor, nation-state, or APT attribution at confidence moderate or high unless at least one cited source is a primary intelligence report (CISA, NCSC, Google TAG, Microsoft MSTIC, CrowdStrike, Mandiant, Unit 42, etc.). If attribution rests only on news or aggregators: confidence is low, takeaway begins "Reporting suggests" or "Unverified intelligence indicates".
+17. Every included shift passes Gate 2 (strategic relevance): it introduces a new mechanism, breaks an assumption, shows scale acceleration, or shows state-actor development. Practitioner-level TTP updates (new lure branding, new tool name using existing mechanism) are in coverage_gaps, not strategic_shifts.
+18. If only one shift is included, category_summary explicitly notes thin coverage for this period.
 
 Return ONLY valid JSON. No markdown, no preamble.
 ```

@@ -377,8 +377,11 @@ async function main() {
 
   // ── Maturity ceiling enforcement (deterministic, post-LLM) ───────────────
   // The category-report prompt has maturity rules but LLMs occasionally assign
-  // operational_campaign to research-only shifts. Cap maturity based on the
-  // actual evidence tiers of the cited sources.
+  // operational_campaign to research-only or single-source shifts. Two caps:
+  //   (a) All cited sources are research/reference → max disclosed_vulnerability
+  //   (b) Only one unique source URL cited → max observed_exploitation, because
+  //       adversary_adoption and operational_campaign require independent corroboration
+  //       by definition ("two or more independent incidents" / "sustained campaign")
   function capShiftMaturity(shift, sourceIndex) {
     const MAT_RANK = {
       operational_campaign: 5, adversary_adoption: 4, observed_exploitation: 3,
@@ -386,17 +389,30 @@ async function main() {
     };
     const labels = (shift.supporting_evidence || []).flatMap(e => e.cited_sources || []);
     if (!labels.length) return shift;
+
     const hasOperational = labels.some(l =>
       ["realized", "proven"].includes(sourceIndex[l]?.importance_tier)
     );
     if (!hasOperational && (MAT_RANK[shift.maturity] || 0) >= 3) {
-      log(`  ↳ capped maturity: ${shift.headline?.slice(0, 60)} (${shift.maturity} → disclosed_vulnerability)`);
+      log(`  ↳ capped maturity (research sources): ${shift.headline?.slice(0, 55)} (${shift.maturity} → disclosed_vulnerability)`);
       return {
         ...shift,
         maturity:   "disclosed_vulnerability",
         confidence: shift.confidence === "high" ? "moderate" : shift.confidence,
       };
     }
+
+    // Single unique source cannot establish a sustained campaign or independent corroboration.
+    const uniqueUrls = new Set(labels.map(l => sourceIndex[l]?.source_url).filter(Boolean));
+    if (uniqueUrls.size <= 1 && (MAT_RANK[shift.maturity] || 0) >= 4) {
+      log(`  ↳ capped maturity (single source): ${shift.headline?.slice(0, 55)} (${shift.maturity} → observed_exploitation)`);
+      return {
+        ...shift,
+        maturity:   "observed_exploitation",
+        confidence: shift.confidence === "high" ? "moderate" : shift.confidence,
+      };
+    }
+
     return shift;
   }
 
@@ -405,6 +421,47 @@ async function main() {
     if (!report) continue;
     const idx = contexts[cat]?.sourceIndex || {};
     report.strategic_shifts = (report.strategic_shifts || []).map(s => capShiftMaturity(s, idx));
+  }
+
+  // ── Cross-category CVE/incident dedup (Fix 1b) ───────────────────────────
+  // Each category is synthesised independently, so the same CVE or named
+  // incident can appear in two sections. Extract CVEs from bullet text and
+  // apply the boundary rule: Agentic/AI-Enabled overlaps resolve to AI-Enabled
+  // (the agent-as-attacker framing owns offensive-agent incidents).
+  //
+  // This is deterministic — no LLM call. It removes the lower-priority
+  // occurrence from supporting_evidence citations, shrinking that shift's
+  // evidence. The post-QA gate then drops the shift if it reaches zero bullets.
+  {
+    const CVE_RE = /CVE-\d{4}-\d+/gi;
+    const catShiftTexts = {}; // cat → Set of CVEs across all its shifts
+
+    for (const cat of activeCategories) {
+      catShiftTexts[cat] = new Set();
+      for (const shift of categoryReports[cat]?.strategic_shifts || []) {
+        for (const ev of shift.supporting_evidence || []) {
+          for (const m of (ev.fact || "").matchAll(CVE_RE)) {
+            catShiftTexts[cat].add(m[0].toUpperCase());
+          }
+        }
+      }
+    }
+
+    // Boundary rule: Agentic/AI-Enabled overlap → keep in AI-Enabled only.
+    const agCves = catShiftTexts["agentic_ai_threats"]   || new Set();
+    const aiCves = catShiftTexts["ai_enabled_threats"]   || new Set();
+    const shared = [...agCves].filter(c => aiCves.has(c));
+
+    if (shared.length && categoryReports["agentic_ai_threats"]) {
+      for (const shift of categoryReports["agentic_ai_threats"].strategic_shifts || []) {
+        shift.supporting_evidence = (shift.supporting_evidence || []).filter(ev => {
+          const evCves = [...(ev.fact || "").matchAll(CVE_RE)].map(m => m[0].toUpperCase());
+          const hasDup = evCves.some(c => shared.includes(c));
+          if (hasDup) log(`  ↳ dedup: removed "${ev.fact?.slice(0, 60)}…" from agentic (CVE owned by ai_enabled)`);
+          return !hasDup;
+        });
+      }
+    }
   }
 
   // ── Fetch full_text for every cited source (once) ─────────────────────────

@@ -39,8 +39,29 @@ SPECIFIC (keep):  "Autonomous intrusion systems coordinated multi-stage attacks 
 
 If you cannot write a specific statement grounded in the evidence provided, write fewer statements. Do not pad with generic observations.
 
+════ PRIORITY ORDER ════
+
+Order bullets by strategic significance for a government cybersecurity audience.
+Place first whichever finding has the highest combination of:
+  - Confidence (high > moderate > low)
+  - Maturity (operational_campaign > observed_exploitation > disclosed_vulnerability)
+  - Novelty: state-actor or APT use of AI receives a novelty premium — but only
+    if confidence is moderate or higher. A low-confidence attribution claim should
+    NOT lead the overview; it should appear later or be omitted if too uncertain.
+  - Broken assumption: if any shift has a broken_assumption (a defender control
+    that was trusted and is now demonstrably fallible), that finding belongs near
+    the top.
+
+If a state-actor finding exists at confidence moderate or higher, it must appear
+as one of the overview bullets. Do not bury it below supply-chain or technical
+findings that are less strategically significant for a government audience.
+
 ════ STYLE ════
 
+- Present-tense analytical voice throughout. Describe what attackers ARE doing,
+  what controls ARE failing, what boundaries HAVE been crossed — not what happened
+  as a past event narrative ("In July, X occurred"). Lead each bullet with the
+  attacker action or capability change, not the date or context.
 - One idea per statement
 - Plain language, active voice
 - No citations (this is a synthesis slide)
