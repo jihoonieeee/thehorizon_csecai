@@ -39,6 +39,15 @@ SPECIFIC (keep):  "Autonomous intrusion systems coordinated multi-stage attacks 
 
 If you cannot write a specific statement grounded in the evidence provided, write fewer statements. Do not pad with generic observations.
 
+════ EPISTEMIC INTEGRITY ════
+
+The input includes a [confidence:low/moderate/high] tag per shift. Treat these as hard constraints:
+
+- confidence:low shifts whose takeaway begins "Reporting suggests" or "Unverified intelligence indicates" MUST carry that hedge if they appear in an overview bullet. Do not restate them as confirmed fact ("China-aligned operators DO X" when the source says "Reporting suggests operators may do X").
+- confidence:moderate shifts may be stated directly but without superlatives.
+- confidence:high shifts may be stated directly.
+- If a low-confidence finding is not specific enough to be useful with a hedge, omit it rather than stating it as confirmed.
+
 ════ PRIORITY ORDER ════
 
 Order bullets by strategic significance for a government cybersecurity audience.

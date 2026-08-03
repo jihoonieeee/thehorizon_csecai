@@ -464,6 +464,25 @@ async function main() {
       }
     }
 
+    // 4. Research_demonstration confidence must be low (Gate 1 Exception B requirement).
+    // The LLM sometimes assigns moderate/high confidence to pure research shifts.
+    if (shift.maturity === "research_demonstration" && shift.confidence !== "low") {
+      log(`  ↳ research confidence → low: ${shift.headline?.slice(0, 55)}`);
+      return { ...shift, confidence: "low" };
+    }
+
+    // 5. Academic/preprint source cap: if ALL cited sources are research papers
+    // (source_type = academic_paper, preprint, arxiv etc.) and maturity is above
+    // research_demonstration, cap to research_demonstration. Prevents a research
+    // paper tagged "proven" in the DB from being presented at observed_exploitation.
+    const ACADEMIC_TYPES = new Set(["academic_paper", "preprint", "arxiv", "conference_paper"]);
+    const allAcademic = labels.length > 0 &&
+      labels.every(l => ACADEMIC_TYPES.has(sourceIndex[l]?.source_type?.toLowerCase() || ""));
+    if (allAcademic && MAT_RANK[shift.maturity] > 2) {
+      log(`  ↳ academic cap: ${shift.headline?.slice(0, 55)} (${shift.maturity} → research_demonstration)`);
+      return { ...shift, maturity: "research_demonstration", confidence: "low" };
+    }
+
     return shift;
   }
 
