@@ -136,10 +136,12 @@ export function detectCategories(payload) {
 const R = (id, applicable, pass, detail) => ({ id, applicable, pass, detail });
 
 /** Factual claims must be backed by a citation (inline [src-N] or a citation entry).
+ *  General fallback and out_of_scope answers are exempt — they explicitly label
+ *  themselves as ungrounded background knowledge, so uncited claims are expected.
  *  Brief-path answers (vulnerability_lookup etc.) use STRUCTURE_BRIEF which puts
- *  citations in sub-bullets rather than always inline — check citations[] presence
- *  rather than inline markers alone for those cases. */
+ *  citations in sub-bullets — check citations[] presence rather than inline markers. */
 export function evalEvidenceForClaims(payload) {
+  if (isRefusal(payload)) return R("evidence_for_claims", false, null, "N/A — general/refusal answer, citations not expected.");
   const answer = payload.answer || "";
   const hasFactual = FACTUAL_MARKERS.test(answer);
   if (!hasFactual) return R("evidence_for_claims", false, null, "No hard factual markers to check.");
