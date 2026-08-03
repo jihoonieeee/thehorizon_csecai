@@ -376,41 +376,90 @@ async function main() {
   }
 
   // ── Maturity ceiling enforcement (deterministic, post-LLM) ───────────────
-  // The category-report prompt has maturity rules but LLMs occasionally assign
-  // operational_campaign to research-only or single-source shifts. Two caps:
-  //   (a) All cited sources are research/reference → max disclosed_vulnerability
-  //   (b) Only one unique source URL cited → max observed_exploitation, because
-  //       adversary_adoption and operational_campaign require independent corroboration
-  //       by definition ("two or more independent incidents" / "sustained campaign")
+  // LLMs assign maturity labels from the prompt's ceiling table, but do so
+  // inconsistently for edge cases. These caps enforce the table in code.
+  //
+  // The ceiling table mirrors the prompt exactly:
+  //   realized  → operational_campaign (uncapped — confirmed in-wild)
+  //   proven    → observed_exploitation (PoC in controlled conditions)
+  //   research  → research_demonstration (lab/academic only)
+  //   reference → disclosed_vulnerability (advisory/governance signal)
+  //   unknown   → disclosed_vulnerability (conservative default)
+  //
+  // Additionally: a shift citing only a single unique source URL cannot be
+  // adversary_adoption or operational_campaign — those labels require
+  // "two or more independent incidents" or a "documented sustained campaign."
+  //
+  // Attribution cap: when all cited sources are non-primary-intel publishers
+  // (secondary aggregators, news sites) and the shift makes a nation-state/APT
+  // attribution claim, confidence is forced to "low" and the takeaway is hedged.
+
+  // Ceiling for each importance tier (prompt ceiling table, deterministic)
+  const TIER_CEILING = {
+    realized:  5, // operational_campaign — no cap
+    proven:    3, // observed_exploitation
+    research:  1, // research_demonstration
+    reference: 2, // disclosed_vulnerability
+    unknown:   2, // conservative default
+  };
+  const MAT_RANK = {
+    operational_campaign: 5, adversary_adoption: 4, observed_exploitation: 3,
+    disclosed_vulnerability: 2, research_demonstration: 1,
+  };
+  const MAT_FROM_RANK = {
+    5: "operational_campaign", 4: "adversary_adoption", 3: "observed_exploitation",
+    2: "disclosed_vulnerability", 1: "research_demonstration",
+  };
+
+  // Attribution keywords that trigger the secondary-source attribution cap
+  const ATTRIBUTION_RE = /china[\s-]linked|china[\s-]align|nation[\s-]state|state[\s-]actor|apt\s*\d|espionage group|state[\s-]sponsored|state actor/i;
+
   function capShiftMaturity(shift, sourceIndex) {
-    const MAT_RANK = {
-      operational_campaign: 5, adversary_adoption: 4, observed_exploitation: 3,
-      disclosed_vulnerability: 2, research_demonstration: 1,
-    };
     const labels = (shift.supporting_evidence || []).flatMap(e => e.cited_sources || []);
     if (!labels.length) return shift;
 
-    const hasOperational = labels.some(l =>
-      ["realized", "proven"].includes(sourceIndex[l]?.importance_tier)
-    );
-    if (!hasOperational && (MAT_RANK[shift.maturity] || 0) >= 3) {
-      log(`  ↳ capped maturity (research sources): ${shift.headline?.slice(0, 55)} (${shift.maturity} → disclosed_vulnerability)`);
+    // 1. Ceiling table: find the highest maturity any cited source can support
+    let allowedRank = 0;
+    for (const l of labels) {
+      const tier = sourceIndex[l]?.importance_tier || "unknown";
+      const ceiling = TIER_CEILING[tier] ?? 2;
+      if (ceiling > allowedRank) allowedRank = ceiling;
+    }
+    const currentRank = MAT_RANK[shift.maturity] || 0;
+
+    if (currentRank > allowedRank) {
+      const newMaturity = MAT_FROM_RANK[allowedRank] || "disclosed_vulnerability";
+      log(`  ↳ capped maturity (ceiling table): ${shift.headline?.slice(0, 55)} (${shift.maturity} → ${newMaturity})`);
       return {
         ...shift,
-        maturity:   "disclosed_vulnerability",
+        maturity:   newMaturity,
         confidence: shift.confidence === "high" ? "moderate" : shift.confidence,
       };
     }
 
-    // Single unique source cannot establish a sustained campaign or independent corroboration.
+    // 2. Single unique source cannot establish a sustained campaign
     const uniqueUrls = new Set(labels.map(l => sourceIndex[l]?.source_url).filter(Boolean));
-    if (uniqueUrls.size <= 1 && (MAT_RANK[shift.maturity] || 0) >= 4) {
+    if (uniqueUrls.size <= 1 && currentRank >= 4) {
       log(`  ↳ capped maturity (single source): ${shift.headline?.slice(0, 55)} (${shift.maturity} → observed_exploitation)`);
       return {
         ...shift,
         maturity:   "observed_exploitation",
         confidence: shift.confidence === "high" ? "moderate" : shift.confidence,
       };
+    }
+
+    // 3. Attribution cap: state-actor/APT claim sourced only from non-primary-intel
+    const bulletText = (shift.supporting_evidence || []).map(e => e.fact || "").join(" ");
+    if (ATTRIBUTION_RE.test(bulletText) || ATTRIBUTION_RE.test(shift.takeaway || "")) {
+      const anyPrimary = labels.some(l => sourceIndex[l]?.is_primary_intel === true);
+      if (!anyPrimary && shift.confidence !== "low") {
+        log(`  ↳ attribution cap: ${shift.headline?.slice(0, 55)} — no primary intel source, confidence → low`);
+        const hedgedTakeaway = shift.takeaway?.startsWith("Reporting suggests") ||
+                               shift.takeaway?.startsWith("Unverified")
+          ? shift.takeaway
+          : `Reporting suggests ${shift.takeaway?.charAt(0).toLowerCase()}${shift.takeaway?.slice(1)}`;
+        return { ...shift, confidence: "low", takeaway: hedgedTakeaway };
+      }
     }
 
     return shift;
@@ -518,10 +567,14 @@ async function main() {
   for (const cat of activeCategories) {
     const qa = qaResults[cat];
     if (!qa) continue;
-    if (qa.citation_issue_count > 0)   log(`  ⚠ ${cat}: ${qa.citation_issue_count} citation issues fixed`);
-    if (qa.entailment_issue_count > 0) log(`  ⚠ ${cat}: ${qa.entailment_issue_count} entailment issue(s) (corrected/dropped)`);
-    if (qa.citation_issue_count === 0 && qa.entailment_issue_count === 0) log(`  ✓ ${cat}: QA passed`);
-    // Surface each gated bullet so it can be reviewed (non-blocking).
+    if (qa.citation_issue_count > 0)        log(`  ⚠ ${cat}: ${qa.citation_issue_count} citation issues fixed`);
+    if (qa.case_study_mismatch_count > 0)   log(`  ⚠ ${cat}: ${qa.case_study_mismatch_count} case study citation(s) removed (topic mismatch)`);
+    if (qa.entailment_issue_count > 0)      log(`  ⚠ ${cat}: ${qa.entailment_issue_count} entailment issue(s) (corrected/dropped)`);
+    if (qa.coherence_issue_count > 0)       log(`  ⚠ ${cat}: ${qa.coherence_issue_count} shift(s) dropped (incoherent — bullets don't support headline)`);
+    const totalIssues = (qa.citation_issue_count || 0) + (qa.case_study_mismatch_count || 0) +
+                        (qa.entailment_issue_count || 0) + (qa.coherence_issue_count || 0);
+    if (totalIssues === 0) log(`  ✓ ${cat}: QA passed`);
+    // Surface each gated item for review (non-blocking).
     for (const iss of qa.issues || []) {
       if (iss.type === "entailment_failure") {
         log(`      ↳ DROPPED [${iss.cited}] "${iss.bullet}${iss.bullet?.length >= 100 ? "…" : ""}"`);
@@ -531,6 +584,10 @@ async function main() {
         if (iss.reason) log(`         reason: ${iss.reason}`);
       } else if (iss.type === "unresolvable_citation") {
         log(`      ↳ dropped citation ${iss.label} (${iss.context})`);
+      } else if (iss.type === "case_study_citation_mismatch") {
+        log(`      ↳ removed case study citation [${iss.label}] — "${iss.source}" does not match entity "${iss.entity}"`);
+      } else if (iss.type === "shift_incoherent") {
+        log(`      ↳ DROPPED shift "${iss.headline}" — bullets do not support headline`);
       }
     }
   }
