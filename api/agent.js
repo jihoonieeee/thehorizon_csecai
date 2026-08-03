@@ -643,10 +643,13 @@ export default async function handler(req, res) {
         : "synthesis";
     // Token ceiling is a conciseness signal and a stream-timeout safety net.
     // The word-budget in the prompt is the binding constraint — this is the ceiling.
-    // On Gemini, maxOutputTokens also covers thinking tokens, so the full-answer
-    // ceiling is raised and thinking is bounded (1024) to guarantee answer room;
-    // brief answers run on Flash with thinking disabled (thinkingBudget 0).
-    const maxTokens = briefAnswer ? 1200 : 2000;
+    // On thinking/reasoning models (e.g. azure.claude-sonnet-5), thinking tokens
+    // consume the max_tokens budget before output tokens are allocated. With the old
+    // ceiling of 2000, a model spending ~1500 tokens thinking left only ~500 for the
+    // answer — causing empty or truncated responses on complex queries. Raised to 4000
+    // so thinking + answer fit within budget. Brief answers stay at 1500 (Flash, no
+    // thinking) and full answers at 4000 (Sonnet, thinking may consume ~1000-2000).
+    const maxTokens = briefAnswer ? 2000 : 8000;
     const synthArgs = {
       tier: synthTier, system: cachedSystem, messages, maxTokens,
       thinkingBudget: briefAnswer ? 0 : 1024,

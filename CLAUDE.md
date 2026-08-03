@@ -39,7 +39,7 @@ PLATFORM_AI_PROVIDER=platform_ai     — chatbot provider: platform_ai | gemini 
 PLATFORM_API_BASE_URL     — GovTech platform base URL (default: https://api-public.ai.tech.gov.sg)
 PLATFORM_MODEL_CHEAP      — override cheap-tier model (default: gemini-2.5-flash-lite)
 PLATFORM_MODEL_STANDARD   — override standard-tier model (default: gemini-2.5-flash)
-PLATFORM_MODEL_SYNTHESIS  — override synthesis-tier model (default: azure.claude-sonnet-4-6)
+PLATFORM_MODEL_SYNTHESIS  — override synthesis-tier model (default: azure.claude-sonnet-5)
 LLM_ONLY_GEMINI=1         — hard lock: forces ALL chatbot+pipeline calls to Gemini; must NOT be set when using platform_ai
 LLM_PROVIDER_ORDER=gemini — pipeline router provider order (does not affect chatbot)
 GEMINI_API_KEY            — used by pipeline (llmRouter) and as chatbot fallback when PLATFORM_AI_PROVIDER=gemini
