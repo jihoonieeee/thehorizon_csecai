@@ -1,0 +1,86 @@
+name: Generate — Dashboard Insights
+
+# Standalone insights-only run. Uses already-classified + evidenced sources in the
+# DB — does NOT re-run classify or evidence extraction. Safe to run at any time.
+#
+# Usage:
+#   gh workflow run generate-insights.yml \
+#     --field window=month \
+#     --field force=true
+
+on:
+  workflow_dispatch:
+    inputs:
+      window:
+        description: 'Reporting window: week | month | quarter | all'
+        type: choice
+        options: [week, month, quarter, all]
+        default: week
+      force:
+        description: 'Overwrite existing insights for this period'
+        type: boolean
+        default: false
+      asof:
+        description: 'Target date YYYY-MM-DD (leave blank = current period)'
+        type: string
+        default: ''
+
+env:
+  LLM_PROVIDER_ORDER:       platform
+  PLATFORM_AI_PROVIDER:     platform_ai
+  PLATFORM_PIPELINE_MODEL:  gpt-5.4
+  PLATFORM_MODEL_SYNTHESIS: gpt-5.4
+  PLATFORM_API_BASE_URL:    https://api-public.ai.tech.gov.sg
+  LLM_DAILY_TOKEN_BUDGET:   '2000000'
+
+jobs:
+  insights:
+    name: Dashboard insights (${{ github.event.inputs.window }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Generate insights (week)
+        if: github.event.inputs.window == 'week' || github.event.inputs.window == 'all'
+        run: |
+          node scripts/generateDashboardInsights.js \
+            --window week \
+            ${{ github.event.inputs.force == 'true' && '--force' || '' }} \
+            ${{ github.event.inputs.asof != '' && format('--asof {0}', github.event.inputs.asof) || '' }}
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
+          PROXY_URL:                 ${{ secrets.PROXY_URL }}
+
+      - name: Generate insights (month)
+        if: github.event.inputs.window == 'month' || github.event.inputs.window == 'all'
+        run: |
+          node scripts/generateDashboardInsights.js \
+            --window month \
+            ${{ github.event.inputs.force == 'true' && '--force' || '' }} \
+            ${{ github.event.inputs.asof != '' && format('--asof {0}', github.event.inputs.asof) || '' }}
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
+          PROXY_URL:                 ${{ secrets.PROXY_URL }}
+
+      - name: Generate insights (quarter)
+        if: github.event.inputs.window == 'quarter' || github.event.inputs.window == 'all'
+        run: |
+          node scripts/generateDashboardInsights.js \
+            --window quarter \
+            ${{ github.event.inputs.force == 'true' && '--force' || '' }} \
+            ${{ github.event.inputs.asof != '' && format('--asof {0}', github.event.inputs.asof) || '' }}
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
+          PROXY_URL:                 ${{ secrets.PROXY_URL }}
