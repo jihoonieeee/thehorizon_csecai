@@ -1,26 +1,27 @@
 name: Pipeline — Classify + Evidence + Insights
 
 # Runs classify (L4), rescrape, evidence (L5), and dashboard insights.
-# Fires ~30–60 min after each ingest window closes, giving connectors and arXiv
-# time to finish before classify starts.
+# Fires 90 min after each ingest window opens, giving connectors time to finish
+# even on slow runs (rate-limited fetches, large RSS backlogs).
 #
 # Schedule (UTC; SGT = UTC+8):
 #   05:30 — after the 04:00 connector + arXiv window (arXiv watchdog exits by 04:55)
-#   17:00 — after the 16:00 connector window (RSS finishes in ~10 min)
-#   21:00 — after the 20:00 connector window (backup slot)
+#   17:30 — after the 16:00 connector window (90-min safety margin)
+#   21:30 — after the 20:00 connector window (backup slot, 90-min safety margin)
 #
-# No skip check: classify gates on main_category IS NULL so it exits in seconds
-# when there is nothing new to process — re-running is never wasteful.
-# Insights generation is idempotent (window_key × category dedup in DB).
+# Skip logic for 17:30 and 21:30 slots (05:30 always runs):
+#   Skip if classify already succeeded after the previous ingest slot AND
+#   no new connector run happened in the current ingest slot.
+#   This makes 17:30 and 21:30 true backups rather than unconditional runs.
 #
-# Insights are generated at 17:00 and 21:00 on weekly/monthly/quarterly triggers.
+# Insights are generated at 17:30 and 21:30 on weekly/monthly/quarterly triggers.
 # The 05:30 slot never generates insights (equivalent to the old pre-ingest buffer).
 
 on:
   schedule:
     - cron: '30 5 * * *'   # after 04:00 connectors + arXiv
-    - cron: '0 17 * * *'   # after 16:00 connectors
-    - cron: '0 21 * * *'   # after 20:00 connectors (backup)
+    - cron: '30 17 * * *'  # after 16:00 connectors (90-min margin)
+    - cron: '30 21 * * *'  # after 20:00 connectors (backup, 90-min margin)
   workflow_dispatch:
     inputs:
       classify_limit:
@@ -52,13 +53,56 @@ env:
 
 jobs:
   preflight:
-    name: Preflight — insights flags
+    name: Preflight — skip check + insights flags
     runs-on: ubuntu-latest
     outputs:
+      should_skip:   ${{ steps.check.outputs.should_skip }}
       run_weekly:    ${{ steps.flags.outputs.run_weekly }}
       run_monthly:   ${{ steps.flags.outputs.run_monthly }}
       run_quarterly: ${{ steps.flags.outputs.run_quarterly }}
     steps:
+      - name: Skip if previous classify succeeded and no new connector ingest
+        id: check
+        run: |
+          # 05:30 always runs. Manual dispatches always run.
+          # 17:30 skips if classify already succeeded since 05:00 UTC AND
+          #        connectors did not succeed since 15:30 UTC (16:00 slot skipped).
+          # 21:30 skips if classify already succeeded since 17:00 UTC AND
+          #        connectors did not succeed since 19:30 UTC (20:00 slot skipped).
+          SCHEDULE="${{ github.event.schedule }}"
+          if [ "${{ github.event_name }}" != "schedule" ] || \
+             [ "$SCHEDULE" = "30 5 * * *" ]; then
+            echo "should_skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          TODAY=$(date -u +%Y-%m-%d)
+          if [ "$SCHEDULE" = "30 17 * * *" ]; then
+            CLASSIFY_CUTOFF="${TODAY}T05:00:00Z"
+            CONNECTOR_CUTOFF="${TODAY}T15:30:00Z"
+          else
+            CLASSIFY_CUTOFF="${TODAY}T17:00:00Z"
+            CONNECTOR_CUTOFF="${TODAY}T19:30:00Z"
+          fi
+          CLASSIFY_OK=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/pipeline-classify.yml/runs?status=success&per_page=10" \
+            --jq "[.workflow_runs[] | select(.created_at > \"$CLASSIFY_CUTOFF\")] | length")
+          CONNECTOR_NEW=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/pipeline-connectors.yml/runs?status=success&per_page=10" \
+            --jq "[.workflow_runs[] | select(.created_at > \"$CONNECTOR_CUTOFF\")] | length")
+          if [ "$CLASSIFY_OK" -gt 0 ] && [ "$CONNECTOR_NEW" -eq 0 ]; then
+            echo "should_skip=true" >> "$GITHUB_OUTPUT"
+            echo "Classify already succeeded and no new connector ingest — skipping backup slot."
+          else
+            echo "should_skip=false" >> "$GITHUB_OUTPUT"
+            if [ "$CLASSIFY_OK" -eq 0 ]; then
+              echo "Previous classify did not succeed — running backup."
+            else
+              echo "New connector ingest detected — classifying new sources."
+            fi
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Compute insights flags
         id: flags
         run: |
@@ -73,7 +117,7 @@ jobs:
             # 05:30 slot mirrors the old pre-ingest buffer — no insights
             W=false; M=false; Q=false
           else
-            # 17:00 and 21:00 slots generate insights on weekly/monthly/quarterly days
+            # 17:30 and 21:30 slots generate insights on weekly/monthly/quarterly days
             DAY_OF_WEEK=$(date -u +%u)
             DAY_OF_MONTH=$(date -u +%-d)
             MONTH=$(date -u +%-m)
@@ -98,6 +142,7 @@ jobs:
     needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    if: needs.preflight.outputs.should_skip != 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

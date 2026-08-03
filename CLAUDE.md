@@ -16,7 +16,7 @@ The intended audience is cybersecurity professionals, policy analysts, and decis
 - Scheduling: GitHub Actions — **three** separate workflows:
     - `pipeline-connectors.yml` — L1–L3 RSS/API ingest (04:00 / 16:00 / 20:00 UTC)
     - `pipeline-arxiv.yml`      — arXiv ingest only (04:00 UTC)
-    - `pipeline-classify.yml`   — L4 classify + L5 evidence + insights (05:30 / 17:00 / 21:00 UTC)
+    - `pipeline-classify.yml`   — L4 classify + L5 evidence + insights (05:30 / 17:30 / 21:30 UTC)
   Expanded windows on Mondays (7d) and 1st of month (30d). Insights only on weekly/monthly/quarterly triggers.
 
 
