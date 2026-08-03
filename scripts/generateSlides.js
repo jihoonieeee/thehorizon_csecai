@@ -27,7 +27,7 @@ import { parseArgs } from "node:util";
 
 import { put }                                    from "@vercel/blob";
 import { makeSupabaseClient, fetchSlideCorpus, attachEvidence } from "../lib/slides/fetchSlideCorpus.js";
-import { buildCategoryContext, CATEGORIES }       from "../lib/slides/buildCategoryContext.js";
+import { buildCategoryContext, CATEGORIES, isMajorTISource } from "../lib/slides/buildCategoryContext.js";
 import { generateCategoryReport }                 from "../lib/slides/generateCategoryReport.js";
 import { qaReport }                               from "../lib/slides/qaReport.js";
 import { planCategorySlides }                     from "../lib/slides/planCategorySlides.js";
@@ -448,11 +448,13 @@ async function main() {
       };
     }
 
-    // 3. Attribution cap: state-actor/APT claim sourced only from non-primary-intel
+    // 3. Attribution cap: state-actor/APT claim sourced only from non-major-TI publishers.
+    // Uses isMajorTISource (URL patterns only) rather than is_primary_intel to avoid
+    // trust_tier=primary mis-tags on aggregators/news outlets bypassing the cap.
     const bulletText = (shift.supporting_evidence || []).map(e => e.fact || "").join(" ");
     if (ATTRIBUTION_RE.test(bulletText) || ATTRIBUTION_RE.test(shift.takeaway || "")) {
-      const anyPrimary = labels.some(l => sourceIndex[l]?.is_primary_intel === true);
-      if (!anyPrimary && shift.confidence !== "low") {
+      const anyMajorTI = labels.some(l => isMajorTISource(sourceIndex[l]?.source_url || ""));
+      if (!anyMajorTI && shift.confidence !== "low") {
         log(`  ↳ attribution cap: ${shift.headline?.slice(0, 55)} — no primary intel source, confidence → low`);
         const hedgedTakeaway = shift.takeaway?.startsWith("Reporting suggests") ||
                                shift.takeaway?.startsWith("Unverified")
