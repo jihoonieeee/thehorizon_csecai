@@ -98,10 +98,7 @@ export function LoginPage({ mode: initialMode = "signin" }) {
               {loading ? "Signing in…" : "Sign In"}
             </button>
             <p className="hz-login-hint" style={{ marginTop: "8px" }}>
-              Forgot your password? Email us at{" "}
-              <a href="mailto:sereneinnotech@gmail.com" className="hz-login-link" style={{ display: "inline" }}>
-                sereneinnotech@gmail.com
-              </a>
+              Forgot your password? Email us.
             </p>
           </form>
         )}
