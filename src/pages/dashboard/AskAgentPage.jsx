@@ -11,7 +11,7 @@ const SUGGESTIONS = [
   { label: "Most important finding",    prompt: "What's the most important finding right now?" },
   { label: "LLM jailbreak trends",      prompt: "Are LLM jailbreaks getting more common?" },
   { label: "Agentic AI risks",          prompt: "What agentic AI risks should I prioritize?" },
-  { label: "MCP vulnerabilities",       prompt: "Tell me about MCP vulnerabilities in the past 90 days" },
+  { label: "Deepfakes & disinformation", prompt: "What deepfake or AI-generated disinformation threats have emerged recently?" },
   { label: "AI as an attack tool",      prompt: "How is AI being used as an attack tool?" },
   { label: "Defender watch list",       prompt: "What should defenders watch in the next 90 days?" },
 ];
@@ -255,14 +255,16 @@ function StructuredText({ text, sourceRefs }) {
 function SourceButton({ c, index }) {
   const label = c.publisher || c.source_title || "Source";
   const short = label.length > 28 ? label.slice(0, 28) + "…" : label;
+  // Use the src-N number from c.ref so the footer number matches the inline [src-N] citation.
+  const num = c.ref ? (parseInt(c.ref.match(/\d+/)?.[0], 10) || index + 1) : index + 1;
   return c.url ? (
     <a href={c.url} target="_blank" rel="noopener noreferrer" className="hz-source-btn" title={c.source_title || label}>
-      <span className="hz-source-btn-num">{index + 1}</span>
+      <span className="hz-source-btn-num">{num}</span>
       {short}
     </a>
   ) : (
     <span className="hz-source-btn hz-source-btn-nolink" title={label}>
-      <span className="hz-source-btn-num">{index + 1}</span>
+      <span className="hz-source-btn-num">{num}</span>
       {short}
     </span>
   );
