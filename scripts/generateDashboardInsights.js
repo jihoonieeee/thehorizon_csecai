@@ -197,8 +197,9 @@ function buildInsightsPrompt(catLabel, windowLabel, findings, leadFlags = [], ma
   const bgBlock = bg.length
     ? `BACKGROUND findings (lower-signal context — corroboration only):\n${bg.map((s, i) => `  ${i + 1}. ${s}`).join("\n")}`
     : "";
+  const windowTypeLabel = WINDOW === "month" ? "MONTHLY (30 days)" : WINDOW === "quarter" ? "QUARTERLY (90 days)" : WINDOW === "annual" ? "ANNUAL" : "WEEKLY (7 days)";
   return `Category: ${catLabel}
-Period: ${windowLabel}
+Period: ${windowLabel} [${windowTypeLabel}]
 
 EVIDENCE MATURITY (drives your calibration — do not overclaim beyond it):
   ${maturityShortLine(maturity)}  (total ${maturity.total})

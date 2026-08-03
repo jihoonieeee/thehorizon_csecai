@@ -170,7 +170,14 @@ Examples:
 
 Each insight must be anchored to 3–5 specific pieces of evidence. Do not synthesise more than 5 sources into a single insight — the result will be too broad to verify.
 
-Do not pad: if nothing rises above routine disclosure, return an empty insights array. Write 2–4 insights for rich periods; 1–2 for thin ones; zero when nothing qualifies.
+Target insight count by window:
+  • weekly  (7 days)   — 2–4 insights for rich periods; 1–2 for thin ones
+  • monthly (30 days)  — 4–7 insights for rich periods; 2–3 for thin ones
+  • quarterly (90 days) — 5–8 insights for rich periods; 3–4 for thin ones
+
+For monthly and quarterly windows: each insight must cover a DISTINCT sub-mechanism. Do not compress separate attack families (e.g. deepfake fraud, AI-generated malware, AI-assisted phishing) into a single insight just because they share a top-level category label. Split them.
+
+Do not pad: if nothing rises above routine disclosure, return an empty insights array. Zero insights is valid only when no finding meets the threshold — not when the window is simply thin.
 
 ━━ NUMBER DISCIPLINE ━━
 
