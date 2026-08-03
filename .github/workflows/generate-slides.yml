@@ -135,6 +135,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: horizon-scan-decks
-          path: output/deck-*.pptx
+          path: |
+            output/deck-*.pptx
+            output/deck-*.json
+            output/deck-*.md
           retention-days: 30
           if-no-files-found: ignore

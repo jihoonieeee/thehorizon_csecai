@@ -127,6 +127,115 @@ function makeTimeframeLabel(dateFrom, dateTo) {
 
 function log(msg) { process.stdout.write(`${msg}\n`); }
 
+// ── Markdown export ───────────────────────────────────────────────────────────
+
+function renderDeckMarkdown({ generated_at, timeframe, date_from, date_to, window: win, source_count, slide_count, deck }) {
+  const lines = [];
+  const push = (...args) => lines.push(...args);
+
+  push(
+    `# AI Cyber Threat Horizon Scan — ${timeframe}`,
+    ``,
+    `Generated: ${generated_at.replace("T", " ").slice(0, 19)} UTC | Window: ${win} | Sources: ${source_count} | Slides: ${slide_count}`,
+    `Period: ${date_from} → ${date_to}`,
+    ``,
+  );
+
+  const CONFIDENCE_ICON = { high: "🔴", medium: "🟡", low: "⚪" };
+  const MATURITY_ICON   = { emerging: "🌱", active: "⚡", established: "🔒" };
+
+  for (const slide of (deck?.slides || [])) {
+    switch (slide.type) {
+
+      case "cover":
+        push(`---`, ``, `## Cover`, ``, `> ${slide.headline}`, ``);
+        break;
+
+      case "overview":
+        push(`---`, ``, `## Overview — ${slide.headline}`, ``);
+        for (const b of (slide.bullets || [])) {
+          push(`- **${b.role?.toUpperCase() || ""}** ${b.text}`);
+        }
+        push(``);
+        break;
+
+      case "section_summary": {
+        const cat = slide.category?.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) || slide.headline;
+        push(`---`, ``, `## ${cat}`, ``, `> ${slide.category_summary || ""}`, ``);
+        if (slide.shift_headlines?.length) {
+          push(`**Shifts covered:**`);
+          for (const h of slide.shift_headlines) push(`- ${h}`);
+          push(``);
+        }
+        break;
+      }
+
+      case "strategic_shift": {
+        const conf = CONFIDENCE_ICON[slide.confidence] || "";
+        const mat  = MATURITY_ICON[slide.maturity]    || "";
+        push(
+          `### ${mat}${conf} [Strategic Shift] ${slide.headline}`,
+          ``,
+          `**Takeaway:** ${slide.takeaway || ""}`,
+          ``,
+          `**Confidence:** ${slide.confidence || "—"} | **Maturity:** ${slide.maturity || "—"}`,
+          ``,
+        );
+        for (const b of (slide.bullets || [])) {
+          const refs = (b.cite_nums || []).map(n => `[${n}]`).join("");
+          push(`- **[${(b.role || b.bullet_role || "").toUpperCase()}]** ${b.text}${refs ? " " + refs : ""}`);
+        }
+        if (slide.implication) push(``, `**Implication:** ${slide.implication}`);
+        if (slide._footnotes?.length) {
+          push(``, `*Sources: ${slide._footnotes.map(f => `[${f.num}] ${f.publisher}`).join(", ")}*`);
+        }
+        push(``);
+        break;
+      }
+
+      case "case_study": {
+        push(
+          `### 🔍 [Case Study] ${slide.headline}`,
+          ``,
+        );
+        if (slide.named_entity) push(`**Entity:** ${slide.named_entity}`, ``);
+        for (const b of (slide.bullets || [])) {
+          const refs = (b.cite_nums || []).map(n => `[${n}]`).join("");
+          push(`- **[${(b.role || b.bullet_role || "").toUpperCase()}]** ${b.text}${refs ? " " + refs : ""}`);
+        }
+        if (slide.diagram_spec?.steps?.length) {
+          push(``, `**Attack chain:** ${slide.diagram_spec.steps.join(" → ")}`);
+        }
+        if (slide._footnotes?.length) {
+          push(``, `*Sources: ${slide._footnotes.map(f => `[${f.num}] ${f.publisher}`).join(", ")}*`);
+        }
+        push(``);
+        break;
+      }
+
+      case "outlook_structured":
+        push(`---`, ``, `## 📅 ${slide.headline}`, ``);
+        for (const item of (slide.watch_items || [])) {
+          const label = item.label ? `**${item.label}:** ` : "";
+          push(`- ${label}${item.text || item}`);
+        }
+        if (slide.caveat) push(``, `> ⚠ ${slide.caveat}`);
+        push(``);
+        break;
+
+      case "references":
+        push(`---`, ``, `## References`, ``);
+        for (const r of (slide.bullets || [])) {
+          push(`- [${r.ref_num}] **${r.publisher}** — [${r.title}](${r.url})`);
+        }
+        push(``);
+        break;
+    }
+  }
+
+  return lines.join("\n");
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -394,6 +503,20 @@ async function main() {
   }, null, 2));
   log(`  JSON saved → ${jsonOutPath}`);
 
+  // ── Save human-readable Markdown for auditing ─────────────────────────────
+  const mdOutPath = outPath.replace(/\.pptx$/i, ".md");
+  fs.writeFileSync(mdOutPath, renderDeckMarkdown({
+    generated_at: new Date().toISOString(),
+    timeframe:    timeframeLabel,
+    date_from:    dateFrom,
+    date_to:      dateTo,
+    window:       argv.window || "custom",
+    source_count: allSources.length,
+    slide_count,
+    deck,
+  }));
+  log(`  MD  saved → ${mdOutPath}`);
+
   // ── Persist to Vercel Blob + Supabase so the dashboard can find the deck ──
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     log("\nPersisting deck…");
@@ -438,6 +561,14 @@ async function main() {
         contentType: "application/json",
       });
       log(`  JSON uploaded → ${jsonUrl}`);
+
+      // Upload Markdown (human-readable audit copy)
+      const mdContent = fs.readFileSync(mdOutPath, "utf8");
+      const { url: mdUrl } = await put(`${blobBase}.md`, mdContent, {
+        ...blobOpts,
+        contentType: "text/markdown",
+      });
+      log(`  MD  uploaded → ${mdUrl}`);
 
       const { error } = await supabase.from("decks").upsert({
         deck_id:             deckId,
