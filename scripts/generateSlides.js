@@ -418,72 +418,64 @@ async function main() {
     const labels = (shift.supporting_evidence || []).flatMap(e => e.cited_sources || []);
     if (!labels.length) return shift;
 
-    // 1. Ceiling table: find the highest maturity any cited source can support
+    // All caps applied sequentially on a mutable copy — no early returns — so a
+    // shift can receive multiple caps in one pass (e.g. ceiling table lowers
+    // maturity AND attribution cap lowers confidence on the same shift).
+    let s = { ...shift };
+
+    // 1. Ceiling table: cap maturity to the highest level any cited source supports
     let allowedRank = 0;
     for (const l of labels) {
       const tier = sourceIndex[l]?.importance_tier || "unknown";
       const ceiling = TIER_CEILING[tier] ?? 2;
       if (ceiling > allowedRank) allowedRank = ceiling;
     }
-    const currentRank = MAT_RANK[shift.maturity] || 0;
-
-    if (currentRank > allowedRank) {
+    if ((MAT_RANK[s.maturity] || 0) > allowedRank) {
       const newMaturity = MAT_FROM_RANK[allowedRank] || "disclosed_vulnerability";
-      log(`  ↳ capped maturity (ceiling table): ${shift.headline?.slice(0, 55)} (${shift.maturity} → ${newMaturity})`);
-      return {
-        ...shift,
-        maturity:   newMaturity,
-        confidence: shift.confidence === "high" ? "moderate" : shift.confidence,
-      };
+      log(`  ↳ capped maturity (ceiling table): ${s.headline?.slice(0, 55)} (${s.maturity} → ${newMaturity})`);
+      s = { ...s, maturity: newMaturity, confidence: s.confidence === "high" ? "moderate" : s.confidence };
     }
 
     // 2. Single unique source cannot establish a sustained campaign
     const uniqueUrls = new Set(labels.map(l => sourceIndex[l]?.source_url).filter(Boolean));
-    if (uniqueUrls.size <= 1 && currentRank >= 4) {
-      log(`  ↳ capped maturity (single source): ${shift.headline?.slice(0, 55)} (${shift.maturity} → observed_exploitation)`);
-      return {
-        ...shift,
-        maturity:   "observed_exploitation",
-        confidence: shift.confidence === "high" ? "moderate" : shift.confidence,
-      };
+    if (uniqueUrls.size <= 1 && (MAT_RANK[s.maturity] || 0) >= 4) {
+      log(`  ↳ capped maturity (single source): ${s.headline?.slice(0, 55)} (${s.maturity} → observed_exploitation)`);
+      s = { ...s, maturity: "observed_exploitation", confidence: s.confidence === "high" ? "moderate" : s.confidence };
     }
 
-    // 3. Attribution cap: state-actor/APT claim sourced only from non-major-TI publishers.
-    // Uses isMajorTISource (URL patterns only) rather than is_primary_intel to avoid
-    // trust_tier=primary mis-tags on aggregators/news outlets bypassing the cap.
-    const bulletText = (shift.supporting_evidence || []).map(e => e.fact || "").join(" ");
-    if (ATTRIBUTION_RE.test(bulletText) || ATTRIBUTION_RE.test(shift.takeaway || "")) {
+    // 3. Attribution cap: state-actor/APT claim not sourced from a major TI publisher.
+    // Uses isMajorTISource (URL patterns only) — avoids trust_tier=primary mis-tags
+    // on aggregators and news outlets from bypassing the cap.
+    const bulletText = (s.supporting_evidence || []).map(e => e.fact || "").join(" ");
+    if (ATTRIBUTION_RE.test(bulletText) || ATTRIBUTION_RE.test(s.takeaway || "")) {
       const anyMajorTI = labels.some(l => isMajorTISource(sourceIndex[l]?.source_url || ""));
-      if (!anyMajorTI && shift.confidence !== "low") {
-        log(`  ↳ attribution cap: ${shift.headline?.slice(0, 55)} — no primary intel source, confidence → low`);
-        const hedgedTakeaway = shift.takeaway?.startsWith("Reporting suggests") ||
-                               shift.takeaway?.startsWith("Unverified")
-          ? shift.takeaway
-          : `Reporting suggests ${shift.takeaway?.charAt(0).toLowerCase()}${shift.takeaway?.slice(1)}`;
-        return { ...shift, confidence: "low", takeaway: hedgedTakeaway };
+      if (!anyMajorTI && s.confidence !== "low") {
+        log(`  ↳ attribution cap: ${s.headline?.slice(0, 55)} — no major TI source, confidence → low`);
+        const hedgedTakeaway = s.takeaway?.startsWith("Reporting suggests") ||
+                               s.takeaway?.startsWith("Unverified")
+          ? s.takeaway
+          : `Reporting suggests ${s.takeaway?.charAt(0).toLowerCase()}${s.takeaway?.slice(1)}`;
+        s = { ...s, confidence: "low", takeaway: hedgedTakeaway };
       }
     }
 
     // 4. Research_demonstration confidence must be low (Gate 1 Exception B requirement).
-    // The LLM sometimes assigns moderate/high confidence to pure research shifts.
-    if (shift.maturity === "research_demonstration" && shift.confidence !== "low") {
-      log(`  ↳ research confidence → low: ${shift.headline?.slice(0, 55)}`);
-      return { ...shift, confidence: "low" };
+    if (s.maturity === "research_demonstration" && s.confidence !== "low") {
+      log(`  ↳ research confidence → low: ${s.headline?.slice(0, 55)}`);
+      s = { ...s, confidence: "low" };
     }
 
-    // 5. Academic/preprint source cap: if ALL cited sources are research papers
-    // (source_type = academic_paper, preprint, arxiv etc.) and maturity is above
-    // research_demonstration, cap to research_demonstration. Prevents a research
-    // paper tagged "proven" in the DB from being presented at observed_exploitation.
+    // 5. Academic/preprint source cap: all-arXiv/preprint shifts cannot exceed
+    // research_demonstration even if the DB tagged a paper as "proven" importance.
     const ACADEMIC_TYPES = new Set(["academic_paper", "preprint", "arxiv", "conference_paper"]);
     const allAcademic = labels.length > 0 &&
       labels.every(l => ACADEMIC_TYPES.has(sourceIndex[l]?.source_type?.toLowerCase() || ""));
-    if (allAcademic && MAT_RANK[shift.maturity] > 2) {
-      log(`  ↳ academic cap: ${shift.headline?.slice(0, 55)} (${shift.maturity} → research_demonstration)`);
-      return { ...shift, maturity: "research_demonstration", confidence: "low" };
+    if (allAcademic && (MAT_RANK[s.maturity] || 0) > 2) {
+      log(`  ↳ academic cap: ${s.headline?.slice(0, 55)} (${s.maturity} → research_demonstration)`);
+      s = { ...s, maturity: "research_demonstration", confidence: "low" };
     }
 
-    return shift;
+    return s;
   }
 
   for (const cat of activeCategories) {
