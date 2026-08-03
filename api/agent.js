@@ -810,9 +810,8 @@ export default async function handler(req, res) {
       let verify = { verdict: "grounded", unsupported: [], contradictions: [], unreconciled: [], ran: false };
       const verifyIssues = [];
       let confidence = parsed.confidence;
-      // Verifier disabled — saves one LLM call (~3-9s) to stay within Vercel
-      // 10s function limit. Re-enable when running on Pro (60s limit).
-      const shouldVerify = false;
+      const shouldVerify = !isGeneral && !parsed.out_of_scope && finalAnswer
+        && sourceRefs.length && !BRIEF_QUERY_TYPES.has(plan.query_type);
       if (shouldVerify) {
         const citedNums = new Set(
           [...finalAnswer.matchAll(/\[src-(\d+)\]/g)].map(m => parseInt(m[1], 10))
