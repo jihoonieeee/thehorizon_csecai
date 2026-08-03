@@ -607,6 +607,34 @@ async function main() {
       log(`  ✗ ${cat}: dropped ${dropped} shift(s) with no evidence after QA`);
   }
 
+  // ── Category floor: regenerate if QA cleared an entire category ─────────
+  // When entailment + coherence gates together eliminate all shifts from a
+  // category that had sources, attempt one fallback regeneration without
+  // entailment QA. This ensures every category with ≥3 sources produces at
+  // least one shift in the deck rather than silently disappearing.
+  if (!skipQa) {
+    const clearedCats = activeCategories.filter(cat => {
+      const report = categoryReports[cat];
+      return report &&
+        (report.strategic_shifts || []).length === 0 &&
+        (contexts[cat]?.sources || []).length >= 3;
+    });
+    if (clearedCats.length) {
+      log(`\n  Category floor: ${clearedCats.length} category(ies) cleared by QA — regenerating without entailment…`);
+      for (const cat of clearedCats) {
+        const fallback = await generateCategoryReport(cat, contexts[cat], timeframeLabel, dateFrom, dateTo);
+        if ((fallback.strategic_shifts || []).length > 0) {
+          const idx = contexts[cat]?.sourceIndex || {};
+          fallback.strategic_shifts = fallback.strategic_shifts.map(s => capShiftMaturity(s, idx));
+          categoryReports[cat] = fallback;
+          log(`  ✓ ${cat}: floor fallback succeeded (${fallback.strategic_shifts.length} shifts, no entailment QA)`);
+        } else {
+          log(`  ✗ ${cat}: floor fallback also empty — category absent from deck`);
+        }
+      }
+    }
+  }
+
   // ── Step 5 (cont): Plan category slides ──────────────────────────────────
   log("\nStep 5/6  Planning slides…");
 

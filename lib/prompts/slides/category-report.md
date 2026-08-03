@@ -19,8 +19,8 @@ The dossier may be preceded by a SELECTION CONTEXT block. When present, it ident
 If the input contains a VALIDATED INSIGHTS block, those insights are the period's confirmed analytical conclusions, already reviewed. They are the SPINE of your output. Your job in this mode is to FORMAT them into slides — NOT to re-analyse, re-derive, invent new conclusions, or replace them with your own generalisations.
 
 For each insight, produce one strategic shift:
-- headline    ← tighten "Headline seed" to a 5–10 word newspaper headline (concrete; keep the specific actor/system/event named in the seed — do not abstract it into "guardrails bypassed by design"-style vagueness).
-- takeaway    ← compress "Conclusion" to ≤35 words, plain language, keeping the specific facts (who, what, scale).
+- headline    ← tighten "Headline seed" to a 5–10 word newspaper headline (concrete; keep the specific actor/system/event named in the seed — do not abstract it into "guardrails bypassed by design"-style vagueness). Present tense.
+- takeaway    ← compress "Conclusion" to ≤20 words, plain language, keeping the specific facts (who, what, scale). These come pre-validated — shorten ruthlessly. State the conclusion, do not narrate the evidence.
 - supporting_evidence ← select the 2–3 sharpest "Key points"; compress each to ≤22 words, one idea each. These must stay concrete and readable — a reader sees them on a slide. Cite the S-labels given in that insight's "Cite" line.
 - maturity    ← use the insight's stated Maturity.
 - confidence  ← use the insight's stated Confidence if given.
@@ -85,11 +85,14 @@ The headline must:
 - state what changed or what assumption broke
 - be scannable in two seconds
 - use plain concrete language
+- be present tense — describe the current threat state, not a past event ("attackers weaponise X", not "attackers weaponised X last month")
 - avoid percentages, em dashes, colons, acronyms, and named papers
 
 GOOD: "Agents hijacked via untrusted web content"
 GOOD: "Pipeline poisoning evades stage-by-stage audits"
 GOOD: "Session attacks bypass prompt-level guardrails"
+GOOD: "Attackers weaponise coding-agent config files as persistence"
+BAD:  "Agent config files became persistence footholds" ← past tense
 BAD:  "Multi-turn prompt injection bypasses GPT-4o production guardrails at 94% rate"
 BAD:  "MCP tool poisoning: NSA advisory and live CVEs confirm risk"
 
@@ -97,7 +100,20 @@ BAD:  "MCP tool poisoning: NSA advisory and live CVEs confirm risk"
 
 Write one takeaway: one sentence, no more than 35 words.
 
-Explains the strategic conclusion in plain language. Must not repeat the headline. States what the evidence shows and why it matters now. One sentence only — no full stops mid-takeaway.
+Explains the strategic conclusion in plain language. Must not repeat the headline. States what the evidence PROVES and why it matters now — not what the evidence SHOWS or DESCRIBES. One sentence only — no full stops mid-takeaway.
+
+TAKEAWAY STYLE — what separates a slide takeaway from a report sentence:
+
+BAD (narrative): "July evidence shows attackers planted poisoned training code that amplified membership inference while keeping model accuracy within 1%, hiding the attack from standard audits."
+GOOD (assertion): "Poisoned training code passes accuracy checks while exposing private training data membership through black-box queries."
+
+BAD (summary):   "The StepSecurity incident and ShadowPickle research show reviewed source and scanner-clean models may still differ from the artifact users execute or load."
+GOOD (assertion): "Source review and scanner-clean results no longer prove the executed artifact matches the audited code."
+
+BAD (verbose):   "Supply-chain operators now target coding-agent rules, hooks, and harness files because agents trust and auto-run them as project configuration, turning metadata into durable execution and exfiltration paths."
+GOOD (punchy):   "Agents treat config files as trusted execution — supply-chain attackers now use them as persistence."
+
+Rule: the takeaway is the strategic conclusion the evidence PROVES, stated as a present-tense fact. It is not a description of what evidence was found or what the source says.
 
 ════ SUPPORTING EVIDENCE ════
 
