@@ -306,7 +306,9 @@ export async function loadWindowSources(from, to) {
     .gte("date_published", from)
     .lte("date_published", to)
     .not("main_category", "is", null)
-    .in("reading_value", ["essential", "recommended"]);
+    // analyst = specialist research content; valid for insights (written for analysts).
+    // background = noise with no landmark signal; excluded.
+    .in("reading_value", ["essential", "recommended", "analyst"]);
   if (error) throw new Error(error.message);
   return data || [];
 }
