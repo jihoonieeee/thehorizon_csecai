@@ -154,7 +154,9 @@ function renderDeckMarkdown({ generated_at, timeframe, date_from, date_to, windo
       case "overview":
         push(`---`, ``, `## Overview — ${slide.headline}`, ``);
         for (const b of (slide.bullets || [])) {
-          push(`- **${b.role?.toUpperCase() || ""}** ${b.text}`);
+          const role  = (b.role || b.bullet_role || "").toUpperCase();
+          const label = role ? `**[${role}]** ` : "";
+          push(`- ${label}${b.text}`);
         }
         push(``);
         break;
@@ -182,8 +184,10 @@ function renderDeckMarkdown({ generated_at, timeframe, date_from, date_to, windo
           ``,
         );
         for (const b of (slide.bullets || [])) {
-          const refs = (b.cite_nums || []).map(n => `[${n}]`).join("");
-          push(`- **[${(b.role || b.bullet_role || "").toUpperCase()}]** ${b.text}${refs ? " " + refs : ""}`);
+          const refs  = (b.cite_nums || []).map(n => `[${n}]`).join("");
+          const role  = (b.role || b.bullet_role || "").toUpperCase();
+          const label = role ? `**[${role}]** ` : "";
+          push(`- ${label}${b.text}${refs ? " " + refs : ""}`);
         }
         if (slide.implication) push(``, `**Implication:** ${slide.implication}`);
         if (slide._footnotes?.length) {
@@ -200,11 +204,16 @@ function renderDeckMarkdown({ generated_at, timeframe, date_from, date_to, windo
         );
         if (slide.named_entity) push(`**Entity:** ${slide.named_entity}`, ``);
         for (const b of (slide.bullets || [])) {
-          const refs = (b.cite_nums || []).map(n => `[${n}]`).join("");
-          push(`- **[${(b.role || b.bullet_role || "").toUpperCase()}]** ${b.text}${refs ? " " + refs : ""}`);
+          const refs  = (b.cite_nums || []).map(n => `[${n}]`).join("");
+          const role  = (b.role || b.bullet_role || "").toUpperCase();
+          const label = role ? `**[${role}]** ` : "";
+          push(`- ${label}${b.text}${refs ? " " + refs : ""}`);
         }
         if (slide.diagram_spec?.steps?.length) {
-          push(``, `**Attack chain:** ${slide.diagram_spec.steps.join(" → ")}`);
+          const chain = slide.diagram_spec.steps
+            .map(s => (typeof s === "string" ? s : s.step || JSON.stringify(s)))
+            .join(" → ");
+          push(``, `**Attack chain:** ${chain}`);
         }
         if (slide._footnotes?.length) {
           push(``, `*Sources: ${slide._footnotes.map(f => `[${f.num}] ${f.publisher}`).join(", ")}*`);
