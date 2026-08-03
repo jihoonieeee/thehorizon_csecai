@@ -19,6 +19,9 @@ export const CATEGORY_KEYS = [
   "basic_retrieval", "category_specific", "cross_category", "time_bound",
   "evidence_traceability", "hallucination_resistance", "adversarial",
   "ambiguous", "recommendation", "source_quality", "taxonomy_fit", "slide_support",
+  // v2 — retrieval quality
+  "retrieval_precision", "source_importance", "recency", "fixed_timeframe",
+  "trend_analysis", "topic_specific", "citation_verification",
 ];
 
 export const TEST_CASES = [
@@ -107,6 +110,146 @@ export const TEST_CASES = [
   { id: "SL-03", category: "slide_support", question: "What should go into the 6-month outlook?", note: "Outlook with assumptions + indicators; calibrated wording." },
   { id: "SL-04", category: "slide_support", question: "What are the strongest attack chains in the corpus?", note: "Evidence-linked attack chains; no overconfident wording." },
   { id: "SL-05", category: "slide_support", question: "Which findings should be excluded from executive slides?", note: "Flags weak/unverified items unfit for executive slides." },
+
+  // ── v2: Retrieval Precision ────────────────────────────────────────────────────
+  { id: "RP-01", category: "retrieval_precision",
+    question: "What do we know about indirect prompt injection attacks against AI agents that use retrieval?",
+    requiredKeywords: ["indirect", "retrieval", "RAG", "document", "rag"],
+    note: "Sources must specifically cover indirect/RAG prompt injection, not generic jailbreaks. At least one cited source title or summary must contain 'indirect', 'RAG', or 'retrieval'." },
+
+  { id: "RP-02", category: "retrieval_precision",
+    question: "What is CVE-2026-42271 and what happened with it?",
+    requiredKeywords: ["CVE-2026-42271", "LiteLLM", "litellm", "command injection"],
+    note: "Must name the CVE, the product, and exploitation status. No generic LLM threat filler." },
+
+  { id: "RP-03", category: "retrieval_precision",
+    question: "What security research exists on multimodal model attacks that use images or audio as the attack vector?",
+    requiredKeywords: ["image", "multimodal", "visual", "audio", "vision"],
+    note: "Sources must cover multimodal attack vectors. Must not drift to text-only jailbreaks." },
+
+  { id: "RP-04", category: "retrieval_precision",
+    question: "Which AI security incidents involved poisoned or backdoored model weights uploaded to model repositories?",
+    requiredKeywords: ["model", "weight", "upload", "repository", "Hugging Face", "supply chain"],
+    note: "Must cite supply-chain model poisoning specifically, not prompt injection or data poisoning." },
+
+  { id: "RP-05", category: "retrieval_precision",
+    question: "What attacks have been used to extract or leak LLM system prompts?",
+    requiredKeywords: ["system prompt", "prompt extraction", "context leak", "exfiltrat"],
+    note: "Sources must be about system prompt extraction or context leakage, not generic PII leakage." },
+
+  // ── v2: Source Importance ─────────────────────────────────────────────────────
+  { id: "SI-01", category: "source_importance",
+    question: "What are the most critical confirmed AI security incidents — not research demonstrations — in the past 90 days?",
+    requireTrustTier: ["primary", "high"],
+    note: "Cited sources should be primary/high trust. Must distinguish operational incidents from research demos." },
+
+  { id: "SI-02", category: "source_importance",
+    question: "What warnings or advisories have government agencies or national CERTs issued about AI threats?",
+    requireTrustTier: ["primary"],
+    note: "Must cite primary-tier sources (CISA, NCSC, CSA, NIST). Vendor blogs do not count as government warnings." },
+
+  { id: "SI-03", category: "source_importance",
+    question: "What is the single most operationally significant LLM vulnerability confirmed in real-world exploitation?",
+    requireTrustTier: ["primary", "high"],
+    note: "Should name one specific confirmed vulnerability with CISA KEV listing or equivalent. Distinguishes confirmed from research." },
+
+  { id: "SI-04", category: "source_importance",
+    question: "Which findings about AI supply chain attacks are backed by the strongest evidence?",
+    requireTrustTier: ["primary", "high", "curated"],
+    note: "Answer should rank or qualify sources by evidence strength. Primary/high-tier sources should dominate." },
+
+  // ── v2: Recency ───────────────────────────────────────────────────────────────
+  { id: "RQ-01", category: "recency",
+    question: "What are the most recent LLM security disclosures from the past two weeks?",
+    maxAgeDays: 14,
+    note: "temporal_scope must say '2 weeks'. Cited source dates must fall within 14 days of today. If none, must say so." },
+
+  { id: "RQ-02", category: "recency",
+    question: "What happened in AI agent security this week?",
+    maxAgeDays: 7,
+    note: "temporal_scope must be 'this week' or last 7 days. Cited sources must be from the past 7 days." },
+
+  { id: "RQ-03", category: "recency",
+    question: "What is the latest research on autonomous AI agents performing offensive cyber operations?",
+    maxAgeDays: 90,
+    note: "At least one cited source should be recent. Must not cite only older foundational papers if recent ones exist." },
+
+  // ── v2: Fixed Timeframe ───────────────────────────────────────────────────────
+  { id: "FT-01", category: "fixed_timeframe",
+    question: "What AI security incidents were reported in June 2026?",
+    requiredScopeLabel: "june 2026",
+    note: "Scope must say June 2026. All cited sources must have dates in June 2026." },
+
+  { id: "FT-02", category: "fixed_timeframe",
+    question: "What adversarial ML research was published in Q1 2026?",
+    requiredScopeLabel: "q1 2026",
+    note: "temporal_scope must say Q1 2026 or Jan-Mar 2026. Cited source dates must be 2026-01-01 to 2026-03-31." },
+
+  { id: "FT-03", category: "fixed_timeframe",
+    question: "What LLM vulnerabilities were disclosed between January and April 2026?",
+    requiredScopeLabel: "2026",
+    note: "Closed window. Agent must state scope. No sources outside Jan–Apr 2026 should be cited." },
+
+  { id: "FT-04", category: "fixed_timeframe",
+    question: "Give me a timeline of major AI agent security incidents in 2026 so far.",
+    requiredScopeLabel: "2026",
+    note: "Answer must be roughly chronological. All cited sources should be from 2026." },
+
+  // ── v2: Trend Analysis ────────────────────────────────────────────────────────
+  { id: "TR-01", category: "trend_analysis",
+    question: "Is the volume of reported LLM jailbreak attacks increasing or decreasing over the past six months?",
+    note: "Must state a direction (increasing/decreasing/stable/insufficient data). Not a point-in-time snapshot." },
+
+  { id: "TR-02", category: "trend_analysis",
+    question: "How has the nature of AI supply chain attacks changed from early 2025 to mid 2026?",
+    note: "Must compare two time periods explicitly. Needs sources from at least two different periods." },
+
+  { id: "TR-03", category: "trend_analysis",
+    question: "Are AI-enabled phishing attacks becoming more sophisticated over time, and what evidence supports that?",
+    note: "Must name specific sophistication signals and how they evolved. Cannot claim 'increasing' without evidence." },
+
+  { id: "TR-04", category: "trend_analysis",
+    question: "Which AI threat category has seen the most growth in reported incidents this year?",
+    note: "Must make a comparative claim across categories backed by volume or trend data." },
+
+  // ── v2: Topic-Specific ────────────────────────────────────────────────────────
+  { id: "TS-01", category: "topic_specific",
+    question: "What security vulnerabilities have been found in AI coding assistants like Claude Code, Cursor, or GitHub Copilot?",
+    requiredKeywords: ["coding", "copilot", "cursor", "claude code", "devin", "coding assistant"],
+    note: "Must cite sources specifically about coding assistants. Name at least one product. Not generic LLM jailbreaks." },
+
+  { id: "TS-02", category: "topic_specific",
+    question: "What are the known security issues with the Model Context Protocol (MCP)?",
+    requiredKeywords: ["MCP", "model context protocol", "tool poisoning", "tool shadowing"],
+    note: "Must cite sources specifically about MCP. Should name MCP-specific attack patterns, not generic agentic AI." },
+
+  { id: "TS-03", category: "topic_specific",
+    question: "What attacks have exploited AI agent tool use or function calling to take real-world actions?",
+    requiredKeywords: ["tool", "function call", "tool use", "MCP", "plugin", "action"],
+    note: "Should cite tool-use exploitation specifically. Distinguish from prompt injection that doesn't invoke tools." },
+
+  { id: "TS-04", category: "topic_specific",
+    question: "What security vulnerabilities have been found in AI inference infrastructure like vLLM, Ollama, or LiteLLM?",
+    requiredKeywords: ["vllm", "ollama", "litellm", "inference", "proxy", "gateway"],
+    note: "Must cite sources about AI serving infrastructure specifically. Name specific CVEs or incidents." },
+
+  { id: "TS-05", category: "topic_specific",
+    question: "What is known about attacks targeting AI agent memory or RAG knowledge bases?",
+    requiredKeywords: ["RAG", "retrieval", "memory", "knowledge base", "poisoning"],
+    note: "Must address agent memory or RAG poisoning. Not just one-shot prompt injection." },
+
+  // ── v2: Citation Verification ─────────────────────────────────────────────────
+  { id: "CV-01", category: "citation_verification",
+    question: "What happened with LiteLLM?",
+    note: "Verify: every [src-N] maps to source_refs[N-1] with non-null URL; footer ref numbers match; no duplicate URLs." },
+
+  { id: "CV-02", category: "citation_verification",
+    question: "What agentic AI risks are most relevant to enterprise environments?",
+    note: "Broader answer with more citations — stress-test citation index consistency with 5+ sources." },
+
+  { id: "CV-03", category: "citation_verification",
+    question: "What are the main LLM threats this week?",
+    note: "Time-bounded query — verify [src-N] markers are consistent after QA drops out-of-window sources." },
 ];
 
 // Sanity: keep the catalog honest about its own coverage.

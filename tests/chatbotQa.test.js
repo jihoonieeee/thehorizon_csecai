@@ -15,6 +15,9 @@ import {
   evalNoFabricatedSpecifics, evalAdversarialResistance, evalMultipleCategories,
   evalNoCategoryDrift, detectCategories, evaluateCase, verdictFor,
   evalAnswerStructure, evalSoWhatPresent, evalConfidenceCalibration, evalCitationSpread,
+  evalCitationIndexConsistency, evalCitationFooterMatch, evalNoDuplicateUrls,
+  evalSourceRecency, evalTemporalScopeAccuracy, evalTopicSpecificity,
+  evalTrustTierPresent, evalTrendDirection,
 } from "./chatbotQa/evaluators.js";
 import { TEST_CASES, CATEGORY_KEYS, COVERAGE } from "./chatbotQa/testCases.js";
 
@@ -286,6 +289,110 @@ test("citation_spread: only 2 citations is N/A", () => {
   isNA(evalCitationSpread({ answer_mode: "grounded", answer: "Assessment: Two issues. [src-1] Another issue. [src-2]" }));
 });
 
+// ── v2 evaluator unit tests ───────────────────────────────────────────────────────
+
+const V2_REFS = [
+  { ref: "src-1", title: "LiteLLM RCE via command injection", url: "https://a.com/litellm", summary: "command injection flaw in litellm proxy", trust_tier: "high", date: "2026-06-01" },
+  { ref: "src-2", title: "CISA KEV: LiteLLM CVE", url: "https://cisa.gov/kev/litellm", summary: "CISA added CVE-2026-42271 to KEV", trust_tier: "primary", date: "2026-06-08" },
+  { ref: "src-3", title: "Indirect RAG prompt injection study", url: "https://arxiv.org/rag-injection", summary: "indirect prompt injection via retrieval augmented generation documents", trust_tier: "high", date: "2026-05-10" },
+];
+const V2_CITS = [
+  { ref: "[src-1]", source_title: "LiteLLM RCE", url: "https://a.com/litellm", publisher: "CSA", trust_tier: "high" },
+  { ref: "[src-2]", source_title: "CISA KEV", url: "https://cisa.gov/kev/litellm", publisher: "CISA", trust_tier: "primary" },
+];
+
+test("citation_index: all valid refs pass", () => {
+  isPass(evalCitationIndexConsistency({ answer: "Finding [src-1] and [src-2].", source_refs: V2_REFS }));
+});
+test("citation_index: out-of-bounds ref fails", () => {
+  isFail(evalCitationIndexConsistency({ answer: "Finding [src-5].", source_refs: V2_REFS }));
+});
+test("citation_index: no inline refs is N/A", () => {
+  isNA(evalCitationIndexConsistency({ answer: "No citations here.", source_refs: V2_REFS }));
+});
+
+test("citation_footer: matching URLs pass", () => {
+  isPass(evalCitationFooterMatch({ citations: V2_CITS, source_refs: V2_REFS }));
+});
+test("citation_footer: mismatched URL fails", () => {
+  const bad = [{ ref: "[src-1]", url: "https://different.com/other", publisher: "?", trust_tier: "medium" }];
+  isFail(evalCitationFooterMatch({ citations: bad, source_refs: V2_REFS }));
+});
+
+test("no_duplicate_urls: unique URLs pass", () => {
+  isPass(evalNoDuplicateUrls({ citations: V2_CITS }));
+});
+test("no_duplicate_urls: duplicate URL fails", () => {
+  const dupe = [
+    { ref: "[src-1]", url: "https://a.com/litellm" },
+    { ref: "[src-2]", url: "https://a.com/litellm" },
+  ];
+  isFail(evalNoDuplicateUrls({ citations: dupe }));
+});
+test("no_duplicate_urls: origin- prefix variant treated as duplicate", () => {
+  const variant = [
+    { ref: "[src-1]", url: "https://unit42.example.com/report" },
+    { ref: "[src-2]", url: "https://origin-unit42.example.com/report" },
+  ];
+  isFail(evalNoDuplicateUrls({ citations: variant }));
+});
+
+test("source_recency: source within window passes", () => {
+  const recentRefs = [{ ref: "src-1", date: new Date().toISOString().slice(0, 10), url: "https://x.com", trust_tier: "high" }];
+  isPass(evalSourceRecency({ answer: "Finding [src-1].", source_refs: recentRefs, citations: [] }, { maxAgeDays: 14 }));
+});
+test("source_recency: source outside window fails", () => {
+  const oldRefs = [{ ref: "src-1", date: "2020-01-01", url: "https://x.com", trust_tier: "high" }];
+  isFail(evalSourceRecency({ answer: "Finding [src-1].", source_refs: oldRefs, citations: [] }, { maxAgeDays: 14 }));
+});
+
+test("temporal_scope_accuracy: matching label passes", () => {
+  isPass(evalTemporalScopeAccuracy({ temporal_scope: "June 2026" }, { requiredScopeLabel: "june 2026" }));
+});
+test("temporal_scope_accuracy: mismatched label fails", () => {
+  isFail(evalTemporalScopeAccuracy({ temporal_scope: "last 90 days" }, { requiredScopeLabel: "june 2026" }));
+});
+
+test("topic_specificity: cited source contains keyword passes", () => {
+  isPass(evalTopicSpecificity(
+    { answer: "Finding [src-3].", source_refs: V2_REFS, citations: [] },
+    { requiredKeywords: ["RAG", "retrieval"] }
+  ));
+});
+test("topic_specificity: no cited source contains keyword fails", () => {
+  isFail(evalTopicSpecificity(
+    { answer: "Finding [src-1].", source_refs: V2_REFS, citations: [] },
+    { requiredKeywords: ["deepfake", "voice clone"] }
+  ));
+});
+
+test("trust_tier_present: primary source cited passes", () => {
+  isPass(evalTrustTierPresent(
+    { answer: "Finding [src-2].", source_refs: V2_REFS, citations: [] },
+    { requireTrustTier: ["primary"] }
+  ));
+});
+test("trust_tier_present: only medium sources fails", () => {
+  const medRefs = [{ ref: "src-1", url: "https://a.com", trust_tier: "medium" }];
+  isFail(evalTrustTierPresent(
+    { answer: "Finding [src-1].", source_refs: medRefs, citations: [] },
+    { requireTrustTier: ["primary", "high"] }
+  ));
+});
+
+test("trend_direction: 'increasing' present passes", () => {
+  isPass(evalTrendDirection({ answer_mode: "grounded",
+    answer: "Assessment: Jailbreak attacks are increasing significantly in the past six months based on three independent threat reports. **1.** Volume of distinct jailbreak disclosures rose compared to the prior period, with novel multi-turn variants emerging specifically against instruction-tuned models. **2.** Techniques are diversifying from single-turn injections toward multi-step context accumulation attacks that are harder to detect with static guardrails. So what: defenders must adapt rate-limit and semantic-detection controls to keep pace with the escalation." }));
+});
+test("trend_direction: point-in-time snapshot with no direction fails", () => {
+  isFail(evalTrendDirection({ answer_mode: "grounded",
+    answer: "Assessment: Current jailbreak attacks primarily target frontier models using multi-turn prompts and context manipulation. **1.** Technique A involves embedding malicious instructions inside role-play scenarios that bypass refusal training. **2.** Technique B uses token-level obfuscation to evade safety classifiers. **3.** Researchers published three papers this quarter on automated red-teaming frameworks that outperform human-written attacks. So what: organisations should monitor published jailbreak taxonomies and update their model fine-tuning baselines regularly." }));
+});
+test("trend_direction: 'insufficient data' passes", () => {
+  isPass(evalTrendDirection({ answer_mode: "grounded",
+    answer: "Assessment: There is insufficient data in the current corpus to determine a clear trend direction for this topic over time. **1.** Only two sources in the evidence base cover this specific attack class, both published within the same two-week window, making temporal comparison impossible. **2.** Both sources originate from a single publisher, which limits the ability to assess whether their reporting reflects a genuine trend or a publication cluster. So what: more data from diverse publishers over a longer window is needed before a directional claim can be made." }));
+});
+
 // detectCategories
 test("detectCategories: merges structured + textual signals", () => {
   const cats = detectCategories({ answer: "prompt injection and deepfake voice cloning", source_refs: srcRefs(["agentic_ai_threats"]) });
@@ -318,13 +425,16 @@ test("evaluateCase: category-specific with drift → Fail", () => {
 });
 
 // catalog integrity
-test("catalog: at least 60 test cases", () => {
-  assert.ok(TEST_CASES.length >= 60, `only ${TEST_CASES.length} cases`);
+test("catalog: at least 85 test cases (62 v1 + 26 v2)", () => {
+  assert.ok(TEST_CASES.length >= 85, `only ${TEST_CASES.length} cases`);
 });
 test("catalog: every category is covered", () => {
+  // v1 categories require ≥4; v2 categories are intentionally smaller (3-5 cases each)
+  const V2_CATS = new Set(["retrieval_precision","source_importance","recency","fixed_timeframe","trend_analysis","topic_specific","citation_verification"]);
   for (const k of CATEGORY_KEYS) {
     const n = COVERAGE.find(c => c.category === k)?.count || 0;
-    assert.ok(n >= 4, `category ${k} has only ${n} cases`);
+    const min = V2_CATS.has(k) ? 3 : 4;
+    assert.ok(n >= min, `category ${k} has only ${n} cases (need ≥${min})`);
   }
 });
 test("catalog: every case has a unique id and a question", () => {

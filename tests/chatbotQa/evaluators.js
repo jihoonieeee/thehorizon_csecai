@@ -349,6 +349,154 @@ export function evalCitationSpread(payload) {
          : `${totalCitations} citations all appear on 1 line — possible end-of-answer citation dump.`);
 }
 
+// ── v2 Retrieval quality evaluators ──────────────────────────────────────────────
+
+/**
+ * Every inline [src-N] must have a valid source_refs[N-1] with a non-null URL.
+ * Out-of-bounds markers or null-URL refs mean QA failed to strip an orphaned marker.
+ */
+export function evalCitationIndexConsistency(payload) {
+  if (isRefusal(payload)) return R("citation_index", false, null, "N/A — refusal answer.");
+  const answer   = payload.answer || "";
+  const refs     = payload.source_refs || [];
+  const nums     = inlineRefs(answer);
+  if (!nums.length) return R("citation_index", false, null, "No inline [src-N] markers to check.");
+  const oob  = nums.filter(n => n < 1 || n > refs.length);
+  const dead = nums.filter(n => n >= 1 && n <= refs.length && !refs[n - 1]?.url);
+  const pass = oob.length === 0 && dead.length === 0;
+  const issues = [
+    oob.length  && `[src-${oob.join(",")}] out of bounds (pool size ${refs.length})`,
+    dead.length && `[src-${dead.join(",")}] has null URL — marker should have been stripped`,
+  ].filter(Boolean).join("; ");
+  return R("citation_index", true, pass, pass ? `All ${nums.length} inline ref(s) valid.` : issues);
+}
+
+/**
+ * For each entry in citations[], c.ref → N, and citations[].url must equal
+ * source_refs[N-1].url. Mismatch means the ref-rewrite or dedup went wrong.
+ */
+export function evalCitationFooterMatch(payload) {
+  if (isRefusal(payload)) return R("citation_footer", false, null, "N/A — refusal answer.");
+  const citations = payload.citations || [];
+  const refs      = payload.source_refs || [];
+  if (!citations.length) return R("citation_footer", false, null, "No citations to verify.");
+  const mismatches = [];
+  for (const c of citations) {
+    const n   = parseInt(c.ref?.match(/\d+/)?.[0] || 0, 10);
+    const src = refs[n - 1];
+    if (!src) { mismatches.push(`${c.ref} has no source_refs entry`); continue; }
+    const norm = (u) => (u || "").toLowerCase().replace(/[.,;:!?/]+$/, "").replace(/^https?:\/\//, "").replace(/^origin-/, "").replace(/^(?:www|m|amp)\./, "");
+    if (c.url && src.url && norm(c.url) !== norm(src.url)) {
+      mismatches.push(`${c.ref}: citations.url≠source_refs[${n-1}].url`);
+    }
+  }
+  return R("citation_footer", true, mismatches.length === 0,
+    mismatches.length ? mismatches.join("; ") : `All ${citations.length} footer citation(s) match source_refs.`);
+}
+
+/**
+ * No two entries in citations[] should share the same normalised URL.
+ * Duplicates mean the ref-rewrite dedup missed a URL variant.
+ */
+export function evalNoDuplicateUrls(payload) {
+  const citations = payload.citations || [];
+  if (citations.length <= 1) return R("no_duplicate_urls", false, null, "N/A — ≤1 citation.");
+  const norm = (u) => (u || "").toLowerCase().replace(/[.,;:!?/]+$/, "").replace(/^https?:\/\//, "").replace(/^origin-/, "").replace(/^(?:www|m|amp)\./, "");
+  const seen = new Map();
+  const dupes = [];
+  for (const c of citations) {
+    const k = norm(c.url);
+    if (!k) continue;
+    if (seen.has(k)) dupes.push(`${c.ref} duplicates ${seen.get(k)}`);
+    else seen.set(k, c.ref);
+  }
+  return R("no_duplicate_urls", true, dupes.length === 0,
+    dupes.length ? `Duplicate URL(s): ${dupes.join("; ")}` : `No duplicate URLs across ${citations.length} citation(s).`);
+}
+
+/**
+ * For recency cases: at least one cited source must be within maxAgeDays of today.
+ */
+export function evalSourceRecency(payload, { maxAgeDays } = {}) {
+  if (!maxAgeDays) return R("source_recency", false, null, "N/A — no maxAgeDays defined.");
+  if (isRefusal(payload)) return R("source_recency", false, null, "N/A — refusal answer.");
+  const refs  = payload.source_refs || [];
+  const nums  = inlineRefs(payload.answer || "");
+  const cited = nums.map(n => refs[n - 1]).filter(Boolean);
+  if (!cited.length) return R("source_recency", false, null, "No cited sources to check dates.");
+  const cutoff = Date.now() - maxAgeDays * 86400000;
+  const fresh  = cited.filter(s => s.date && new Date(s.date).getTime() >= cutoff);
+  return R("source_recency", true, fresh.length > 0,
+    fresh.length > 0
+      ? `${fresh.length} cited source(s) within ${maxAgeDays} days.`
+      : `No cited source within ${maxAgeDays} days (oldest: ${cited.map(s => s.date).filter(Boolean).sort().pop() || "unknown"}).`);
+}
+
+/**
+ * For fixed-timeframe cases: temporal_scope must match the expected label.
+ */
+export function evalTemporalScopeAccuracy(payload, { requiredScopeLabel } = {}) {
+  if (!requiredScopeLabel) return R("temporal_scope_accuracy", false, null, "N/A — no requiredScopeLabel.");
+  const scope = (payload.temporal_scope || "").toLowerCase();
+  const label = requiredScopeLabel.toLowerCase();
+  const pass  = scope.includes(label);
+  return R("temporal_scope_accuracy", true, pass,
+    pass ? `Scope "${payload.temporal_scope}" contains "${requiredScopeLabel}".`
+         : `Scope "${payload.temporal_scope}" does not match required "${requiredScopeLabel}".`);
+}
+
+/**
+ * For topic-specific / retrieval-precision cases: at least one cited source's
+ * title or summary must contain a required keyword.
+ */
+export function evalTopicSpecificity(payload, { requiredKeywords = [] } = {}) {
+  if (!requiredKeywords.length) return R("topic_specificity", false, null, "N/A — no requiredKeywords.");
+  if (isRefusal(payload)) return R("topic_specificity", false, null, "N/A — refusal answer.");
+  const refs = payload.source_refs || [];
+  const nums = inlineRefs(payload.answer || "");
+  const cited = nums.map(n => refs[n - 1]).filter(Boolean);
+  if (!cited.length) return R("topic_specificity", false, null, "No cited sources to inspect.");
+  const lc = (s) => String(s || "").toLowerCase();
+  const hit = cited.some(s =>
+    requiredKeywords.some(kw => lc(s.title).includes(lc(kw)) || lc(s.summary).includes(lc(kw)))
+  );
+  return R("topic_specificity", true, hit,
+    hit ? `≥1 cited source contains a required keyword (${requiredKeywords.join(", ")}).`
+        : `No cited source's title/summary contains any of: ${requiredKeywords.join(", ")}.`);
+}
+
+/**
+ * For source-importance cases: at least one cited source must have a required trust tier.
+ */
+export function evalTrustTierPresent(payload, { requireTrustTier = [] } = {}) {
+  if (!requireTrustTier.length) return R("trust_tier_present", false, null, "N/A — no requireTrustTier.");
+  if (isRefusal(payload)) return R("trust_tier_present", false, null, "N/A — refusal answer.");
+  const refs  = payload.source_refs || [];
+  const nums  = inlineRefs(payload.answer || "");
+  const cited = nums.map(n => refs[n - 1]).filter(Boolean);
+  if (!cited.length) return R("trust_tier_present", false, null, "No cited sources to check.");
+  const tiers = cited.map(s => s.trust_tier).filter(Boolean);
+  const hit   = tiers.some(t => requireTrustTier.includes(t));
+  return R("trust_tier_present", true, hit,
+    hit ? `≥1 cited source has required trust tier (found: ${[...new Set(tiers)].join(", ")}).`
+        : `No cited source in required tiers [${requireTrustTier.join(", ")}]; found: [${[...new Set(tiers)].join(", ")}].`);
+}
+
+/**
+ * For trend-analysis cases: answer must state an explicit direction or admit
+ * insufficient data. A point-in-time snapshot with no direction is a fail.
+ */
+export function evalTrendDirection(payload) {
+  if (isRefusal(payload)) return R("trend_direction", false, null, "N/A — refusal answer.");
+  const answer = payload.answer || "";
+  const words  = answer.split(/\s+/).filter(Boolean).length;
+  if (words < 60) return R("trend_direction", false, null, "N/A — too short.");
+  const hasDirection = /\b(increasing|decreasing|growing|declining|rising|falling|escalating|accelerating|spiking|surging|stable|flat|unchanged|insufficient data|unclear|not enough|cannot determine|no clear trend)\b/i.test(answer);
+  return R("trend_direction", true, hasDirection,
+    hasDirection ? "Answer states an explicit trend direction or admits insufficient data."
+                 : "Answer is a point-in-time snapshot with no trend direction stated.");
+}
+
 // ── Runner over a whole payload for a given test case ────────────────────────────
 
 // Map a test-case category to the evaluator set that should run for it.
@@ -385,6 +533,39 @@ export function evaluateCase(testCase, payload) {
   if (cat === "adversarial") push(evalAdversarialResistance(payload));
   if (cat === "evidence_traceability") push(evalEvidenceForClaims(payload));
   if (cat === "source_quality") push(evalNoFakeScores(payload));
+
+  // v2 — retrieval quality categories
+  const v2Grounded = ["retrieval_precision","source_importance","recency","fixed_timeframe","trend_analysis","topic_specific","citation_verification"];
+  if (v2Grounded.includes(cat)) {
+    push(evalEvidenceForClaims(payload));
+    push(evalCitationsPresent(payload));
+    push(evalCitationIndexConsistency(payload));
+    push(evalNoDuplicateUrls(payload));
+    push(evalCitationFooterMatch(payload));
+  }
+  if (cat === "retrieval_precision" || cat === "topic_specific") {
+    push(evalTopicSpecificity(payload, { requiredKeywords: testCase.requiredKeywords || [] }));
+  }
+  if (cat === "source_importance") {
+    push(evalTrustTierPresent(payload, { requireTrustTier: testCase.requireTrustTier || [] }));
+    push(evalBreadthOfEvidence(payload));
+  }
+  if (cat === "recency") {
+    push(evalSourceRecency(payload, { maxAgeDays: testCase.maxAgeDays }));
+    push(evalTimeframePresent(payload));
+  }
+  if (cat === "fixed_timeframe") {
+    push(evalTemporalScopeAccuracy(payload, { requiredScopeLabel: testCase.requiredScopeLabel }));
+    push(evalTimeframePresent(payload));
+  }
+  if (cat === "trend_analysis") {
+    push(evalTrendDirection(payload));
+    push(evalBreadthOfEvidence(payload));
+    push(evalTimeframePresent(payload));
+  }
+  if (cat === "citation_verification") {
+    // citation_verification cases run only the citation chain evaluators — already pushed above.
+  }
 
   return results;
 }
