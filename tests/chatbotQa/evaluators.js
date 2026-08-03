@@ -277,6 +277,76 @@ export function evalNoCategoryDrift(payload, { requestedCategory, tolerance = 0.
     `${off}/${citedCats.length} off-category CITED sources (${(ratio * 100).toFixed(0)}% ≤ ${(tolerance * 100).toFixed(0)}% allowed).`);
 }
 
+// ── Structural coherence evaluators ─────────────────────────────────────────────
+
+/**
+ * Grounded answers of substance must have an "Assessment:" line and at least one
+ * numbered point. Missing either means the response is a wall of prose with no
+ * scannable structure, which is a formatting failure regardless of content quality.
+ */
+export function evalAnswerStructure(payload) {
+  if (isRefusal(payload)) return R("answer_structure", false, null, "N/A — refusal/general/out_of_scope.");
+  const answer = payload.answer || "";
+  const words = answer.split(/\s+/).filter(Boolean).length;
+  if (words < 60) return R("answer_structure", false, null, "N/A — answer too short to require structure.");
+  const hasAssessment   = /\bAssessment\s*:/i.test(answer);
+  const hasNumberedPt   = /^\s*\*{0,2}\s*\d+[.)]\s+\S/m.test(answer);
+  const pass = hasAssessment && hasNumberedPt;
+  const missing = [!hasAssessment && "Assessment: line", !hasNumberedPt && "numbered points"].filter(Boolean).join(", ");
+  return R("answer_structure", true, pass,
+    pass ? "Assessment line + numbered points present." : `Missing: ${missing}.`);
+}
+
+/**
+ * Substantive grounded answers (>150 words) must end with a "So what:" line.
+ * Brief/lookup answers are exempt (they use the STRUCTURE_BRIEF template which
+ * explicitly omits it). Missing So what on a strategic answer means the analyst
+ * implication is left for the reader to infer.
+ */
+export function evalSoWhatPresent(payload) {
+  if (isRefusal(payload)) return R("so_what_present", false, null, "N/A — refusal/general/out_of_scope.");
+  const answer = payload.answer || "";
+  const words  = answer.split(/\s+/).filter(Boolean).length;
+  if (words < 150) return R("so_what_present", false, null, "N/A — short/lookup answer, So what not expected.");
+  const hasSoWhat = /\bSo\s+what\s*:/i.test(answer);
+  return R("so_what_present", true, hasSoWhat,
+    hasSoWhat ? "So what: line present." : "Substantive grounded answer missing 'So what:' analyst implication line.");
+}
+
+/**
+ * "High" confidence must be backed by at least 2 citations. High confidence with
+ * 0–1 citations suggests the model is overconfident relative to its evidence base.
+ * Moderate and low confidence are not checked — under-confidence is not a bug.
+ */
+export function evalConfidenceCalibration(payload) {
+  if (payload.confidence !== "high") return R("confidence_calibration", false, null, `N/A — confidence is ${payload.confidence || "unknown"}.`);
+  if (isRefusal(payload)) return R("confidence_calibration", false, null, "N/A — refusal answer.");
+  const citCount = (payload.citations || []).length;
+  const pass = citCount >= 2;
+  return R("confidence_calibration", true, pass,
+    pass ? `High confidence backed by ${citCount} citation(s).`
+         : `High confidence with only ${citCount} citation(s) — likely overconfident relative to evidence.`);
+}
+
+/**
+ * When an answer has ≥3 citations, they should be spread across multiple lines
+ * rather than all dumped in a single sentence. Clustering all [src-N] in one
+ * place ("…as documented [src-1][src-2][src-3][src-4]…") suggests the model
+ * cited lazily rather than attributing individual claims to specific sources.
+ */
+export function evalCitationSpread(payload) {
+  const answer = payload.answer || "";
+  if (isRefusal(payload)) return R("citation_spread", false, null, "N/A — refusal answer.");
+  const totalCitations = inlineRefs(answer).length;
+  if (totalCitations < 3) return R("citation_spread", false, null, `N/A — only ${totalCitations} inline ref(s), spread not applicable.`);
+  const lines = answer.split("\n");
+  const citedLineCount = lines.filter(l => /\[src-\d+\]/.test(l)).length;
+  const pass = citedLineCount >= 2;
+  return R("citation_spread", true, pass,
+    pass ? `Citations appear on ${citedLineCount} separate lines — well distributed.`
+         : `${totalCitations} citations all appear on 1 line — possible end-of-answer citation dump.`);
+}
+
 // ── Runner over a whole payload for a given test case ────────────────────────────
 
 // Map a test-case category to the evaluator set that should run for it.
@@ -289,6 +359,12 @@ export function evaluateCase(testCase, payload) {
   push(evalNoMalformedCitations(payload));
   push(evalNoFakeScores(payload));
   push(evalNoSpeculation(payload));
+
+  // Structural coherence — applies to all grounded answers regardless of category.
+  push(evalAnswerStructure(payload));
+  push(evalSoWhatPresent(payload));
+  push(evalConfidenceCalibration(payload));
+  push(evalCitationSpread(payload));
 
   const cat = testCase.category;
 

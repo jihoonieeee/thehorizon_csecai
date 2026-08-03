@@ -14,6 +14,7 @@ import {
   evalNoOperationalOverreach, evalTimeframePresent, evalHandlesUnknown,
   evalNoFabricatedSpecifics, evalAdversarialResistance, evalMultipleCategories,
   evalNoCategoryDrift, detectCategories, evaluateCase, verdictFor,
+  evalAnswerStructure, evalSoWhatPresent, evalConfidenceCalibration, evalCitationSpread,
 } from "./chatbotQa/evaluators.js";
 import { TEST_CASES, CATEGORY_KEYS, COVERAGE } from "./chatbotQa/testCases.js";
 
@@ -214,6 +215,75 @@ test("no_category_drift: cross-category pool but on-category CITATIONS passes", 
 });
 test("no_category_drift: no cited sources → N/A", () => {
   isNA(evalNoCategoryDrift({ answer: "No citations here.", source_refs: srcRefs(["llm_threats"]) }, { requestedCategory: "llm_threats" }));
+});
+
+// ── Structural coherence evaluators ──────────────────────────────────────────────
+
+const FULL_ANSWER = `Assessment: Prompt injection against AI coding tools is confirmed active exploitation, not just theoretical risk [src-1][src-2].
+
+1. GitHub Copilot and Claude Code are being manipulated into stealing credentials via prompt injection in third-party code [src-1].
+   - Attackers embed hidden instructions in library source code that redirect the coding agent to exfiltrate environment variables [src-1].
+   - The attack bypasses standard code-review workflows because the malicious payload lives in a third-party dependency, not in the developer's own files [src-1].
+   - GhostAction and NX Build System campaigns are the earliest confirmed instances of this technique producing real credential theft [src-1].
+
+2. CISA has not yet added the associated CVE to its Known Exploited Vulnerabilities catalog, but industry sources from three independent vendors confirm active exploitation [src-2].
+   - The gap between vendor reporting and government validation creates a window where organizations following only CISA KEV are unprotected [src-2].
+   - Microsoft Incident Response rates this as the fastest-growing attack surface in agentic AI deployments for enterprise environments [src-2].
+
+3. Research demonstrates fully automated black-box prompt injection frameworks now outperform human-crafted attacks against LLM agents, indicating the technique will scale [src-3].
+
+So what: Treat any AI coding assistant as a potential exfiltration vector when it reads third-party code, and audit CI/CD pipeline permissions independently of KEV status.`;
+
+test("answer_structure: well-formed answer passes", () => {
+  isPass(evalAnswerStructure({ answer_mode: "grounded", answer: FULL_ANSWER }));
+});
+test("answer_structure: answer missing Assessment: fails", () => {
+  // Long enough answer (>60 words) but no Assessment: line — should fail structure check.
+  isFail(evalAnswerStructure({ answer_mode: "grounded",
+    answer: "1. Prompt injection against AI coding tools is confirmed active exploitation. Attackers embed instructions in library source code that redirect the agent to exfiltrate environment variables. This bypasses standard code-review workflows. 2. CISA has not listed the CVE yet, but industry sources confirm active exploitation from three independent vendors. 3. Automated frameworks now outperform manual attacks. So what: audit CI/CD pipeline permissions." }));
+});
+test("answer_structure: answer missing numbered points fails", () => {
+  // Long enough answer but no numbered points — wall of prose without structure.
+  isFail(evalAnswerStructure({ answer_mode: "grounded",
+    answer: "Assessment: Prompt injection against coding tools is confirmed active. Attackers embed hidden instructions in third-party library code that redirect the coding agent to exfiltrate credentials and environment variables. This bypasses standard code-review because the malicious payload is in a dependency. CISA has not yet listed the CVE but three vendor reports confirm exploitation. Automated injection frameworks now outperform manual attacks. So what: audit CI/CD permissions independently of CISA KEV status." }));
+});
+test("answer_structure: general-mode answer is N/A", () => {
+  isNA(evalAnswerStructure({ answer_mode: "general", answer: FULL_ANSWER }));
+});
+test("answer_structure: short answer is N/A", () => {
+  isNA(evalAnswerStructure({ answer_mode: "grounded", answer: "Assessment: No evidence. [src-1]" }));
+});
+
+test("so_what_present: answer with So what: passes", () => {
+  isPass(evalSoWhatPresent({ answer_mode: "grounded", answer: FULL_ANSWER }));
+});
+test("so_what_present: long grounded answer without So what: fails", () => {
+  const noSoWhat = FULL_ANSWER.replace(/\nSo what:.*$/, "");
+  isFail(evalSoWhatPresent({ answer_mode: "grounded", answer: noSoWhat }));
+});
+test("so_what_present: short answer is N/A", () => {
+  isNA(evalSoWhatPresent({ answer_mode: "grounded", answer: "Assessment: No evidence found. [src-1]" }));
+});
+
+test("confidence_calibration: high confidence with 2+ citations passes", () => {
+  isPass(evalConfidenceCalibration({ confidence: "high", citations: cite(3), answer: FULL_ANSWER }));
+});
+test("confidence_calibration: high confidence with 0 citations fails", () => {
+  isFail(evalConfidenceCalibration({ confidence: "high", citations: [], answer: FULL_ANSWER }));
+});
+test("confidence_calibration: moderate confidence is N/A", () => {
+  isNA(evalConfidenceCalibration({ confidence: "moderate", citations: cite(1), answer: FULL_ANSWER }));
+});
+
+test("citation_spread: ≥3 citations across multiple lines passes", () => {
+  isPass(evalCitationSpread({ answer_mode: "grounded", answer: FULL_ANSWER }));
+});
+test("citation_spread: ≥3 citations all on one line fails", () => {
+  const dumped = "Assessment: Multiple issues found [src-1][src-2][src-3][src-4]. No further detail.";
+  isFail(evalCitationSpread({ answer_mode: "grounded", answer: dumped }));
+});
+test("citation_spread: only 2 citations is N/A", () => {
+  isNA(evalCitationSpread({ answer_mode: "grounded", answer: "Assessment: Two issues. [src-1] Another issue. [src-2]" }));
 });
 
 // detectCategories
