@@ -306,8 +306,9 @@ export async function loadWindowSources(from, to) {
     .gte("date_published", from)
     .lte("date_published", to)
     .not("main_category", "is", null)
-    // analyst = specialist research content; valid for insights (written for analysts).
-    // background = noise with no landmark signal; excluded.
+    // Load essential+recommended+analyst; analyst sources are held as a fallback
+    // and only merged into a category's pool when that category has fewer than
+    // ANALYST_FALLBACK_THRESHOLD essential/recommended sources (see below).
     .in("reading_value", ["essential", "recommended", "analyst"]);
   if (error) throw new Error(error.message);
   return data || [];
@@ -954,7 +955,14 @@ async function main() {
     const confidence = deriveConfidence(maturity);
 
     // Compose findings: evidence facts (round-robin across sources) + summary fallback.
-    const catRows = currRows.filter(r => r.main_category === cat.key);
+    // analyst-tier sources are included only when the primary pool (essential+recommended)
+    // is thin — gives TAI/LLM research depth without diluting richer categories.
+    const ANALYST_FALLBACK_THRESHOLD = 10;
+    const allCatRows      = currRows.filter(r => r.main_category === cat.key);
+    const primaryCatRows  = allCatRows.filter(r => r.reading_value === "essential" || r.reading_value === "recommended");
+    const catRows = primaryCatRows.length >= ANALYST_FALLBACK_THRESHOLD
+      ? primaryCatRows
+      : allCatRows; // include analyst fallback for thin categories
     // Give the synthesis a wide view of the period's sources in ONE pass (was 40)
     // so it can see the whole field and pick/cluster the strongest signals rather
     // than latching onto whatever a small window happened to include.
