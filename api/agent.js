@@ -104,7 +104,7 @@ function buildGroundedSystem(scopeLabel, focusCategory, thin, brief = false, que
                       : brief                      ? STRUCTURE_BRIEF
                       :                              STRUCTURE_FULL;
   const forwardNote = temporalIntent === "forward_looking"
-    ? `\nFORWARD-LOOKING ANALYSIS: The question asks what defenders should watch or prepare for in the coming period. Use the provided sources (recent evidence) as the foundation to identify which threats are escalating, maturing, or expanding — then draw forward-looking implications. You are NOT writing about future events that haven't happened; you are extracting forward-looking risk signals from current evidence. The temporal constraint applies to your source base (which sources you draw from), not your conclusions (which should speak to near-term risk). Write recommendations grounded in the sourced evidence, e.g. "given the documented acceleration in X [src-N], defenders should prioritise Y in the next 90 days."`
+    ? `\nFORWARD-LOOKING ANALYSIS: The question asks what defenders should watch or prepare for in the coming period. The data window above (${scopeLabel}) is your EVIDENCE BASE — sources published in that recent period. You are NOT constrained to write only about events in a future window. Instead: use the provided recent sources to identify which threats are escalating, maturing, or expanding, then draw forward-looking implications from that evidence. Write conclusions that speak to near-term risk, grounded in the cited sources. Example: "given the documented acceleration in X [src-N], defenders should prioritise Y in the next 90 days." The TEMPORAL CONSTRAINT above applies to which sources you draw from, not the timeframe of your conclusions.`
     : "";
   return interpolate(loadPrompt("agent/grounded").system, { today, scopeLabel, catNote, thinNote, trendNote, forwardNote, structureNote });
 }
@@ -538,11 +538,17 @@ export default async function handler(req, res) {
     // Skip selector LLM call for small pools — saves one cheap call (~3-9s).
     // With ≤ 10 candidates, just pass all through; synthesis cites only relevant ones.
     const SELECTOR_THRESHOLD = 10;
-    const sel = candidateSources.length === 0
+    // For non-exhaustive queries, cap the selector pool at 25 pre-ranked candidates.
+    // The full 50-source pool causes verbose model reasoning (~8K token input) that
+    // busts output token limits even at 6K. Top-25 retains the highest-ranked sources
+    // while keeping selector input manageable. all_matching passes the full pool.
+    const SELECTOR_CAP = plan.exhaustiveness === "all_matching" ? candidateSources.length : 25;
+    const selectorPool = candidateSources.slice(0, SELECTOR_CAP);
+    const sel = selectorPool.length === 0
       ? { selected: [], verdict: "none", coverage: "none", missing: [], usage: { input_tokens: 0, output_tokens: 0 } }
-      : candidateSources.length <= SELECTOR_THRESHOLD
-        ? { selected: candidateSources.map(s => s.ref), verdict: "good", coverage: "complete", missing: [], usage: { input_tokens: 0, output_tokens: 0 } }
-        : await selectSources(query, candidateSources, plan, candidateSources.length, evidenceBySrcId);
+      : selectorPool.length <= SELECTOR_THRESHOLD
+        ? { selected: selectorPool.map(s => s.ref), verdict: "good", coverage: "complete", missing: [], usage: { input_tokens: 0, output_tokens: 0 } }
+        : await selectSources(query, selectorPool, plan, candidateSources.length, evidenceBySrcId);
     addCheap(sel.usage);
 
     // Layer 3 — lenient fallback: the strict selector found nothing, but retrieval did.
