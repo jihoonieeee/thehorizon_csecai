@@ -23,7 +23,7 @@
 
 import { executeTool, retrieveRelevant, enrichSourcesWithFullText, fetchEvidenceForSources, fetchEvidenceForCandidates } from "../lib/agent/agentTools.js";
 import { planQuery } from "../lib/agent/queryPlanner.js";
-import { selectSources } from "../lib/agent/agentLlm.js";
+import { selectSources, selectSourcesLenient } from "../lib/agent/agentLlm.js";
 import { verifyAnswer } from "../lib/agent/verifyAnswer.js";
 import { platformChat, estimateCostUsd, modelForTier, platformConfig } from "../lib/llm/platformProvider.js";
 import { logAgentCostToDB } from "../lib/llm/usagePersistence.js";
@@ -77,7 +77,19 @@ CITATION REQUIREMENT: Every factual claim, named entity, date, version number, o
 
 WORD BUDGET: Under 300 words. Stop when the question is answered.`;
 
-function buildGroundedSystem(scopeLabel, focusCategory, thin, brief = false, queryType = null, temporalIntent = null) {
+const STRUCTURE_DEFINITION = `STRUCTURE (conceptual explanation — write in flowing paragraphs, not bullets):
+PARAGRAPH 1 — Definition: One sentence defining the concept in plain English. No jargon first, no "Assessment:" header. Start directly with the concept name and what it is.
+PARAGRAPH 2 — How it works: 2–4 sentences explaining the mechanism in plain words. Use a concrete example if it helps ("for example, an attacker might...").
+PARAGRAPH 3 — Why it matters: 1–2 sentences on the practical risk or consequence to a defender, organisation, or user.
+PARAGRAPH 4 (optional) — Grounded in the corpus: If the sources contain a good real example or measurement, cite it in one sentence with [src-N] to show this is real, not hypothetical.
+
+HARD RULES — violations will confuse the reader:
+- PARAGRAPHS ONLY. No numbered points (1. 2. 3.), no bullet lists ("- "), no bold headers, no sub-bullets. Use normal sentence-level citation [src-N] only.
+- Do NOT use "Assessment:", "So what:", "Defenders:", or any other analyst-briefing headers.
+- Do NOT try to cite all available sources. Pick at most 2 that best illustrate the concept. The goal is clarity, not comprehensive sourcing.
+- STOP after Paragraph 4. No trailing paragraphs. Under 200 words total.`;
+
+function buildGroundedSystem(scopeLabel, focusCategory, thin, brief = false, queryType = null, temporalIntent = null, selectorMissing = []) {
   const today = new Date().toISOString().slice(0, 10);
   const catNote = focusCategory
     ? `\nThe question is about ${CATEGORY_LABELS[focusCategory]}; keep the answer within that category.`
@@ -86,9 +98,11 @@ function buildGroundedSystem(scopeLabel, focusCategory, thin, brief = false, que
     ? `\nTREND REQUIREMENT: The Assessment line MUST state an explicit direction — "increasing", "decreasing", "stable", or "insufficient data to determine direction". A list of incidents with no directional claim is a failure.`
     : "";
   const thinNote = thin
-    ? `\nCoverage is THIN — only a small number of relevant sources were found. Say so plainly and keep confidence at most moderate.`
+    ? `\nCoverage is THIN — retrieved sources are insufficient to fully answer this question. Keep confidence at most moderate and say plainly what is missing.${selectorMissing.length ? ` Known gaps: ${selectorMissing.slice(0, 3).join("; ")}.` : ""}`
     : "";
-  const structureNote = brief ? STRUCTURE_BRIEF : STRUCTURE_FULL;
+  const structureNote = queryType === "definition" ? STRUCTURE_DEFINITION
+                      : brief                      ? STRUCTURE_BRIEF
+                      :                              STRUCTURE_FULL;
   const forwardNote = temporalIntent === "forward_looking"
     ? `\nFORWARD-LOOKING ANALYSIS: The question asks what defenders should watch or prepare for in the coming period. Use the provided sources (recent evidence) as the foundation to identify which threats are escalating, maturing, or expanding — then draw forward-looking implications. You are NOT writing about future events that haven't happened; you are extracting forward-looking risk signals from current evidence. The temporal constraint applies to your source base (which sources you draw from), not your conclusions (which should speak to near-term risk). Write recommendations grounded in the sourced evidence, e.g. "given the documented acceleration in X [src-N], defenders should prioritise Y in the next 90 days."`
     : "";
@@ -531,6 +545,29 @@ export default async function handler(req, res) {
         : await selectSources(query, candidateSources, plan, candidateSources.length, evidenceBySrcId);
     addCheap(sel.usage);
 
+    // Layer 3 — lenient fallback: the strict selector found nothing, but retrieval did.
+    // Run a simpler "most related" pass over the top-12 pre-ranked candidates before
+    // giving up and routing to a general-knowledge answer.
+    if (sel.verdict === "none" && candidateSources.length > 0) {
+      const top12 = candidateSources.slice(0, 12);
+      const lenient = await selectSourcesLenient(query, top12, plan);
+      addCheap(lenient.usage);
+      if (lenient.verdict !== "none") {
+        sel.selected = lenient.selected;
+        sel.verdict  = "thin"; // always thin — it's a broader match
+        sel.coverage = "partial";
+        sel.missing  = lenient.missing || [];
+      }
+    }
+
+    // Definition queries need only one explanatory source to be "good" — the selector
+    // consistently rates them thin because it checks for incident coverage gaps that
+    // are irrelevant for a concept explanation. Upgrade thin→good when at least one
+    // source was selected.
+    if (plan.query_type === "definition" && sel.verdict === "thin" && sel.selected?.length > 0) {
+      sel.verdict = "good";
+    }
+
     const selectedSet = new Set(sel.selected);
     // Renumber 1..N so [src-N] in the answer always refers to position N in this
     // array — the selector's refs are already contiguous but we renumber again
@@ -622,7 +659,7 @@ export default async function handler(req, res) {
     const briefAnswer = BRIEF_QUERY_TYPES.has(plan.query_type); // comparison is intentionally absent from BRIEF_QUERY_TYPES
     const system = isGeneral
       ? buildGeneralSystem(query)
-      : buildGroundedSystem(plan.temporal.scope_label, plan.category, sel.verdict === "thin", briefAnswer, plan.query_type, plan.temporal.temporal_intent);
+      : buildGroundedSystem(plan.temporal.scope_label, plan.category, sel.verdict === "thin", briefAnswer, plan.query_type, plan.temporal.temporal_intent, sel.missing || []);
     // Taxonomy block: 9KB payload sent on every call. Only inject for analytical
     // query types that actually need precise taxonomy labels. Brief lookups and
     // general queries don't benefit from it and it adds network overhead through proxy.
@@ -713,6 +750,8 @@ export default async function handler(req, res) {
       }
       const parsed = parseResponse(rawText);
       parsed.answer = normalizeCitationMarkers(parsed.answer);
+      // Strip hallucinated [src-N] markers from general answers — no real sources exist.
+      if (isGeneral) parsed.answer = parsed.answer.replace(/\[src-\d+\]/g, "");
       // Normalise URLs for dedup: strip scheme, trailing punctuation, and common
       // CDN/staging subdomain prefixes so variant URLs of the same article collapse
       // to one key. Handles:
@@ -921,6 +960,10 @@ export default async function handler(req, res) {
       }
 
       if (generalPreamble && !blocked) finalAnswer = generalPreamble + finalAnswer;
+
+      // Strip any hallucinated [src-N] markers from general answers — there are no
+      // sources to link to, and they render as broken unclickable superscripts.
+      if (isGeneral && !blocked) finalAnswer = finalAnswer.replace(/\[src-\d+\]/g, "");
 
       // Renumber [src-N] refs sequentially after QA. Some sources are dropped
       // (dead URLs, off-topic, marketing) leaving gaps like 1,2,4,5,7 — compact

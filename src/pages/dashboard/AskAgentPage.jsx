@@ -293,8 +293,8 @@ function Message({ msg, onFollowUp, showCost }) {
         </div>
       )}
       {msg.retrieval_verdict === "thin" && msg.answer_mode !== "general" && !msg.streaming && (
-        <div className="hz-answer-mode-badge hz-answer-mode-thin" title="Fewer than 3 sources matched this question — answer may be incomplete.">
-          Limited sources — answer may be incomplete
+        <div className="hz-answer-mode-badge hz-answer-mode-thin" title="The selector found relevant sources but judged coverage incomplete for this question — answer may have gaps.">
+          Limited coverage — answer may be incomplete
         </div>
       )}
       <div className="hz-msg-assistant-content">

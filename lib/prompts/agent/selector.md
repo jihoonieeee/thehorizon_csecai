@@ -92,17 +92,35 @@ discusses AI supply-chain themes in the same breath. The named entity must be th
 service, infrastructure, or user-base that was attacked or affected — not a thematically related
 system in the same ecosystem. Apply this strictly for all named entities, not just Hugging Face.
 
-SPECIFIC SUBJECT RULE — when the question names a specific object, only select sources that
-directly address THAT object, not adjacent members of the same family:
-  "image classifier attacks"  → sources about image classifier evasion ONLY
-                                 NOT: audio adversarial ML, malware classifier evasion, generic adversarial examples
-  "MCP vulnerabilities"       → sources about MCP protocol flaws or exploitation
-                                 NOT: generic agentic-AI risk overviews that briefly mention MCP
-  "prompt injection in agents"→ sources about PI in agentic/tool-use contexts
-                                 NOT: PI in plain LLM chat sessions
+VOCABULARY BRIDGE — READ THIS BEFORE APPLYING THE SUBJECT RULE BELOW.
+The query plan includes `search_terms` that are the semantic equivalents the query planner
+already identified for the user's concepts. These ARE the expanded definition of what the
+user is asking for. A source that directly addresses any search_term is directly addressing
+the user's request — even when its vocabulary differs from the question's exact wording.
 
-Ask: "Does this source directly address the specific thing asked, or merely a related topic?" If
-the answer is "related topic only" — exclude it and note the gap in missing[].
+  Example: user asks "PoC exploits for tool-use abuse in AI agents"
+    search_terms include: mcp exploit, tool poisoning, exploit, proof of concept, agent tool exploit
+    → "MCP Bridge Vulnerability That Turns Agents Into Rogue Admins" addresses "mcp exploit" → SELECT
+    → "Exploiting Tool and Function Calling in LLM Agents" addresses "exploit" + "tool" → SELECT
+    → "GitHub proof-of-concept AI agent exploit" addresses "proof of concept" + "exploit" → SELECT
+    → A source about general AI ethics with no match to any search_term → EXCLUDE
+
+Apply the subject rule below AFTER checking the vocabulary bridge. If a source matches any
+search_term, it passes the subject rule — do not then re-apply the subject rule to reject it.
+
+VECTOR LANE SIGNAL — Each source shows a `lanes:` field. Sources with `vector` in lanes were
+matched by semantic embedding similarity — the embedding model already confirmed concept-level
+relevance. Do not reject a vector-matched source solely because its phrasing differs. Only
+exclude a vector-matched source when its summary/facts show it is clearly off-topic.
+
+SPECIFIC SUBJECT RULE — applies to sources that did NOT match any search_term and were NOT
+retrieved via vector lane. For those, require direct subject match:
+  "image classifier attacks"  → image classifier evasion ONLY, not generic adversarial examples
+  "MCP vulnerabilities"       → MCP protocol flaws, not generic agentic-AI risk overviews
+  "prompt injection in agents"→ PI in agentic/tool-use contexts, not plain LLM chat
+
+Ask: "Does this source match a search_term, come from the vector lane, OR directly address
+the specific subject?" If none of the three — exclude it and note the gap in missing[].
 
 SCAN-SOURCE RULE — when requested_objects contains "incident" and does NOT include "research",
 sources typed research_finding, benchmark_evaluation, or capability_demonstration may only be
@@ -169,6 +187,7 @@ Different publishers repeating the same original disclosure are NOT independent 
 
 Do not force a fixed range. Use the number the request actually needs:
 
+  definition / concept explanation      → 1–3 sources maximum; pick the most illustrative, not the most comprehensive
   exact lookup (CVE, paper, incident)  → usually 1–3
   factual list or timeline             → one strong source per distinct item
   exhaustive enumeration (all_matching)→ every qualifying non-duplicate source needed to cover all matching objects
@@ -216,9 +235,23 @@ Example — "All Hugging Face incidents in July 2026":
 9. VERDICT AND COVERAGE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-verdict reflects whether the SELECTED sources can answer the question:
-  good   — selected evidence is sufficient to answer with meaningful confidence
-  thin   — relevant evidence exists but gaps remain; answer will be incomplete or caveated
+verdict reflects whether the SELECTED sources can adequately answer the question's CORE INTENT:
+  good   — the selected evidence directly addresses the question's core asks with meaningful
+            specificity. Caveats, single-source items, or secondary gaps do NOT make an
+            answer "thin" — they belong in the synthesis text, not in the verdict.
+            For strategic assessment queries (landscape, trends, "most important finding"):
+            use good whenever 3+ selected sources collectively cover the main thrust of
+            the question — count distinct source items, not distinct publishers.
+            For incident/list queries: use good when the known incidents are well-documented,
+            even if the list is not exhaustive.
+  thin   — use ONLY when the core question CANNOT be adequately addressed:
+            • 1–2 sources total for a question requiring breadth across multiple items/actors
+            • The central named entity or technique has NO direct source coverage
+            • An exhaustive list request can only return 1 confirmed item
+            • The only available sources are research-stage for a question explicitly about
+              real-world incidents/confirmed exploitation, AND this is stated in missing[]
+            Do NOT use thin merely because some gaps remain, because an answer will have
+            caveats, or because the ideal answer would have been longer or more comprehensive.
   none   — no source in the pool directly supports the request; return selected: []
 
 coverage reflects whether the CANDIDATE POOL (all sources shown to you) is complete:
@@ -237,6 +270,11 @@ Populate missing[] with concrete gaps such as:
 
 Do not infer that an exhaustive list is complete merely because several sources were retrieved.
 
+DEFINITION QUERY OVERRIDE — when query_type is `definition`, always use verdict `good` if
+any selected source explains the concept, mechanism, or term being asked about. Incident
+coverage gaps are irrelevant for a concept explanation. A definition question with even one
+explanatory source is adequately answered — do not rate it thin.
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 10. FINAL VALIDATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -251,7 +289,7 @@ Before returning verify:
 7. Every selected source contributes a unique fact or needed corroboration.
 8. Source count fits the query type (no padding, no arbitrary cap for all_matching).
 9. Exhaustive requests were not silently reduced to representative examples.
-10. Verdict reflects evidence coverage, not source count.
+10. Verdict reflects whether the core question CAN be answered, not whether the answer is perfect. Reserve thin for cases where the question fundamentally cannot be addressed — not for well-grounded answers that have caveats.
 11. SCAN-SOURCE RULE: if requested_objects is incident-only, no research_finding/benchmark_evaluation/capability_demonstration source was selected as primary incident evidence.
 12. ENTITY ROLE RULE: if entity_role is set in the query plan, directional filtering was applied and only sources matching that role were selected.
 
