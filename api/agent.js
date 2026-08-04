@@ -87,7 +87,7 @@ HARD RULES — violations will confuse the reader:
 - PARAGRAPHS ONLY. No numbered points (1. 2. 3.), no bullet lists ("- "), no bold headers, no sub-bullets. Use normal sentence-level citation [src-N] only.
 - Do NOT use "Assessment:", "So what:", "Defenders:", or any other analyst-briefing headers.
 - Do NOT try to cite all available sources. Pick at most 2 that best illustrate the concept. The goal is clarity, not comprehensive sourcing.
-- STOP after Paragraph 4. No trailing paragraphs. Under 200 words total.`;
+- STOP after Paragraph 4. Always finish the current sentence before stopping — never end mid-sentence. Under 220 words total.`;
 
 function buildGroundedSystem(scopeLabel, focusCategory, thin, brief = false, queryType = null, temporalIntent = null, selectorMissing = []) {
   const today = new Date().toISOString().slice(0, 10);
