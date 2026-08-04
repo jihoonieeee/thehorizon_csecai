@@ -67,7 +67,7 @@ const STRUCTURE_FULL = `STRUCTURE:
 2) At most 4 numbered points. Order them by descending operational impact — most severe or significant item first. Primary ordering signal: source maturity shown in context (operational > observed > disclosed > demonstrated > research); when maturity is absent, use source type as proxy (incident / threat_intelligence before research_finding / benchmark_evaluation / capability_demonstration); recency is the tiebreaker when impact is equal. Each point has exactly this shape: [judgement line] then [sub-bullets] then [next point]. No text between the judgement and the sub-bullets. No text after the sub-bullets. The judgement line is the header; the sub-bullets carry the evidence. No taxonomy labels, no italic technique descriptions, no explanatory bridge sentences anywhere inside a point. The judgement line itself must carry a [src-N] citation if it contains any specific claim, date, named actor, or product — do not leave it uncited.
 3) "So what:" — ONE sentence. No compound sentences.
 
-HARD LIMIT: Under 500 words total (excluding the SCOPE/CONFIDENCE footer). Count as you write. If you reach 400 words before the last point, cut sub-bullets to one per remaining point.`;
+HARD LIMIT: Under 600 words total (excluding the SCOPE/CONFIDENCE footer). Always finish the sentence you are writing before stopping — never cut mid-sentence.`;
 const STRUCTURE_BRIEF = `STRUCTURE (direct lookup — answer the question and stop):
 1) "Assessment:" — ONE sentence. The direct answer and confidence.
 2) At most 3 numbered points. At most 2 sub-bullets per point ("- ") — one specific fact + [src-N] per sub-bullet. One clause per sub-bullet, no narrative explanation. The numbered judgement line itself must carry a [src-N] if it contains any specific claim, date, named actor, or product.
@@ -75,7 +75,7 @@ Do NOT add "So what" or "Defenders" lines.
 
 CITATION REQUIREMENT: Every factual claim, named entity, date, version number, or CVE ID MUST have a [src-N] citation. If sources are provided, cite at least one. An answer with factual claims and no citations is invalid.
 
-WORD BUDGET: Under 300 words. Stop when the question is answered.`;
+WORD BUDGET: Under 400 words. Always finish the sentence you are writing before stopping — never cut mid-sentence.`;
 
 const STRUCTURE_DEFINITION = `STRUCTURE (conceptual explanation — write in flowing paragraphs, not bullets):
 PARAGRAPH 1 — Definition: One sentence defining the concept in plain English. No jargon first, no "Assessment:" header. Start directly with the concept name and what it is.
@@ -87,7 +87,7 @@ HARD RULES — violations will confuse the reader:
 - PARAGRAPHS ONLY. No numbered points (1. 2. 3.), no bullet lists ("- "), no bold headers, no sub-bullets. Use normal sentence-level citation [src-N] only.
 - Do NOT use "Assessment:", "So what:", "Defenders:", or any other analyst-briefing headers.
 - Do NOT try to cite all available sources. Pick at most 2 that best illustrate the concept. The goal is clarity, not comprehensive sourcing.
-- STOP after Paragraph 4. Always finish the current sentence before stopping — never end mid-sentence. Under 220 words total.`;
+- STOP after Paragraph 4. Always finish the current sentence before stopping — never end mid-sentence. Under 300 words total.`;
 
 function buildGroundedSystem(scopeLabel, focusCategory, thin, brief = false, queryType = null, temporalIntent = null, selectorMissing = []) {
   const today = new Date().toISOString().slice(0, 10);
@@ -659,7 +659,9 @@ export default async function handler(req, res) {
     // definition or publisher_lookup when the question asks "X vs Y" — comparison
     // answers require Sonnet + full structure to synthesise across two sides.
     const BRIEF_QUERY_TYPES = new Set([
-      "definition", "vulnerability_lookup", "incident_lookup",
+      // "definition" intentionally excluded: prose explanations need the synthesis
+      // tier (Sonnet) and 8K tokens — cheap tier (Flash/2K) truncates mid-sentence.
+      "vulnerability_lookup", "incident_lookup",
       "entity_history", "research_lookup", "publisher_lookup",
     ]);
     const briefAnswer = BRIEF_QUERY_TYPES.has(plan.query_type); // comparison is intentionally absent from BRIEF_QUERY_TYPES

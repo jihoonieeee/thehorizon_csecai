@@ -330,6 +330,18 @@ LEXICAL RECALL RULES:
    "PoC exploit" / "proof of concept" / "PoC for agents" →
      demonstration, research finding, attack technique, vulnerability, exploit, published attack
 
+   "adversarial patch attacks" / "patch attack on vision models" →
+     adversarial patch, physical adversarial, vision model attack, image classifier evasion, patch-based attack
+
+   "adversarial robustness" / "robustness defence" / "robust AI" →
+     adversarial robustness, certified defense, adversarial training, robust model, adversarial defense paper
+
+   "jailbreak methods in research" / "jailbreak techniques community" →
+     jailbreak, LLM jailbreak, safety bypass, alignment bypass, jailbreaking, guardrail bypass, jailbreak attack
+
+   "RAG poisoning research" / "RAG attack" / "retrieval poisoning" →
+     RAG, retrieval augmented generation, knowledge poisoning, corpus poisoning, RAG attack, poisoned knowledge base
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SCOPE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
