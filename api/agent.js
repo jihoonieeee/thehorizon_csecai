@@ -697,13 +697,17 @@ export default async function handler(req, res) {
     // On thinking/reasoning models (e.g. azure.claude-sonnet-5), thinking tokens
     // consume the max_tokens budget before output tokens are allocated. With the old
     // ceiling of 2000, a model spending ~1500 tokens thinking left only ~500 for the
-    // answer — causing empty or truncated responses on complex queries. Raised to 4000
-    // so thinking + answer fit within budget. Brief answers stay at 1500 (Flash, no
-    // thinking) and full answers at 4000 (Sonnet, thinking may consume ~1000-2000).
-    const maxTokens = briefAnswer ? 2000 : 12000;
+    // Set thinkingBudget to 0 for all synthesis calls. The GovTech platform
+    // (azure.claude-sonnet-5) deducts thinking tokens from the shared output budget
+    // before text tokens are allocated. On complex queries (strategic assessments,
+    // trend analysis with many sources), model thinking can consume 1000-2000 tokens
+    // leaving insufficient budget for a full answer, causing empty response and
+    // routing to general fallback. Sonnet-class models reason well without an
+    // explicit thinking budget.
+    const maxTokens = briefAnswer ? 2000 : 8000;
     const synthArgs = {
       tier: synthTier, system: cachedSystem, messages, maxTokens,
-      thinkingBudget: briefAnswer ? 0 : 1024,
+      thinkingBudget: 0,
       timeoutMs: 180000,
     };
 
@@ -724,7 +728,7 @@ export default async function handler(req, res) {
         { type: "text", text: buildGeneralSystem(query), cache_control: { type: "ephemeral" } },
       ];
       const gResp = await platformChat({
-        tier: "synthesis", maxTokens: 8000, thinkingBudget: 1024, system: gSys,
+        tier: "synthesis", maxTokens: 4000, thinkingBudget: 0, system: gSys,
         messages: [...historyMessages, { role: "user", content: query.trim() }],
       });
       recordSynth(gResp.inputTokens, gResp.outputTokens, gResp.model);
@@ -751,7 +755,7 @@ export default async function handler(req, res) {
       // platform error that returned 200 with empty content). Route to general
       // fallback instead of surfacing the literal placeholder to the user.
       if (!rawText || !rawText.trim()) {
-        process.stderr.write(`[agent] WARNING: model returned empty response — routing to general fallback\n`);
+        process.stderr.write(`[agent] WARNING: model returned empty response (len=${rawText?.length??'null'}) — routing to general fallback\n`);
         return await synthGeneralFallback();
       }
       const parsed = parseResponse(rawText);
@@ -1049,7 +1053,18 @@ export default async function handler(req, res) {
     }
 
     // ── Buffered path ────────────────────────────────────────────────────────────
-    const resp = await platformChat({ ...synthArgs, stream: false });
+    // Buffered synthesis with retry: the GovTech platform occasionally returns 200 OK
+    // with empty content (rate limit / transient overload). Retry up to 2 times with
+    // 3s backoff before falling to general fallback.
+    let resp;
+    for (let attempt = 0; attempt <= 2; attempt++) {
+      resp = await platformChat({ ...synthArgs, stream: false });
+      if (resp.text?.trim()) break;
+      if (attempt < 2) {
+        process.stderr.write(`[agent] synthesis empty (attempt ${attempt + 1}) — retrying in 3s\n`);
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
     recordSynth(resp.inputTokens, resp.outputTokens, resp.model);
     return res.status(200).json(await buildPayload(resp.text || ""));
 
