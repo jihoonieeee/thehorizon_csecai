@@ -77,7 +77,7 @@ CITATION REQUIREMENT: Every factual claim, named entity, date, version number, o
 
 WORD BUDGET: Under 300 words. Stop when the question is answered.`;
 
-function buildGroundedSystem(scopeLabel, focusCategory, thin, brief = false, queryType = null) {
+function buildGroundedSystem(scopeLabel, focusCategory, thin, brief = false, queryType = null, temporalIntent = null) {
   const today = new Date().toISOString().slice(0, 10);
   const catNote = focusCategory
     ? `\nThe question is about ${CATEGORY_LABELS[focusCategory]}; keep the answer within that category.`
@@ -89,7 +89,10 @@ function buildGroundedSystem(scopeLabel, focusCategory, thin, brief = false, que
     ? `\nCoverage is THIN — only a small number of relevant sources were found. Say so plainly and keep confidence at most moderate.`
     : "";
   const structureNote = brief ? STRUCTURE_BRIEF : STRUCTURE_FULL;
-  return interpolate(loadPrompt("agent/grounded").system, { today, scopeLabel, catNote, thinNote, trendNote, structureNote });
+  const forwardNote = temporalIntent === "forward_looking"
+    ? `\nFORWARD-LOOKING ANALYSIS: The question asks what defenders should watch or prepare for in the coming period. Use the provided sources (recent evidence) as the foundation to identify which threats are escalating, maturing, or expanding — then draw forward-looking implications. You are NOT writing about future events that haven't happened; you are extracting forward-looking risk signals from current evidence. The temporal constraint applies to your source base (which sources you draw from), not your conclusions (which should speak to near-term risk). Write recommendations grounded in the sourced evidence, e.g. "given the documented acceleration in X [src-N], defenders should prioritise Y in the next 90 days."`
+    : "";
+  return interpolate(loadPrompt("agent/grounded").system, { today, scopeLabel, catNote, thinNote, trendNote, forwardNote, structureNote });
 }
 
 function buildGeneralSystem(query) {
@@ -619,7 +622,7 @@ export default async function handler(req, res) {
     const briefAnswer = BRIEF_QUERY_TYPES.has(plan.query_type); // comparison is intentionally absent from BRIEF_QUERY_TYPES
     const system = isGeneral
       ? buildGeneralSystem(query)
-      : buildGroundedSystem(plan.temporal.scope_label, plan.category, sel.verdict === "thin", briefAnswer, plan.query_type);
+      : buildGroundedSystem(plan.temporal.scope_label, plan.category, sel.verdict === "thin", briefAnswer, plan.query_type, plan.temporal.temporal_intent);
     // Taxonomy block: 9KB payload sent on every call. Only inject for analytical
     // query types that actually need precise taxonomy labels. Brief lookups and
     // general queries don't benefit from it and it adds network overhead through proxy.
@@ -654,7 +657,7 @@ export default async function handler(req, res) {
     // answer — causing empty or truncated responses on complex queries. Raised to 4000
     // so thinking + answer fit within budget. Brief answers stay at 1500 (Flash, no
     // thinking) and full answers at 4000 (Sonnet, thinking may consume ~1000-2000).
-    const maxTokens = briefAnswer ? 2000 : 8000;
+    const maxTokens = briefAnswer ? 2000 : 12000;
     const synthArgs = {
       tier: synthTier, system: cachedSystem, messages, maxTokens,
       thinkingBudget: briefAnswer ? 0 : 1024,
@@ -701,7 +704,14 @@ export default async function handler(req, res) {
     // buildPayload: shared by streamed + buffered paths. Runs deterministic QA and
     // the Haiku verifier, then assembles the response.
     async function buildPayload(rawText) {
-      const parsed = parseResponse(rawText || "(No answer generated)");
+      // Empty response from the model (token exhaustion, thinking overflow, or
+      // platform error that returned 200 with empty content). Route to general
+      // fallback instead of surfacing the literal placeholder to the user.
+      if (!rawText || !rawText.trim()) {
+        process.stderr.write(`[agent] WARNING: model returned empty response — routing to general fallback\n`);
+        return await synthGeneralFallback();
+      }
+      const parsed = parseResponse(rawText);
       parsed.answer = normalizeCitationMarkers(parsed.answer);
       // Normalise URLs for dedup: strip scheme, trailing punctuation, and common
       // CDN/staging subdomain prefixes so variant URLs of the same article collapse
@@ -912,6 +922,27 @@ export default async function handler(req, res) {
 
       if (generalPreamble && !blocked) finalAnswer = generalPreamble + finalAnswer;
 
+      // Renumber [src-N] refs sequentially after QA. Some sources are dropped
+      // (dead URLs, off-topic, marketing) leaving gaps like 1,2,4,5,7 — compact
+      // to 1,2,3,4,5 so footer buttons always match inline citation numbers.
+      if (!blocked && localSourceRefs.some(s => !s.url)) {
+        const oldToNew = {};
+        let newIdx = 0;
+        localSourceRefs.forEach((s, i) => { if (s.url) oldToNew[i + 1] = ++newIdx; });
+        finalAnswer = finalAnswer.replace(/\[src-(\d+)\]/g, (m, n) => {
+          const nn = oldToNew[parseInt(n, 10)];
+          return nn ? `[src-${nn}]` : "";
+        });
+        dedupedCitations = dedupedCitations
+          .map(c => {
+            const oldNum = parseInt(c.ref?.match(/\d+/)?.[0], 10);
+            const nn = oldToNew[oldNum];
+            return nn ? { ...c, ref: `[src-${nn}]` } : null;
+          })
+          .filter(Boolean);
+        localSourceRefs = localSourceRefs.filter(s => s.url);
+      }
+
       const qaIssues = qaFindings.map(i => i.detail);
       logAgentCostToDB({ inputTokens: usage.in, outputTokens: usage.out, rounds: 1, costUsd: costUsd() }).catch(() => {});
 
@@ -971,8 +1002,7 @@ export default async function handler(req, res) {
     // ── Buffered path ────────────────────────────────────────────────────────────
     const resp = await platformChat({ ...synthArgs, stream: false });
     recordSynth(resp.inputTokens, resp.outputTokens, resp.model);
-    const rawText = resp.text || "(No answer generated)";
-    return res.status(200).json(await buildPayload(rawText));
+    return res.status(200).json(await buildPayload(resp.text || ""));
 
   } catch (err) {
     console.error("[agent] error:", err.message, err.stack?.slice(0, 500));

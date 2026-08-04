@@ -250,6 +250,11 @@ export const TEST_CASES = [
   { id: "CV-03", category: "citation_verification",
     question: "What are the main LLM threats this week?",
     note: "Time-bounded query — verify [src-N] markers are consistent after QA drops out-of-window sources." },
+
+  // Forward-looking / defender recommendations
+  { id: "FW-01", category: "recommendation",
+    question: "What should defenders watch in the next 90 days?",
+    note: "Forward-looking query — must produce a grounded answer using recent sources as evidence base, not refuse or return empty." },
 ];
 
 // Sanity: keep the catalog honest about its own coverage.
