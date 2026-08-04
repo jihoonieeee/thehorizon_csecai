@@ -504,8 +504,27 @@ export default async function handler(req, res) {
       return res.status(200).json(payload);
     }
 
-    // ── 3. Retrieve candidates (broad, date-filtered) ────────────────────────────
-    const ret = await retrieveRelevant(plan);
+    // ── 3. Retrieve + prefetch synthesis data in parallel ───────────────────────
+    // evidence/judgments/trends/temporal only need the PLAN (not selected sources),
+    // so they can fire immediately alongside retrieval instead of waiting for the
+    // selector to finish (~10s later). Saves 2-4s on every grounded response.
+    const evidenceQuery = plan.search_terms?.length ? plan.search_terms.join(" ") : query;
+    const evDateFrom    = plan.temporal?.all_time ? undefined : (plan.temporal?.date_from || undefined);
+    const evDateTo      = plan.temporal?.all_time ? undefined : (plan.temporal?.date_to   || undefined);
+    const windowDays    = evDateFrom
+      ? Math.round((Date.now() - new Date(evDateFrom).getTime()) / 86400000)
+      : Infinity;
+    const isTightWindow     = !plan.temporal?.all_time && windowDays <= 30;
+    const TEMPORAL_QT       = new Set(["trend_analysis", "timeline", "comparison", "strategic_assessment"]);
+    const needsTemporalData = TEMPORAL_QT.has(plan.query_type) && plan.temporal?.temporal_intent !== "none";
+
+    const [ret, prefetchedEvidence, prefetchedJudgments, prefetchedTrends, prefetchedTemporal] = await Promise.all([
+      retrieveRelevant(plan),
+      executeTool("get_evidence", { query: evidenceQuery, categories: undefined, tags: plan.taxonomy_tags?.length ? plan.taxonomy_tags : undefined, limit: 12, date_from: evDateFrom, date_to: evDateTo }).catch(() => null),
+      (plan.needs_judgments && !isTightWindow) ? executeTool("get_judgments", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
+      plan.needs_trends ? executeTool("trend_analysis", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
+      needsTemporalData ? executeTool("search_temporal_insights", { query, categories: plan.category ? [plan.category] : undefined, win: "month", date_from: evDateFrom, date_to: evDateTo }).catch(() => null) : Promise.resolve(null),
+    ]);
 
     // ── 4. Selector (Haiku) — semantic pick from the candidate pool ───────────
     // Pre-filter marketing blogs BEFORE passing to the selector so its coverage
@@ -611,38 +630,9 @@ export default async function handler(req, res) {
     const isGeneral = (sel.verdict === "none" || sourceRefs.length === 0) && !cveResults.some(r => r.found);
 
     if (!isGeneral) {
-      // Use the planner's expanded search terms (domain terminology) rather than
-      // the raw user question — prevents evidence retrieval from only matching the
-      // user's words and missing sources that use different but equivalent phrasing.
-      const evidenceQuery = plan.search_terms?.length ? plan.search_terms.join(" ") : query;
-      const evDateFrom = plan.temporal?.all_time ? undefined : (plan.temporal?.date_from || undefined);
-      const evDateTo   = plan.temporal?.all_time ? undefined : (plan.temporal?.date_to   || undefined);
-      // Judgments are strategic summaries of the ENTIRE corpus history — injecting
-      // them into a tight recency window (≤ 30 days) causes Sonnet to write about
-      // historical incidents as "context", blowing out the temporal boundary.
-      const windowDays = evDateFrom
-        ? Math.round((Date.now() - new Date(evDateFrom).getTime()) / 86400000)
-        : Infinity;
-      const isTightWindow = !plan.temporal?.all_time && windowDays <= 30;
-      const TEMPORAL_QUERY_TYPES = new Set(["trend_analysis", "timeline", "comparison", "strategic_assessment"]);
-      const jobs = [
-        executeTool("get_evidence", { query: evidenceQuery, categories: undefined, tags: plan.taxonomy_tags?.length ? plan.taxonomy_tags : undefined, limit: 12, date_from: evDateFrom, date_to: evDateTo }).catch(() => null),
-        (plan.needs_judgments && !isTightWindow) ? executeTool("get_judgments", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
-        plan.needs_trends ? executeTool("trend_analysis", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
-        // Only fetch temporal insights when the query actually has a time dimension —
-        // timeless strategic questions ("what should defenders prioritise?") have
-        // temporal_intent="none" and gain nothing from historical snapshots.
-        (TEMPORAL_QUERY_TYPES.has(plan.query_type) && plan.temporal?.temporal_intent !== "none")
-          ? executeTool("search_temporal_insights", {
-              query:      query,
-              categories: plan.category ? [plan.category] : undefined,
-              win:        "month",
-              date_from:  plan.temporal?.date_from || undefined,
-              date_to:    plan.temporal?.date_to   || undefined,
-            }).catch(() => null)
-          : Promise.resolve(null),
-      ];
-      const [ev, jd, tr, ti] = await Promise.all(jobs);
+      // Prefetches fired in parallel with retrieval are now complete (they started
+      // before the selector, which takes 5-15s). Just consume the resolved values.
+      const [ev, jd, tr, ti] = [prefetchedEvidence, prefetchedJudgments, prefetchedTrends, prefetchedTemporal];
       temporalInsights = ti;
       evidence   = ev?.evidence_items || [];
       judgments  = jd?.judgments || [];
