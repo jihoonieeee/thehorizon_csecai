@@ -536,7 +536,7 @@ export default async function handler(req, res) {
     const candidateSources = ret.sources
       .filter(s => !s.url || !isMarketingBlog(s.url))
       .map((s, i) => ({ ...s, ref: `src-${i + 1}` }));
-    if (streaming) sse({ type: "status", text: `Found ${candidateSources.length} sources — selecting the most relevant…` });
+    if (streaming) sse({ type: "status", text: "Selecting relevant sources…" });
 
     // Pre-fetch evidence facts for all candidate sources so the selector can see
     // atomic facts extracted from the source body (beyond the 1000-char summary).
@@ -604,9 +604,9 @@ export default async function handler(req, res) {
       .map((s, i) => ({ ...s, ref: `src-${i + 1}` }));
 
     if (streaming && rawSourceRefs.length > 0) {
-      sse({ type: "status", text: `${rawSourceRefs.length} source${rawSourceRefs.length !== 1 ? "s" : ""} selected — generating answer…` });
+      sse({ type: "status", text: "Generating answer…" });
     } else if (streaming) {
-      sse({ type: "status", text: "No matching sources — generating from background knowledge…" });
+      sse({ type: "status", text: "Generating from background knowledge…" });
     }
 
     // Fix 1 — full-text enrichment: replace the 700-char truncated summary with up
