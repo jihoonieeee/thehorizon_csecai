@@ -455,8 +455,10 @@ export function AskAgentPage() {
           const data = line.slice(5).trim();
           if (!data) continue;
           let e; try { e = JSON.parse(data); } catch { continue; }
-          if (e.type === "delta") {
-            setLast(prev => ({ ...prev, content: prev.content + e.text }));
+          if (e.type === "status") {
+            setLast(prev => ({ ...prev, status: e.text }));
+          } else if (e.type === "delta") {
+            setLast(prev => ({ ...prev, content: prev.content + e.text, status: null }));
           } else if (e.type === "done") {
             done = e;
             setLast({
@@ -551,14 +553,15 @@ export function AskAgentPage() {
             <Message key={i} msg={msg} onFollowUp={send} showCost={isAdmin} />
           ))}
           {loading && (() => {
-            // Show "Thinking…" only until the first streamed token lands; once the
+            // Show status/progress until the first streamed token lands; once the
             // assistant bubble has content, the streaming text itself is the signal.
             const last = messages[messages.length - 1];
             const streamingWithText = last && last.role === "assistant" && last.content;
+            const statusText = last?.role === "assistant" ? last.status : null;
             return streamingWithText ? null : (
               <div className="hz-loading-dot">
                 <span className="hz-loading-dots"><span /><span /><span /></span>
-                Thinking…
+                {statusText || "Thinking…"}
               </div>
             );
           })()}
@@ -571,7 +574,7 @@ export function AskAgentPage() {
         <div className="hz-chat-window" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div className="hz-loading-dot">
             <span className="hz-loading-dots"><span /><span /><span /></span>
-            Thinking…
+            {(() => { const last = messages[messages.length - 1]; return last?.role === "assistant" && last.status ? last.status : "Thinking…"; })()}
           </div>
         </div>
       )}
