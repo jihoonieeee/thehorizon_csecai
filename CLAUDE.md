@@ -238,7 +238,11 @@ deny-by-default guard `requireAdmin()` in `lib/api/requireAuth.js`, which resolv
 missing/invalid authentication and 403 for an authenticated caller lacking the role. The
 frontend's `getAccessLevel()` reads the same `app_metadata` field, but is presentation only.
 Roles are assigned with `scripts/createUser.js <email> [admin|guest]`; migrate legacy accounts
-with `node scripts/migrateUserRoles.js --admins a@b.com[,c@d.com] [--apply]`.
+with `node scripts/migrateUserRoles.js --admins a@b.com[,c@d.com] [--apply]`. A DB-level `auth.users` trigger to strip the dead `user_metadata.role` key was attempted but
+abandoned: firing during GoTrue's own writes needs `ENABLE ALWAYS`, which requires ownership of
+`auth.users` that the managed plan denies (`set role supabase_auth_admin` → permission denied).
+It was only defence in depth — the app-layer guard is the actual control, so nothing is lost.
+`user_metadata.role` remains writable but inert; nothing reads it.
 
 Chatbot auth bypass (dev only): set AGENT_TEST_TOKEN in .env.local, pass it as
 `Authorization: Bearer <token>`. requireAuth checks VERCEL_ENV !== "production" before
