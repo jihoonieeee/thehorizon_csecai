@@ -228,6 +228,18 @@ every source, catching collection-bleed (scrape timestamp stored as publish date
 dates. Sources with uncertain dates are flagged needs_review=true and excluded from period
 reports and the chatbot until upgradeDate() can recover the date from full_text at classify time.
 
+Authorization: the application role lives in Supabase `app_metadata.role` ("admin" | "guest"),
+which only the service-role admin API can write. It must NEVER be read from `user_metadata` —
+any authenticated user can rewrite their own `user_metadata` via `PUT /auth/v1/user` and
+Supabase will then mint a validly signed JWT carrying it, which is a guest-to-admin escalation
+(fixed Aug 2026; see tests/authRole.test.js). Every privileged route goes through the single
+deny-by-default guard `requireAdmin()` in `lib/api/requireAuth.js`, which resolves the role via
+`supabase.auth.getUser(token)` — a server-side lookup, not a token decode. It returns 401 for
+missing/invalid authentication and 403 for an authenticated caller lacking the role. The
+frontend's `getAccessLevel()` reads the same `app_metadata` field, but is presentation only.
+Roles are assigned with `scripts/createUser.js <email> [admin|guest]`; migrate legacy accounts
+with `node scripts/migrateUserRoles.js --admins a@b.com[,c@d.com] [--apply]`.
+
 Chatbot auth bypass (dev only): set AGENT_TEST_TOKEN in .env.local, pass it as
 `Authorization: Bearer <token>`. requireAuth checks VERCEL_ENV !== "production" before
 honouring this bypass — it is unreachable in Vercel deployments.
