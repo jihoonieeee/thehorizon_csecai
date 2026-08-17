@@ -7,28 +7,34 @@ Cross-category 6-month threat watchlist for a CISO briefing. Synthesises develop
 ```
 You are writing a 6-MONTH THREAT WATCHLIST slide for a CISO briefing.
 
-This slide comes AFTER four category sections. Your job is to synthesise across all four categories and identify 3 specific, observable signals that analysts should monitor over the next six months.
+This slide comes AFTER four category sections. Your job is to synthesise across all four categories and identify 4–6 specific, observable signals that analysts should monitor over the next six months. Target at least one watch item per threat category that produced a strategic shift in this period.
 
 ════ FORMAT RULES ════
 
-Return exactly 3 watch items. Each must have:
-  - text: one sentence naming the specific technique or behaviour to monitor (≤25 words)
-  - current_signal: what evidence from this period established this signal (≤20 words)
-  - watch_for: one concrete observable that would confirm the trajectory (≤20 words)
+Return 4–6 watch items. Each must have:
+  - text: one sentence naming the specific technique or behaviour to monitor (≤25 words). Lead with "Watch for:" or "Monitor for:" to anchor the item as a forward signal, not a restatement of what already happened.
+  - current_signal: what evidence from this period established this signal (≤20 words). Name the specific incident, advisory, or finding — do not paraphrase.
+  - watch_for: one concrete observable that would confirm the trajectory (≤20 words). Must name a specific incident type, disclosure type, tool release, or forum signal — not "continued growth" or "increased adoption".
   - confidence: low | moderate
 
 Rules:
-- Use "may" or "could" — never "will", "is expected to", or "should occur within X months".
+- Each item must look FORWARD — it should name a threshold or trigger that would show the threat has progressed, not restate what already occurred.
+- Use "may" or "could" for the trajectory — never "will" or "is expected to".
 - Do not predict specific timelines. Do not say "within six months" or "by Q3".
 - Each item must name a specific technique, actor type, or system — not general capability growth.
 - Each watch item must be falsifiable: a reader must be able to name something that would prove it wrong.
 - current_signal must reference something actually observed in the evidence provided, not inferred.
-- watch_for must be a concrete observable (a specific incident type, a specific forum post type, a specific tool release) — not "continued growth" or "increased adoption".
 
-BAD text:  "Autonomous intrusion capabilities will become recurring operational use within six months."
-GOOD text: "Autonomous multi-stage intrusion may move from isolated incidents to repeated adversary use."
+BAD text:  "Autonomous intrusion capabilities will become recurring operational use."
+BAD text:  "Autonomous intrusion agents may appear in repeated real-world compromises." ← just restates a shift
+GOOD text: "Watch for: autonomous intrusion agents appearing in ransomware chains — the Langflow and OpenAI sandbox incidents show the transition from reconnaissance-only to production-impact capability."
+
 BAD watch_for: "Monitor for increased AI agent attacks."
-GOOD watch_for: "Independent incident-response reports linking AI agents to multi-stage intrusions by distinct actors."
+BAD watch_for: "Continued use of autonomous agents in intrusion operations." ← not concrete
+GOOD watch_for: "Independent IR firms reporting AI agents used in multi-stage intrusions by distinct threat actors — not the same operators."
+
+BAD current_signal: "Autonomous agents completed intrusions in July." ← vague
+GOOD current_signal: "Langflow CVE-2025-3248 exploitation and OpenAI sandbox escape both showed autonomous production impact."
 
 ════ EVIDENCE CONSTRAINT ════
 
@@ -62,5 +68,5 @@ Return:
   "caveat": "<one sentence about evidence gaps, or null if 3 items are well-grounded>"
 }
 
-Return 3 watch_items. Reduce to 2 and add a caveat only if evidence is genuinely insufficient.
+Return 4–6 watch_items. Target at least one per category that had a strategic shift. If only 2–3 categories had material developments, return 3–4 items and add a caveat noting the thinner coverage period.
 ```

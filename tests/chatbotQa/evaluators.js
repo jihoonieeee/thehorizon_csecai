@@ -42,7 +42,7 @@ const MALFORMED_CITATION = /\[src-(?!\d+\])[^\]]{0,40}\]/i;
 const FAKE_SCORE = [
   /\bconfidence\b[^.\n]{0,24}?\b\d{1,3}(?:\.\d+)?\s*(?:%|\/\s*\d+|out of\s*\d+)/i,
   /\b(?:risk|threat|priority|relevance|severity|impact)\s+score\s*(?:[:=]|of|is)?\s*\d/i,
-  /\b\d{1,2}(?:\.\d)?\s*\/\s*(?:5|10|100)\b(?!\s*(?:am|pm))/,   // 8/10, 7.5/100 (not times)
+  /\b\d{1,2}(?:\.\d)?\s*\/\s*(?:5|10|100)\b(?!\s*(?:am|pm|,\s*[A-Z]))/,   // 8/10, 7.5/100 (not times; not "4.6/5, Opus 4.8" model-version lists)
   /\bscored?\s+(?:it\s+)?(?:a\s+)?\d{1,3}(?:\.\d+)?\s*(?:%|\/)/i,
 ];
 
@@ -82,10 +82,17 @@ const INSUFFICIENT_EVIDENCE = [
 ];
 
 // A refusal / unknown-handled response: the agent either structurally blocked the
-// answer (qa_blocked) or used insufficient-evidence language. Used everywhere a
-// refusal should exempt an answer from citation/breadth expectations.
+// answer (qa_blocked), used insufficient-evidence language, OR correctly routed to
+// the general fallback (answer_mode === "general"). The general fallback fires when
+// corpus retrieval finds nothing on-topic — for hallucination-trap questions this
+// IS the correct handling, and the fallback preamble explicitly labels the answer
+// as ungrounded general knowledge rather than a corpus-verified finding.
 function isRefusal(payload) {
   if (payload?.qa_blocked === true) return true;
+  if (payload?.answer_mode === "general") return true;
+  // out_of_scope: the planner refused to engage with the query at all — strongest
+  // possible adversarial resistance, clearly not a compliance or citation failure.
+  if (payload?.answer_mode === "out_of_scope") return true;
   return anyMatch(INSUFFICIENT_EVIDENCE, payload?.answer || "");
 }
 
@@ -128,12 +135,20 @@ export function detectCategories(payload) {
 
 const R = (id, applicable, pass, detail) => ({ id, applicable, pass, detail });
 
-/** Factual claims must be backed by a citation (inline [src-N] or a citation entry). */
+/** Factual claims must be backed by a citation (inline [src-N] or a citation entry).
+ *  General fallback and out_of_scope answers are exempt — they explicitly label
+ *  themselves as ungrounded background knowledge, so uncited claims are expected.
+ *  Brief-path answers (vulnerability_lookup etc.) use STRUCTURE_BRIEF which puts
+ *  citations in sub-bullets — check citations[] presence rather than inline markers. */
 export function evalEvidenceForClaims(payload) {
+  if (isRefusal(payload)) return R("evidence_for_claims", false, null, "N/A — general/refusal answer, citations not expected.");
   const answer = payload.answer || "";
   const hasFactual = FACTUAL_MARKERS.test(answer);
   if (!hasFactual) return R("evidence_for_claims", false, null, "No hard factual markers to check.");
-  const cited = inlineRefs(answer).length > 0 || (payload.citations || []).length > 0;
+  // Brief answers cite via citations[] even when inline [src-N] may be absent.
+  const hasCitations = (payload.citations || []).length > 0;
+  const hasInline    = inlineRefs(answer).length > 0;
+  const cited = hasCitations || hasInline;
   return R("evidence_for_claims", true, cited,
     cited ? "Factual claims carry citations." : "Factual claims present with NO citation.");
 }
@@ -270,6 +285,236 @@ export function evalNoCategoryDrift(payload, { requestedCategory, tolerance = 0.
     `${off}/${citedCats.length} off-category CITED sources (${(ratio * 100).toFixed(0)}% ≤ ${(tolerance * 100).toFixed(0)}% allowed).`);
 }
 
+// ── Structural coherence evaluators ─────────────────────────────────────────────
+
+/**
+ * Grounded answers of substance must have an "Assessment:" line and at least one
+ * numbered point. Missing either means the response is a wall of prose with no
+ * scannable structure, which is a formatting failure regardless of content quality.
+ */
+export function evalAnswerStructure(payload) {
+  if (isRefusal(payload)) return R("answer_structure", false, null, "N/A — refusal/general/out_of_scope.");
+  if (isBriefAnswer(payload)) return R("answer_structure", false, null, `N/A — brief ${payload.query_type} query uses compact structure.`);
+  const answer = payload.answer || "";
+  const words = answer.split(/\s+/).filter(Boolean).length;
+  if (words < 60) return R("answer_structure", false, null, "N/A — answer too short to require structure.");
+  const hasAssessment   = /\bAssessment\s*:/i.test(answer);
+  // Match both plain "1. " and bold "**1.** " markdown formats.
+  // The model uses **N.** (closing asterisks after the period) so we allow \*{0,2} after [.)].
+  const hasNumberedPt   = /^\s*\*{0,2}\s*\d+[.)]\*{0,2}\s+\S/m.test(answer);
+  const pass = hasAssessment && hasNumberedPt;
+  const missing = [!hasAssessment && "Assessment: line", !hasNumberedPt && "numbered points"].filter(Boolean).join(", ");
+  return R("answer_structure", true, pass,
+    pass ? "Assessment line + numbered points present." : `Missing: ${missing}.`);
+}
+
+// Query types that use STRUCTURE_BRIEF — no So what: required, inline [src-N] optional.
+const BRIEF_QUERY_TYPES = new Set([
+  "definition", "vulnerability_lookup", "incident_lookup",
+  "entity_history", "research_lookup", "publisher_lookup",
+]);
+function isBriefAnswer(payload) {
+  return BRIEF_QUERY_TYPES.has(payload?.query_type);
+}
+
+/**
+ * Substantive grounded answers (>150 words) must end with a "So what:" line.
+ * Brief/lookup answers are exempt (STRUCTURE_BRIEF template omits it).
+ * Missing So what on a strategic answer means the analyst implication is left for the reader.
+ */
+export function evalSoWhatPresent(payload) {
+  if (isRefusal(payload)) return R("so_what_present", false, null, "N/A — refusal/general/out_of_scope.");
+  if (isBriefAnswer(payload)) return R("so_what_present", false, null, `N/A — brief ${payload.query_type} query, So what not required.`);
+  const answer = payload.answer || "";
+  const words  = answer.split(/\s+/).filter(Boolean).length;
+  if (words < 150) return R("so_what_present", false, null, "N/A — short/lookup answer, So what not expected.");
+  const hasSoWhat = /\bSo\s+what\s*:/i.test(answer);
+  return R("so_what_present", true, hasSoWhat,
+    hasSoWhat ? "So what: line present." : "Substantive grounded answer missing 'So what:' analyst implication line.");
+}
+
+/**
+ * "High" confidence must be backed by at least 2 citations. High confidence with
+ * 0–1 citations suggests the model is overconfident relative to its evidence base.
+ * Moderate and low confidence are not checked — under-confidence is not a bug.
+ */
+export function evalConfidenceCalibration(payload) {
+  if (payload.confidence !== "high") return R("confidence_calibration", false, null, `N/A — confidence is ${payload.confidence || "unknown"}.`);
+  if (isRefusal(payload)) return R("confidence_calibration", false, null, "N/A — refusal answer.");
+  const citCount = (payload.citations || []).length;
+  const pass = citCount >= 2;
+  return R("confidence_calibration", true, pass,
+    pass ? `High confidence backed by ${citCount} citation(s).`
+         : `High confidence with only ${citCount} citation(s) — likely overconfident relative to evidence.`);
+}
+
+/**
+ * When an answer has ≥3 citations, they should be spread across multiple lines
+ * rather than all dumped in a single sentence. Clustering all [src-N] in one
+ * place ("…as documented [src-1][src-2][src-3][src-4]…") suggests the model
+ * cited lazily rather than attributing individual claims to specific sources.
+ */
+export function evalCitationSpread(payload) {
+  const answer = payload.answer || "";
+  if (isRefusal(payload)) return R("citation_spread", false, null, "N/A — refusal answer.");
+  const totalCitations = inlineRefs(answer).length;
+  if (totalCitations < 3) return R("citation_spread", false, null, `N/A — only ${totalCitations} inline ref(s), spread not applicable.`);
+  const lines = answer.split("\n");
+  const citedLineCount = lines.filter(l => /\[src-\d+\]/.test(l)).length;
+  const pass = citedLineCount >= 2;
+  return R("citation_spread", true, pass,
+    pass ? `Citations appear on ${citedLineCount} separate lines — well distributed.`
+         : `${totalCitations} citations all appear on 1 line — possible end-of-answer citation dump.`);
+}
+
+// ── v2 Retrieval quality evaluators ──────────────────────────────────────────────
+
+/**
+ * Every inline [src-N] must have a valid source_refs[N-1] with a non-null URL.
+ * Out-of-bounds markers or null-URL refs mean QA failed to strip an orphaned marker.
+ */
+export function evalCitationIndexConsistency(payload) {
+  if (isRefusal(payload)) return R("citation_index", false, null, "N/A — refusal answer.");
+  const answer   = payload.answer || "";
+  const refs     = payload.source_refs || [];
+  const nums     = inlineRefs(answer);
+  if (!nums.length) return R("citation_index", false, null, "No inline [src-N] markers to check.");
+  const oob  = nums.filter(n => n < 1 || n > refs.length);
+  const dead = nums.filter(n => n >= 1 && n <= refs.length && !refs[n - 1]?.url);
+  const pass = oob.length === 0 && dead.length === 0;
+  const issues = [
+    oob.length  && `[src-${oob.join(",")}] out of bounds (pool size ${refs.length})`,
+    dead.length && `[src-${dead.join(",")}] has null URL — marker should have been stripped`,
+  ].filter(Boolean).join("; ");
+  return R("citation_index", true, pass, pass ? `All ${nums.length} inline ref(s) valid.` : issues);
+}
+
+/**
+ * For each entry in citations[], c.ref → N, and citations[].url must equal
+ * source_refs[N-1].url. Mismatch means the ref-rewrite or dedup went wrong.
+ */
+export function evalCitationFooterMatch(payload) {
+  if (isRefusal(payload)) return R("citation_footer", false, null, "N/A — refusal answer.");
+  const citations = payload.citations || [];
+  const refs      = payload.source_refs || [];
+  if (!citations.length) return R("citation_footer", false, null, "No citations to verify.");
+  const mismatches = [];
+  for (const c of citations) {
+    const n   = parseInt(c.ref?.match(/\d+/)?.[0] || 0, 10);
+    const src = refs[n - 1];
+    if (!src) { mismatches.push(`${c.ref} has no source_refs entry`); continue; }
+    const norm = (u) => (u || "").toLowerCase().replace(/[.,;:!?/]+$/, "").replace(/^https?:\/\//, "").replace(/^origin-/, "").replace(/^(?:www|m|amp)\./, "");
+    if (c.url && src.url && norm(c.url) !== norm(src.url)) {
+      mismatches.push(`${c.ref}: citations.url≠source_refs[${n-1}].url`);
+    }
+  }
+  return R("citation_footer", true, mismatches.length === 0,
+    mismatches.length ? mismatches.join("; ") : `All ${citations.length} footer citation(s) match source_refs.`);
+}
+
+/**
+ * No two entries in citations[] should share the same normalised URL.
+ * Duplicates mean the ref-rewrite dedup missed a URL variant.
+ */
+export function evalNoDuplicateUrls(payload) {
+  const citations = payload.citations || [];
+  if (citations.length <= 1) return R("no_duplicate_urls", false, null, "N/A — ≤1 citation.");
+  const norm = (u) => (u || "").toLowerCase().replace(/[.,;:!?/]+$/, "").replace(/^https?:\/\//, "").replace(/^origin-/, "").replace(/^(?:www|m|amp)\./, "");
+  const seen = new Map();
+  const dupes = [];
+  for (const c of citations) {
+    const k = norm(c.url);
+    if (!k) continue;
+    if (seen.has(k)) dupes.push(`${c.ref} duplicates ${seen.get(k)}`);
+    else seen.set(k, c.ref);
+  }
+  return R("no_duplicate_urls", true, dupes.length === 0,
+    dupes.length ? `Duplicate URL(s): ${dupes.join("; ")}` : `No duplicate URLs across ${citations.length} citation(s).`);
+}
+
+/**
+ * For recency cases: at least one cited source must be within maxAgeDays of today.
+ */
+export function evalSourceRecency(payload, { maxAgeDays } = {}) {
+  if (!maxAgeDays) return R("source_recency", false, null, "N/A — no maxAgeDays defined.");
+  if (isRefusal(payload)) return R("source_recency", false, null, "N/A — refusal answer.");
+  const refs  = payload.source_refs || [];
+  const nums  = inlineRefs(payload.answer || "");
+  const cited = nums.map(n => refs[n - 1]).filter(Boolean);
+  if (!cited.length) return R("source_recency", false, null, "No cited sources to check dates.");
+  const cutoff = Date.now() - maxAgeDays * 86400000;
+  const fresh  = cited.filter(s => s.date && new Date(s.date).getTime() >= cutoff);
+  return R("source_recency", true, fresh.length > 0,
+    fresh.length > 0
+      ? `${fresh.length} cited source(s) within ${maxAgeDays} days.`
+      : `No cited source within ${maxAgeDays} days (oldest: ${cited.map(s => s.date).filter(Boolean).sort().pop() || "unknown"}).`);
+}
+
+/**
+ * For fixed-timeframe cases: temporal_scope must match the expected label.
+ */
+export function evalTemporalScopeAccuracy(payload, { requiredScopeLabel } = {}) {
+  if (!requiredScopeLabel) return R("temporal_scope_accuracy", false, null, "N/A — no requiredScopeLabel.");
+  const scope = (payload.temporal_scope || "").toLowerCase();
+  const label = requiredScopeLabel.toLowerCase();
+  const pass  = scope.includes(label);
+  return R("temporal_scope_accuracy", true, pass,
+    pass ? `Scope "${payload.temporal_scope}" contains "${requiredScopeLabel}".`
+         : `Scope "${payload.temporal_scope}" does not match required "${requiredScopeLabel}".`);
+}
+
+/**
+ * For topic-specific / retrieval-precision cases: at least one cited source's
+ * title or summary must contain a required keyword.
+ */
+export function evalTopicSpecificity(payload, { requiredKeywords = [] } = {}) {
+  if (!requiredKeywords.length) return R("topic_specificity", false, null, "N/A — no requiredKeywords.");
+  if (isRefusal(payload)) return R("topic_specificity", false, null, "N/A — refusal answer.");
+  const refs = payload.source_refs || [];
+  const nums = inlineRefs(payload.answer || "");
+  const cited = nums.map(n => refs[n - 1]).filter(Boolean);
+  if (!cited.length) return R("topic_specificity", false, null, "No cited sources to inspect.");
+  const lc = (s) => String(s || "").toLowerCase();
+  const hit = cited.some(s =>
+    requiredKeywords.some(kw => lc(s.title).includes(lc(kw)) || lc(s.summary).includes(lc(kw)))
+  );
+  return R("topic_specificity", true, hit,
+    hit ? `≥1 cited source contains a required keyword (${requiredKeywords.join(", ")}).`
+        : `No cited source's title/summary contains any of: ${requiredKeywords.join(", ")}.`);
+}
+
+/**
+ * For source-importance cases: at least one cited source must have a required trust tier.
+ */
+export function evalTrustTierPresent(payload, { requireTrustTier = [] } = {}) {
+  if (!requireTrustTier.length) return R("trust_tier_present", false, null, "N/A — no requireTrustTier.");
+  if (isRefusal(payload)) return R("trust_tier_present", false, null, "N/A — refusal answer.");
+  const refs  = payload.source_refs || [];
+  const nums  = inlineRefs(payload.answer || "");
+  const cited = nums.map(n => refs[n - 1]).filter(Boolean);
+  if (!cited.length) return R("trust_tier_present", false, null, "No cited sources to check.");
+  const tiers = cited.map(s => s.trust_tier).filter(Boolean);
+  const hit   = tiers.some(t => requireTrustTier.includes(t));
+  return R("trust_tier_present", true, hit,
+    hit ? `≥1 cited source has required trust tier (found: ${[...new Set(tiers)].join(", ")}).`
+        : `No cited source in required tiers [${requireTrustTier.join(", ")}]; found: [${[...new Set(tiers)].join(", ")}].`);
+}
+
+/**
+ * For trend-analysis cases: answer must state an explicit direction or admit
+ * insufficient data. A point-in-time snapshot with no direction is a fail.
+ */
+export function evalTrendDirection(payload) {
+  if (isRefusal(payload)) return R("trend_direction", false, null, "N/A — refusal answer.");
+  const answer = payload.answer || "";
+  const words  = answer.split(/\s+/).filter(Boolean).length;
+  if (words < 60) return R("trend_direction", false, null, "N/A — too short.");
+  const hasDirection = /\b(increasing|decreasing|growing|declining|rising|falling|escalating|accelerating|spiking|surging|stable|flat|unchanged|insufficient data|unclear|not enough|cannot determine|no clear trend)\b/i.test(answer);
+  return R("trend_direction", true, hasDirection,
+    hasDirection ? "Answer states an explicit trend direction or admits insufficient data."
+                 : "Answer is a point-in-time snapshot with no trend direction stated.");
+}
+
 // ── Runner over a whole payload for a given test case ────────────────────────────
 
 // Map a test-case category to the evaluator set that should run for it.
@@ -282,6 +527,12 @@ export function evaluateCase(testCase, payload) {
   push(evalNoMalformedCitations(payload));
   push(evalNoFakeScores(payload));
   push(evalNoSpeculation(payload));
+
+  // Structural coherence — applies to all grounded answers regardless of category.
+  push(evalAnswerStructure(payload));
+  push(evalSoWhatPresent(payload));
+  push(evalConfidenceCalibration(payload));
+  push(evalCitationSpread(payload));
 
   const cat = testCase.category;
 
@@ -300,6 +551,39 @@ export function evaluateCase(testCase, payload) {
   if (cat === "adversarial") push(evalAdversarialResistance(payload));
   if (cat === "evidence_traceability") push(evalEvidenceForClaims(payload));
   if (cat === "source_quality") push(evalNoFakeScores(payload));
+
+  // v2 — retrieval quality categories
+  const v2Grounded = ["retrieval_precision","source_importance","recency","fixed_timeframe","trend_analysis","topic_specific","citation_verification"];
+  if (v2Grounded.includes(cat)) {
+    push(evalEvidenceForClaims(payload));
+    push(evalCitationsPresent(payload));
+    push(evalCitationIndexConsistency(payload));
+    push(evalNoDuplicateUrls(payload));
+    push(evalCitationFooterMatch(payload));
+  }
+  if (cat === "retrieval_precision" || cat === "topic_specific") {
+    push(evalTopicSpecificity(payload, { requiredKeywords: testCase.requiredKeywords || [] }));
+  }
+  if (cat === "source_importance") {
+    push(evalTrustTierPresent(payload, { requireTrustTier: testCase.requireTrustTier || [] }));
+    push(evalBreadthOfEvidence(payload));
+  }
+  if (cat === "recency") {
+    push(evalSourceRecency(payload, { maxAgeDays: testCase.maxAgeDays }));
+    push(evalTimeframePresent(payload));
+  }
+  if (cat === "fixed_timeframe") {
+    push(evalTemporalScopeAccuracy(payload, { requiredScopeLabel: testCase.requiredScopeLabel }));
+    push(evalTimeframePresent(payload));
+  }
+  if (cat === "trend_analysis") {
+    push(evalTrendDirection(payload));
+    push(evalBreadthOfEvidence(payload));
+    push(evalTimeframePresent(payload));
+  }
+  if (cat === "citation_verification") {
+    // citation_verification cases run only the citation chain evaluators — already pushed above.
+  }
 
   return results;
 }

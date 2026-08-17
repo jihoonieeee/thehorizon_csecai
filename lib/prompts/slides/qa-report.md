@@ -20,6 +20,7 @@ Rules:
 - Be strict about invented/mis-attributed statistics, measurements, actors, CVEs, and exploitation status. A number or named entity that does not appear in the cited text is NOT supported, even if it sounds plausible.
 - Be lenient about pure phrasing/paraphrase differences when the substance matches.
 - A correction must not introduce anything new — it only removes or softens what the sources don't support.
+- RELEVANCE GATE: The cited source must PRIMARILY discuss the claimed incident, CVE, product, or actor. A source whose main subject is a different attack, technique, or system — even if it mentions the topic in passing — counts as unsupported. Do not award "ok" when the source's primary focus is unrelated to the central claim.
 
 Return ONLY valid JSON.
 ```

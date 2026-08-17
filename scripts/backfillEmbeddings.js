@@ -87,9 +87,11 @@ const EMBED_URL   = `${BASE_URL}/platform/models/v1/embeddings`;
 async function embedBatch(texts, attempt = 0) {
   if (!texts.length) return [];
   const MAX_RETRIES = 4;
+  const headers = { "Content-Type": "application/json", "x-api-key": process.env.PLATFORM_AI_API_KEY };
+  if (process.env.PROXY_SECRET) headers["x-proxy-secret"] = process.env.PROXY_SECRET;
   const res = await fetch(EMBED_URL, {
     method:  "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": process.env.PLATFORM_AI_API_KEY },
+    headers,
     body:    JSON.stringify({ model: EMBED_MODEL, input: texts }),
     signal:  AbortSignal.timeout(30000),
   });

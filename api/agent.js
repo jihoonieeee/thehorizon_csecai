@@ -23,7 +23,7 @@
 
 import { executeTool, retrieveRelevant, enrichSourcesWithFullText, fetchEvidenceForSources, fetchEvidenceForCandidates } from "../lib/agent/agentTools.js";
 import { planQuery } from "../lib/agent/queryPlanner.js";
-import { selectSources } from "../lib/agent/agentLlm.js";
+import { selectSources, selectSourcesLenient } from "../lib/agent/agentLlm.js";
 import { verifyAnswer } from "../lib/agent/verifyAnswer.js";
 import { platformChat, estimateCostUsd, modelForTier, platformConfig } from "../lib/llm/platformProvider.js";
 import { logAgentCostToDB } from "../lib/llm/usagePersistence.js";
@@ -66,26 +66,47 @@ const STRUCTURE_FULL = `STRUCTURE:
 1) "Assessment:" — ONE sentence only. The real signal and your confidence. Direct — no hedging clauses, no "it is worth noting".
 2) At most 4 numbered points. Order them by descending operational impact — most severe or significant item first. Primary ordering signal: source maturity shown in context (operational > observed > disclosed > demonstrated > research); when maturity is absent, use source type as proxy (incident / threat_intelligence before research_finding / benchmark_evaluation / capability_demonstration); recency is the tiebreaker when impact is equal. Each point has exactly this shape: [judgement line] then [sub-bullets] then [next point]. No text between the judgement and the sub-bullets. No text after the sub-bullets. The judgement line is the header; the sub-bullets carry the evidence. No taxonomy labels, no italic technique descriptions, no explanatory bridge sentences anywhere inside a point. The judgement line itself must carry a [src-N] citation if it contains any specific claim, date, named actor, or product — do not leave it uncited.
 3) "So what:" — ONE sentence. No compound sentences.
-4) "Defenders:" — ONE sentence. The single most actionable step.
 
-HARD LIMIT: Under 650 words total (excluding the SCOPE/CONFIDENCE footer). Count as you write. If you reach 500 words before the last point, cut sub-bullets to one per remaining point.`;
+HARD LIMIT: Under 600 words total (excluding the SCOPE/CONFIDENCE footer). Always finish the sentence you are writing before stopping — never cut mid-sentence.`;
 const STRUCTURE_BRIEF = `STRUCTURE (direct lookup — answer the question and stop):
 1) "Assessment:" — ONE sentence. The direct answer and confidence.
 2) At most 3 numbered points. At most 2 sub-bullets per point ("- ") — one specific fact + [src-N] per sub-bullet. One clause per sub-bullet, no narrative explanation. The numbered judgement line itself must carry a [src-N] if it contains any specific claim, date, named actor, or product.
 Do NOT add "So what" or "Defenders" lines.
 
-WORD BUDGET: Under 300 words. Stop when the question is answered.`;
+CITATION REQUIREMENT: Every factual claim, named entity, date, version number, or CVE ID MUST have a [src-N] citation. If sources are provided, cite at least one. An answer with factual claims and no citations is invalid.
 
-function buildGroundedSystem(scopeLabel, focusCategory, thin, brief = false) {
+WORD BUDGET: Under 400 words. Always finish the sentence you are writing before stopping — never cut mid-sentence.`;
+
+const STRUCTURE_DEFINITION = `STRUCTURE (conceptual explanation — write in flowing paragraphs, not bullets):
+PARAGRAPH 1 — Definition: One sentence defining the concept in plain English. No jargon first, no "Assessment:" header. Start directly with the concept name and what it is.
+PARAGRAPH 2 — How it works: 2–4 sentences explaining the mechanism in plain words. Use a concrete example if it helps ("for example, an attacker might...").
+PARAGRAPH 3 — Why it matters: 1–2 sentences on the practical risk or consequence to a defender, organisation, or user.
+PARAGRAPH 4 (optional) — Grounded in the corpus: If the sources contain a good real example or measurement, cite it in one sentence with [src-N] to show this is real, not hypothetical.
+
+HARD RULES — violations will confuse the reader:
+- PARAGRAPHS ONLY. No numbered points (1. 2. 3.), no bullet lists ("- "), no bold headers, no sub-bullets. Use normal sentence-level citation [src-N] only.
+- Do NOT use "Assessment:", "So what:", "Defenders:", or any other analyst-briefing headers.
+- Do NOT try to cite all available sources. Pick at most 2 that best illustrate the concept. The goal is clarity, not comprehensive sourcing.
+- STOP after Paragraph 4. Always finish the current sentence before stopping — never end mid-sentence. Under 300 words total.`;
+
+function buildGroundedSystem(scopeLabel, focusCategory, thin, brief = false, queryType = null, temporalIntent = null, selectorMissing = []) {
   const today = new Date().toISOString().slice(0, 10);
   const catNote = focusCategory
     ? `\nThe question is about ${CATEGORY_LABELS[focusCategory]}; keep the answer within that category.`
     : "";
-  const thinNote = thin
-    ? `\nCoverage is THIN — only a small number of relevant sources were found. Say so plainly and keep confidence at most moderate.`
+  const trendNote = queryType === "trend_analysis"
+    ? `\nTREND REQUIREMENT: The Assessment line MUST state an explicit direction — "increasing", "decreasing", "stable", or "insufficient data to determine direction". A list of incidents with no directional claim is a failure.`
     : "";
-  const structureNote = brief ? STRUCTURE_BRIEF : STRUCTURE_FULL;
-  return interpolate(loadPrompt("agent/grounded").system, { today, scopeLabel, catNote, thinNote, structureNote });
+  const thinNote = thin
+    ? `\nCoverage is THIN — retrieved sources are insufficient to fully answer this question. Keep confidence at most moderate and say plainly what is missing.${selectorMissing.length ? ` Known gaps: ${selectorMissing.slice(0, 3).join("; ")}.` : ""}`
+    : "";
+  const structureNote = queryType === "definition" ? STRUCTURE_DEFINITION
+                      : brief                      ? STRUCTURE_BRIEF
+                      :                              STRUCTURE_FULL;
+  const forwardNote = temporalIntent === "forward_looking"
+    ? `\nFORWARD-LOOKING ANALYSIS: The question asks what defenders should watch or prepare for in the coming period. The data window above (${scopeLabel}) is your EVIDENCE BASE — sources published in that recent period. You are NOT constrained to write only about events in a future window. Instead: use the provided recent sources to identify which threats are escalating, maturing, or expanding, then draw forward-looking implications from that evidence. Write conclusions that speak to near-term risk, grounded in the cited sources. Example: "given the documented acceleration in X [src-N], defenders should prioritise Y in the next 90 days." The TEMPORAL CONSTRAINT above applies to which sources you draw from, not the timeframe of your conclusions.`
+    : "";
+  return interpolate(loadPrompt("agent/grounded").system, { today, scopeLabel, catNote, thinNote, trendNote, forwardNote, structureNote });
 }
 
 function buildGeneralSystem(query) {
@@ -182,16 +203,18 @@ function extractCitations(text, sourceRefs) {
 
 // ── Deterministic QA (unchanged) ────────────────────────────────────────────────
 
+// Purely grammatical/functional stopwords. Security-domain terms (threat, attack,
+// model, etc.) were previously included but caused the bag-of-words relevance
+// check to fail on legitimately cited sources that share only those terms with
+// the answer — they are now kept so genuine overlap is detected.
 const QA_STOPWORDS = new Set([
   "the","and","for","are","with","that","this","from","into","what","how","why",
   "does","is","of","to","a","in","on","an","about","which","were","was","has",
   "have","can","could","would","should","their","they","there","these","those",
   "then","than","also","been","being","such","other","more","most","some","any",
   "when","where","while","because","after","before","over","under","between",
-  "threat","threats","attack","attacks","source","sources","security","model",
-  "models","system","systems","data","using","used","use","risk","risks",
 ]);
-function qaContentTokens(s) {
+export function qaContentTokens(s) {
   const words = String(s || "").toLowerCase().match(/[a-z0-9]{4,}/g) || [];
   return new Set(words.filter(w => !QA_STOPWORDS.has(w)));
 }
@@ -299,12 +322,10 @@ export async function urlIsBroken(url) {
   }
 }
 async function findDeadUrls(urls, normalizeUrl) {
-  const distinct = [...new Set(urls.filter(Boolean))];
-  if (!distinct.length) return new Set();
-  const verdicts = await Promise.all(distinct.map(u => urlIsBroken(u)));
-  const dead = new Set();
-  distinct.forEach((u, i) => { if (verdicts[i]) dead.add(normalizeUrl(u)); });
-  return dead;
+  // Disabled — URL liveness checks add 5-8s after synthesis and push past
+  // Vercel's 10s function limit. Sources come from a curated DB; dead links
+  // are rare enough that the latency cost is not worth it.
+  return new Set();
 }
 
 // ── Grounding context builder ────────────────────────────────────────────────────
@@ -464,7 +485,8 @@ export default async function handler(req, res) {
     }
 
     // ── 1. Plan (Haiku) ──────────────────────────────────────────────────────────
-    const { plan, usage: planUsage } = await planQuery(query);
+    if (streaming) sse({ type: "status", text: "Searching corpus…" });
+    const { plan, usage: planUsage } = await planQuery(query, { history: historyMessages });
     addCheap(planUsage);
     if (category && CATEGORY_LABELS[category]) plan.category = category;  // explicit dashboard filter wins
 
@@ -483,8 +505,27 @@ export default async function handler(req, res) {
       return res.status(200).json(payload);
     }
 
-    // ── 3. Retrieve candidates (broad, date-filtered) ────────────────────────────
-    const ret = await retrieveRelevant(plan);
+    // ── 3. Retrieve + prefetch synthesis data in parallel ───────────────────────
+    // evidence/judgments/trends/temporal only need the PLAN (not selected sources),
+    // so they can fire immediately alongside retrieval instead of waiting for the
+    // selector to finish (~10s later). Saves 2-4s on every grounded response.
+    const evidenceQuery = plan.search_terms?.length ? plan.search_terms.join(" ") : query;
+    const evDateFrom    = plan.temporal?.all_time ? undefined : (plan.temporal?.date_from || undefined);
+    const evDateTo      = plan.temporal?.all_time ? undefined : (plan.temporal?.date_to   || undefined);
+    const windowDays    = evDateFrom
+      ? Math.round((Date.now() - new Date(evDateFrom).getTime()) / 86400000)
+      : Infinity;
+    const isTightWindow     = !plan.temporal?.all_time && windowDays <= 30;
+    const TEMPORAL_QT       = new Set(["trend_analysis", "timeline", "comparison", "strategic_assessment"]);
+    const needsTemporalData = TEMPORAL_QT.has(plan.query_type) && plan.temporal?.temporal_intent !== "none";
+
+    const [ret, prefetchedEvidence, prefetchedJudgments, prefetchedTrends, prefetchedTemporal] = await Promise.all([
+      retrieveRelevant(plan),
+      executeTool("get_evidence", { query: evidenceQuery, categories: undefined, tags: plan.taxonomy_tags?.length ? plan.taxonomy_tags : undefined, limit: 12, date_from: evDateFrom, date_to: evDateTo }).catch(() => null),
+      (plan.needs_judgments && !isTightWindow) ? executeTool("get_judgments", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
+      plan.needs_trends ? executeTool("trend_analysis", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
+      needsTemporalData ? executeTool("search_temporal_insights", { query, categories: plan.category ? [plan.category] : undefined, win: "month", date_from: evDateFrom, date_to: evDateTo }).catch(() => null) : Promise.resolve(null),
+    ]);
 
     // ── 4. Selector (Haiku) — semantic pick from the candidate pool ───────────
     // Pre-filter marketing blogs BEFORE passing to the selector so its coverage
@@ -495,6 +536,7 @@ export default async function handler(req, res) {
     const candidateSources = ret.sources
       .filter(s => !s.url || !isMarketingBlog(s.url))
       .map((s, i) => ({ ...s, ref: `src-${i + 1}` }));
+    if (streaming) sse({ type: "status", text: "Selecting relevant sources…" });
 
     // Pre-fetch evidence facts for all candidate sources so the selector can see
     // atomic facts extracted from the source body (beyond the 1000-char summary).
@@ -514,10 +556,44 @@ export default async function handler(req, res) {
     // between ret.count and candidateSources.length is marketing blogs removed.
     // Telling the selector "35 of 35" when it sees 33 (2 blogs filtered) is
     // misleading; the selector IS seeing the full usable pool.
-    const sel = candidateSources.length
-      ? await selectSources(query, candidateSources, plan, candidateSources.length, evidenceBySrcId)
-      : { selected: [], verdict: "none", coverage: "none", missing: [], usage: { input_tokens: 0, output_tokens: 0 } };
+    // Skip selector LLM call for small pools — saves one cheap call (~3-9s).
+    // With ≤ 10 candidates, just pass all through; synthesis cites only relevant ones.
+    const SELECTOR_THRESHOLD = 10;
+    // For non-exhaustive queries, cap the selector pool at 25 pre-ranked candidates.
+    // The full 50-source pool causes verbose model reasoning (~8K token input) that
+    // busts output token limits even at 6K. Top-25 retains the highest-ranked sources
+    // while keeping selector input manageable. all_matching passes the full pool.
+    const SELECTOR_CAP = plan.exhaustiveness === "all_matching" ? candidateSources.length : 25;
+    const selectorPool = candidateSources.slice(0, SELECTOR_CAP);
+    const sel = selectorPool.length === 0
+      ? { selected: [], verdict: "none", coverage: "none", missing: [], usage: { input_tokens: 0, output_tokens: 0 } }
+      : selectorPool.length <= SELECTOR_THRESHOLD
+        ? { selected: selectorPool.map(s => s.ref), verdict: "good", coverage: "complete", missing: [], usage: { input_tokens: 0, output_tokens: 0 } }
+        : await selectSources(query, selectorPool, plan, candidateSources.length, evidenceBySrcId);
     addCheap(sel.usage);
+
+    // Layer 3 — lenient fallback: the strict selector found nothing, but retrieval did.
+    // Run a simpler "most related" pass over the top-12 pre-ranked candidates before
+    // giving up and routing to a general-knowledge answer.
+    if (sel.verdict === "none" && candidateSources.length > 0) {
+      const top12 = candidateSources.slice(0, 12);
+      const lenient = await selectSourcesLenient(query, top12, plan);
+      addCheap(lenient.usage);
+      if (lenient.verdict !== "none") {
+        sel.selected = lenient.selected;
+        sel.verdict  = "thin"; // always thin — it's a broader match
+        sel.coverage = "partial";
+        sel.missing  = lenient.missing || [];
+      }
+    }
+
+    // Definition queries need only one explanatory source to be "good" — the selector
+    // consistently rates them thin because it checks for incident coverage gaps that
+    // are irrelevant for a concept explanation. Upgrade thin→good when at least one
+    // source was selected.
+    if (plan.query_type === "definition" && sel.verdict === "thin" && sel.selected?.length > 0) {
+      sel.verdict = "good";
+    }
 
     const selectedSet = new Set(sel.selected);
     // Renumber 1..N so [src-N] in the answer always refers to position N in this
@@ -526,6 +602,12 @@ export default async function handler(req, res) {
     const rawSourceRefs = candidateSources
       .filter(s => selectedSet.has(s.ref))
       .map((s, i) => ({ ...s, ref: `src-${i + 1}` }));
+
+    if (streaming && rawSourceRefs.length > 0) {
+      sse({ type: "status", text: "Generating answer…" });
+    } else if (streaming) {
+      sse({ type: "status", text: "Generating from background knowledge…" });
+    }
 
     // Fix 1 — full-text enrichment: replace the 700-char truncated summary with up
     // to 2000 chars of actual article body for each selected source. Sonnet then
@@ -556,38 +638,9 @@ export default async function handler(req, res) {
     const isGeneral = (sel.verdict === "none" || sourceRefs.length === 0) && !cveResults.some(r => r.found);
 
     if (!isGeneral) {
-      // Use the planner's expanded search terms (domain terminology) rather than
-      // the raw user question — prevents evidence retrieval from only matching the
-      // user's words and missing sources that use different but equivalent phrasing.
-      const evidenceQuery = plan.search_terms?.length ? plan.search_terms.join(" ") : query;
-      const evDateFrom = plan.temporal?.all_time ? undefined : (plan.temporal?.date_from || undefined);
-      const evDateTo   = plan.temporal?.all_time ? undefined : (plan.temporal?.date_to   || undefined);
-      // Judgments are strategic summaries of the ENTIRE corpus history — injecting
-      // them into a tight recency window (≤ 30 days) causes Sonnet to write about
-      // historical incidents as "context", blowing out the temporal boundary.
-      const windowDays = evDateFrom
-        ? Math.round((Date.now() - new Date(evDateFrom).getTime()) / 86400000)
-        : Infinity;
-      const isTightWindow = !plan.temporal?.all_time && windowDays <= 30;
-      const TEMPORAL_QUERY_TYPES = new Set(["trend_analysis", "timeline", "comparison", "strategic_assessment"]);
-      const jobs = [
-        executeTool("get_evidence", { query: evidenceQuery, categories: undefined, tags: plan.taxonomy_tags?.length ? plan.taxonomy_tags : undefined, limit: 12, date_from: evDateFrom, date_to: evDateTo }).catch(() => null),
-        (plan.needs_judgments && !isTightWindow) ? executeTool("get_judgments", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
-        plan.needs_trends ? executeTool("trend_analysis", { categories: plan.category ? [plan.category] : undefined }).catch(() => null) : Promise.resolve(null),
-        // Only fetch temporal insights when the query actually has a time dimension —
-        // timeless strategic questions ("what should defenders prioritise?") have
-        // temporal_intent="none" and gain nothing from historical snapshots.
-        (TEMPORAL_QUERY_TYPES.has(plan.query_type) && plan.temporal?.temporal_intent !== "none")
-          ? executeTool("search_temporal_insights", {
-              query:      query,
-              categories: plan.category ? [plan.category] : undefined,
-              win:        "month",
-              date_from:  plan.temporal?.date_from || undefined,
-              date_to:    plan.temporal?.date_to   || undefined,
-            }).catch(() => null)
-          : Promise.resolve(null),
-      ];
-      const [ev, jd, tr, ti] = await Promise.all(jobs);
+      // Prefetches fired in parallel with retrieval are now complete (they started
+      // before the selector, which takes 5-15s). Just consume the resolved values.
+      const [ev, jd, tr, ti] = [prefetchedEvidence, prefetchedJudgments, prefetchedTrends, prefetchedTemporal];
       temporalInsights = ti;
       evidence   = ev?.evidence_items || [];
       judgments  = jd?.judgments || [];
@@ -604,19 +657,28 @@ export default async function handler(req, res) {
     // definition or publisher_lookup when the question asks "X vs Y" — comparison
     // answers require Sonnet + full structure to synthesise across two sides.
     const BRIEF_QUERY_TYPES = new Set([
-      "definition", "vulnerability_lookup", "incident_lookup",
+      // "definition" intentionally excluded: prose explanations need the synthesis
+      // tier (Sonnet) and 8K tokens — cheap tier (Flash/2K) truncates mid-sentence.
+      "vulnerability_lookup", "incident_lookup",
       "entity_history", "research_lookup", "publisher_lookup",
     ]);
     const briefAnswer = BRIEF_QUERY_TYPES.has(plan.query_type); // comparison is intentionally absent from BRIEF_QUERY_TYPES
     const system = isGeneral
       ? buildGeneralSystem(query)
-      : buildGroundedSystem(plan.temporal.scope_label, plan.category, sel.verdict === "thin", briefAnswer);
-    // Taxonomy block first: it's large, static, and caches across all requests.
-    // The dynamic system prompt is second — it changes per query (category/scope/thin).
-    const cachedSystem = [
-      { type: "text", text: TAXONOMY_CONTEXT, cache_control: { type: "ephemeral" } },
-      { type: "text", text: system, cache_control: { type: "ephemeral" } },
-    ];
+      : buildGroundedSystem(plan.temporal.scope_label, plan.category, sel.verdict === "thin", briefAnswer, plan.query_type, plan.temporal.temporal_intent, sel.missing || []);
+    // Taxonomy block: 9KB payload sent on every call. Only inject for analytical
+    // query types that actually need precise taxonomy labels. Brief lookups and
+    // general queries don't benefit from it and it adds network overhead through proxy.
+    const TAXONOMY_QUERY_TYPES = new Set([
+      "trend_analysis", "strategic_assessment", "comparison", "timeline",
+    ]);
+    const needsTaxonomy = TAXONOMY_QUERY_TYPES.has(plan.query_type) && !isGeneral;
+    const cachedSystem = needsTaxonomy
+      ? [
+          { type: "text", text: TAXONOMY_CONTEXT, cache_control: { type: "ephemeral" } },
+          { type: "text", text: system, cache_control: { type: "ephemeral" } },
+        ]
+      : [{ type: "text", text: system, cache_control: { type: "ephemeral" } }];
 
     const userContent = isGeneral
       ? query.trim()
@@ -632,13 +694,21 @@ export default async function handler(req, res) {
         : "synthesis";
     // Token ceiling is a conciseness signal and a stream-timeout safety net.
     // The word-budget in the prompt is the binding constraint — this is the ceiling.
-    // On Gemini, maxOutputTokens also covers thinking tokens, so the full-answer
-    // ceiling is raised and thinking is bounded (1024) to guarantee answer room;
-    // brief answers run on Flash with thinking disabled (thinkingBudget 0).
-    const maxTokens = briefAnswer ? 1200 : 3000;
+    // On thinking/reasoning models (e.g. azure.claude-sonnet-5), thinking tokens
+    // consume the max_tokens budget before output tokens are allocated. With the old
+    // ceiling of 2000, a model spending ~1500 tokens thinking left only ~500 for the
+    // Set thinkingBudget to 0 for all synthesis calls. The GovTech platform
+    // (azure.claude-sonnet-5) deducts thinking tokens from the shared output budget
+    // before text tokens are allocated. On complex queries (strategic assessments,
+    // trend analysis with many sources), model thinking can consume 1000-2000 tokens
+    // leaving insufficient budget for a full answer, causing empty response and
+    // routing to general fallback. Sonnet-class models reason well without an
+    // explicit thinking budget.
+    const maxTokens = briefAnswer ? 2000 : 8000;
     const synthArgs = {
       tier: synthTier, system: cachedSystem, messages, maxTokens,
-      thinkingBudget: briefAnswer ? 0 : 1024,
+      thinkingBudget: 0,
+      timeoutMs: 180000,
     };
 
     // A leading, un-streamed preamble for the general path so the user immediately
@@ -658,7 +728,7 @@ export default async function handler(req, res) {
         { type: "text", text: buildGeneralSystem(query), cache_control: { type: "ephemeral" } },
       ];
       const gResp = await platformChat({
-        tier: "synthesis", maxTokens: 3000, thinkingBudget: 1024, system: gSys,
+        tier: "synthesis", maxTokens: 4000, thinkingBudget: 0, system: gSys,
         messages: [...historyMessages, { role: "user", content: query.trim() }],
       });
       recordSynth(gResp.inputTokens, gResp.outputTokens, gResp.model);
@@ -681,9 +751,30 @@ export default async function handler(req, res) {
     // buildPayload: shared by streamed + buffered paths. Runs deterministic QA and
     // the Haiku verifier, then assembles the response.
     async function buildPayload(rawText) {
-      const parsed = parseResponse(rawText || "(No answer generated)");
+      // Empty response from the model (token exhaustion, thinking overflow, or
+      // platform error that returned 200 with empty content). Route to general
+      // fallback instead of surfacing the literal placeholder to the user.
+      if (!rawText || !rawText.trim()) {
+        process.stderr.write(`[agent] WARNING: model returned empty response (len=${rawText?.length??'null'}) — routing to general fallback\n`);
+        return await synthGeneralFallback();
+      }
+      const parsed = parseResponse(rawText);
       parsed.answer = normalizeCitationMarkers(parsed.answer);
-      const normalizeUrl = (u) => u?.replace(/[.,;:!?/]+$/, "").toLowerCase().replace(/^https?:\/\//, "");
+      // Strip hallucinated [src-N] markers from general answers — no real sources exist.
+      if (isGeneral) parsed.answer = parsed.answer.replace(/\[src-\d+\]/g, "");
+      // Normalise URLs for dedup: strip scheme, trailing punctuation, and common
+      // CDN/staging subdomain prefixes so variant URLs of the same article collapse
+      // to one key. Handles:
+      //   "origin-unit42.paloaltonetworks.com/foo" → "unit42.paloaltonetworks.com/foo"
+      //   "www.example.com/foo" → "example.com/foo"
+      const normalizeUrl = (u) => {
+        if (!u) return u;
+        return u.replace(/[.,;:!?/]+$/, "")
+                .toLowerCase()
+                .replace(/^https?:\/\//, "")
+                .replace(/^origin-/, "")          // CDN "origin-X" subdomain prefix → X
+                .replace(/^(?:www|m|amp)\./, ""); // strip common www./m./amp. prefixes
+      };
 
       const retrievedUrls = new Set([
         ...sourceRefs.map(s => normalizeUrl(s.url)),
@@ -800,8 +891,8 @@ export default async function handler(req, res) {
       let verify = { verdict: "grounded", unsupported: [], contradictions: [], unreconciled: [], ran: false };
       const verifyIssues = [];
       let confidence = parsed.confidence;
-      const shouldVerify = !isGeneral && !parsed.out_of_scope && finalAnswer
-        && sourceRefs.length && !BRIEF_QUERY_TYPES.has(plan.query_type);
+      // Verifier moved to /api/agent-verify (phase 2 call from client).
+      const shouldVerify = false;
       if (shouldVerify) {
         const citedNums = new Set(
           [...finalAnswer.matchAll(/\[src-(\d+)\]/g)].map(m => parseInt(m[1], 10))
@@ -821,7 +912,6 @@ export default async function handler(req, res) {
         verify = await verifyAnswer({
           answer:   finalAnswer,
           sources:  citedSources.length ? citedSources : localSourceRefs,
-          // Prefer source-specific evidence; fall back to query evidence if none found
           evidence: sourceEvidence.length ? sourceEvidence : evidence,
         });
         addCheap(verify.usage);
@@ -881,6 +971,31 @@ export default async function handler(req, res) {
 
       if (generalPreamble && !blocked) finalAnswer = generalPreamble + finalAnswer;
 
+      // Strip any hallucinated [src-N] markers from general answers — there are no
+      // sources to link to, and they render as broken unclickable superscripts.
+      if (isGeneral && !blocked) finalAnswer = finalAnswer.replace(/\[src-\d+\]/g, "");
+
+      // Renumber [src-N] refs sequentially after QA. Some sources are dropped
+      // (dead URLs, off-topic, marketing) leaving gaps like 1,2,4,5,7 — compact
+      // to 1,2,3,4,5 so footer buttons always match inline citation numbers.
+      if (!blocked && localSourceRefs.some(s => !s.url)) {
+        const oldToNew = {};
+        let newIdx = 0;
+        localSourceRefs.forEach((s, i) => { if (s.url) oldToNew[i + 1] = ++newIdx; });
+        finalAnswer = finalAnswer.replace(/\[src-(\d+)\]/g, (m, n) => {
+          const nn = oldToNew[parseInt(n, 10)];
+          return nn ? `[src-${nn}]` : "";
+        });
+        dedupedCitations = dedupedCitations
+          .map(c => {
+            const oldNum = parseInt(c.ref?.match(/\d+/)?.[0], 10);
+            const nn = oldToNew[oldNum];
+            return nn ? { ...c, ref: `[src-${nn}]` } : null;
+          })
+          .filter(Boolean);
+        localSourceRefs = localSourceRefs.filter(s => s.url);
+      }
+
       const qaIssues = qaFindings.map(i => i.detail);
       logAgentCostToDB({ inputTokens: usage.in, outputTokens: usage.out, rounds: 1, costUsd: costUsd() }).catch(() => {});
 
@@ -938,10 +1053,20 @@ export default async function handler(req, res) {
     }
 
     // ── Buffered path ────────────────────────────────────────────────────────────
-    const resp = await platformChat({ ...synthArgs, stream: false });
+    // Buffered synthesis with retry: the GovTech platform occasionally returns 200 OK
+    // with empty content (rate limit / transient overload). Retry up to 2 times with
+    // 3s backoff before falling to general fallback.
+    let resp;
+    for (let attempt = 0; attempt <= 2; attempt++) {
+      resp = await platformChat({ ...synthArgs, stream: false });
+      if (resp.text?.trim()) break;
+      if (attempt < 2) {
+        process.stderr.write(`[agent] synthesis empty (attempt ${attempt + 1}) — retrying in 3s\n`);
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
     recordSynth(resp.inputTokens, resp.outputTokens, resp.model);
-    const rawText = resp.text || "(No answer generated)";
-    return res.status(200).json(await buildPayload(rawText));
+    return res.status(200).json(await buildPayload(resp.text || ""));
 
   } catch (err) {
     console.error("[agent] error:", err.message, err.stack?.slice(0, 500));

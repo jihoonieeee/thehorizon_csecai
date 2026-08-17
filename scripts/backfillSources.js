@@ -78,15 +78,30 @@ const startArg      = process.argv[2] || `${new Date().getFullYear()}-01-01`;
 const endArg        = process.argv[3] || new Date().toISOString().slice(0, 10);
 const connectorArg  = (process.argv[4] || "all").toLowerCase();
 
-// Parse optional per-connector group suffix: "arxiv:traditional_ml" or "arxiv:traditional"
-// → connectorFilter=["arxiv"], connectorOptions={ arxiv: { queryGroups:["traditional_ml"] } }
+// Parse optional per-connector group suffix: "arxiv:llm_threats" or "arxiv:llm_threats+traditional_ml"
+// → connectorFilter=["arxiv"], connectorOptions={ arxiv: { queryGroups:["llm_threats","traditional_ml"] } }
+//
+// Supported group name aliases (short forms for CLI convenience):
+//   traditional / tai  → traditional_ml
+//   llm                → llm_threats
+//   agentic            → agentic_threats
+//   ai_enabled / aie   → ai_enabled
+const GROUP_ALIASES = {
+  traditional:   "traditional_ml",
+  tai:           "traditional_ml",
+  llm:           "llm_threats",
+  agentic:       "agentic_threats",
+  ai_enabled:    "ai_enabled",
+  aie:           "ai_enabled",
+};
+
 const connectorOptions = {};
 const connectorFilter = connectorArg === "all" ? null : connectorArg.split(",").map(part => {
-  const [key, group] = part.split(":");
-  if (group) {
-    const resolved = group === "traditional" ? "traditional_ml" : group;
+  const [key, groupSpec] = part.split(":");
+  if (groupSpec) {
+    const groups = groupSpec.split("+").map(g => GROUP_ALIASES[g] ?? g);
     if (!connectorOptions[key]) connectorOptions[key] = { queryGroups: [] };
-    connectorOptions[key].queryGroups.push(resolved);
+    connectorOptions[key].queryGroups.push(...groups);
   }
   return key;
 });

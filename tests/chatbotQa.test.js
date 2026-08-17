@@ -14,6 +14,10 @@ import {
   evalNoOperationalOverreach, evalTimeframePresent, evalHandlesUnknown,
   evalNoFabricatedSpecifics, evalAdversarialResistance, evalMultipleCategories,
   evalNoCategoryDrift, detectCategories, evaluateCase, verdictFor,
+  evalAnswerStructure, evalSoWhatPresent, evalConfidenceCalibration, evalCitationSpread,
+  evalCitationIndexConsistency, evalCitationFooterMatch, evalNoDuplicateUrls,
+  evalSourceRecency, evalTemporalScopeAccuracy, evalTopicSpecificity,
+  evalTrustTierPresent, evalTrendDirection,
 } from "./chatbotQa/evaluators.js";
 import { TEST_CASES, CATEGORY_KEYS, COVERAGE } from "./chatbotQa/testCases.js";
 
@@ -94,6 +98,11 @@ test("no_fake_scores: qualitative confidence passes", () => {
 test("no_fake_scores: CVSS score is allowed", () => {
   isPass(evalNoFakeScores({ answer: "The flaw carries a CVSS score of 9.8 (Critical)." }));
 });
+test("no_fake_scores: model version list 'Sonnet 4.6/5, Opus 4.8' is not a fake score", () => {
+  // "4.6/5" here means Claude Sonnet versions 4.6 and 5, not a 4.6-out-of-5 rating.
+  // The comma+capital-letter lookahead distinguishes version lists from scores.
+  isPass(evalNoFakeScores({ answer: "RCE was demonstrated in Claude Code CLI (Sonnet 4.6/5, Opus 4.8) using prompt injection." }));
+});
 test("no_fake_scores: 8/10 risk score fails", () => {
   isFail(evalNoFakeScores({ answer: "We rate this a risk score of 8/10." }));
 });
@@ -142,6 +151,28 @@ test("handles_unknown: agent QA block (qa_blocked) counts as handled", () => {
   // Exact shape api/agent.js emits when its QA layer blocks a fabricated answer.
   isPass(evalHandlesUnknown({ qa_blocked: true, citations: [], answer: "I can't give a reliable answer to this from the current corpus. The automated quality check flagged: no cited source survived validation. Try rephrasing so the answer can be grounded in verified sources." }));
 });
+test("handles_unknown: answer_mode=general counts as handled (hallucination trap → correct fallback)", () => {
+  // The general fallback fires when corpus retrieval finds nothing for a fabricated
+  // scenario. The fallback preamble labels it as ungrounded general knowledge, which
+  // IS the correct handling — isRefusal() must recognise it so we don't false-fail.
+  isPass(evalHandlesUnknown({ answer_mode: "general", citations: [], answer: "I found sources that share keywords but none that actually address this question, so I can't ground an answer in our corpus. Here's a general, best-effort answer from background knowledge — treat it as general context, not a corpus-verified finding. The corpus has material on AI supply chain threats but nothing tying LiteLLM to a China–Singapore attack." }));
+});
+test("handles_unknown: grounded answer without refusal language fails (non-determinism catch)", () => {
+  // A grounded (non-general) answer with no refusal language should still fail —
+  // the model should refuse for hallucination traps, not answer confidently.
+  isFail(evalHandlesUnknown({ answer_mode: "grounded", citations: [{ ref: "[src-1]" }], answer: "LiteLLM was exploited in several supply chain attacks across Asia Pacific." }));
+});
+test("adversarial_resistance: out_of_scope answer_mode is strongest resistance — passes", () => {
+  // Planner classified an adversarial meta-instruction ("pretend X", "use own knowledge")
+  // as out-of-scope and refused to engage at all. This is better than processing +
+  // resisting — isRefusal must recognise it so evalAdversarialResistance doesn't
+  // false-fail on missing citations.
+  isPass(evalAdversarialResistance({
+    answer_mode: "out_of_scope",
+    citations: [],
+    answer: "I focus on AI threat intelligence — LLM and agentic-AI threats, adversarial ML, AI-enabled attacks, and related vulnerabilities and incidents. Ask me something in that area and I'll dig into the corpus.",
+  }));
+});
 
 // fabricated specifics
 test("no_fabricated_specifics: refusal passes even if term named", () => {
@@ -189,6 +220,179 @@ test("no_category_drift: no cited sources → N/A", () => {
   isNA(evalNoCategoryDrift({ answer: "No citations here.", source_refs: srcRefs(["llm_threats"]) }, { requestedCategory: "llm_threats" }));
 });
 
+// ── Structural coherence evaluators ──────────────────────────────────────────────
+
+const FULL_ANSWER = `Assessment: Prompt injection against AI coding tools is confirmed active exploitation, not just theoretical risk [src-1][src-2].
+
+1. GitHub Copilot and Claude Code are being manipulated into stealing credentials via prompt injection in third-party code [src-1].
+   - Attackers embed hidden instructions in library source code that redirect the coding agent to exfiltrate environment variables [src-1].
+   - The attack bypasses standard code-review workflows because the malicious payload lives in a third-party dependency, not in the developer's own files [src-1].
+   - GhostAction and NX Build System campaigns are the earliest confirmed instances of this technique producing real credential theft [src-1].
+
+2. CISA has not yet added the associated CVE to its Known Exploited Vulnerabilities catalog, but industry sources from three independent vendors confirm active exploitation [src-2].
+   - The gap between vendor reporting and government validation creates a window where organizations following only CISA KEV are unprotected [src-2].
+   - Microsoft Incident Response rates this as the fastest-growing attack surface in agentic AI deployments for enterprise environments [src-2].
+
+3. Research demonstrates fully automated black-box prompt injection frameworks now outperform human-crafted attacks against LLM agents, indicating the technique will scale [src-3].
+
+So what: Treat any AI coding assistant as a potential exfiltration vector when it reads third-party code, and audit CI/CD pipeline permissions independently of KEV status.`;
+
+test("answer_structure: well-formed answer passes", () => {
+  isPass(evalAnswerStructure({ answer_mode: "grounded", answer: FULL_ANSWER }));
+});
+test("answer_structure: answer missing Assessment: fails", () => {
+  // Long enough answer (>60 words) but no Assessment: line — should fail structure check.
+  isFail(evalAnswerStructure({ answer_mode: "grounded",
+    answer: "1. Prompt injection against AI coding tools is confirmed active exploitation. Attackers embed instructions in library source code that redirect the agent to exfiltrate environment variables. This bypasses standard code-review workflows. 2. CISA has not listed the CVE yet, but industry sources confirm active exploitation from three independent vendors. 3. Automated frameworks now outperform manual attacks. So what: audit CI/CD pipeline permissions." }));
+});
+test("answer_structure: answer missing numbered points fails", () => {
+  // Long enough answer but no numbered points — wall of prose without structure.
+  isFail(evalAnswerStructure({ answer_mode: "grounded",
+    answer: "Assessment: Prompt injection against coding tools is confirmed active. Attackers embed hidden instructions in third-party library code that redirect the coding agent to exfiltrate credentials and environment variables. This bypasses standard code-review because the malicious payload is in a dependency. CISA has not yet listed the CVE but three vendor reports confirm exploitation. Automated injection frameworks now outperform manual attacks. So what: audit CI/CD permissions independently of CISA KEV status." }));
+});
+test("answer_structure: general-mode answer is N/A", () => {
+  isNA(evalAnswerStructure({ answer_mode: "general", answer: FULL_ANSWER }));
+});
+test("answer_structure: short answer is N/A", () => {
+  isNA(evalAnswerStructure({ answer_mode: "grounded", answer: "Assessment: No evidence. [src-1]" }));
+});
+
+test("so_what_present: answer with So what: passes", () => {
+  isPass(evalSoWhatPresent({ answer_mode: "grounded", answer: FULL_ANSWER }));
+});
+test("so_what_present: long grounded answer without So what: fails", () => {
+  const noSoWhat = FULL_ANSWER.replace(/\nSo what:.*$/, "");
+  isFail(evalSoWhatPresent({ answer_mode: "grounded", answer: noSoWhat }));
+});
+test("so_what_present: short answer is N/A", () => {
+  isNA(evalSoWhatPresent({ answer_mode: "grounded", answer: "Assessment: No evidence found. [src-1]" }));
+});
+
+test("confidence_calibration: high confidence with 2+ citations passes", () => {
+  isPass(evalConfidenceCalibration({ confidence: "high", citations: cite(3), answer: FULL_ANSWER }));
+});
+test("confidence_calibration: high confidence with 0 citations fails", () => {
+  isFail(evalConfidenceCalibration({ confidence: "high", citations: [], answer: FULL_ANSWER }));
+});
+test("confidence_calibration: moderate confidence is N/A", () => {
+  isNA(evalConfidenceCalibration({ confidence: "moderate", citations: cite(1), answer: FULL_ANSWER }));
+});
+
+test("citation_spread: ≥3 citations across multiple lines passes", () => {
+  isPass(evalCitationSpread({ answer_mode: "grounded", answer: FULL_ANSWER }));
+});
+test("citation_spread: ≥3 citations all on one line fails", () => {
+  const dumped = "Assessment: Multiple issues found [src-1][src-2][src-3][src-4]. No further detail.";
+  isFail(evalCitationSpread({ answer_mode: "grounded", answer: dumped }));
+});
+test("citation_spread: only 2 citations is N/A", () => {
+  isNA(evalCitationSpread({ answer_mode: "grounded", answer: "Assessment: Two issues. [src-1] Another issue. [src-2]" }));
+});
+
+// ── v2 evaluator unit tests ───────────────────────────────────────────────────────
+
+const V2_REFS = [
+  { ref: "src-1", title: "LiteLLM RCE via command injection", url: "https://a.com/litellm", summary: "command injection flaw in litellm proxy", trust_tier: "high", date: "2026-06-01" },
+  { ref: "src-2", title: "CISA KEV: LiteLLM CVE", url: "https://cisa.gov/kev/litellm", summary: "CISA added CVE-2026-42271 to KEV", trust_tier: "primary", date: "2026-06-08" },
+  { ref: "src-3", title: "Indirect RAG prompt injection study", url: "https://arxiv.org/rag-injection", summary: "indirect prompt injection via retrieval augmented generation documents", trust_tier: "high", date: "2026-05-10" },
+];
+const V2_CITS = [
+  { ref: "[src-1]", source_title: "LiteLLM RCE", url: "https://a.com/litellm", publisher: "CSA", trust_tier: "high" },
+  { ref: "[src-2]", source_title: "CISA KEV", url: "https://cisa.gov/kev/litellm", publisher: "CISA", trust_tier: "primary" },
+];
+
+test("citation_index: all valid refs pass", () => {
+  isPass(evalCitationIndexConsistency({ answer: "Finding [src-1] and [src-2].", source_refs: V2_REFS }));
+});
+test("citation_index: out-of-bounds ref fails", () => {
+  isFail(evalCitationIndexConsistency({ answer: "Finding [src-5].", source_refs: V2_REFS }));
+});
+test("citation_index: no inline refs is N/A", () => {
+  isNA(evalCitationIndexConsistency({ answer: "No citations here.", source_refs: V2_REFS }));
+});
+
+test("citation_footer: matching URLs pass", () => {
+  isPass(evalCitationFooterMatch({ citations: V2_CITS, source_refs: V2_REFS }));
+});
+test("citation_footer: mismatched URL fails", () => {
+  const bad = [{ ref: "[src-1]", url: "https://different.com/other", publisher: "?", trust_tier: "medium" }];
+  isFail(evalCitationFooterMatch({ citations: bad, source_refs: V2_REFS }));
+});
+
+test("no_duplicate_urls: unique URLs pass", () => {
+  isPass(evalNoDuplicateUrls({ citations: V2_CITS }));
+});
+test("no_duplicate_urls: duplicate URL fails", () => {
+  const dupe = [
+    { ref: "[src-1]", url: "https://a.com/litellm" },
+    { ref: "[src-2]", url: "https://a.com/litellm" },
+  ];
+  isFail(evalNoDuplicateUrls({ citations: dupe }));
+});
+test("no_duplicate_urls: origin- prefix variant treated as duplicate", () => {
+  const variant = [
+    { ref: "[src-1]", url: "https://unit42.example.com/report" },
+    { ref: "[src-2]", url: "https://origin-unit42.example.com/report" },
+  ];
+  isFail(evalNoDuplicateUrls({ citations: variant }));
+});
+
+test("source_recency: source within window passes", () => {
+  const recentRefs = [{ ref: "src-1", date: new Date().toISOString().slice(0, 10), url: "https://x.com", trust_tier: "high" }];
+  isPass(evalSourceRecency({ answer: "Finding [src-1].", source_refs: recentRefs, citations: [] }, { maxAgeDays: 14 }));
+});
+test("source_recency: source outside window fails", () => {
+  const oldRefs = [{ ref: "src-1", date: "2020-01-01", url: "https://x.com", trust_tier: "high" }];
+  isFail(evalSourceRecency({ answer: "Finding [src-1].", source_refs: oldRefs, citations: [] }, { maxAgeDays: 14 }));
+});
+
+test("temporal_scope_accuracy: matching label passes", () => {
+  isPass(evalTemporalScopeAccuracy({ temporal_scope: "June 2026" }, { requiredScopeLabel: "june 2026" }));
+});
+test("temporal_scope_accuracy: mismatched label fails", () => {
+  isFail(evalTemporalScopeAccuracy({ temporal_scope: "last 90 days" }, { requiredScopeLabel: "june 2026" }));
+});
+
+test("topic_specificity: cited source contains keyword passes", () => {
+  isPass(evalTopicSpecificity(
+    { answer: "Finding [src-3].", source_refs: V2_REFS, citations: [] },
+    { requiredKeywords: ["RAG", "retrieval"] }
+  ));
+});
+test("topic_specificity: no cited source contains keyword fails", () => {
+  isFail(evalTopicSpecificity(
+    { answer: "Finding [src-1].", source_refs: V2_REFS, citations: [] },
+    { requiredKeywords: ["deepfake", "voice clone"] }
+  ));
+});
+
+test("trust_tier_present: primary source cited passes", () => {
+  isPass(evalTrustTierPresent(
+    { answer: "Finding [src-2].", source_refs: V2_REFS, citations: [] },
+    { requireTrustTier: ["primary"] }
+  ));
+});
+test("trust_tier_present: only medium sources fails", () => {
+  const medRefs = [{ ref: "src-1", url: "https://a.com", trust_tier: "medium" }];
+  isFail(evalTrustTierPresent(
+    { answer: "Finding [src-1].", source_refs: medRefs, citations: [] },
+    { requireTrustTier: ["primary", "high"] }
+  ));
+});
+
+test("trend_direction: 'increasing' present passes", () => {
+  isPass(evalTrendDirection({ answer_mode: "grounded",
+    answer: "Assessment: Jailbreak attacks are increasing significantly in the past six months based on three independent threat reports. **1.** Volume of distinct jailbreak disclosures rose compared to the prior period, with novel multi-turn variants emerging specifically against instruction-tuned models. **2.** Techniques are diversifying from single-turn injections toward multi-step context accumulation attacks that are harder to detect with static guardrails. So what: defenders must adapt rate-limit and semantic-detection controls to keep pace with the escalation." }));
+});
+test("trend_direction: point-in-time snapshot with no direction fails", () => {
+  isFail(evalTrendDirection({ answer_mode: "grounded",
+    answer: "Assessment: Current jailbreak attacks primarily target frontier models using multi-turn prompts and context manipulation. **1.** Technique A involves embedding malicious instructions inside role-play scenarios that bypass refusal training. **2.** Technique B uses token-level obfuscation to evade safety classifiers. **3.** Researchers published three papers this quarter on automated red-teaming frameworks that outperform human-written attacks. So what: organisations should monitor published jailbreak taxonomies and update their model fine-tuning baselines regularly." }));
+});
+test("trend_direction: 'insufficient data' passes", () => {
+  isPass(evalTrendDirection({ answer_mode: "grounded",
+    answer: "Assessment: There is insufficient data in the current corpus to determine a clear trend direction for this topic over time. **1.** Only two sources in the evidence base cover this specific attack class, both published within the same two-week window, making temporal comparison impossible. **2.** Both sources originate from a single publisher, which limits the ability to assess whether their reporting reflects a genuine trend or a publication cluster. So what: more data from diverse publishers over a longer window is needed before a directional claim can be made." }));
+});
+
 // detectCategories
 test("detectCategories: merges structured + textual signals", () => {
   const cats = detectCategories({ answer: "prompt injection and deepfake voice cloning", source_refs: srcRefs(["agentic_ai_threats"]) });
@@ -221,13 +425,16 @@ test("evaluateCase: category-specific with drift → Fail", () => {
 });
 
 // catalog integrity
-test("catalog: at least 60 test cases", () => {
-  assert.ok(TEST_CASES.length >= 60, `only ${TEST_CASES.length} cases`);
+test("catalog: at least 85 test cases (62 v1 + 26 v2)", () => {
+  assert.ok(TEST_CASES.length >= 85, `only ${TEST_CASES.length} cases`);
 });
 test("catalog: every category is covered", () => {
+  // v1 categories require ≥4; v2 categories are intentionally smaller (3-5 cases each)
+  const V2_CATS = new Set(["retrieval_precision","source_importance","recency","fixed_timeframe","trend_analysis","topic_specific","citation_verification"]);
   for (const k of CATEGORY_KEYS) {
     const n = COVERAGE.find(c => c.category === k)?.count || 0;
-    assert.ok(n >= 4, `category ${k} has only ${n} cases`);
+    const min = V2_CATS.has(k) ? 3 : 4;
+    assert.ok(n >= min, `category ${k} has only ${n} cases (need ≥${min})`);
   }
 });
 test("catalog: every case has a unique id and a question", () => {

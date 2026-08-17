@@ -123,6 +123,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BLOB_READ_WRITE_TOKEN:     ${{ secrets.BLOB_READ_WRITE_TOKEN }}
           PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
+          PROXY_URL:                 ${{ secrets.PROXY_URL }}
           LLM_PROVIDER_ORDER:        platform
           PLATFORM_AI_PROVIDER:      platform_ai
           PLATFORM_PIPELINE_MODEL:   gpt-5.4
@@ -134,6 +135,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: horizon-scan-decks
-          path: output/deck-*.pptx
+          path: |
+            output/deck-*.pptx
+            output/deck-*.json
+            output/deck-*.md
           retention-days: 30
           if-no-files-found: ignore

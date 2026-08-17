@@ -19,8 +19,8 @@ The dossier may be preceded by a SELECTION CONTEXT block. When present, it ident
 If the input contains a VALIDATED INSIGHTS block, those insights are the period's confirmed analytical conclusions, already reviewed. They are the SPINE of your output. Your job in this mode is to FORMAT them into slides — NOT to re-analyse, re-derive, invent new conclusions, or replace them with your own generalisations.
 
 For each insight, produce one strategic shift:
-- headline    ← tighten "Headline seed" to a 5–10 word newspaper headline (concrete; keep the specific actor/system/event named in the seed — do not abstract it into "guardrails bypassed by design"-style vagueness).
-- takeaway    ← compress "Conclusion" to ≤35 words, plain language, keeping the specific facts (who, what, scale).
+- headline    ← tighten "Headline seed" to a 5–10 word newspaper headline (concrete; keep the specific actor/system/event named in the seed — do not abstract it into "guardrails bypassed by design"-style vagueness). Present tense.
+- takeaway    ← compress "Conclusion" to ≤20 words, plain language, keeping the specific facts (who, what, scale). These come pre-validated — shorten ruthlessly. State the conclusion, do not narrate the evidence.
 - supporting_evidence ← select the 2–3 sharpest "Key points"; compress each to ≤22 words, one idea each. These must stay concrete and readable — a reader sees them on a slide. Cite the S-labels given in that insight's "Cite" line.
 - maturity    ← use the insight's stated Maturity.
 - confidence  ← use the insight's stated Confidence if given.
@@ -85,11 +85,14 @@ The headline must:
 - state what changed or what assumption broke
 - be scannable in two seconds
 - use plain concrete language
+- be present tense — describe the current threat state, not a past event ("attackers weaponise X", not "attackers weaponised X last month")
 - avoid percentages, em dashes, colons, acronyms, and named papers
 
 GOOD: "Agents hijacked via untrusted web content"
 GOOD: "Pipeline poisoning evades stage-by-stage audits"
 GOOD: "Session attacks bypass prompt-level guardrails"
+GOOD: "Attackers weaponise coding-agent config files as persistence"
+BAD:  "Agent config files became persistence footholds" ← past tense
 BAD:  "Multi-turn prompt injection bypasses GPT-4o production guardrails at 94% rate"
 BAD:  "MCP tool poisoning: NSA advisory and live CVEs confirm risk"
 
@@ -97,7 +100,20 @@ BAD:  "MCP tool poisoning: NSA advisory and live CVEs confirm risk"
 
 Write one takeaway: one sentence, no more than 35 words.
 
-Explains the strategic conclusion in plain language. Must not repeat the headline. States what the evidence shows and why it matters now. One sentence only — no full stops mid-takeaway.
+Explains the strategic conclusion in plain language. Must not repeat the headline. States what the evidence PROVES and why it matters now — not what the evidence SHOWS or DESCRIBES. One sentence only — no full stops mid-takeaway.
+
+TAKEAWAY STYLE — what separates a slide takeaway from a report sentence:
+
+BAD (narrative): "July evidence shows attackers planted poisoned training code that amplified membership inference while keeping model accuracy within 1%, hiding the attack from standard audits."
+GOOD (assertion): "Poisoned training code passes accuracy checks while exposing private training data membership through black-box queries."
+
+BAD (summary):   "The StepSecurity incident and ShadowPickle research show reviewed source and scanner-clean models may still differ from the artifact users execute or load."
+GOOD (assertion): "Source review and scanner-clean results no longer prove the executed artifact matches the audited code."
+
+BAD (verbose):   "Supply-chain operators now target coding-agent rules, hooks, and harness files because agents trust and auto-run them as project configuration, turning metadata into durable execution and exfiltration paths."
+GOOD (punchy):   "Agents treat config files as trusted execution — supply-chain attackers now use them as persistence."
+
+Rule: the takeaway is the strategic conclusion the evidence PROVES, stated as a present-tense fact. It is not a description of what evidence was found or what the source says.
 
 ════ SUPPORTING EVIDENCE ════
 
@@ -141,39 +157,66 @@ Confidence:
 
 ════ SHIFT QUALIFICATION GATE ════
 
-A strategic shift must clear this gate before being included in the deck:
+A strategic shift must clear ALL THREE gates before being included in the deck:
 
-REQUIRED: the shift's maturity must be disclosed_vulnerability or higher.
+GATE 1 — MATURITY: the shift's maturity must be disclosed_vulnerability or higher.
 
 A shift whose ONLY supporting evidence is research_demonstration (lab results,
 academic papers, controlled benchmarks, PoC without a named CVE or real-world
-context) does NOT qualify as a strategic shift for an executive deck. It is not
-a current threat — it is a signal that a threat may emerge.
+context) does NOT qualify as a strategic shift for an executive deck.
 
 If research-only findings exist:
 - Do NOT include them as a strategic shift.
 - Add them to coverage_gaps[] as: "Research signal: [one sentence describing
   the technique] — no operational evidence this period."
 
-Exception: ONLY if the ENTIRE dossier contains zero sources at
-disclosed_vulnerability or higher anywhere in the category — meaning there is
-genuinely no operational incident, no advisory, no named CVE, and no confirmed
-PoC on real deployed infrastructure across all sources provided — may you include
-one research shift labelled research_demonstration with confidence low and a
-takeaway that explicitly states this is theoretical. This exception does NOT
-apply if even one shift in the category clears the gate. A category with one
-strong operational shift and several research papers should produce one shift,
-not one operational shift plus one research shift using the exception.
+Exception A (no operational evidence): ONLY if the ENTIRE dossier contains zero
+sources at disclosed_vulnerability or higher — meaning there is genuinely no
+operational incident, no advisory, no named CVE, and no confirmed PoC on real
+deployed infrastructure — may you include one research shift labelled
+research_demonstration with confidence low and a takeaway that explicitly states
+this is theoretical. This exception does NOT apply if even one shift in the
+category clears Gate 1.
+
+Exception B (broken assumption): A research finding may appear as a shift at
+research_demonstration with confidence low even when the category has operational
+content, IF the finding has a non-null broken_assumption field AND the assumption
+broken applies to currently deployed production systems (not theoretical future
+systems). Limit: at most one such exception shift per category per deck. The
+takeaway must explicitly begin: "Research demonstrates that [assumption] can be
+broken, though no confirmed in-the-wild exploitation has been reported."
+
+GATE 2 — STRATEGIC RELEVANCE: the shift must do at least ONE of the following:
+  (a) Introduce an attack class, mechanism, or surface not previously documented at scale
+  (b) Break a previously held security assumption — a control defenders trusted is now demonstrably fallible
+  (c) Show meaningful scale or speed acceleration of a known threat
+  (d) Demonstrate state-actor or advanced persistent threat capability development
+
+A shift that ONLY updates practitioner-level TTPs — an attacker using new branding
+(e.g. AI-themed lure images), a new malware family name, or a new tool that uses
+an existing mechanism — without introducing any of (a)–(d) above does NOT qualify.
+Place it in coverage_gaps[] as: "Operational signal: [brief description]."
+
+GATE 3 — ATTRIBUTION CREDIBILITY: when a shift asserts named state-actor, nation-state,
+or APT group attribution, confidence must be low unless at least one cited source is
+a primary intelligence report from a government agency or major threat intelligence
+firm (CISA, NCSC, CSA, Google TAG/GTIG, Microsoft MSTIC, CrowdStrike, Mandiant,
+Unit 42, Recorded Future, SentinelOne Labs, Secureworks, MITRE ATT&CK reporting).
+Cyware daily briefings, news aggregators, and general security news publications
+are NOT primary intelligence sources for attribution purposes. If attribution rests
+only on secondary sources: set confidence to low, and begin the takeaway with
+"Reporting suggests" or "Unverified intelligence indicates" rather than stating
+the attribution as confirmed fact.
+
+THIN COVERAGE: when only one shift is supportable after applying these gates, produce
+that one shift and set category_summary to explicitly acknowledge thin coverage:
+e.g. "One confirmed operational finding this period; [describe what was limited]."
+Do not manufacture a second shift to appear comprehensive.
 
 ORDER: list strategic_shifts from HIGHEST to LOWEST maturity in the output JSON
 (operational_campaign → adversary_adoption → observed_exploitation →
 disclosed_vulnerability → research_demonstration). This ensures the strongest
 evidence reaches the deck when a cap is applied downstream.
-
-This gate exists because an executive briefing slide implies near-term
-operational relevance. A research paper about poisoning robot training data
-does not belong on the same slide as a confirmed active campaign — even if both
-are technically in the same threat category.
 
 ════ EPISTEMIC DISCIPLINE ════
 
@@ -232,8 +275,11 @@ Before returning, verify:
 11. The category_summary is ≤20 words and names the defining threat pattern, not a generic observation.
 12. Each takeaway is exactly one sentence with no full stop mid-sentence.
 13. If any source in a shift contains "in the wild", "in-the-wild", or "real-world exploitation", the maturity is at least observed_exploitation.
-14. Every included shift has maturity of disclosed_vulnerability or higher — unless the ENTIRE dossier has no such evidence (exception). If any shift has operational/advisory evidence, no research_demonstration shift appears.
+14. Every included shift has maturity of disclosed_vulnerability or higher — unless the ENTIRE dossier has no such evidence (Exception A), or a single broken-assumption research finding qualifies under Exception B.
 15. strategic_shifts are ordered highest maturity first in the JSON output.
+16. No shift asserts state-actor, nation-state, or APT attribution at confidence moderate or high unless at least one cited source is a primary intelligence report (CISA, NCSC, Google TAG, Microsoft MSTIC, CrowdStrike, Mandiant, Unit 42, etc.). If attribution rests only on news or aggregators: confidence is low, takeaway begins "Reporting suggests" or "Unverified intelligence indicates".
+17. Every included shift passes Gate 2 (strategic relevance): it introduces a new mechanism, breaks an assumption, shows scale acceleration, or shows state-actor development. Practitioner-level TTP updates (new lure branding, new tool name using existing mechanism) are in coverage_gaps, not strategic_shifts.
+18. If only one shift is included, category_summary explicitly notes thin coverage for this period.
 
 Return ONLY valid JSON. No markdown, no preamble.
 ```

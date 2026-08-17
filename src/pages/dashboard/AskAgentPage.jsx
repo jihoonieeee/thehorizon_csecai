@@ -11,7 +11,7 @@ const SUGGESTIONS = [
   { label: "Most important finding",    prompt: "What's the most important finding right now?" },
   { label: "LLM jailbreak trends",      prompt: "Are LLM jailbreaks getting more common?" },
   { label: "Agentic AI risks",          prompt: "What agentic AI risks should I prioritize?" },
-  { label: "MCP vulnerabilities",       prompt: "Tell me about MCP vulnerabilities in the past 90 days" },
+  { label: "Deepfakes & disinformation", prompt: "What deepfake or AI-generated disinformation threats have emerged recently?" },
   { label: "AI as an attack tool",      prompt: "How is AI being used as an attack tool?" },
   { label: "Defender watch list",       prompt: "What should defenders watch in the next 90 days?" },
 ];
@@ -255,14 +255,16 @@ function StructuredText({ text, sourceRefs }) {
 function SourceButton({ c, index }) {
   const label = c.publisher || c.source_title || "Source";
   const short = label.length > 28 ? label.slice(0, 28) + "…" : label;
+  // Use the src-N number from c.ref so the footer number matches the inline [src-N] citation.
+  const num = c.ref ? (parseInt(c.ref.match(/\d+/)?.[0], 10) || index + 1) : index + 1;
   return c.url ? (
     <a href={c.url} target="_blank" rel="noopener noreferrer" className="hz-source-btn" title={c.source_title || label}>
-      <span className="hz-source-btn-num">{index + 1}</span>
+      <span className="hz-source-btn-num">{num}</span>
       {short}
     </a>
   ) : (
     <span className="hz-source-btn hz-source-btn-nolink" title={label}>
-      <span className="hz-source-btn-num">{index + 1}</span>
+      <span className="hz-source-btn-num">{num}</span>
       {short}
     </span>
   );
@@ -290,14 +292,22 @@ function Message({ msg, onFollowUp, showCost }) {
           General knowledge — not grounded in the corpus
         </div>
       )}
+      {msg.retrieval_verdict === "thin" && msg.answer_mode !== "general" && !msg.streaming && (
+        <div className="hz-answer-mode-badge hz-answer-mode-thin" title="The selector found relevant sources but judged coverage incomplete for this question — answer may have gaps.">
+          Limited coverage — answer may be incomplete
+        </div>
+      )}
       <div className="hz-msg-assistant-content">
         <StructuredText text={msg.content} sourceRefs={msg.source_refs} />
       </div>
 
       {msg.citations?.length > 0 && (() => {
+        const sorted = [...msg.citations].sort((a, b) =>
+          (parseInt(a.ref?.match(/\d+/)?.[0] || 0, 10)) - (parseInt(b.ref?.match(/\d+/)?.[0] || 0, 10))
+        );
         const isAIID = (c) => c.url?.includes("incidentdatabase.ai") || /ai incident database/i.test(c.publisher || "");
-        const main = msg.citations.filter(c => !isAIID(c));
-        const aiid = msg.citations.filter(c => isAIID(c));
+        const main = sorted.filter(c => !isAIID(c));
+        const aiid = sorted.filter(c => isAIID(c));
         return (
           <div className="hz-source-row">
             <span className="hz-source-row-label">Sources</span>
@@ -445,8 +455,10 @@ export function AskAgentPage() {
           const data = line.slice(5).trim();
           if (!data) continue;
           let e; try { e = JSON.parse(data); } catch { continue; }
-          if (e.type === "delta") {
-            setLast(prev => ({ ...prev, content: prev.content + e.text }));
+          if (e.type === "status") {
+            setLast(prev => ({ ...prev, status: e.text }));
+          } else if (e.type === "delta") {
+            setLast(prev => ({ ...prev, content: prev.content + e.text, status: null }));
           } else if (e.type === "done") {
             done = e;
             setLast({
@@ -463,8 +475,22 @@ export function AskAgentPage() {
               qa_issues:           e.qa_issues            || [],
               qa_pass:             e.qa_pass !== false,
               answer_mode:         e.answer_mode          || null,
+              retrieval_verdict:   e.retrieval_verdict    || null,
               streaming:           false,
             });
+            // Phase 2: run verifier in the background — separate Vercel call
+            // so synthesis completes within 10s. Patches answer if issues found.
+            if (e.answer && e.answer_mode === "grounded" && (e.source_refs || []).length) {
+              fetch("/api/agent-verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getSessionToken(session)}` },
+                body: JSON.stringify({ answer: e.answer, sources: e.source_refs || [], evidence: [] }),
+              }).then(r => r.ok ? r.json() : null).then(v => {
+                if (!v?.ran || !v.unsupported?.length) return;
+                const note = `\n\n**Note — the following specific claims could not be verified against the provided source summaries and may be inaccurate:**\n${v.unsupported.map(u => `- ${u}`).join("\n")}`;
+                setLast(prev => ({ ...prev, content: prev.content + note }));
+              }).catch(() => {});
+            }
           } else if (e.type === "error") {
             throw new Error(e.error);
           }
@@ -527,14 +553,15 @@ export function AskAgentPage() {
             <Message key={i} msg={msg} onFollowUp={send} showCost={isAdmin} />
           ))}
           {loading && (() => {
-            // Show "Thinking…" only until the first streamed token lands; once the
+            // Show status/progress until the first streamed token lands; once the
             // assistant bubble has content, the streaming text itself is the signal.
             const last = messages[messages.length - 1];
             const streamingWithText = last && last.role === "assistant" && last.content;
+            const statusText = last?.role === "assistant" ? last.status : null;
             return streamingWithText ? null : (
               <div className="hz-loading-dot">
                 <span className="hz-loading-dots"><span /><span /><span /></span>
-                Thinking…
+                {statusText || "Thinking…"}
               </div>
             );
           })()}
@@ -547,7 +574,7 @@ export function AskAgentPage() {
         <div className="hz-chat-window" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div className="hz-loading-dot">
             <span className="hz-loading-dots"><span /><span /><span /></span>
-            Thinking…
+            {(() => { const last = messages[messages.length - 1]; return last?.role === "assistant" && last.status ? last.status : "Thinking…"; })()}
           </div>
         </div>
       )}

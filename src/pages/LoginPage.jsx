@@ -25,7 +25,7 @@ function PasswordRules({ password }) {
   );
 }
 
-export function LoginPage({ mode: initialMode = "signin", isReset = false }) {
+export function LoginPage({ mode: initialMode = "signin" }) {
   const [mode,     setMode]     = useState(initialMode);
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
@@ -45,18 +45,6 @@ export function LoginPage({ mode: initialMode = "signin", isReset = false }) {
       setMode("setup");
     }
     setLoading(false);
-  }
-
-  async function handleForgot(e) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin,
-    });
-    setLoading(false);
-    if (error) { setError(error.message); return; }
-    setInfo("Check your inbox — a password reset link is on its way.");
   }
 
   async function handleSetup(e) {
@@ -109,53 +97,16 @@ export function LoginPage({ mode: initialMode = "signin", isReset = false }) {
             <button className="hz-login-btn" type="submit" disabled={loading}>
               {loading ? "Signing in…" : "Sign In"}
             </button>
-            <button
-              type="button"
-              className="hz-login-link"
-              onClick={() => { setError(null); setInfo(null); setMode("forgot"); }}
-            >
-              Forgot password?
-            </button>
-          </form>
-        )}
-
-        {mode === "forgot" && (
-          <form className="hz-login-form" onSubmit={handleForgot}>
-            <p className="hz-login-hint">
-              Enter your email and we'll send a reset link.
+            <p className="hz-login-hint" style={{ marginTop: "8px" }}>
+              Forgot your password? Email us.
             </p>
-            <input
-              className="hz-auth-input"
-              type="email"
-              placeholder="Email address"
-              autoComplete="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-            />
-            {error && <div className="hz-login-error">{error}</div>}
-            {info  && <div className="hz-login-info">{info}</div>}
-            {!info && (
-              <button className="hz-login-btn" type="submit" disabled={loading}>
-                {loading ? "Sending…" : "Send reset link"}
-              </button>
-            )}
-            <button
-              type="button"
-              className="hz-login-link"
-              onClick={() => { setError(null); setInfo(null); setMode("signin"); }}
-            >
-              Back to sign in
-            </button>
           </form>
         )}
 
         {mode === "setup" && (
           <form className="hz-login-form" onSubmit={handleSetup}>
             <p className="hz-login-hint">
-              {isReset
-                ? "Set a new password for your account."
-                : "Welcome to The Horizon. Set a permanent password to activate your account."}
+              Welcome to The Horizon. Set a permanent password to activate your account.
             </p>
             <input
               className="hz-auth-input"

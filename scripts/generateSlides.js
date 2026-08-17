@@ -27,7 +27,7 @@ import { parseArgs } from "node:util";
 
 import { put }                                    from "@vercel/blob";
 import { makeSupabaseClient, fetchSlideCorpus, attachEvidence } from "../lib/slides/fetchSlideCorpus.js";
-import { buildCategoryContext, CATEGORIES }       from "../lib/slides/buildCategoryContext.js";
+import { buildCategoryContext, CATEGORIES, isMajorTISource } from "../lib/slides/buildCategoryContext.js";
 import { generateCategoryReport }                 from "../lib/slides/generateCategoryReport.js";
 import { qaReport }                               from "../lib/slides/qaReport.js";
 import { planCategorySlides }                     from "../lib/slides/planCategorySlides.js";
@@ -126,6 +126,124 @@ function makeTimeframeLabel(dateFrom, dateTo) {
 }
 
 function log(msg) { process.stdout.write(`${msg}\n`); }
+
+// ── Markdown export ───────────────────────────────────────────────────────────
+
+function renderDeckMarkdown({ generated_at, timeframe, date_from, date_to, window: win, source_count, slide_count, deck }) {
+  const lines = [];
+  const push = (...args) => lines.push(...args);
+
+  push(
+    `# AI Cyber Threat Horizon Scan — ${timeframe}`,
+    ``,
+    `Generated: ${generated_at.replace("T", " ").slice(0, 19)} UTC | Window: ${win} | Sources: ${source_count} | Slides: ${slide_count}`,
+    `Period: ${date_from} → ${date_to}`,
+    ``,
+  );
+
+  const CONFIDENCE_ICON = { high: "🔴", medium: "🟡", low: "⚪" };
+  const MATURITY_ICON   = { emerging: "🌱", active: "⚡", established: "🔒" };
+
+  for (const slide of (deck?.slides || [])) {
+    switch (slide.type) {
+
+      case "cover":
+        push(`---`, ``, `## Cover`, ``, `> ${slide.headline}`, ``);
+        break;
+
+      case "overview":
+        push(`---`, ``, `## Overview — ${slide.headline}`, ``);
+        for (const b of (slide.bullets || [])) {
+          const role  = (b.role || b.bullet_role || "").toUpperCase();
+          const label = role ? `**[${role}]** ` : "";
+          push(`- ${label}${b.text}`);
+        }
+        push(``);
+        break;
+
+      case "section_summary": {
+        const cat = slide.category?.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) || slide.headline;
+        push(`---`, ``, `## ${cat}`, ``, `> ${slide.category_summary || ""}`, ``);
+        if (slide.shift_headlines?.length) {
+          push(`**Shifts covered:**`);
+          for (const h of slide.shift_headlines) push(`- ${h}`);
+          push(``);
+        }
+        break;
+      }
+
+      case "strategic_shift": {
+        const conf = CONFIDENCE_ICON[slide.confidence] || "";
+        const mat  = MATURITY_ICON[slide.maturity]    || "";
+        push(
+          `### ${mat}${conf} [Strategic Shift] ${slide.headline}`,
+          ``,
+          `**Takeaway:** ${slide.takeaway || ""}`,
+          ``,
+          `**Confidence:** ${slide.confidence || "—"} | **Maturity:** ${slide.maturity || "—"}`,
+          ``,
+        );
+        for (const b of (slide.bullets || [])) {
+          const refs  = (b.cite_nums || []).map(n => `[${n}]`).join("");
+          const role  = (b.role || b.bullet_role || "").toUpperCase();
+          const label = role ? `**[${role}]** ` : "";
+          push(`- ${label}${b.text}${refs ? " " + refs : ""}`);
+        }
+        if (slide.implication) push(``, `**Implication:** ${slide.implication}`);
+        if (slide._footnotes?.length) {
+          push(``, `*Sources: ${slide._footnotes.map(f => `[${f.num}] ${f.publisher}`).join(", ")}*`);
+        }
+        push(``);
+        break;
+      }
+
+      case "case_study": {
+        push(
+          `### 🔍 [Case Study] ${slide.headline}`,
+          ``,
+        );
+        if (slide.named_entity) push(`**Entity:** ${slide.named_entity}`, ``);
+        for (const b of (slide.bullets || [])) {
+          const refs  = (b.cite_nums || []).map(n => `[${n}]`).join("");
+          const role  = (b.role || b.bullet_role || "").toUpperCase();
+          const label = role ? `**[${role}]** ` : "";
+          push(`- ${label}${b.text}${refs ? " " + refs : ""}`);
+        }
+        if (slide.diagram_spec?.steps?.length) {
+          const chain = slide.diagram_spec.steps
+            .map(s => (typeof s === "string" ? s : s.step || JSON.stringify(s)))
+            .join(" → ");
+          push(``, `**Attack chain:** ${chain}`);
+        }
+        if (slide._footnotes?.length) {
+          push(``, `*Sources: ${slide._footnotes.map(f => `[${f.num}] ${f.publisher}`).join(", ")}*`);
+        }
+        push(``);
+        break;
+      }
+
+      case "outlook_structured":
+        push(`---`, ``, `## 📅 ${slide.headline}`, ``);
+        for (const item of (slide.watch_items || [])) {
+          const label = item.label ? `**${item.label}:** ` : "";
+          push(`- ${label}${item.text || item}`);
+        }
+        if (slide.caveat) push(``, `> ⚠ ${slide.caveat}`);
+        push(``);
+        break;
+
+      case "references":
+        push(`---`, ``, `## References`, ``);
+        for (const r of (slide.bullets || [])) {
+          push(`- [${r.ref_num}] **${r.publisher}** — [${r.title}](${r.url})`);
+        }
+        push(``);
+        break;
+    }
+  }
+
+  return lines.join("\n");
+}
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -234,6 +352,194 @@ async function main() {
     }
   }
 
+  // ── Retry categories where the LLM call returned empty (once, sequential) ──
+  // Promise.allSettled swallows null LLM responses as fulfilled-but-empty.
+  // Retry gives transient platform errors a second chance before the category
+  // is silently absent from the deck.
+  const emptyDueToLlm = activeCategories.filter(cat => {
+    const rep = categoryReports[cat];
+    return rep &&
+      (rep.strategic_shifts || []).length === 0 &&
+      (rep.coverage_gaps || []).some(g => g.includes("LLM call returned empty"));
+  });
+  if (emptyDueToLlm.length) {
+    log(`\n  Retrying ${emptyDueToLlm.length} empty category report(s)…`);
+    for (const cat of emptyDueToLlm) {
+      const retry = await generateCategoryReport(cat, contexts[cat], timeframeLabel, dateFrom, dateTo);
+      if ((retry.strategic_shifts || []).length > 0) {
+        categoryReports[cat] = retry;
+        log(`  ✓ ${cat}: retry succeeded (${retry.strategic_shifts.length} shifts)`);
+      } else {
+        log(`  ✗ ${cat}: retry still empty — category will be absent from deck`);
+      }
+    }
+  }
+
+  // ── Maturity ceiling enforcement (deterministic, post-LLM) ───────────────
+  // LLMs assign maturity labels from the prompt's ceiling table, but do so
+  // inconsistently for edge cases. These caps enforce the table in code.
+  //
+  // The ceiling table mirrors the prompt exactly:
+  //   realized  → operational_campaign (uncapped — confirmed in-wild)
+  //   proven    → observed_exploitation (PoC in controlled conditions)
+  //   research  → research_demonstration (lab/academic only)
+  //   reference → disclosed_vulnerability (advisory/governance signal)
+  //   unknown   → disclosed_vulnerability (conservative default)
+  //
+  // Additionally: a shift citing only a single unique source URL cannot be
+  // adversary_adoption or operational_campaign — those labels require
+  // "two or more independent incidents" or a "documented sustained campaign."
+  //
+  // Attribution cap: when all cited sources are non-primary-intel publishers
+  // (secondary aggregators, news sites) and the shift makes a nation-state/APT
+  // attribution claim, confidence is forced to "low" and the takeaway is hedged.
+
+  // Ceiling for each importance tier (prompt ceiling table, deterministic)
+  const TIER_CEILING = {
+    realized:  5, // operational_campaign — no cap
+    proven:    3, // observed_exploitation
+    research:  1, // research_demonstration
+    reference: 2, // disclosed_vulnerability
+    unknown:   2, // conservative default
+  };
+  const MAT_RANK = {
+    operational_campaign: 5, adversary_adoption: 4, observed_exploitation: 3,
+    disclosed_vulnerability: 2, research_demonstration: 1,
+  };
+  const MAT_FROM_RANK = {
+    5: "operational_campaign", 4: "adversary_adoption", 3: "observed_exploitation",
+    2: "disclosed_vulnerability", 1: "research_demonstration",
+  };
+
+  // Attribution keywords that trigger the secondary-source attribution cap
+  const ATTRIBUTION_RE = /china[\s-]linked|china[\s-]align|nation[\s-]state|state[\s-]actor|apt\s*\d|espionage group|state[\s-]sponsored|state actor/i;
+
+  function capShiftMaturity(shift, sourceIndex) {
+    const labels = (shift.supporting_evidence || []).flatMap(e => e.cited_sources || []);
+    if (!labels.length) return shift;
+
+    // All caps applied sequentially on a mutable copy — no early returns — so a
+    // shift can receive multiple caps in one pass (e.g. ceiling table lowers
+    // maturity AND attribution cap lowers confidence on the same shift).
+    let s = { ...shift };
+
+    // 1. Ceiling table: cap maturity to the highest level any cited source supports
+    let allowedRank = 0;
+    for (const l of labels) {
+      const tier = sourceIndex[l]?.importance_tier || "unknown";
+      const ceiling = TIER_CEILING[tier] ?? 2;
+      if (ceiling > allowedRank) allowedRank = ceiling;
+    }
+    if ((MAT_RANK[s.maturity] || 0) > allowedRank) {
+      const newMaturity = MAT_FROM_RANK[allowedRank] || "disclosed_vulnerability";
+      log(`  ↳ capped maturity (ceiling table): ${s.headline?.slice(0, 55)} (${s.maturity} → ${newMaturity})`);
+      s = { ...s, maturity: newMaturity, confidence: s.confidence === "high" ? "moderate" : s.confidence };
+    }
+
+    // 2. Single unique source cannot establish a sustained campaign
+    const uniqueUrls = new Set(labels.map(l => sourceIndex[l]?.source_url).filter(Boolean));
+    if (uniqueUrls.size <= 1 && (MAT_RANK[s.maturity] || 0) >= 4) {
+      log(`  ↳ capped maturity (single source): ${s.headline?.slice(0, 55)} (${s.maturity} → observed_exploitation)`);
+      s = { ...s, maturity: "observed_exploitation", confidence: s.confidence === "high" ? "moderate" : s.confidence };
+    }
+
+    // 3. Attribution cap: state-actor/APT claim not sourced from a major TI publisher.
+    // Uses isMajorTISource (URL patterns only) — avoids trust_tier=primary mis-tags
+    // on aggregators and news outlets from bypassing the cap.
+    // When cap fires: confidence → low, maturity → disclosed_vulnerability max,
+    // takeaway prefixed with "Reporting suggests". Preserves proper-noun capitalisation
+    // by only lowercasing the first char when it would produce "china" → avoid that
+    // by keeping the original case for the second word onward.
+    const bulletText = (s.supporting_evidence || []).map(e => e.fact || "").join(" ");
+    if (ATTRIBUTION_RE.test(bulletText) || ATTRIBUTION_RE.test(s.takeaway || "")) {
+      const anyMajorTI = labels.some(l => isMajorTISource(sourceIndex[l]?.source_url || ""));
+      if (!anyMajorTI && s.confidence !== "low") {
+        log(`  ↳ attribution cap: ${s.headline?.slice(0, 55)} — no major TI source, confidence → low, maturity ≤ disclosed_vulnerability`);
+        let hedgedTakeaway = s.takeaway || "";
+        if (!hedgedTakeaway.startsWith("Reporting suggests") && !hedgedTakeaway.startsWith("Unverified")) {
+          // Lowercase only a leading single-word article/pronoun, not proper nouns.
+          // If the takeaway starts with a proper noun (capital letter that isn't I/A),
+          // keep it capitalized to avoid "china-aligned" artifacts.
+          const firstWord = hedgedTakeaway.split(" ")[0] || "";
+          const safeFirstChar = /^[A-Z]{2,}/.test(firstWord) || /^[A-Z][a-z]{2,}/.test(firstWord)
+            ? hedgedTakeaway   // starts with proper noun — don't lowercase
+            : hedgedTakeaway.charAt(0).toLowerCase() + hedgedTakeaway.slice(1);
+          hedgedTakeaway = `Reporting suggests ${safeFirstChar}`;
+        }
+        const cappedMaturity = (MAT_RANK[s.maturity] || 0) > 2
+          ? "disclosed_vulnerability"
+          : s.maturity;
+        s = { ...s, confidence: "low", maturity: cappedMaturity, takeaway: hedgedTakeaway };
+      }
+    }
+
+    // 4. Research_demonstration confidence must be low (Gate 1 Exception B requirement).
+    if (s.maturity === "research_demonstration" && s.confidence !== "low") {
+      log(`  ↳ research confidence → low: ${s.headline?.slice(0, 55)}`);
+      s = { ...s, confidence: "low" };
+    }
+
+    // 5. Academic/preprint source cap: all-arXiv/preprint shifts cannot exceed
+    // research_demonstration even if the DB tagged a paper as "proven" importance.
+    const ACADEMIC_TYPES = new Set(["academic_paper", "preprint", "arxiv", "conference_paper"]);
+    const allAcademic = labels.length > 0 &&
+      labels.every(l => ACADEMIC_TYPES.has(sourceIndex[l]?.source_type?.toLowerCase() || ""));
+    if (allAcademic && (MAT_RANK[s.maturity] || 0) > 2) {
+      log(`  ↳ academic cap: ${s.headline?.slice(0, 55)} (${s.maturity} → research_demonstration)`);
+      s = { ...s, maturity: "research_demonstration", confidence: "low" };
+    }
+
+    return s;
+  }
+
+  for (const cat of activeCategories) {
+    const report = categoryReports[cat];
+    if (!report) continue;
+    const idx = contexts[cat]?.sourceIndex || {};
+    report.strategic_shifts = (report.strategic_shifts || []).map(s => capShiftMaturity(s, idx));
+  }
+
+  // ── Cross-category CVE/incident dedup (Fix 1b) ───────────────────────────
+  // Each category is synthesised independently, so the same CVE or named
+  // incident can appear in two sections. Extract CVEs from bullet text and
+  // apply the boundary rule: Agentic/AI-Enabled overlaps resolve to AI-Enabled
+  // (the agent-as-attacker framing owns offensive-agent incidents).
+  //
+  // This is deterministic — no LLM call. It removes the lower-priority
+  // occurrence from supporting_evidence citations, shrinking that shift's
+  // evidence. The post-QA gate then drops the shift if it reaches zero bullets.
+  {
+    const CVE_RE = /CVE-\d{4}-\d+/gi;
+    const catShiftTexts = {}; // cat → Set of CVEs across all its shifts
+
+    for (const cat of activeCategories) {
+      catShiftTexts[cat] = new Set();
+      for (const shift of categoryReports[cat]?.strategic_shifts || []) {
+        for (const ev of shift.supporting_evidence || []) {
+          for (const m of (ev.fact || "").matchAll(CVE_RE)) {
+            catShiftTexts[cat].add(m[0].toUpperCase());
+          }
+        }
+      }
+    }
+
+    // Boundary rule: Agentic/AI-Enabled overlap → keep in AI-Enabled only.
+    const agCves = catShiftTexts["agentic_ai_threats"]   || new Set();
+    const aiCves = catShiftTexts["ai_enabled_threats"]   || new Set();
+    const shared = [...agCves].filter(c => aiCves.has(c));
+
+    if (shared.length && categoryReports["agentic_ai_threats"]) {
+      for (const shift of categoryReports["agentic_ai_threats"].strategic_shifts || []) {
+        shift.supporting_evidence = (shift.supporting_evidence || []).filter(ev => {
+          const evCves = [...(ev.fact || "").matchAll(CVE_RE)].map(m => m[0].toUpperCase());
+          const hasDup = evCves.some(c => shared.includes(c));
+          if (hasDup) log(`  ↳ dedup: removed "${ev.fact?.slice(0, 60)}…" from agentic (CVE owned by ai_enabled)`);
+          return !hasDup;
+        });
+      }
+    }
+  }
+
   // ── Fetch full_text for every cited source (once) ─────────────────────────
   // Both the deterministic scrub and the QA gate ground on full_text — the same
   // basis the insight layer uses — not the ~550-char short_summary. Fetch the
@@ -266,12 +572,14 @@ async function main() {
     }
   }
 
-  // ── Steps 4+5: QA + Outlook + Overview in parallel ───────────────────────
-  log("\nSteps 4+5/6  QA checks + Outlook + Overview (parallel)…");
+  // ── Step 4: QA + Outlook in parallel ────────────────────────────────────
+  // Overview is generated AFTER QA + post-QA gate so it only references shifts
+  // that will actually appear in the deck. Outlook is independent of QA results
+  // so it stays in this parallel batch.
+  log("\nStep 4/6  QA checks + Outlook (parallel)…");
   const allReports = activeCategories.map(c => categoryReports[c]).filter(Boolean);
 
-  // Skip cross-category slides in single-category debug mode — they'd misrepresent the deck
-  const [qaResultPairs, outlookRaw, overviewRaw] = await Promise.all([
+  const [qaResultPairs, outlookRaw] = await Promise.all([
     Promise.all(
       activeCategories.map(async cat => {
         const report = categoryReports[cat];
@@ -281,17 +589,20 @@ async function main() {
       })
     ),
     singleCat ? Promise.resolve(null) : generateOutlookSlide(allReports, timeframeLabel, dateFrom, dateTo),
-    singleCat ? Promise.resolve(null) : generateOverviewSlide(allReports, timeframeLabel, dateFrom, dateTo),
   ]);
 
   const qaResults = Object.fromEntries(qaResultPairs);
   for (const cat of activeCategories) {
     const qa = qaResults[cat];
     if (!qa) continue;
-    if (qa.citation_issue_count > 0)   log(`  ⚠ ${cat}: ${qa.citation_issue_count} citation issues fixed`);
-    if (qa.entailment_issue_count > 0) log(`  ⚠ ${cat}: ${qa.entailment_issue_count} entailment issue(s) (corrected/dropped)`);
-    if (qa.citation_issue_count === 0 && qa.entailment_issue_count === 0) log(`  ✓ ${cat}: QA passed`);
-    // Surface each gated bullet so it can be reviewed (non-blocking).
+    if (qa.citation_issue_count > 0)        log(`  ⚠ ${cat}: ${qa.citation_issue_count} citation issues fixed`);
+    if (qa.case_study_mismatch_count > 0)   log(`  ⚠ ${cat}: ${qa.case_study_mismatch_count} case study citation(s) removed (topic mismatch)`);
+    if (qa.entailment_issue_count > 0)      log(`  ⚠ ${cat}: ${qa.entailment_issue_count} entailment issue(s) (corrected/dropped)`);
+    if (qa.coherence_issue_count > 0)       log(`  ⚠ ${cat}: ${qa.coherence_issue_count} shift(s) dropped (incoherent — bullets don't support headline)`);
+    const totalIssues = (qa.citation_issue_count || 0) + (qa.case_study_mismatch_count || 0) +
+                        (qa.entailment_issue_count || 0) + (qa.coherence_issue_count || 0);
+    if (totalIssues === 0) log(`  ✓ ${cat}: QA passed`);
+    // Surface each gated item for review (non-blocking).
     for (const iss of qa.issues || []) {
       if (iss.type === "entailment_failure") {
         log(`      ↳ DROPPED [${iss.cited}] "${iss.bullet}${iss.bullet?.length >= 100 ? "…" : ""}"`);
@@ -301,9 +612,63 @@ async function main() {
         if (iss.reason) log(`         reason: ${iss.reason}`);
       } else if (iss.type === "unresolvable_citation") {
         log(`      ↳ dropped citation ${iss.label} (${iss.context})`);
+      } else if (iss.type === "case_study_citation_mismatch") {
+        log(`      ↳ removed case study citation [${iss.label}] — "${iss.source}" does not match entity "${iss.entity}"`);
+      } else if (iss.type === "shift_incoherent") {
+        log(`      ↳ DROPPED shift "${iss.headline}" — bullets do not support headline`);
       }
     }
   }
+
+  // ── Post-QA gate: drop shifts that lost all evidence bullets ────────────
+  // qaReport entailment may drop every bullet from a shift. A shift with zero
+  // supporting_evidence is assertion without evidence — remove it before
+  // planCategorySlides runs so it never reaches the deck.
+  for (const cat of activeCategories) {
+    const report = categoryReports[cat];
+    if (!report) continue;
+    const before = (report.strategic_shifts || []).length;
+    report.strategic_shifts = (report.strategic_shifts || [])
+      .filter(s => (s.supporting_evidence || []).length >= 1);
+    const dropped = before - report.strategic_shifts.length;
+    if (dropped > 0)
+      log(`  ✗ ${cat}: dropped ${dropped} shift(s) with no evidence after QA`);
+  }
+
+  // ── Category floor: regenerate if QA cleared an entire category ─────────
+  // When entailment + coherence gates together eliminate all shifts from a
+  // category that had sources, attempt one fallback regeneration without
+  // entailment QA. This ensures every category with ≥3 sources produces at
+  // least one shift in the deck rather than silently disappearing.
+  if (!skipQa) {
+    const clearedCats = activeCategories.filter(cat => {
+      const report = categoryReports[cat];
+      return report &&
+        (report.strategic_shifts || []).length === 0 &&
+        (contexts[cat]?.sources || []).length >= 3;
+    });
+    if (clearedCats.length) {
+      log(`\n  Category floor: ${clearedCats.length} category(ies) cleared by QA — regenerating without entailment…`);
+      for (const cat of clearedCats) {
+        const fallback = await generateCategoryReport(cat, contexts[cat], timeframeLabel, dateFrom, dateTo);
+        if ((fallback.strategic_shifts || []).length > 0) {
+          const idx = contexts[cat]?.sourceIndex || {};
+          fallback.strategic_shifts = fallback.strategic_shifts.map(s => capShiftMaturity(s, idx));
+          categoryReports[cat] = fallback;
+          log(`  ✓ ${cat}: floor fallback succeeded (${fallback.strategic_shifts.length} shifts, no entailment QA)`);
+        } else {
+          log(`  ✗ ${cat}: floor fallback also empty — category absent from deck`);
+        }
+      }
+    }
+  }
+
+  // ── Step 4b: Overview — generated after QA + gate so it only sees deck-visible shifts ──
+  log("\nStep 4b/6  Generating overview (post-QA)…");
+  const postQaReports = activeCategories.map(c => categoryReports[c]).filter(Boolean);
+  const overviewRaw = singleCat
+    ? null
+    : await generateOverviewSlide(postQaReports, timeframeLabel, dateFrom, dateTo);
 
   // ── Step 5 (cont): Plan category slides ──────────────────────────────────
   log("\nStep 5/6  Planning slides…");
@@ -394,6 +759,20 @@ async function main() {
   }, null, 2));
   log(`  JSON saved → ${jsonOutPath}`);
 
+  // ── Save human-readable Markdown for auditing ─────────────────────────────
+  const mdOutPath = outPath.replace(/\.pptx$/i, ".md");
+  fs.writeFileSync(mdOutPath, renderDeckMarkdown({
+    generated_at: new Date().toISOString(),
+    timeframe:    timeframeLabel,
+    date_from:    dateFrom,
+    date_to:      dateTo,
+    window:       argv.window || "custom",
+    source_count: allSources.length,
+    slide_count,
+    deck,
+  }));
+  log(`  MD  saved → ${mdOutPath}`);
+
   // ── Persist to Vercel Blob + Supabase so the dashboard can find the deck ──
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     log("\nPersisting deck…");
@@ -438,6 +817,14 @@ async function main() {
         contentType: "application/json",
       });
       log(`  JSON uploaded → ${jsonUrl}`);
+
+      // Upload Markdown (human-readable audit copy)
+      const mdContent = fs.readFileSync(mdOutPath, "utf8");
+      const { url: mdUrl } = await put(`${blobBase}.md`, mdContent, {
+        ...blobOpts,
+        contentType: "text/markdown",
+      });
+      log(`  MD  uploaded → ${mdUrl}`);
 
       const { error } = await supabase.from("decks").upsert({
         deck_id:             deckId,

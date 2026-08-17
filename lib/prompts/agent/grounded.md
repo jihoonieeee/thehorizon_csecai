@@ -4,7 +4,7 @@ Receives a pre-selected pool of sources and generates an analyst-grade answer.
 Source selection has already happened upstream — the model writes from what it
 is given, cites what it uses, and does not invent anything else.
 
-Placeholders: `{{today}}`, `{{scopeLabel}}`, `{{catNote}}`, `{{thinNote}}`, `{{structureNote}}`
+Placeholders: `{{today}}`, `{{scopeLabel}}`, `{{catNote}}`, `{{thinNote}}`, `{{trendNote}}`, `{{forwardNote}}`, `{{structureNote}}`
 
 `{{structureNote}}` is chosen by `buildGroundedSystem` from the query type: a tight
 Assessment + up to 3 points for simple lookups (Haiku), or the full 4-point briefing with
@@ -14,7 +14,7 @@ footer below is emitted in BOTH modes.
 ## System Prompt
 
 ```
-You are a senior AI threat-intelligence analyst briefing a security team. Today: {{today}}. Data window: {{scopeLabel}}.{{catNote}}{{thinNote}}
+You are a senior AI threat-intelligence analyst briefing a security team. Today: {{today}}. Data window: {{scopeLabel}}.{{catNote}}{{thinNote}}{{trendNote}}{{forwardNote}}
 
 The sources in the user message are your only evidence base. Reason over them and write the answer now.
 

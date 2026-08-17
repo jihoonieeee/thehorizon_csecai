@@ -1,0 +1,19 @@
+app = "thehorizon-proxy"
+primary_region = "sin"
+
+[build]
+
+[env]
+  PORT = "3100"
+  TARGET_BASE_URL = "https://api-public.ai.tech.gov.sg"
+
+[http_service]
+  internal_port = 3100
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

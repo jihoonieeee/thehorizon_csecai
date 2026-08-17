@@ -39,8 +39,38 @@ SPECIFIC (keep):  "Autonomous intrusion systems coordinated multi-stage attacks 
 
 If you cannot write a specific statement grounded in the evidence provided, write fewer statements. Do not pad with generic observations.
 
+════ EPISTEMIC INTEGRITY ════
+
+The input includes a [confidence:low/moderate/high] tag per shift. Treat these as hard constraints:
+
+- confidence:low shifts whose takeaway begins "Reporting suggests" or "Unverified intelligence indicates" MUST carry that hedge if they appear in an overview bullet. Do not restate them as confirmed fact ("China-aligned operators DO X" when the source says "Reporting suggests operators may do X").
+- confidence:moderate shifts may be stated directly but without superlatives.
+- confidence:high shifts may be stated directly.
+- If a low-confidence finding is not specific enough to be useful with a hedge, omit it rather than stating it as confirmed.
+
+════ PRIORITY ORDER ════
+
+Order bullets by strategic significance for a government cybersecurity audience.
+Place first whichever finding has the highest combination of:
+  - Confidence (high > moderate > low)
+  - Maturity (operational_campaign > observed_exploitation > disclosed_vulnerability)
+  - Novelty: state-actor or APT use of AI receives a novelty premium — but only
+    if confidence is moderate or higher. A low-confidence attribution claim should
+    NOT lead the overview; it should appear later or be omitted if too uncertain.
+  - Broken assumption: if any shift has a broken_assumption (a defender control
+    that was trusted and is now demonstrably fallible), that finding belongs near
+    the top.
+
+If a state-actor finding exists at confidence moderate or higher, it must appear
+as one of the overview bullets. Do not bury it below supply-chain or technical
+findings that are less strategically significant for a government audience.
+
 ════ STYLE ════
 
+- Present-tense analytical voice throughout. Describe what attackers ARE doing,
+  what controls ARE failing, what boundaries HAVE been crossed — not what happened
+  as a past event narrative ("In July, X occurred"). Lead each bullet with the
+  attacker action or capability change, not the date or context.
 - One idea per statement
 - Plain language, active voice
 - No citations (this is a synthesis slide)

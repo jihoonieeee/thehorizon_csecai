@@ -57,6 +57,13 @@ Apply these six criteria in order. Each refines the pool from the previous.
    vulnerabilities, research, and strategic signals — weighted by what the period
    actually produced.
 
+   CATEGORY FLOOR (hard rule): The newsletter covers four threat categories —
+   Traditional AI Threats, LLM Threats, Agentic AI Threats, and AI-Enabled Threats.
+   If the candidate pool contains at least one source in a category with significance
+   ≥ notable OR a non-null broken_assumption, you MUST include at least one source
+   from that category. Do not leave an entire category absent when qualifying sources
+   exist. Apply this floor BEFORE allocating any surplus slots.
+
 6. DEDUPLICATION
    Treat duplication at the story level, not the source level. Multiple articles about
    the same incident, paper, CVE, or product launch are one story — select the most

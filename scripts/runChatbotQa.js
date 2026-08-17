@@ -14,11 +14,16 @@
  * Requires: ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
  *
  * Usage:
- *   node scripts/runChatbotQa.js                 # all cases
+ *   node scripts/runChatbotQa.js                      # all cases
  *   node scripts/runChatbotQa.js --category hallucination_resistance
  *   node scripts/runChatbotQa.js --id BR-01,HR-01
- *   node scripts/runChatbotQa.js --verbose       # print each answer
- *   node scripts/runChatbotQa.js --json out.json # also write machine-readable report
+ *   node scripts/runChatbotQa.js --verbose            # print each answer (400 chars)
+ *   node scripts/runChatbotQa.js --verbose-full       # print each answer (full text)
+ *   node scripts/runChatbotQa.js --review             # clean formatted output for human quality inspection
+ *   node scripts/runChatbotQa.js --json out.json      # also write machine-readable report
+ *   node scripts/runChatbotQa.js --delay 2000         # ms to wait between cases (default 2000)
+ *                                                     # prevents Supabase connection exhaustion
+ *                                                     # on full 62-case runs; use 0 for --id runs
  */
 import "dotenv/config";
 import { writeFileSync } from "node:fs";
@@ -28,10 +33,16 @@ import { evaluateCase, verdictFor } from "../tests/chatbotQa/evaluators.js";
 
 const args    = process.argv.slice(2);
 const getArg  = (f) => { const i = args.indexOf(f); return i >= 0 ? args[i + 1] : null; };
-const VERBOSE = args.includes("--verbose");
+const VERBOSE      = args.includes("--verbose") || args.includes("--verbose-full");
+const VERBOSE_FULL = args.includes("--verbose-full");
+const REVIEW       = args.includes("--review");   // clean formatted output for human quality inspection
 const ONLY_CAT = getArg("--category");
 const ONLY_IDS = getArg("--id")?.split(",").map(s => s.trim());
 const JSON_OUT = getArg("--json");
+// Inter-case delay prevents Supabase HTTP keep-alive sockets from exhausting the
+// connection pool on full 62-case runs. Defaults to 2 s; pass --delay 0 for
+// targeted --id runs where connection exhaustion is not a risk.
+const INTER_CASE_DELAY = parseInt(getArg("--delay") ?? "2000", 10);
 
 for (const k of ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]) {
   if (!process.env[k]) { console.error(`Missing env: ${k}. This runner needs live keys.`); process.exit(1); }
@@ -76,6 +87,68 @@ const cases = TEST_CASES
 
 const V_COLOR = { Excellent: "\x1b[32m", Acceptable: "\x1b[33m", Fail: "\x1b[31m" };
 const RESET = "\x1b[0m";
+const W = 72; // terminal width for review output
+
+function printReview(tc, payload, results, verdict, err, ms) {
+  const vColor = V_COLOR[verdict] || "";
+  const bar = "═".repeat(W);
+  const div = "─".repeat(W);
+  const label = `${tc.id} │ ${tc.category}`;
+  const vLabel = `[${verdict}]`;
+  const pad = Math.max(0, W - label.length - vLabel.length - 3);
+  console.log(`\n${vColor}╔${bar}╗`);
+  console.log(`║ ${label}${" ".repeat(pad)}${vLabel} ║`);
+  console.log(`╚${bar}╝${RESET}`);
+  console.log(`\nQ: ${tc.question}\n`);
+
+  if (err) {
+    console.log(`\x1b[31mERROR: ${err}\x1b[0m\n`);
+    return;
+  }
+
+  // Metadata line
+  const meta = [
+    `mode: ${payload.answer_mode || "?"}`,
+    `confidence: ${payload.confidence || "?"}`,
+    `scope: ${payload.temporal_scope || "?"}`,
+    `citations: ${(payload.citations || []).length}`,
+    ms != null ? `${(ms / 1000).toFixed(1)}s` : null,
+  ].filter(Boolean).join("  │  ");
+  console.log(`\x1b[90m${meta}\x1b[0m`);
+
+  // Full answer with preserved line breaks — strip only [src-N] markers for readability
+  // (keep them for reviewers who want to spot citation placement)
+  console.log(`\n${div}`);
+  console.log((payload.answer || "(No answer generated)").trim());
+  console.log(div);
+
+  // Sources — show each cited source with trust tier and date
+  const sourceRefs = payload.source_refs || [];
+  const citations  = payload.citations  || [];
+  if (citations.length) {
+    console.log("\nSOURCES:");
+    for (const c of citations) {
+      const n   = parseInt(c.ref?.match(/\d+/)?.[0] || 0, 10);
+      const src = sourceRefs[n - 1] || {};
+      const tier = src.trust_tier ? `[${src.trust_tier}]` : "";
+      const date = src.date ? ` · ${src.date}` : "";
+      const pub  = c.publisher ? ` · ${c.publisher}` : "";
+      console.log(`  [${n}] ${c.source_title || "Unknown"}${pub}${date} ${tier}`);
+      if (c.url) console.log(`      ${c.url}`);
+    }
+  }
+
+  // Evaluator results — show all applicable ones
+  const applicable = results.filter(r => r.applicable);
+  if (applicable.length) {
+    console.log("\nEVALUATORS:");
+    for (const r of applicable) {
+      const icon = r.pass === true ? "\x1b[32m✓\x1b[0m" : r.pass === false ? "\x1b[31m✗\x1b[0m" : "\x1b[33m?\x1b[0m";
+      console.log(`  ${icon} ${r.id}: ${r.detail}`);
+    }
+  }
+  console.log("");
+}
 const tally = { Excellent: 0, Acceptable: 0, Fail: 0, Error: 0 };
 const report = [];
 let totalCost = 0;          // summed estimated_cost_usd across cases
@@ -97,26 +170,34 @@ for (const tc of cases) {
   const cost = payload?.token_usage?.estimated_cost_usd || 0;
   if (!err) { totalCost += cost; if (ms != null) latencies.push(ms); if (payload?.token_usage?.model) models.add(payload.token_usage.model); }
 
-  const color = V_COLOR[verdict] || "";
-  const meta = err ? "" : `  \x1b[90m(${(ms/1000).toFixed(1)}s · $${cost.toFixed(4)})${RESET}`;
-  console.log(`${color}[${verdict}]${RESET} ${tc.id} (${tc.category})  ${tc.question}${meta}`);
-  if (err) {
-    console.log(`      error: ${err}`);
+  if (REVIEW) {
+    printReview(tc, payload || {}, results, verdict, err, ms);
   } else {
-    for (const r of results) {
-      if (r.pass === false)      console.log(`      ✗ ${r.id}: ${r.detail}`);
-      else if (r.pass === null && r.applicable) console.log(`      ? ${r.id}: ${r.detail}`);
-    }
-    if (VERBOSE) {
-      console.log(`      answer: ${(payload.answer || "").replace(/\s+/g, " ").slice(0, 400)}`);
-      console.log(`      citations: ${(payload.citations || []).length} | confidence: ${payload.confidence} | scope: ${payload.temporal_scope}`);
+    const color = V_COLOR[verdict] || "";
+    const meta = err ? "" : `  \x1b[90m(${(ms/1000).toFixed(1)}s · $${cost.toFixed(4)})${RESET}`;
+    console.log(`${color}[${verdict}]${RESET} ${tc.id} (${tc.category})  ${tc.question}${meta}`);
+    if (err) {
+      console.log(`      error: ${err}`);
+    } else {
+      for (const r of results) {
+        if (r.pass === false)      console.log(`      ✗ ${r.id}: ${r.detail}`);
+        else if (r.pass === null && r.applicable) console.log(`      ? ${r.id}: ${r.detail}`);
+      }
+      if (VERBOSE) {
+        const answerText = (payload.answer || "").replace(/\s+/g, " ");
+        console.log(`      answer: ${VERBOSE_FULL ? answerText : answerText.slice(0, 400)}`);
+        console.log(`      mode: ${payload.answer_mode || "?"} | citations: ${(payload.citations || []).length} | confidence: ${payload.confidence} | scope: ${payload.temporal_scope}`);
+      }
     }
   }
   report.push({ id: tc.id, category: tc.category, question: tc.question, verdict, error: err,
     latency_ms: ms, cost_usd: cost, token_usage: payload?.token_usage,
     results, answer: payload?.answer, citations: payload?.citations, source_refs: payload?.source_refs,
     confidence: payload?.confidence, temporal_scope: payload?.temporal_scope,
+    answer_mode: payload?.answer_mode, retrieval_verdict: payload?.retrieval_verdict,
     qa_pass: payload?.qa_pass, qa_blocked: payload?.qa_blocked });
+
+  if (INTER_CASE_DELAY > 0) await new Promise(r => setTimeout(r, INTER_CASE_DELAY));
 }
 
 // Cost + latency stats.

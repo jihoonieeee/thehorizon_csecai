@@ -55,6 +55,13 @@ HARD RULES for reconciliation notes:
 WRONG: "The ANSWER attributes the axios compromise to March 31, 2026, but [src-16] documents May 2026. The ANSWER should clarify whether these are two separate incidents. Readers should verify the axios timeline."
 RIGHT: "Sources conflict on the axios date: [src-16] places this in May 2026 while [src-18] provides no date. The March 2026 date cited above is unconfirmed."
 
+STEP 2B — TEMPORAL SCOPE CHECK
+The user context includes a "Data window:" label. If a specific date, month, or year appears in the ANSWER
+that falls clearly outside that window, and no source explicitly says it is historical context, flag it
+as a potential scope-creep item in unsupported[] using the verbatim date phrase from the answer.
+Do NOT flag qualitative references to "prior developments" or "historically" — only flag specific dates
+or periods that appear to be presented as in-window events when they predate the window.
+
 STEP 3 — UNSUPPORTED CLAIM CHECK
 Work through the candidate phrases extracted in STEP 0 one at a time. For each candidate, check:
   (a) Does it appear in the summary or title of the [src-N] it is attributed to?
