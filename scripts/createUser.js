@@ -52,12 +52,14 @@ if (resend) {
   const { data: { users } } = await supabase.auth.admin.listUsers({ perPage: 1000 });
   const existing = users.find(u => u.email === email);
   if (!existing) { console.error(`User ${email} not found.`); process.exit(1); }
-  // Preserve the user's existing role — don't overwrite it with the CLI default
-  const existingRole = existing.user_metadata?.role ?? role;
+  // Preserve the user's existing role — don't overwrite it with the CLI default.
+  // Read from app_metadata: user_metadata is user-writable and not authoritative.
+  const existingRole = existing.app_metadata?.role ?? role;
   const tempPassword = genTempPassword();
   const { error } = await supabase.auth.admin.updateUserById(existing.id, {
     password: tempPassword,
-    user_metadata: { role: existingRole, needs_password_setup: true },
+    app_metadata:  { role: existingRole },
+    user_metadata: { needs_password_setup: true },
   });
   if (error) { console.error("Failed to reset user:", error.message); process.exit(1); }
   printCredentials(email, tempPassword);
@@ -70,7 +72,10 @@ const { data, error } = await supabase.auth.admin.createUser({
   email,
   password:      tempPassword,
   email_confirm: true,
-  user_metadata: { role, needs_password_setup: true },
+  // The role goes in app_metadata — only the service-role admin API can write it.
+  // Putting it in user_metadata would let the account promote itself to admin.
+  app_metadata:  { role },
+  user_metadata: { needs_password_setup: true },
 });
 
 if (error) {

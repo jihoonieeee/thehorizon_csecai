@@ -17,7 +17,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { maturityOf } from "../lib/pipeline/scoring/maturityLevel.js";
 import { readingValueOf } from "../lib/pipeline/scoring/sourceSignal.js";
-import { requireAuth } from "../lib/api/requireAuth.js";
+import { requireAuth, roleOf } from "../lib/api/requireAuth.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -61,31 +61,26 @@ function periodWindow(period) {
   };
 }
 
-// Mutation auth: CRON_SECRET (machine-to-machine) or a Supabase admin session JWT.
-// GEN_TOKEN (guest tier) is intentionally excluded — guests cannot modify the corpus.
-async function authorized(req) {
-  const secret = process.env.CRON_SECRET;
-  const auth   = req.headers.authorization || "";
-
-  if (secret && auth === `Bearer ${secret}`) return true;
-
-  // Supabase user session — must have role=admin in user_metadata
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  if (token) {
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    if (!error && user?.user_metadata?.role === "admin") return true;
-  }
-
-  return false;
-}
+// Mutation auth is delegated to the shared deny-by-default guard in
+// lib/api/requireAuth.js: CRON_SECRET (machine-to-machine) or a session whose
+// app_metadata.role is admin. GEN_TOKEN (guest tier) is intentionally excluded
+// — guests cannot modify the corpus.
 
 export default async function handler(req, res) {
-  // All methods require a valid Supabase session.
-  if (!await requireAuth(req)) return res.status(401).json({ error: "Unauthorized" });
+  // Resolve the caller once: every method needs a valid Supabase session, and
+  // GET needs to know whether that session is an admin (to widen the row set).
+  // CRON_SECRET is a machine-to-machine caller with no session — it is admin.
+  const cronCaller = !!process.env.CRON_SECRET &&
+    (req.headers?.authorization || "") === `Bearer ${process.env.CRON_SECRET}`;
+  const sessionUser = cronCaller ? null : await requireAuth(req);
+  if (!cronCaller && !sessionUser) return res.status(401).json({ error: "Unauthorized" });
+
+  const isAdmin = cronCaller || roleOf(sessionUser) === "admin";
 
   // ── Mutations: PATCH (edit publish date) / DELETE (remove source) ────────────
   if (req.method === "PATCH" || req.method === "DELETE") {
-    if (!await authorized(req)) return res.status(401).json({ error: "Unauthorized" });
+    // Deny by default; 403 (not 401) for an authenticated caller lacking the role.
+    if (!isAdmin) return res.status(403).json({ error: "Forbidden" });
     try {
       const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
       const id = String((req.query?.id ?? body.id) || "").trim();
@@ -161,7 +156,6 @@ export default async function handler(req, res) {
     const cap     = p.limit ? Math.min(Math.max(parseInt(p.limit, 10) || 0, 0), HARD_CAP) : HARD_CAP;
 
     const { start, end, label } = periodWindow(period);
-    const isAdmin = await authorized(req);
 
     // Build a fresh filtered query for each page (the builder is single-use).
     // `starred` is included only when the column exists (migration 013) — the flag

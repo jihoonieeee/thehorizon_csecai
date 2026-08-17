@@ -22,7 +22,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { getCompletedPeriodWindow } from "../lib/time/reportingWindow.js";
-import { requireAuth } from "../lib/api/requireAuth.js";
+import { requireAuth, requireAdmin } from "../lib/api/requireAuth.js";
 import { computeEvidenceMaturity, deriveConfidence } from "../lib/dashboard/evidenceMaturity.js";
 import { truncateAtWord } from "../lib/utils/truncate.js";
 import { maturityOf, MATURITY_RANK } from "../lib/pipeline/scoring/maturityLevel.js";
@@ -268,27 +268,17 @@ async function getInsights(win, windowKey) {
   }
 }
 
+// Dispatching a newsletter workflow spends CI minutes and LLM budget and
+// republishes analyst-facing output, so it is an administrative operation:
+// CRON_SECRET, GEN_TOKEN, or an app_metadata admin session. It previously
+// accepted any logged-in session.
 async function isAuthorized(req) {
-  const secret   = process.env.CRON_SECRET;
   const genToken = process.env.GEN_TOKEN;
   const auth     = req.headers.authorization || "";
 
-  if (!secret) return false;
-  if (auth === `Bearer ${secret}`) return true;
-  if (genToken && auth === `Bearer ${genToken}`) return true;
+  if (genToken && auth === `Bearer ${genToken}`) return { ok: true };
 
-  // Supabase user session JWT
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  if (token) {
-    const supabaseAdmin = (await import("@supabase/supabase-js")).createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-    if (!error && user) return true;
-  }
-
-  return false;
+  return requireAdmin(req);
 }
 
 export default async function handler(req, res) {
@@ -297,7 +287,8 @@ export default async function handler(req, res) {
 
   // ── POST /api/dashboard — dispatch newsletter generation via GitHub Actions ──
   if (req.method === "POST") {
-    if (!await isAuthorized(req)) return res.status(401).json({ error: "Unauthorized" });
+    const auth = await isAuthorized(req);
+    if (!auth.ok) return res.status(auth.status ?? 403).json({ error: auth.error ?? "Forbidden" });
     const { format, window: win = "week" } = req.body || {};
     if (format !== "newsletter") return res.status(400).json({ error: "Only format=newsletter is supported via POST" });
     const safeWin = ["week", "month"].includes(win) ? win : "week";
