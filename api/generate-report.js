@@ -120,7 +120,8 @@ export default async function handler(req, res) {
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.presentationml.presentation");
         res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
         res.setHeader("Cache-Control", "private, no-store");
-        const buf = Buffer.from(await new Response(blobRes.stream).arrayBuffer());
+        const buf = Buffer.from(await blobRes.arrayBuffer());
+        res.setHeader("Content-Length", String(buf.length));
         return res.status(200).send(buf);
       }
 
