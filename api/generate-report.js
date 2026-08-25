@@ -109,13 +109,18 @@ export default async function handler(req, res) {
         const blobRes = await fetch(deck.pptx_url, {
           headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
         });
-        if (!blobRes.ok) return res.status(502).json({ error: `Blob fetch failed: ${blobRes.status}` });
+        // Include the blob store's own message — a bare status hides the common
+        // causes (suspended store, rotated BLOB_READ_WRITE_TOKEN, deleted object).
+        if (!blobRes.ok) {
+          const detail = (await blobRes.text().catch(() => "")).slice(0, 200);
+          return res.status(502).json({ error: `Blob fetch failed: ${blobRes.status}`, detail });
+        }
 
         const filename = `horizon_scan_${(deck.deck_id || "deck").replace(/^deck-/, "")}.pptx`;
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.presentationml.presentation");
         res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
         res.setHeader("Cache-Control", "private, no-store");
-        const buf = Buffer.from(await blobRes.arrayBuffer());
+        const buf = Buffer.from(await new Response(blobRes.stream).arrayBuffer());
         return res.status(200).send(buf);
       }
 
