@@ -6,6 +6,7 @@ import { GeneratePage }  from "../../pages/dashboard/GeneratePage.jsx";
 import { useAuth }       from "../../AuthContext.jsx";
 import { supabase }      from "../../lib/supabase.js";
 import { getAccessLevel } from "../../auth.js";
+import { logEvent, EVENTS } from "../../lib/activityLog.js";
 
 const NAV_ITEMS = [
   { id: "overview",  label: "Overview"  },
@@ -69,6 +70,12 @@ export function DashboardShell() {
 
   const role = getAccessLevel(session);
   const meta = ROLE_META[role] ?? ROLE_META.guest;
+
+  // Client-side nav is invisible to Vercel Analytics (the /react component has
+  // no router integration), so record each view ourselves.
+  useEffect(() => {
+    logEvent(session, EVENTS.PAGE_VIEW, activePage);
+  }, [session, activePage]);
 
   return (
     <div className="hz-shell">
