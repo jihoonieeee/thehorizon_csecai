@@ -350,7 +350,7 @@ function NewsletterPanel({ secret }) {
               ref={iframeRef}
               srcDoc={data.html}
               onLoad={onIframeLoad}
-              sandbox="allow-same-origin"
+              sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
               title="Newsletter preview"
               style={{ width: "100%", minHeight: 400, border: "none", display: "block" }}
             />
