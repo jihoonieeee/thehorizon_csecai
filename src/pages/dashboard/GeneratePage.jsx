@@ -56,7 +56,7 @@ const PERIODS = [
 ];
 
 function SlidesPanel({ secret }) {
-  const [period, setPeriod]           = useState("quarter");
+  const [period, setPeriod]           = useState("month");
   const [status, setStatus]           = useState("loading"); // loading | ready | empty | error
   const [deck, setDeck]               = useState(null);
   const [error, setError]             = useState(null);
