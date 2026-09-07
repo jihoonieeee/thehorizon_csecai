@@ -35,6 +35,13 @@ const VALID_CATEGORIES = new Set([
   "ai_enabled_threats", "unclear_or_adjacent",
 ]);
 
+// The categories a guest is allowed to receive: the four offensive ones only.
+// unclear_or_adjacent is deliberately absent — see the guest filter in the GET
+// handler. Admins get the unfiltered corpus.
+const GUEST_CATEGORIES = [
+  "traditional_ai_threats", "llm_threats", "agentic_ai_threats", "ai_enabled_threats",
+];
+
 function periodWindow(period) {
   const now = new Date();
   if (period === "all-time") {
@@ -168,7 +175,24 @@ export default async function handler(req, res) {
         .select(starredColAvailable ? `${SELECT_BASE},starred` : SELECT_BASE)
         .not("validation_status", "eq", "reject");
 
-      if (!isAdmin) q = q.eq("needs_review", false);
+      // Guests never receive flagged rows, nor the "Other" bucket:
+      // unclear_or_adjacent is an internal triage/debugging state rather than an
+      // analyst-facing category. Enforced here so the rows never leave the server
+      // — the frontend also hides them, but that is presentation only.
+      // Guests see only the four offensive categories. This deliberately drops
+      // BOTH unclear_or_adjacent (an internal triage state, not analyst-facing)
+      // and rows with no category yet (ingested but not through Layer 4 — they
+      // would otherwise appear with no category chip, and would show up as an
+      // unexplained gap between the Overview total and the four category counts).
+      // An allow-list is used rather than not-equal because in SQL
+      // `main_category <> 'x'` is NULL, not true, for an unset category — so a
+      // bare not-equal filter would exclude nulls only by accident.
+      // Trade-off: a guest sees newly ingested sources only after the next
+      // classify run (3x daily). Drop GUEST_CATEGORIES into an `.or(is.null,...)`
+      // if that latency matters more than the reconciling totals.
+      if (!isAdmin) {
+        q = q.eq("needs_review", false).in("main_category", GUEST_CATEGORIES);
+      }
 
       // Stable ordering (date desc, id asc tiebreak) so .range() paging never
       // skips or double-counts rows that share a publish date.

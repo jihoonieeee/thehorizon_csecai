@@ -48,7 +48,7 @@ async function main() {
   const today  = now.toISOString().slice(0, 10);
   const period = buildPeriod(WINDOW, now);
 
-  console.log(`\n The Horizon — Newsletter Generator`);
+  console.log(`\n AI Horizon — Newsletter Generator`);
   console.log(`  Window : ${period.label} (${period.date_from} → ${period.date_to})`);
 
   const log = msg => console.log(`  ${msg}`);

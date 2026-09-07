@@ -1,4 +1,4 @@
-# The Horizon — Dashboard Legend
+# AI Horizon — Dashboard Legend
 
 Reference for every label, badge, and classification shown in the dashboard.
 Each entry explains what the label means, where it comes from, and what it implies.

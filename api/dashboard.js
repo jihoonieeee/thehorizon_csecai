@@ -22,7 +22,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { getCompletedPeriodWindow } from "../lib/time/reportingWindow.js";
-import { requireAuth, requireAdmin } from "../lib/api/requireAuth.js";
+import { requireAuth, requireAdmin, roleOf } from "../lib/api/requireAuth.js";
 import { computeEvidenceMaturity, deriveConfidence } from "../lib/dashboard/evidenceMaturity.js";
 import { truncateAtWord } from "../lib/utils/truncate.js";
 import { maturityOf, MATURITY_RANK } from "../lib/pipeline/scoring/maturityLevel.js";
@@ -284,7 +284,14 @@ async function isAuthorized(req) {
 
 export default async function handler(req, res) {
   // All methods require a valid Supabase session.
-  if (!await requireAuth(req)) return res.status(401).json({ error: "Unauthorized" });
+  const sessionUser = await requireAuth(req);
+  if (!sessionUser) return res.status(401).json({ error: "Unauthorized" });
+  // Role decides whether the "Other" (unclear_or_adjacent) bucket is disclosed:
+  // it is an internal triage state, not an analyst-facing category. A CRON_SECRET
+  // caller is machine-to-machine and gets the admin view.
+  const isAdminCaller =
+    (process.env.CRON_SECRET && req.headers?.authorization === `Bearer ${process.env.CRON_SECRET}`) ||
+    roleOf(sessionUser) === "admin";
 
   // ── POST /api/dashboard — dispatch newsletter generation via GitHub Actions ──
   if (req.method === "POST") {
@@ -361,7 +368,15 @@ export default async function handler(req, res) {
 
     // Exclude child sources (extracted sub-findings) from all counts — they are
     // subordinate to their parent report and would double-count if included.
-    const parents   = all.filter(s => !s.parent_source_id);
+    // Guests additionally never see the "Other" (unclear_or_adjacent) bucket, so
+    // it is dropped here, before anything derives from `parents`: total, category
+    // cards, trend buckets, top incidents and the tag matrix all inherit the
+    // exclusion, and `other` below computes to 0 rather than leaking a count.
+    // Guests see only the four offensive categories — matches the allow-list in
+    // api/sources.js so the two pages report the same total.
+    const parents   = all.filter(s =>
+      !s.parent_source_id &&
+      (isAdminCaller || CATEGORIES.some(c => c.key === s.main_category)));
     const total      = parents.length;
     const highTrust  = parents.filter(s => ["primary","high"].includes(s.trust_tier)).length;
 
@@ -577,7 +592,12 @@ export default async function handler(req, res) {
         // Everything not in the 4 offensive categories: unclear_or_adjacent context
         // (defenses, frameworks, generic CVEs) + any untagged. Surfaced so the stat
         // row reconciles to `total` — the 4 category cards alone never sum to it.
-        other: total - CATEGORIES.reduce((n, c) => n + catMap[c.key].length, 0),
+        // ADMIN ONLY. For guests `parents` already excludes everything outside the
+        // four categories, so this would compute to 0 regardless; returning null
+        // leaves the bucket's existence undisclosed rather than reporting it empty.
+        other: isAdminCaller
+          ? total - CATEGORIES.reduce((n, c) => n + catMap[c.key].length, 0)
+          : null,
       },
       categories,
       trend: {

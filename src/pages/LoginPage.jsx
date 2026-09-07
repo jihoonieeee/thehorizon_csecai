@@ -69,7 +69,7 @@ export function LoginPage({ mode: initialMode = "signin" }) {
     <div className="hz-login-wrap">
       <div className="hz-login-card">
         <div className="hz-login-brand">
-          <div className="hz-login-brand-name">The Horizon</div>
+          <div className="hz-login-brand-name">AI Horizon</div>
           <div className="hz-login-brand-sub">AI Threat Intelligence</div>
         </div>
 
@@ -106,7 +106,7 @@ export function LoginPage({ mode: initialMode = "signin" }) {
         {mode === "setup" && (
           <form className="hz-login-form" onSubmit={handleSetup}>
             <p className="hz-login-hint">
-              Welcome to The Horizon. Set a permanent password to activate your account.
+              Welcome to AI Horizon. Set a permanent password to activate your account.
             </p>
             <input
               className="hz-auth-input"

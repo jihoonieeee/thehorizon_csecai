@@ -609,13 +609,24 @@ export function SourcesPage() {
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(json => {
         const rows = Array.isArray(json) ? json : (json.sources || []);
-        const visible = isAdmin ? rows : rows.filter(s => !s.needs_review);
+        // Guests never see flagged rows, nor the "Other" bucket — unclear_or_adjacent
+        // is an internal triage/debugging state, not an analyst-facing category.
+        // Filtering here (rather than at each call site) means every downstream
+        // count — category tabs, facets, pagination, totals — excludes it for free.
+        const visible = isAdmin
+          ? rows
+          : rows.filter(s => !s.needs_review && s.main_category !== "unclear_or_adjacent");
         setSources(visible);
-        setTotalCount(json.count ?? visible.length);
+        // json.count is the server-side total and still includes Other, so it is
+        // only correct for admins; guests count what they can actually see.
+        setTotalCount(isAdmin ? (json.count ?? visible.length) : visible.length);
         setLoading(false);
       })
       .catch(e => { setError(e.message); setSources([]); setLoading(false); });
-  }, [period]);
+    // isAdmin gates what rows are kept above, so a role resolving after mount
+    // (session arrives async) must re-run the fetch or the guest view keeps
+    // admin-only rows it was built with.
+  }, [period, isAdmin]);
 
   useEffect(() => { loadSources(); }, [loadSources]);
 
@@ -967,7 +978,7 @@ export function SourcesPage() {
           All
           <span className="hz-cat-tab-count">{catCountsFaceted.total}</span>
         </button>
-        {ALL_CATS.map(cat => {
+        {ALL_CATS.filter(c => isAdmin || c !== "unclear_or_adjacent").map(cat => {
           const count = catCountsFaceted.counts[cat] ?? 0;
           const active = activeTab === cat;
           return (

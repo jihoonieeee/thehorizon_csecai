@@ -81,7 +81,7 @@ export function DashboardShell() {
     <div className="hz-shell">
       <nav className="hz-nav">
         <div className="hz-nav-brand">
-          The Horizon
+          AI Horizon
           <small>AI Threat Intelligence</small>
         </div>
 

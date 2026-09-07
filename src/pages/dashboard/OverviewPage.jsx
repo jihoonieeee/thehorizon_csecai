@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchOverview } from "../../api/dashboardApi.js";
 import { useAuth } from "../../AuthContext.jsx";
-import { getSessionToken } from "../../auth.js";
+import { getSessionToken, getAccessLevel } from "../../auth.js";
 
 const CAT_COLOR = {
   traditional_ai_threats: "#3583C9",
@@ -691,6 +691,7 @@ function TagDrilldownPanel({ tag, category, tagSources, onClose }) {
 export function OverviewPage() {
   const session = useAuth();
   const token   = getSessionToken(session);
+  const isAdmin = getAccessLevel(session) === "admin";
 
   const [win,        setWin]        = useState("week");
   const [data,       setData]       = useState(null);
@@ -726,6 +727,13 @@ export function OverviewPage() {
   const trend     = data?.trend;
   const catTrend  = (key) => trend?.by_category?.[key] || [];
 
+  // "Other" (unclear_or_adjacent) is an internal triage state, not an analyst-facing
+  // category — guests see neither the bucket nor its contribution to the total, so
+  // for them the headline count is the sum of the four offensive categories only.
+  const rawTotal   = data?.summary?.total ?? 0;
+  const otherCount = data?.summary?.other ?? 0;
+  const shownTotal = isAdmin ? rawTotal : rawTotal - otherCount;
+
   return (
     <div className="hz-overview-page">
 
@@ -738,7 +746,7 @@ export function OverviewPage() {
               {data.date_from && data.date_to
                 ? `${data.date_from} → ${data.date_to}, SGT`
                 : data.window_label}
-              {" · "}{data.summary?.total ?? 0} sources
+              {" · "}{shownTotal} sources
               {lastFetch && (
                 <span className="hz-overview-refresh-ts">
                   {" "}· {lastFetch.toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" })}
@@ -781,7 +789,7 @@ export function OverviewPage() {
       {data && !loading && (
         <div className="hz-insight-stats">
           <div className="hz-insight-stat">
-            <span className="hz-insight-stat-value">{data.summary?.total ?? "—"}</span>
+            <span className="hz-insight-stat-value">{shownTotal}</span>
             <span className="hz-insight-stat-label">Sources</span>
           </div>
           <span className="hz-insight-stat-eq">·</span>
@@ -794,8 +802,10 @@ export function OverviewPage() {
             </div>
           ))}
           {/* Everything outside the 4 offensive categories: adjacent context
-              (defenses, frameworks, generic CVEs) — so the row sums to Sources. */}
-          {data.summary?.other != null && (
+              (defenses, frameworks, generic CVEs) — so the row sums to Sources.
+              Admin-only: it is an internal triage state, and for guests it is
+              already subtracted from shownTotal so the row still reconciles. */}
+          {isAdmin && data.summary?.other != null && (
             <div className="hz-insight-stat" title="Adjacent context outside the 4 offensive categories: defenses, frameworks, generic CVEs">
               <span className="hz-insight-stat-value" style={{ color: "#94a3b8" }}>
                 {data.summary.other}
