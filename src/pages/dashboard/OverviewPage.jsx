@@ -692,14 +692,14 @@ export function OverviewPage() {
   const session = useAuth();
   const token   = getSessionToken(session);
 
-  const [win,        setWin]        = useState("quarter");
+  const [win,        setWin]        = useState("week");
   const [data,       setData]       = useState(null);
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState(null);
   const [lastFetch,  setLastFetch]  = useState(null);
   const [tagSelection,      setTagSelection]      = useState(null); // { tag, category }
   const [maturitySelection, setMaturitySelection] = useState(null); // { category, level }
-  const [showThreatLegend,  setShowThreatLegend]  = useState(false);
+  const [showThreatLegend,  setShowThreatLegend]  = useState(true);
   const timerRef = useRef(null);
 
   const load = useCallback((w) => {
@@ -867,9 +867,6 @@ export function OverviewPage() {
         </>
       )}
 
-      {/* Threat maturity + priority legend — reference material, kept at the foot */}
-      <ThreatLegend open={showThreatLegend} onToggle={() => setShowThreatLegend(v => !v)} />
-
       {/* Trend chart */}
       {data?.trend?.week_labels?.length > 1 && (
         <>
@@ -890,6 +887,9 @@ export function OverviewPage() {
         </>
       )}
 
+      {/* Threat maturity + priority legend — reference material, kept at the foot */}
+      <ThreatLegend open={showThreatLegend} onToggle={() => setShowThreatLegend(v => !v)} />
+        
       {/* Maturity side panel — fixed drawer, overlays everything */}
       {maturitySelection && (() => {
         const cat = (data?.categories || []).find(c => c.key === maturitySelection.category);
