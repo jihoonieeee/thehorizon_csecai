@@ -1173,7 +1173,7 @@ export function SourcesPage() {
                 <th style={{ width: 24 }}></th>
                 <th>Title</th>
                 <th>Importance</th>
-                <th>Publisher</th>
+                <th style={{ width: 130 }}>Publisher</th>
                 {activeTab === "all" && <th>Category</th>}
                 <th>Tags</th>
                 <th>Date</th>

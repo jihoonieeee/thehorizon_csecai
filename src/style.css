@@ -1680,10 +1680,13 @@ a:hover { text-decoration: underline; }
   line-height: 1.45;
 }
 
+/* Wraps rather than holding one line — a long publisher name used to stretch
+   the column and push the table into horizontal scroll. */
 .hz-src-publisher {
   font-size: 0.77rem;
   color: var(--text-secondary);
-  white-space: nowrap;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .hz-src-cat-badge {

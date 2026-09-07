@@ -173,9 +173,6 @@ export function LegendPanel({ onClose }) {
             </div>
           </div>
         ))}
-        <p className="hz-legend-note" style={{ marginTop: 8 }}>
-          Sources that are defensive-primary or do not map to one of the four offensive categories are filed under <strong>Other / Adjacent</strong>.
-        </p>
       </Section>
     </div>
   );
@@ -211,10 +208,6 @@ export function TaxonomyPanel({ onClose }) {
           </div>
         </div>
       ))}
-      <p className="hz-legend-note" style={{ padding: "4px 20px 16px" }}>
-        Tags <code>defensive</code> and <code>adjacent_context</code> are meta-tags, not taxonomy IDs —
-        they flag sources that are primarily defensive or contextually adjacent rather than directly offensive.
-      </p>
     </div>
   );
 }
