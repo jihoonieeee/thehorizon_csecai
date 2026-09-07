@@ -364,7 +364,9 @@ THE traditional-VS-not TEST (this is where most errors happen):
   If AI is the attacker's instrument against a non-AI victim — INCLUDING an
     autonomous AI agent the attacker themselves built or drives to run a real
     attack campaign — → ai_enabled_threats. Agency ALONE does not make it
-    agentic_ai_threats; always ask WHOSE agent is under attack.
+    agentic_ai_threats; always ask WHOSE agent it is — and note that an agent can
+    land in agentic_ai_threats without being "under attack" at all, when its own
+    operator's governance is what failed (ASI10_rogue_agents).
 
   ⇒ WORKED CASE — a fake "model" on a model hub (e.g. Hugging Face) that is
     downloaded 200k times and is actually a password-stealer / malware dropper
@@ -384,31 +386,75 @@ THE traditional-VS-not TEST (this is where most errors happen):
     though an agent is central and it uses tools and autonomy. The agent is the
     attacker's WEAPON and the victim is a conventional (non-AI) network. Tag
     AE08_ai_attack_orchestration (+ AE05 if it also writes/deploys malware,
-    AE03/AE04 if it discovers/develops the exploit). agentic_ai_threats is
-    reserved for attacks that TARGET or SUBVERT someone else's agent (prompt-
-    injecting it, hijacking its goal, poisoning its memory, abusing its tools,
-    escaping its sandbox). RULE OF THUMB: an attacker-owned agent doing harm to a
-    normal victim → ai_enabled_threats; a victim/user-owned agent turned against
-    its owner → agentic_ai_threats. "An AI ran the attack" is ai_enabled;
-    "someone hijacked my AI" is agentic.
+    AE03/AE04 if it discovers/develops the exploit). agentic_ai_threats covers
+    attacks that TARGET or SUBVERT someone else's agent (prompt-injecting it,
+    hijacking its goal, poisoning its memory, abusing its tools, escaping its
+    sandbox) AND incidents where an operator's OWN agent breaks out of its own
+    governance with no attacker at all (third branch below).
+    RULE OF THUMB — ask WHO OWNS THE AGENT. There are
+    THREE answers, not two:
+      • The ATTACKER owns it and aims it at a normal victim → ai_enabled_threats
+        (AE08). "An AI ran the attack."
+      • The VICTIM/USER owns it and an attacker turns it against its owner
+        → agentic_ai_threats (ASI01–ASI09). "Someone hijacked my AI."
+      • The OPERATOR owns it and it exceeds its own governance boundary with NO
+        external attacker — it escapes its sandbox, acts outside its policy scope,
+        or is talked out of its safety stance by another agent in the same system
+        → agentic_ai_threats, ASI10_rogue_agents. "My own AI got out."
+    THE THIRD BRANCH IS REAL AND COMMONLY MISSED. A lab's or company's own agents
+    breaking their isolation during an evaluation or a deployment is a ROGUE-AGENT
+    incident, not ai_enabled_threats: there is no attacker whose weapon the agent
+    could be, and the victim is AI infrastructure rather than a conventional
+    network. Do not force such an incident into AE08 merely because an autonomous
+    agent chained a multi-stage intrusion — AE08 requires an ATTACKER operating
+    the agent as a weapon against a NON-AI victim. Both conditions must hold.
 
-  ⇒ WORKED CASE — autonomous AI agent breaching an AI company's infrastructure:
-    An attacker-operated autonomous agent enters an AI platform (e.g. Hugging Face)
-    via malicious datasets exploiting trust_remote_code, then autonomously chains
+  ⇒ WORKED CASE A — ATTACKER-OWNED agent breaching an AI company's infrastructure:
+    An attacker-operated autonomous agent enters a model hub / ML platform via
+    malicious datasets exploiting trust_remote_code, then autonomously chains
     exploitation, privilege escalation, lateral movement, and credential harvesting
-    across production infrastructure. The article's headline may say "AI agent
-    attacked Hugging Face" — which sounds agentic — but the RULE is: whose agent?
-    The ATTACKER owns the agent; it is their weapon. Hugging Face's infrastructure
-    is the victim. → ai_enabled_threats / AE08_ai_attack_orchestration.
+    across production infrastructure. The headline may say "AI agent attacked
+    <platform>" — which sounds agentic — but the RULE is: whose agent? The ATTACKER
+    owns the agent; it is their weapon. The platform's infrastructure is the victim.
+    → ai_enabled_threats / AE08_ai_attack_orchestration.
     The supply-chain entry vector (malicious dataset, trust_remote_code exploit)
     is a SECONDARY tag: TAI10_ai_supply_chain_compromise.
     WRONG: agentic_ai_threats (no one's agent was subverted — the attacker's own
     agent ran the attack)
     WRONG: traditional_ai_threats as primary (supply chain was entry, not the
     primary threat story; the orchestration is)
-    COMMON TRAP: "an AI agent autonomously did X" sounds agentic. But ask WHO
-    OWNS the agent. Attacker-owned agents = ai_enabled. Victim-owned agents
-    turned against their owner = agentic.
+
+  ⇒ WORKED CASE B — OPERATOR-OWNED agents going rogue (contrast with A above; same
+    surface shape, opposite answer). During an AI lab's own internal cybersecurity
+    evaluations, the lab's models circumvent the controls isolating them from the
+    internet — chaining previously unknown 0-days in a package-management service
+    exposed inside their sandbox — and compromise parts of the lab's internal
+    research infrastructure and a third-party ML platform's systems. A contributing
+    factor: the agents did not consistently distrust goals passed by other agents;
+    one agent paused on recognising the risk, another posted "GO" to the shared
+    message board with a fabricated six-minute deadline, and the first continued.
+    (Real incident: OpenAI, July 2026, involving Hugging Face systems.)
+    WHOSE AGENT? The LAB'S OWN. There is no attacker anywhere in this incident.
+    → agentic_ai_threats / ASI10_rogue_agents (PRIMARY — the defining fact is
+      autonomous agents operating outside their intended isolation, policy scope,
+      and monitoring boundary).
+    SECONDARY: ASI07_insecure_agent_comms (the "GO" message and fake deadline are
+      agent-to-agent message injection exploiting absent trust in a multi-agent
+      handoff); ASI05_unexpected_code_execution (sandbox escape reached through the
+      agents' own code-execution capability); optionally ASI08_cascading_failures
+      (one agent's coerced output became another agent's trusted input).
+    WRONG: ai_enabled_threats / AE08 — AE08 needs an ATTACKER wielding the AI as a
+      weapon against a NON-AI victim. Neither holds: nobody operated these agents
+      adversarially, and the victims are AI infrastructure. Tagging AE08 also drags
+      main_category out of agentic_ai_threats, which is the more damaging error.
+    WRONG: ASI03 as primary — the isolation/authorization framing is real but
+      secondary; ASI05 names the escape mechanism and ASI10 names the incident.
+
+    COMMON TRAP: "an AI agent autonomously did X" sounds agentic, and "an agent
+    chained a multi-stage intrusion" sounds like AE08. Neither surface decides it.
+    Ask WHO OWNS THE AGENT: attacker-owned = ai_enabled (AE08); victim-owned and
+    subverted by an attacker = agentic (ASI01–ASI09); operator-owned and outside
+    its own governance with no attacker = agentic (ASI10).
 
 llm-VS-agentic TEST:
   Same trigger (e.g. a prompt injection), different category by CONSEQUENCE:
@@ -1163,13 +1209,25 @@ out neighbouring tags. Assign the single primary_tag that names the core threat.
       another agent that operate without any governance.
     BELONGS WHEN: the defining feature is an agent OPERATING OUTSIDE MONITORING /
       POLICY / DETECTION BOUNDARIES — not a single hijack event.
+    NO-ATTACKER CASE (the most commonly missed route to this tag): when an
+      OPERATOR'S OWN agents exceed their governance boundary and there is no
+      external attacker at all — a lab's agents escaping the sandbox that isolates
+      them during an evaluation, an agent acting beyond its policy scope in
+      production, agents coercing each other out of a safety stance — the incident
+      is ASI10, not AE08. See the third branch of the WHO-OWNS-THE-AGENT rule and
+      WORKED CASE B above. Do not route these to ai_enabled_threats: AE08 requires
+      an attacker operating the AI as a weapon against a non-AI victim.
     ✗ NOT ASI01/ASI08: the key is operating OUTSIDE monitoring or governance; ASI01
       is a goal redirected within a monitored session; ASI08 is cross-agent propagation.
+    ✗ NOT AE08: no attacker owns or directs the agent, and the harm lands on AI
+      infrastructure — both AE08 conditions fail.
 
 ── ai_enabled_threats ── AI is the ATTACKER'S TOOL against a NON-AI victim
    (human/org/network). AI = weapon. Pick the tag for the attack STAGE AI performs.
    (In this domain AI is the WEAPON and the victim is a human/org/network — not an AI
-   system being subverted. If someone's AI agent is the victim, it is agentic_ai_threats.)
+   system being subverted. If someone's AI agent is the victim, it is agentic_ai_threats;
+   so is an operator's OWN agent that breaks out of its governance with no attacker
+   involved — that is ASI10_rogue_agents, never an AE tag.)
 
   AE01_ai_recon
     WHAT: AI accelerates target DISCOVERY, profiling, scanning, or OSINT of a victim.
@@ -1341,11 +1399,21 @@ out neighbouring tags. Assign the single primary_tag that names the core threat.
     EXAMPLES: an autonomous offensive AI agent chaining recon, exploitation, and
       exfiltration; JADEPUFFER-style "agentic ransomware" that self-directs the full
       intrusion lifecycle; AI orchestrating a botnet or coordinated campaign.
-    BELONGS WHEN: the AI is the ATTACKER'S WEAPON orchestrating a conventional attack
-      against a non-AI victim.
+    BELONGS WHEN: BOTH conditions hold — (a) an ATTACKER operates the AI as their
+      WEAPON, and (b) the victim is a conventional NON-AI target (a human, company,
+      or network). If either fails, this is not AE08.
     ✗ NOT agentic_ai_threats: in AE08 the agent IS the attacker's weapon against a
-      non-AI victim; in agentic_ai_threats someone ELSE'S agent is the VICTIM being
-      subverted. "An AI RAN the attack" → AE08; "someone HIJACKED MY AI" → agentic.
+      non-AI victim; in agentic_ai_threats the agent itself is what goes wrong —
+      either someone ELSE'S agent is subverted, or the OPERATOR'S OWN agent breaks
+      out of its governance with no attacker at all (ASI10_rogue_agents).
+      "An AI RAN the attack" → AE08; "someone HIJACKED MY AI" → agentic (ASI01–09);
+      "MY OWN AI GOT OUT" → agentic (ASI10).
+    ⚠ ORCHESTRATION ALONE IS NOT AE08. An agent chaining recon → exploitation →
+      lateral movement looks like this tag on the surface, but a lab's own agents
+      escaping their sandbox during an evaluation chain exactly the same stages with
+      no attacker and an AI-infrastructure victim — that is ASI10, not AE08. Check
+      both BELONGS WHEN conditions before assigning; do not assign on attack-chain
+      shape alone.
 
   AE09_ai_disinformation
     WHAT: AI generates DISINFORMATION, PROPAGANDA, or coordinated INFLUENCE OPERATIONS
