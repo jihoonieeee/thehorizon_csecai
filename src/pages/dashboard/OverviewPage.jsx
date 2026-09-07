@@ -699,7 +699,7 @@ export function OverviewPage() {
   const [lastFetch,  setLastFetch]  = useState(null);
   const [tagSelection,      setTagSelection]      = useState(null); // { tag, category }
   const [maturitySelection, setMaturitySelection] = useState(null); // { category, level }
-  const [showThreatLegend,  setShowThreatLegend]  = useState(true);
+  const [showThreatLegend,  setShowThreatLegend]  = useState(false);
   const timerRef = useRef(null);
 
   const load = useCallback((w) => {
