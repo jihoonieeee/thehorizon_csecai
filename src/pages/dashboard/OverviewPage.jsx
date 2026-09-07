@@ -809,9 +809,6 @@ export function OverviewPage() {
       {/* Category legend */}
       <CategoryLegend />
 
-      {/* Threat maturity + priority legend */}
-      <ThreatLegend open={showThreatLegend} onToggle={() => setShowThreatLegend(v => !v)} />
-
       {/* Category cards */}
       {data && (
         <>
@@ -836,26 +833,6 @@ export function OverviewPage() {
             ))}
           </div>
 
-        </>
-      )}
-
-      {/* Trend chart */}
-      {data?.trend?.week_labels?.length > 1 && (
-        <>
-          <div className="hz-overview-section-title">
-            Weekly source volume
-          </div>
-          <div className="hz-trend-panel">
-            <TrendChart trend={data.trend} />
-            <div className="hz-trend-legend">
-              {Object.entries(CAT_COLOR).map(([key, color]) => (
-                <div key={key} className="hz-trend-legend-item">
-                  <span className="hz-trend-legend-dot" style={{ background: color }} />
-                  <span>{CAT_LABEL[key]}</span>
-                </div>
-              ))}
-            </div>
-          </div>
         </>
       )}
 
@@ -887,6 +864,29 @@ export function OverviewPage() {
               onClose={() => setTagSelection(null)}
             />
           )}
+        </>
+      )}
+
+      {/* Threat maturity + priority legend — reference material, kept at the foot */}
+      <ThreatLegend open={showThreatLegend} onToggle={() => setShowThreatLegend(v => !v)} />
+
+      {/* Trend chart */}
+      {data?.trend?.week_labels?.length > 1 && (
+        <>
+          <div className="hz-overview-section-title">
+            Weekly source volume
+          </div>
+          <div className="hz-trend-panel">
+            <TrendChart trend={data.trend} />
+            <div className="hz-trend-legend">
+              {Object.entries(CAT_COLOR).map(([key, color]) => (
+                <div key={key} className="hz-trend-legend-item">
+                  <span className="hz-trend-legend-dot" style={{ background: color }} />
+                  <span>{CAT_LABEL[key]}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </>
       )}
 

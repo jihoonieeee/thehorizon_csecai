@@ -605,7 +605,7 @@ a:hover { text-decoration: underline; }
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
-  margin-bottom: 8px;
+  margin: 24px 0 8px;
 }
 
 .hz-threat-legend-toggle {
