@@ -346,46 +346,30 @@ function InsightItem({ insight, index }) {
 
 // ── Threat maturity + priority legend (inline, above the 4 cards) ─────────────
 
+// Worked examples and matching signals for each rung live in docs/legend.md.
+
 const MATURITY_DEFS = [
   { key: "research",     color: "#94a3b8", label: "Research",
-    desc: "Demonstrated in papers, benchmarks, or controlled lab environments only. No adversary has used it; no working exploit exists outside the research setting.",
-    examples: "Prompt compression attack paper. Backdoor attack benchmark evaluation.",
-    signals: '"we show that", "we demonstrate", academic/arXiv paper, red-team simulation, controlled experiment.' },
+    desc: "Demonstrated in papers, benchmarks, or controlled lab environments only. No adversary has used it; no working exploit exists outside the research setting." },
   { key: "demonstrated", color: "#3b82f6", label: "Demonstrated",
-    desc: "A working exploit or capability exists and is reproducible outside a purely academic setting — a public PoC, a released tool, or a technique verified against a real product. No adversary has used it yet, but the barrier to use is low.",
-    examples: "Wiz Research published working code showing symlink traversal against six real AI coding assistants. Researcher extracted training data from the live GPT-4 API.",
-    signals: 'PoC released, exploit published, "successfully bypassed [real system]", "we exploited [real product]", CVE with working PoC.' },
+    desc: "A working exploit or capability exists and is reproducible outside a purely academic setting — a public PoC, a released tool, or a technique verified against a real product. No adversary has used it yet, but the barrier to use is low." },
   { key: "disclosed",    color: "#f59e0b", label: "Disclosed",
-    desc: "A vendor, researcher, or government agency confirmed a vulnerability exists in a specific product or system. Exploitation has not been observed and no working public exploit exists.",
-    examples: "CVE for prompt injection in LangChain, patched in 0.3.15, no exploit code. CISA advisory for an MCP server flaw.",
-    signals: 'CVE with no known exploit, vendor advisory, "patched in version X", "responsibly disclosed", CISA/NIST advisory.' },
+    desc: "A vendor, researcher, or government agency confirmed a vulnerability exists in a specific product or system. Exploitation has not been observed and no working public exploit exists." },
   { key: "observed",     color: "#ef4444", label: "Observed",
-    desc: "The technique has been confirmed in real-world use against real victims. At least one documented incident with evidence of actual exploitation or harm.",
-    examples: "Prompt injection campaign targeting enterprise chatbots with confirmed credential theft. Malware found in a live Hugging Face repo actively harvesting credentials.",
-    signals: '"exploited in the wild", incident report, confirmed breach, named victims, threat intelligence documenting adversary use.' },
+    desc: "The technique has been confirmed in real-world use against real victims. At least one documented incident with evidence of actual exploitation or harm." },
   { key: "operational",  color: "#7f1d1d", label: "Operational",
-    desc: "In sustained, repeated, or scaled use by one or more threat actors. Multiple incidents, an ongoing campaign, or documented adversary adoption at scale.",
-    examples: "Nation-state group integrating AI-generated spear-phishing into standard tradecraft across multiple operations. Ransomware group using AI for payload generation across multiple campaigns.",
-    signals: '"ongoing campaign", "attributed to [named group]", "multiple victims", threat intelligence spanning weeks or months, GTIG/CrowdStrike campaign reporting.' },
+    desc: "In sustained, repeated, or scaled use by one or more threat actors. Multiple incidents, an ongoing campaign, or documented adversary adoption at scale." },
 ];
 
 const READING_VALUE_DEFS = [
   { key: "essential",   color: "#b91c1c", label: "Essential",
-    desc: "Changes the threat model or establishes something the field had not seen before. First confirmed adversary operationalisation of a major AI capability, landmark frameworks leadership will repeatedly reference, named multi-government advisories declaring a strategic posture shift.",
-    examples: "GTIG's first confirmed AI-generated zero-day in a real operation. OWASP LLM Top 10 initial release. Five Eyes statement on frontier AI cyber risk.",
-    signals: "Confirms something the field considered theoretical; establishes a new attack class; landmark framework or multi-government advisory that reshapes strategic posture." },
+    desc: "Changes the threat model or establishes something the field had not seen before — the first confirmed adversary use of a major AI capability, a landmark framework leadership will repeatedly reference, or a multi-government advisory declaring a shift in strategic posture." },
   { key: "recommended", color: "#c2410c", label: "Recommended",
-    desc: "Materially changes prioritisation within a known attack surface. New variants with concrete evidence, confirmed adversary adoption, strong multi-incident syntheses, and reusable case studies with named actors and measurable impact.",
-    examples: "GTIG quarterly AI threat report with new adversary TTPs. CrowdStrike on first observed AI-generated phishing at scale. HiddenLayer HuggingFace malware incident.",
-    signals: "New TTP variant backed by concrete evidence; first confirmed adversary adoption of a known technique; named incident with measurable impact; shifts how you weight a known risk." },
+    desc: "Materially changes prioritisation within a known attack surface — a new technique variant backed by concrete evidence, the first confirmed adversary adoption of a known technique, a synthesis across multiple incidents, or a named case study with measurable impact." },
   { key: "analyst",     color: "#475569", label: "Analyst",
-    desc: "Technically useful for practitioners but does not change strategic posture. Implementation mechanics, incremental research, exploit details, thin-text advisories. Leadership sees the summary rather than reading the source directly.",
-    examples: "Vulnerability advisory for a vLLM SSRF. arXiv paper with only an abstract available. Third journalist writeup of a known incident.",
-    signals: "CVE or advisory with no exploitation evidence; implementation mechanics; 2nd or 3rd coverage of a known story; incremental research on a well-mapped technique." },
+    desc: "Technically useful for practitioners but does not change strategic posture — implementation mechanics, incremental research on a well-mapped technique, exploit detail, or an advisory with no evidence of exploitation. Leadership sees the summary rather than reading the source directly." },
   { key: "background",  color: "#94a3b8", label: "Background",
-    desc: "Adjacent guidance, policy context, defensive advice, or generic commentary with no distinct offensive intelligence. Sources that add nothing beyond stronger existing coverage.",
-    examples: 'Generic "AI threats are rising" editorial. AWS implementation guide for multi-tenant agents. Defensive IR playbook with no new offensive findings.',
-    signals: "Defensive or hardening content only; policy/governance without offensive findings; generic editorial; adds nothing beyond what better sources already cover." },
+    desc: "Adjacent guidance, policy context, defensive advice, or generic commentary carrying no distinct offensive intelligence, including sources that add nothing beyond stronger existing coverage." },
 ];
 
 function ThreatLegend({ open, onToggle }) {
@@ -407,8 +391,6 @@ function ThreatLegend({ open, onToggle }) {
                 </div>
                 <div className="hz-threat-legend-row-body">
                   <div className="hz-threat-legend-row-desc">{m.desc}</div>
-                  <div className="hz-threat-legend-row-sub"><b>Examples:</b> {m.examples}</div>
-                  <div className="hz-threat-legend-row-sub"><b>Signals:</b> {m.signals}</div>
                 </div>
               </div>
             ))}
@@ -423,8 +405,6 @@ function ThreatLegend({ open, onToggle }) {
                 </div>
                 <div className="hz-threat-legend-row-body">
                   <div className="hz-threat-legend-row-desc">{p.desc}</div>
-                  <div className="hz-threat-legend-row-sub"><b>Examples:</b> {p.examples}</div>
-                  <div className="hz-threat-legend-row-sub"><b>Signals:</b> {p.signals}</div>
                 </div>
               </div>
             ))}

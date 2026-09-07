@@ -23,6 +23,19 @@ Reading value is the primary editorial triage signal. It is independent of threa
 - Thin body text (<~300 chars): capped at `analyst` regardless of title language. The title is not evidence.
 - Defensive-primary sources (vendor tooling docs, architecture guides, how-to hardening): `analyst` or `background` even if they describe attacks as context.
 
+### Worked examples and signals
+
+Retained here for analyst calibration. These were previously shown in the dashboard's
+"Threat Maturity & Reading Value Reference" panel and were removed from the UI to keep it
+scannable; the definitions above remain the authoritative criteria.
+
+| Value | Examples | Signals |
+|---|---|---|
+| `essential` | GTIG's first confirmed AI-generated zero-day in a real operation. OWASP LLM Top 10 initial release. Five Eyes statement on frontier AI cyber risk. | Confirms something the field considered theoretical; establishes a new attack class; landmark framework or multi-government advisory that reshapes strategic posture. |
+| `recommended` | GTIG quarterly AI threat report with new adversary TTPs. CrowdStrike on first observed AI-generated phishing at scale. HiddenLayer HuggingFace malware incident. | New TTP variant backed by concrete evidence; first confirmed adversary adoption of a known technique; named incident with measurable impact; shifts how you weight a known risk. |
+| `analyst` | Vulnerability advisory for a vLLM SSRF. arXiv paper with only an abstract available. Third journalist writeup of a known incident. | CVE or advisory with no exploitation evidence; implementation mechanics; 2nd or 3rd coverage of a known story; incremental research on a well-mapped technique. |
+| `background` | Generic "AI threats are rising" editorial. AWS implementation guide for multi-tenant agents. Defensive IR playbook with no new offensive findings. | Defensive or hardening content only; policy/governance without offensive findings; generic editorial; adds nothing beyond what better sources already cover. |
+
 ---
 
 ## 2. Distribution Recommendation
@@ -57,6 +70,20 @@ Reading value is the primary editorial triage signal. It is independent of threa
 - A CVE alone → `disclosed`. CVE + public PoC → `demonstrated`. CVE + confirmed exploitation → `observed`.
 - Paper tested against a live real product → `demonstrated`. Controlled lab only → `research`.
 - Single confirmed incident → `observed`. Sustained/repeated campaign → `operational`.
+
+### Worked examples and signals
+
+Retained here for analyst calibration. These were previously shown in the dashboard's
+"Threat Maturity & Reading Value Reference" panel and were removed from the UI to keep it
+scannable; the definitions above remain the authoritative criteria.
+
+| Level | Examples | Signals |
+|---|---|---|
+| `research` | Prompt compression attack paper. Backdoor attack benchmark evaluation. | "we show that", "we demonstrate", academic/arXiv paper, red-team simulation, controlled experiment. |
+| `demonstrated` | Wiz Research published working code showing symlink traversal against six real AI coding assistants. Researcher extracted training data from the live GPT-4 API. | PoC released, exploit published, "successfully bypassed [real system]", "we exploited [real product]", CVE with working PoC. |
+| `disclosed` | CVE for prompt injection in LangChain, patched in 0.3.15, no exploit code. CISA advisory for an MCP server flaw. | CVE with no known exploit, vendor advisory, "patched in version X", "responsibly disclosed", CISA/NIST advisory. |
+| `observed` | Prompt injection campaign targeting enterprise chatbots with confirmed credential theft. Malware found in a live Hugging Face repo actively harvesting credentials. | "exploited in the wild", incident report, confirmed breach, named victims, threat intelligence documenting adversary use. |
+| `operational` | Nation-state group integrating AI-generated spear-phishing into standard tradecraft across multiple operations. Ransomware group using AI for payload generation across multiple campaigns. | "ongoing campaign", "attributed to [named group]", "multiple victims", threat intelligence spanning weeks or months, GTIG/CrowdStrike campaign reporting. |
 
 ---
 
