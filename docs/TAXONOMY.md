@@ -1,5 +1,20 @@
 # AI Threat Taxonomy Framework (Operational Intelligence Edition)
 
+> ⚠️ **This document is out of date and is NOT the source of truth.**
+> The authoritative taxonomy is `lib/pipeline/understand/taxonomy.js`; the tag
+> definitions the classifier actually uses live in `lib/prompts/understand/classify.md`.
+>
+> Verified 2026-09-07 against `taxonomy.js` (taxonomy-v10): **16 of the 40 tag IDs
+> below are wrong** — every `AE` tag still uses the pre-v10 long form
+> (`AE01_ai_enabled_reconnaissance` → now `AE01_ai_recon`), as do
+> `LLM02`, `LLM08`, `ASI04`, `ASI07`, `ASI09`. The live tag
+> `LLM11_jailbreak_safety_bypass` is missing entirely, and **none of the 24
+> sub-technique lists match** the current ones.
+>
+> Only the TAI03 / TAI04 sections have been reconciled. Treat the rest as narrative
+> background, not as tag reference. For an accurate generated list, run
+> `node scripts/generateTaxonomyDocs.js` → `lib/config/taxonomy-reference.md`.
+
 ## Purpose
 
 This taxonomy is designed for:
@@ -183,30 +198,21 @@ Crafting adversarial inputs to evade deployed AI systems.
 
 ### Sub-techniques
 
-* decision_boundary_attack
-* transferability_attack
-* physical_adversarial_attack
 * adversarial_patch_attack
+* physical_adversarial_attack
 * semantic_perturbation
-* input_perturbation
+* transferability_attack
 * multimodal_adversarial_input
-* environmental_manipulation
-
----
-
-## TAI04_adversarial_data
-
-Generating or manipulating adversarial input artifacts.
-
-### Sub-techniques
-
 * adversarial_input_generation
 * cross_modal_manipulation
-* semantic_data_manipulation
-* synthetic_adversarial_data
-* contextual_data_manipulation
 
 ---
+
+<!-- TAI04_adversarial_data was REMOVED in taxonomy-v10. Adversarial data is not a
+     distinct category: it is inference-time evasion (TAI03) with the manipulated
+     modality recorded in attack_medium. `adversarial_input_generation` and
+     `cross_modal_manipulation` were reparented to TAI03; the remaining three
+     sub-techniques were dropped. The ID is reserved and must not be reused. -->
 
 ## TAI05_model_extraction
 

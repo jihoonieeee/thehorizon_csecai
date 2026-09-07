@@ -116,7 +116,8 @@ const TAGS = [
   { id: "TAI01_data_poisoning",              label: "Data Poisoning",              domain: "traditional_ai_threats" },
   { id: "TAI02_model_poisoning",             label: "Model Poisoning",             domain: "traditional_ai_threats" },
   { id: "TAI03_adversarial_evasion",         label: "Adversarial Evasion",         domain: "traditional_ai_threats" },
-  { id: "TAI04_adversarial_data",            label: "Adversarial Data",            domain: "traditional_ai_threats" },
+  // TAI04_adversarial_data removed — deprecated in taxonomy-v10 (folded into TAI03
+  // with the modality in attack_medium). ID reserved, not reused. See taxonomy.js:50.
   { id: "TAI05_model_extraction",            label: "Model Extraction",            domain: "traditional_ai_threats" },
   { id: "TAI06_model_inversion",             label: "Model Inversion",             domain: "traditional_ai_threats" },
   { id: "TAI07_membership_inference",        label: "Membership Inference",        domain: "traditional_ai_threats" },

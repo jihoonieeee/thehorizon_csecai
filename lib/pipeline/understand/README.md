@@ -60,9 +60,20 @@ and `normalise()` enforces this as a hard gate on the cached path too.
 |----------|------|-------|
 | `lib/pipeline/understand/taxonomy.js` | **Authoritative runtime data** | The tag IDs `normalise()` validates against. Edit here to change the live taxonomy. |
 | `lib/prompts/understand/classify.md` | **Prompt copy** (prose + definitions) | The definitions shown to the LLM. Keep tag IDs in sync with `taxonomy.js`. |
-| `lib/config/taxonomyRegistry.js` | Descriptions + framework refs | Used by discovery / validation / agent / dashboard. ⚠️ Currently a **separate** definition — some IDs diverge from `taxonomy.js` (e.g. `LLM02_sensitive_information_disclosure` vs `LLM02_sensitive_info_disclosure`, `ASI04_agentic_supply_chain_vulnerabilities` vs `ASI04_agentic_supply_chain`, and a deprecated `TAI04`). Consolidation pending. |
+| `lib/config/taxonomyRegistry.js` | Descriptions + framework refs | Used by discovery / validation / agent / dashboard. **Derived, not separate** — it imports `PRIMARY_TAGS` / `SUB_TECHNIQUES` from `taxonomy.js` and re-shapes them, so IDs cannot drift. Nothing to sync by hand. |
+| `api/dashboard.js` (`TAGS`) | ⚠️ **Hardcoded duplicate** | The tag list served to the frontend taxonomy view. Not derived from `taxonomy.js` — a tag added or deprecated in `taxonomy.js` must be mirrored here or the dashboard silently shows a stale/missing technique. |
+| `src/components/dashboard/LegendPanel.jsx` | ⚠️ **Hardcoded duplicate** | Analyst-facing tag descriptions in the legend. Same caveat as above. |
 | `docs/TAXONOMY.md` | Human reference (framework mapping) | Narrative doc, not imported at runtime. |
 
-**When adding/renaming a tag:** update `taxonomy.js` (runtime) **and** the tag list
-in `classify.md` (prompt), keep `taxonomyRegistry.js` in sync, and re-run
+**When adding/renaming/deprecating a tag**, update all four hand-maintained copies:
+1. `lib/pipeline/understand/taxonomy.js` — runtime source of truth
+2. `lib/prompts/understand/classify.md` — the definition the LLM classifies from;
+   a tag absent here can never be assigned, however valid it is in `taxonomy.js`
+3. `api/dashboard.js` (`TAGS`) — hardcoded, drives the dashboard taxonomy view
+4. `src/components/dashboard/LegendPanel.jsx` — hardcoded, drives the legend
+
+`taxonomyRegistry.js` needs no edit (it derives from `taxonomy.js`). Then re-run
 `tests/understandSourceMechanism.test.js` + `tests/mechanism.test.js`.
+
+Deprecations additionally need a remap of existing rows (see
+`scripts/resortTaxonomyMechanism.js`) and the retired ID left reserved, not reused.

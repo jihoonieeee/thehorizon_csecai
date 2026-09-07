@@ -66,7 +66,8 @@ export const TAXONOMY_GROUPS = [
       { id: "TAI01_data_poisoning",            label: "Data Poisoning",            desc: "Manipulates training inputs (data, labels, learning signals) so the resulting model carries malicious behaviour without touching weights directly." },
       { id: "TAI02_model_poisoning",           label: "Model Poisoning",           desc: "Directly edits or patches model artifact parameters (weights, LoRA adapters, checkpoints) so malice travels with the artifact regardless of deployment." },
       { id: "TAI03_adversarial_evasion",       label: "Adversarial Evasion",       desc: "Crafts an input at inference time so a deployed classical ML classifier misclassifies it. Model and data are untouched; only the query is perturbed." },
-      { id: "TAI04_adversarial_data",          label: "Adversarial Data",          desc: "Generates or manipulates adversarial input artifacts (cross-modal, semantic, contextual) used to fool or probe ML systems." },
+      // TAI04_adversarial_data removed — deprecated in taxonomy-v10, folded into
+      // TAI03 with the modality recorded in attack_medium. See taxonomy.js:50.
       { id: "TAI05_model_extraction",          label: "Model Extraction",          desc: "Primary objective is to recover the model itself: weights, architecture, or decision boundary, producing a working replica via API queries or side-channels." },
       { id: "TAI06_model_inversion",           label: "Model Inversion",           desc: "Recovers private training data, sensitive examples, or attribute distributions from model behaviour. The data is the target, not the model itself." },
       { id: "TAI07_membership_inference",      label: "Membership Inference",      desc: "Determines whether a specific record was in the training set. A binary yes/no privacy leak without recovering the record's content." },
