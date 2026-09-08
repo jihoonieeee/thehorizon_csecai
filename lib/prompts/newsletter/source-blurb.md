@@ -17,7 +17,7 @@ You are given these fields per source — use them to write precisely:
 - mechanism: the attack technique (e.g. "tool_poisoning", "prompt_injection", "model_extraction") — name it specifically
 - key_entities: the specific systems, actors, or products involved — name them, don't say "an AI system"
 - importance_tier: realized (confirmed in-the-wild) | proven (PoC demonstrated) | research (academic) | reference (advisory)
-- maturity_level: operational | observed | disclosed | demonstrated | research — shapes how you qualify the finding
+- maturity_level: operational | observed | validated | research — shapes how you qualify the finding
 - broken_assumption: for research sources, the security assumption this paper invalidates — lead with this if present
 - summary: the primary summary — your blurb must be grounded in this, never invented
 

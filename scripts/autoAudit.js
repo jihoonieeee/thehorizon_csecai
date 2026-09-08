@@ -63,11 +63,11 @@ const MATURITY_FROM_TYPE = {
   threat_intelligence:       "operational",
   adversary_adoption_signal: "operational",
   attack_surface_signal:     "observed",
-  exploit_disclosure:        "demonstrated",
-  capability_demonstration:  "demonstrated",
+  exploit_disclosure:        "validated",
+  capability_demonstration:  "validated",
   research_finding:          "research",
   benchmark_evaluation:      "research",
-  vulnerability:             "disclosed",
+  vulnerability:             "validated",
   governance_signal:         "research",
   defensive_capability:      "research",
 };
@@ -264,7 +264,7 @@ S15 — AE05_ai_malware_dev MISAPPLICATION: AE05 = AI *generating* malware. Do N
 
 S17 — TAI01_data_poisoning MISAPPLICATION: TAI01 = poisoning TRAINING DATA. Do NOT assign for model inversion (TAI06), model extraction (TAI05), membership inference (TAI07), or supply chain code poisoning (TAI10).
 
-S22 — capability_demonstration maturity=research WRONG: If a paper attacks REAL commercial models (GPT-4, Claude, Gemini, live production APIs) with measured results → DEMONSTRATED not research. Research only applies to synthetic/toy/lab environments.
+S22 — capability_demonstration maturity=research WRONG: If a paper attacks REAL commercial models (GPT-4, Claude, Gemini, live production APIs) with measured results → VALIDATED not research. Research only applies to synthetic/toy/lab environments.
 
 S23 — LLM01/LLM04 on RAG/graph attacks WRONG: LLM01 = injection AT INFERENCE TIME into prompts. NOT for RAG corpus poisoning or routing hijacking. LLM04 = WRITING malicious content IN. NOT for extracting out (that is LLM08 or TAI05/TAI06).
 

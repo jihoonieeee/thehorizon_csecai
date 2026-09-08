@@ -32,7 +32,7 @@ measure both **what changed** (semantic drift) and **how serious it became**
 ## Key Existing Fields (no changes needed to use them)
 
 **On `sources`:**
-- `intelligence.maturity_level` — `research | demonstrated | disclosed | observed | operational`
+- `intelligence.maturity_level` — `research | validated | observed | operational`
   Set by Layer 3/4 LLM + deterministic fallback from `source_type`. Single source
   of truth in `lib/pipeline/scoring/maturityLevel.js`.
 - `intelligence.importance.tier` — `realized | proven | research | reference | noise`
@@ -86,7 +86,7 @@ create table threat_timelines (
   date_from        date not null,
   date_to          date not null,
   source_count     int  not null,
-  maturity_dist    jsonb not null,     -- { "research": 5, "demonstrated": 2, ... }
+  maturity_dist    jsonb not null,     -- { "research": 5, "validated": 2, ... }
   dominant_maturity text,              -- the most common maturity level
   maturity_score   float,             -- weighted avg: research=1 ... operational=5
   centroid         vector(1536),       -- avg embedding of all sources in window
@@ -150,14 +150,14 @@ function computeCentroid(embeddings) {
 Count how many sources fall into each maturity level:
 
 ```js
-const maturity_dist = { research: 0, demonstrated: 0, disclosed: 0, observed: 0, operational: 0 };
+const maturity_dist = { research: 0, validated: 0, observed: 0, operational: 0 };
 for (const s of sources) {
   const level = s.intelligence?.maturity_level || "research";
   maturity_dist[level]++;
 }
 ```
 
-Compute a weighted maturity score (research=1, demonstrated=2, disclosed=2.5,
+Compute a weighted maturity score (research=1, validated=2,
 observed=3.5, operational=5) — average across all sources. A rising score over
 time = the threat is maturing toward real-world use.
 
@@ -283,7 +283,7 @@ Added to `lib/agent/agentTools.js` and the `TOOLS` array.
       period: "2025-10",
       label: "October 2025",
       source_count: 9,
-      dominant_maturity: "demonstrated",
+      dominant_maturity: "validated",
       maturity_score: 2.1,
       drift_from_prev: 0.31,
       escalation_signal: false,
@@ -365,7 +365,7 @@ restructuring needed, just additional context lines.
 3. analyse_threat_evolution() — NEW (reads threat_timelines)
    → lens: tag=ASI04_mcp_exploitation
    → returns 8 monthly windows, Jan 2026 → Jul 2026
-   → dominant_maturity moves: research → demonstrated → observed
+   → dominant_maturity moves: research → validated → observed
    → drift_from_prev peaks at 0.44 in April 2026
 
 4. get_evidence() — semantic evidence retrieval (from rag.md)

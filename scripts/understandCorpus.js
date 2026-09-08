@@ -319,7 +319,7 @@ async function runScoringPass(sources) {
 async function runL5Extraction(sources) {
   console.log(`\n── L5: Evidence extraction ─────────────────────────────────────`);
 
-  const HIGH_MATURITY = new Set(["operational", "observed", "demonstrated"]);
+  const HIGH_MATURITY = new Set(["operational", "observed", "validated"]);
   const eligible = sources.filter(s =>
     OFFENSIVE_CATS.has(s.main_category) && (
       ["essential", "recommended"].includes(s.reading_value) ||

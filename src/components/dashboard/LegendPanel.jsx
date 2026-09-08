@@ -7,15 +7,13 @@
 
 const MATURITY = [
   { key: "research",     color: "#94a3b8", label: "Research",
-    desc: "Demonstrated in papers, benchmarks, or controlled lab environments only. No adversary has used it; no working exploit exists outside the research setting." },
-  { key: "demonstrated", color: "#3b82f6", label: "Demonstrated",
-    desc: "A working exploit or capability exists and is reproducible outside a purely academic setting — a public PoC, a released tool, or a technique verified against a real product. No adversary has used it yet, but the barrier to use is low." },
-  { key: "disclosed",    color: "#f59e0b", label: "Disclosed",
-    desc: "A vendor, researcher, or government agency confirmed a vulnerability exists in a specific product or system. Exploitation has not been observed and no working public exploit exists." },
+    desc: "The threat, attack technique, or vulnerability has been identified or demonstrated primarily through research, simulation, benchmarks, or controlled laboratory testing. There is no credible evidence of practical exploitation outside a research setting or of adversary use in the wild." },
+  { key: "validated",    color: "#f59e0b", label: "Validated",
+    desc: "The threat, vulnerability, or attack technique has been credibly confirmed to affect a real product, system, or implementation, or its practical feasibility has been demonstrated through a reproducible exploit, proof-of-concept, tool, or equivalent technical evidence. There is no credible evidence of adversary use in the wild." },
   { key: "observed",     color: "#ef4444", label: "Observed",
-    desc: "The technique has been confirmed in real-world use against real victims. At least one documented incident with evidence of actual exploitation or harm." },
+    desc: "Credible evidence confirms that the technique or exploit has been used against real-world targets outside controlled testing. At least one documented instance of attempted or successful exploitation by a threat actor has been established." },
   { key: "operational",  color: "#7f1d1d", label: "Operational",
-    desc: "In sustained, repeated, or scaled use by one or more threat actors. Multiple incidents, an ongoing campaign, or documented adversary adoption at scale." },
+    desc: "The technique or exploit has progressed beyond isolated use and is being repeatedly, systematically, or at scale employed by one or more threat actors. Evidence indicates sustained adversary adoption, such as multiple incidents, an ongoing campaign, integration into operational tooling, or repeated use across targets." },
 ];
 
 const READING_VALUE = [

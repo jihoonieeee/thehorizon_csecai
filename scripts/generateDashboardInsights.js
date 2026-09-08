@@ -420,7 +420,7 @@ function composeCategoryFindings(catRows, evItems = [], cap = 40) {
   // sources must earn lead status via maturity or research significance.
   const isLead = (row) => row && (
     readingValueOf(row) === "essential" ||
-    ["operational", "observed", "disclosed"].includes(maturityOf(row)) ||
+    ["operational", "observed", "validated"].includes(maturityOf(row)) ||
     significanceRank(row) >= 3
   );
 

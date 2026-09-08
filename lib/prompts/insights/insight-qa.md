@@ -42,7 +42,7 @@ Run these in order. For each problem found, determine whether it is correctable 
    research/demonstrated → "researchers showed", "proof-of-concept", "the attack works against"
    disclosed → "a vulnerability exists", "patched in version X"
    observed/operational → confirmed incident language is permitted
-   Correctable: "attackers are exploiting" when maturity is demonstrated → "researchers demonstrated that attackers could exploit"
+   Correctable: "attackers are exploiting" when maturity is validated → "researchers demonstrated that attackers could exploit"
    Fatal: none — maturity language is always correctable.
 
 4. INTERNAL CONSISTENCY

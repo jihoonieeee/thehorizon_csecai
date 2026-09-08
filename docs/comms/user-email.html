@@ -492,11 +492,10 @@
         <table class="guide-table">
           <thead><tr><th>Level</th><th>What it means</th></tr></thead>
           <tbody>
-            <tr><td><span class="dot" style="background:#94a3b8;"></span>Research</td><td>Demonstrated in papers or controlled lab environments only — no adversary use</td></tr>
-            <tr><td><span class="dot" style="background:#3b82f6;"></span>Demonstrated</td><td>Working exploit or PoC exists and is reproducible against a real product</td></tr>
-            <tr><td><span class="dot" style="background:#f59e0b;"></span>Disclosed</td><td>Confirmed vulnerability in a specific product — no working public exploit yet</td></tr>
-            <tr><td><span class="dot" style="background:#ef4444;"></span>Observed</td><td>Confirmed in real-world use against real victims — at least one documented incident</td></tr>
-            <tr><td><span class="dot" style="background:#7f1d1d;"></span>Operational</td><td>In sustained or scaled use by one or more threat actors across multiple incidents</td></tr>
+            <tr><td><span class="dot" style="background:#94a3b8;"></span>Research</td><td>Identified through research, simulation, benchmarks, or controlled lab testing — no evidence of practical exploitation</td></tr>
+            <tr><td><span class="dot" style="background:#f59e0b;"></span>Validated</td><td>Confirmed to affect a real product or system, or shown feasible via a reproducible exploit — no adversary use yet</td></tr>
+            <tr><td><span class="dot" style="background:#ef4444;"></span>Observed</td><td>Used against real-world targets outside controlled testing — at least one documented instance</td></tr>
+            <tr><td><span class="dot" style="background:#7f1d1d;"></span>Operational</td><td>Repeatedly, systematically, or at-scale use by one or more threat actors — sustained adversary adoption</td></tr>
           </tbody>
         </table>
 
@@ -577,7 +576,7 @@
         <h3>Filters</h3>
         <ul class="guide-list">
           <li><strong>Label</strong> — filter by reading value: Essential, Recommended, Analyst, Background</li>
-          <li><strong>Importance</strong> — filter by evidence maturity: Operational, Observed, Disclosed, Demonstrated, Research</li>
+          <li><strong>Importance</strong> — filter by evidence maturity: Operational, Observed, Validated, Research</li>
           <li><strong>★ Starred</strong> — show only sources you have starred</li>
           <li><strong>Reports</strong> — show longer reports and their extracted sub-findings</li>
         </ul>

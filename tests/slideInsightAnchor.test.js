@@ -17,7 +17,7 @@ const insightPoints = {
       insight: "Attacker-crafted config files execute code at model load time.",
       explanation_points: ["CVE issued", "232M downloads"],
       confidence: "Medium",
-      sources: [{ url: "https://ex.com/b", title: "B", publisher: "Pub", date: "2026-06-20", maturity: "disclosed" }],
+      sources: [{ url: "https://ex.com/b", title: "B", publisher: "Pub", date: "2026-06-20", maturity: "validated" }],
     },
   ],
 };
@@ -37,7 +37,7 @@ test("insightsBlock carries headline seed, points, and resolved citations", () =
   assert.equal(ctx.assessment, "Category thesis for the period.");
 });
 
-test("insight maturity maps to the slide scale (observed→observed_exploitation, disclosed→disclosed_vulnerability)", () => {
+test("insight maturity maps to the slide scale (observed→observed_exploitation, validated→disclosed_vulnerability)", () => {
   const ctx = buildCategoryContext("llm_threats", [], null, insightPoints);
   assert.ok(ctx.insightsBlock.includes("Maturity:   observed_exploitation"));
   assert.ok(ctx.insightsBlock.includes("Maturity:   disclosed_vulnerability"));

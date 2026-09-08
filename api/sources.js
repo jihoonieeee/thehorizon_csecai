@@ -247,7 +247,7 @@ export default async function handler(req, res) {
           // Editorial audience fit — set by Layer 3 LLM.
           reading_value:  readingValueOf(s) ?? null,       // essential|recommended|analyst|background
           // Threat lifecycle — set by Layer 4 / maturity scorer.
-          maturity:       maturityOf(s),                   // research|demonstrated|disclosed|observed|operational
+          maturity:       maturityOf(s),                   // research|validated|observed|operational
           is_report:      s.is_digest === true,
           all_categories: s.intelligence?.all_categories || null,
           finding_count:  s.intelligence?.digest_item_count || null,

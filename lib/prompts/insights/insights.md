@@ -14,11 +14,10 @@ Your job is NOT to summarise sources. Your job is to identify what the evidence 
 Every finding carries a signal prefix: [maturity | source_type | publisher]
 
 Maturity levels, highest to lowest:
-  operational   — sustained adversary campaigns, repeated exploitation
-  observed      — confirmed real-world incident with a victim
-  disclosed     — vendor/government advisory, CVE with no confirmed exploit
-  demonstrated  — working PoC against a real system
-  research      — controlled lab demonstration only
+  operational   — repeated, systematic, or at-scale use by threat actors
+  observed      — used against real-world targets outside controlled testing
+  validated     — confirmed against a real system, or a reproducible exploit exists; no adversary use
+  research      — research, simulation, or controlled lab testing only
 
 Use this hierarchy throughout. A single [observed | incident] finding outweighs ten [research | research_finding] findings. PRIORITY findings anchor insights. BACKGROUND findings only corroborate.
 

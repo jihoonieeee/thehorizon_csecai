@@ -60,17 +60,16 @@ const PAGE_SIZE = 50;
 
 // Importance tier — how consequential the source is (deterministic, from the API).
 // Evidence-maturity ladder — UNIFIED with the dashboard (lib/dashboard/
-// evidenceMaturity.js MATURITY_RUNGS). Same five rungs, same words, same colours,
+// evidenceMaturity.js MATURITY_RUNGS). Same four rungs, same words, same colours,
 // so the Sources page and the Overview page never disagree on how "real" a threat
 // is. Read from each source's `maturity` field (API). Higher rank = more mature.
 const TIER_META = {
-  operational:  { label: "Operational",  short: "Operational",  color: "#7f1d1d", bg: "#fee2e2", rank: 5 },
-  observed:     { label: "Observed",     short: "Observed",     color: "#ef4444", bg: "#fee2e2", rank: 4 },
-  disclosed:    { label: "Disclosed",    short: "Disclosed",    color: "#b45309", bg: "#ffedd5", rank: 3 },
-  demonstrated: { label: "Demonstrated", short: "Demonstrated", color: "#1d4ed8", bg: "#dbeafe", rank: 2 },
-  research:     { label: "Research",     short: "Research",     color: "#475569", bg: "#f1f5f9", rank: 1 },
+  operational: { label: "Operational", short: "Operational", color: "#7f1d1d", bg: "#fee2e2", rank: 4 },
+  observed:    { label: "Observed",    short: "Observed",    color: "#ef4444", bg: "#fee2e2", rank: 3 },
+  validated:   { label: "Validated",   short: "Validated",   color: "#b45309", bg: "#ffedd5", rank: 2 },
+  research:    { label: "Research",    short: "Research",    color: "#475569", bg: "#f1f5f9", rank: 1 },
 };
-const TIER_ORDER = ["operational", "observed", "disclosed", "demonstrated", "research"];
+const TIER_ORDER = ["operational", "observed", "validated", "research"];
 
 // Reading value — essential/recommended/analyst/background.
 // Null until scripts/labelSources.js backfill runs on the corpus.

@@ -10,7 +10,7 @@
  * Eligibility gate (deterministic — no LLM):
  *   - main_category in offensive categories
  *   - reading_value IN (essential, recommended)
- *     OR intelligence.maturity_level IN (operational, observed, demonstrated)
+ *     OR intelligence.maturity_level IN (operational, observed, validated)
  *
  * Content-hash deduplication means re-running is safe and cheap — already-
  * extracted sources are skipped unless their text changed.
@@ -39,7 +39,7 @@ const CONC   = parseInt(getArg("--concurrency",  "4"),  10);
 const SINCE_H = getArg("--since-hours", null);
 
 const OFFENSIVE_CATS  = ["traditional_ai_threats", "llm_threats", "agentic_ai_threats", "ai_enabled_threats"];
-const HIGH_MATURITY   = new Set(["operational", "observed", "demonstrated"]);
+const HIGH_MATURITY   = new Set(["operational", "observed", "validated"]);
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 

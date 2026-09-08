@@ -90,8 +90,7 @@ Exclude a source if:
 
 importance_tier   — substance reality: realized / proven / research / reference
                     (maps to evidence quality above)
-maturity_level    — threat lifecycle stage: operational / observed / disclosed /
-                    demonstrated / research
+maturity_level    — threat lifecycle stage: operational / observed / validated / research
 reading_value     — L3 model's ingest-time editorial assessment: essential /
                     recommended / analyst / background. Treat as one signal among
                     many, not as a gate. A "recommended" source with broad ecosystem

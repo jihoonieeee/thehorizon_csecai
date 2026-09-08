@@ -58,17 +58,18 @@ scannable; the definitions above remain the authoritative criteria.
 **Set by:** Deterministic at Layer 4 ingest; LLM-refined via `scripts/labelMaturityLevels.js`  
 **Question answered:** How far along the threat lifecycle is this technique?
 
+Ordered from least to most mature: `research` → `validated` → `observed` → `operational`.
+
 | Level | Meaning | Typical source types |
 |---|---|---|
-| `research` | Technique studied or simulated in a controlled or academic environment. No adversary use; no working exploit outside the research setting. | `research_finding`, `benchmark_evaluation` |
-| `demonstrated` | Working exploit or PoC exists and is reproducible against real software outside academia. No adversary use yet. | `exploit_disclosure`, `capability_demonstration` |
-| `disclosed` | Vendor, researcher, or government confirmed a vulnerability exists. No exploit or exploitation observed. | `vulnerability`, `governance_signal` |
-| `observed` | Confirmed real-world use — at least one documented incident with evidence of actual exploitation or harm. | `incident`, `attack_surface_signal` |
-| `operational` | Sustained, repeated, or scaled adversary use. Multiple incidents, ongoing campaign, or documented adoption at scale. | `threat_intelligence`, `adversary_adoption_signal` |
+| `research` | The threat, attack technique, or vulnerability has been identified or demonstrated primarily through research, simulation, benchmarks, or controlled laboratory testing. There is no credible evidence of practical exploitation outside a research setting or of adversary use in the wild. | `research_finding`, `benchmark_evaluation` |
+| `validated` | The threat, vulnerability, or attack technique has been credibly confirmed to affect a real product, system, or implementation, or its practical feasibility has been demonstrated through a reproducible exploit, proof-of-concept, tool, or equivalent technical evidence. There is no credible evidence of adversary use in the wild. | `vulnerability`, `exploit_disclosure`, `capability_demonstration`, `governance_signal` |
+| `observed` | Credible evidence confirms that the technique or exploit has been used against real-world targets outside controlled testing. At least one documented instance of attempted or successful exploitation by a threat actor has been established. | `incident`, `attack_surface_signal` |
+| `operational` | The technique or exploit has progressed beyond isolated use and is being repeatedly, systematically, or at scale employed by one or more threat actors. Evidence indicates sustained adversary adoption, such as multiple incidents, an ongoing campaign, integration into operational tooling, or repeated use across targets. | `threat_intelligence`, `adversary_adoption_signal` |
 
 **Classification rules:**
-- A CVE alone → `disclosed`. CVE + public PoC → `demonstrated`. CVE + confirmed exploitation → `observed`.
-- Paper tested against a live real product → `demonstrated`. Controlled lab only → `research`.
+- A CVE → `validated`, with or without a public PoC. CVE + confirmed exploitation → `observed`.
+- Paper tested against a live real product → `validated`. Controlled lab only → `research`.
 - Single confirmed incident → `observed`. Sustained/repeated campaign → `operational`.
 
 ### Worked examples and signals
@@ -80,8 +81,7 @@ scannable; the definitions above remain the authoritative criteria.
 | Level | Examples | Signals |
 |---|---|---|
 | `research` | Prompt compression attack paper. Backdoor attack benchmark evaluation. | "we show that", "we demonstrate", academic/arXiv paper, red-team simulation, controlled experiment. |
-| `demonstrated` | Wiz Research published working code showing symlink traversal against six real AI coding assistants. Researcher extracted training data from the live GPT-4 API. | PoC released, exploit published, "successfully bypassed [real system]", "we exploited [real product]", CVE with working PoC. |
-| `disclosed` | CVE for prompt injection in LangChain, patched in 0.3.15, no exploit code. CISA advisory for an MCP server flaw. | CVE with no known exploit, vendor advisory, "patched in version X", "responsibly disclosed", CISA/NIST advisory. |
+| `validated` | CVE for prompt injection in LangChain, patched in 0.3.15, no exploit code. Wiz Research published working code showing symlink traversal against six real AI coding assistants. | CVE (with or without PoC), vendor advisory, "patched in version X", "responsibly disclosed", CISA/NIST/CERT advisory, PoC released, "we exploited [real product]". |
 | `observed` | Prompt injection campaign targeting enterprise chatbots with confirmed credential theft. Malware found in a live Hugging Face repo actively harvesting credentials. | "exploited in the wild", incident report, confirmed breach, named victims, threat intelligence documenting adversary use. |
 | `operational` | Nation-state group integrating AI-generated spear-phishing into standard tradecraft across multiple operations. Ransomware group using AI for payload generation across multiple campaigns. | "ongoing campaign", "attributed to [named group]", "multiple victims", threat intelligence spanning weeks or months, GTIG/CrowdStrike campaign reporting. |
 

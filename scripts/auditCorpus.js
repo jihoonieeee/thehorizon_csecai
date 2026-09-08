@@ -231,7 +231,7 @@ async function renderSource(s, idx, total, evidenceData) {
   // ── 2. Threat maturity ────────────────────────────────────────────────────
   p("");
   p(`  ${HR}`);
-  p(`  2. THREAT MATURITY  (research→demonstrated→disclosed→observed→operational)`);
+  p(`  2. THREAT MATURITY  (research→validated→observed→operational)`);
   p(`  ${HR}`);
   p(`  STORED     : ${stMaturity || "NOT SET"}`);
   p(`  DET.EXPECT : ${detMaturity.level}  (from source_type=${s.source_type})`);

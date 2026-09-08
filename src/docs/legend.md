@@ -7,8 +7,9 @@ Each entry explains what the label means, where it comes from, and what it impli
 
 ## How `source_type` Is Assigned
 
-`source_type` is the single most important classification field — it drives both the maturity bar
-and the reality badge. It is assigned **deterministically in Layer 3** (no LLM) by
+`source_type` is the single most important classification field — it drives the reality badge and
+the deterministic fallback for the maturity bar. It is assigned **deterministically in Layer 3**
+(no LLM) by
 `lib/pipeline/validation/sourceTyping.js`. The classifier runs this priority chain, first match wins:
 
 1. **Already set** — source already carries a canonical `source_type` → kept as-is.
@@ -50,31 +51,33 @@ They overlap (both start from `source_type`) but use different mappings and serv
 
 ## Evidence Maturity Bar
 
-**What it answers:** "What is the mix of source types in this category's corpus?"
+**What it answers:** "How well-evidenced is this category's corpus?"
 
 A category with 50 sources that are all research papers is a fundamentally different signal
 than one with 10 incident reports. The bar makes this visible so the count alone is not
 mistaken for confirmed operational activity.
 
 **How it works:** `computeEvidenceMaturity()` in `lib/dashboard/evidenceMaturity.js` counts
-every source in the category and puts each into one of five rungs based on `source_type`.
-No LLM, no text scan — pure type lookup.
+every source in the category and puts each into one of four rungs, reading
+`intelligence.maturity_level` (set by the LLM at Layer 4 / `scripts/labelMaturityLevels.js`)
+and falling back to a deterministic `source_type` lookup when it is not yet set.
 
-| Rung | Colour | `source_type` values that map here | What it means |
-|---|---|---|---|
-| **Research** | Grey | `research_finding`, `benchmark_evaluation`, `capability_demonstration`, `defensive_capability` | Techniques that have been studied, simulated, or demonstrated. Includes capability demonstrations — working attack code in a controlled setting. |
-| **Vulnerabilities** | Amber | `vulnerability` | Disclosed CVEs or vendor advisories. A flaw exists; exploitation has not been confirmed. |
-| **Exploitation** | Red | `exploit_disclosure` | A working exploit has been published or demonstrated, not merely disclosed as a CVE. |
-| **Incidents** | Dark red | `incident` | Named, confirmed security events with identified victims or attributed actions. |
-| **Operational** | Deep red | `threat_intelligence`, `adversary_adoption_signal` | Vendor or government reporting of adversary TTPs in active operations — not just one incident, but documented tradecraft. |
+Rungs run left to right from least to most mature:
 
-Sources that don't fit these five (blogs, governance signals, surface signals, unknowns) are
-counted in a hidden `other` bucket and excluded from the bar — they contribute to the total
-source count but not to the maturity distribution.
+| Rung | Colour | What it means |
+|---|---|---|
+| **Research** | Grey | The threat, attack technique, or vulnerability has been identified or demonstrated primarily through research, simulation, benchmarks, or controlled laboratory testing. There is no credible evidence of practical exploitation outside a research setting or of adversary use in the wild. |
+| **Validated** | Amber | The threat, vulnerability, or attack technique has been credibly confirmed to affect a real product, system, or implementation, or its practical feasibility has been demonstrated through a reproducible exploit, proof-of-concept, tool, or equivalent technical evidence. There is no credible evidence of adversary use in the wild. |
+| **Observed** | Red | Credible evidence confirms that the technique or exploit has been used against real-world targets outside controlled testing. At least one documented instance of attempted or successful exploitation by a threat actor has been established. |
+| **Operational** | Deep red | The technique or exploit has progressed beyond isolated use and is being repeatedly, systematically, or at scale employed by one or more threat actors. Evidence indicates sustained adversary adoption, such as multiple incidents, an ongoing campaign, integration into operational tooling, or repeated use across targets. |
+
+Sources whose level does not resolve to one of these four are counted in a hidden `other`
+bucket and excluded from the bar — they contribute to the total source count but not to the
+maturity distribution.
 
 **The confidence score** shown elsewhere is derived directly from this bar:
-sources with zero exploitation + incidents + operational → at most "Medium" confidence;
-High confidence requires at least 3 operational data points and 15+ total sources.
+sources with zero validated + observed + operational → at most "Medium" confidence;
+High confidence requires at least 3 observed/operational data points and 15+ total sources.
 
 ---
 
@@ -127,19 +130,19 @@ and excluded from the ranked list.
 
 ---
 
-## Why `capability_demonstration` Differs Between the Two Systems
+## How the Two Systems Relate
 
-This is the most confusing point:
+Both start from the same evidence but answer different questions, so a source can sit
+differently in each:
 
-- In the **maturity bar**: `capability_demonstration` → **Research** rung (grey)
-- In the **reality badge**: `capability_demonstration` → `proven` → **🟠 Demonstrated** badge
+- The **maturity bar** asks "how close to real adversary operations is this threat?" It reads the
+  LLM-assigned `intelligence.maturity_level`, so a paper attacking a real commercial model lands
+  on **Validated** even though its `source_type` is `research_finding`.
+- The **reality badge** asks "did this individual source prove the attack works?" It is a
+  deterministic three-way label derived from `source_type` alone.
 
-This is intentional. The maturity bar groups things by "how close to real operations are these
-sources?" For that question, a lab-demonstrated attack belongs with research papers — it has not
-been used by an adversary. The reality badge asks "did this individual source prove the attack
-works?" — for which a working demonstration is meaningfully stronger than a theoretical study.
-
-Both answers are correct for their respective questions.
+Both answers are correct for their respective questions. Where they disagree, the maturity bar is
+the more considered signal — it reads the content, not just the artefact kind.
 
 ---
 

@@ -51,7 +51,7 @@ async function main() {
   const finding = `${s.title} (${s.publisher || "unknown"}, ${s.date_published?.slice(0,10)}, type: ${s.source_type}): ${summary}`;
 
   // Threat-intelligence at 90+ orgs with active exploitation → observed maturity.
-  const maturity = { research: 0, demonstrated: 0, disclosed: 0, observed: 1, operational: 0, other: 0, total: 1 };
+  const maturity = { research: 0, validated: 0, observed: 1, operational: 0, other: 0, total: 1 };
   const confidence = { level: "Low", reason: "single threat-intelligence source citing a vendor report; scale figures not independently corroborated here" };
 
   const system = loadPrompt("insights/insights").system;
