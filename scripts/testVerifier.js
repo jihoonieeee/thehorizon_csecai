@@ -19,7 +19,7 @@
  */
 
 import "dotenv/config";
-import { callGemini } from "../lib/llm/providers/gemini.js";
+import { platformChat } from "../lib/llm/platformProvider.js";
 import { parseJsonLoose } from "../lib/agent/agentLlm.js";
 import { verifyAnswer } from "../lib/agent/verifyAnswer.js";
 
@@ -27,41 +27,21 @@ import { verifyAnswer } from "../lib/agent/verifyAnswer.js";
 
 // gemini-2.5-flash: disable thinking (thinkingBudget:0) so output tokens aren't
 // consumed by internal chain-of-thought before the JSON response.
-const GEMINI_MODEL = "gemini-2.5-flash";
+// Model resolves inside platformProvider.js from PLATFORM_AI_* env.
 
+// Routes through the shared platform seam (PLATFORM_AI_API_KEY). Keeps the
+// {data, usage, error} shape the harness expects — errors are returned, not thrown.
 async function callGeminiJson({ system, user, maxTokens }) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return { data: null, usage: { input_tokens: 0, output_tokens: 0 }, error: "no GEMINI_API_KEY" };
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-  const fullPrompt = system ? `${system}\n\n---\n\n${user}` : user;
-  const body = {
-    contents: [{ parts: [{ text: fullPrompt }] }],
-    generationConfig: {
-      temperature: 0,
-      responseMimeType: "application/json",
-      maxOutputTokens: maxTokens ?? 2000,
-      thinkingConfig: { thinkingBudget: 0 },
-    },
-  };
-
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(30000),
+    const res = await platformChat({
+      tier: "cheap", system, user,
+      json: true,
+      maxTokens: maxTokens ?? 3072,
+      timeoutMs: 60000,
     });
-    const json = await res.json();
-    if (!res.ok) {
-      return { data: null, usage: { input_tokens: 0, output_tokens: 0 }, error: json.error?.message };
-    }
-    const text = json.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    const meta = json.usageMetadata || {};
-    const data = parseJsonLoose(text);
     return {
-      data,
-      usage: { input_tokens: meta.promptTokenCount ?? 0, output_tokens: meta.candidatesTokenCount ?? 0 },
+      data:  parseJsonLoose(res.text),
+      usage: { input_tokens: res.inputTokens ?? 0, output_tokens: res.outputTokens ?? 0 },
     };
   } catch (err) {
     return { data: null, usage: { input_tokens: 0, output_tokens: 0 }, error: err.message };
@@ -126,7 +106,7 @@ const TEST_EVIDENCE = [
 
 async function main() {
   console.log("=== verifyAnswer contradiction test (Gemini Flash) ===\n");
-  console.log(`Model: ${GEMINI_MODEL}`);
+  console.log(`Model: (platform seam — see PLATFORM_MODEL_* env)`);
   console.log(`Sources: ${TEST_SOURCES.length} (src-3 contradicts src-1/src-2)`);
   console.log("Expected: contradictions detected, unreconciled non-empty, verdict not 'grounded'\n");
 

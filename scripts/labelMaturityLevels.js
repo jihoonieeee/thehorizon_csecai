@@ -17,6 +17,7 @@
 
 import "dotenv/config";
 import { createClient }          from "@supabase/supabase-js";
+import { jsonChat }              from "../lib/llm/jsonChat.js";
 import { classifyMaturityLevel, deterministicMaturity, MATURITY_LEVELS, MATURITY_RANK }
   from "../lib/pipeline/scoring/maturityLevel.js";
 
@@ -36,58 +37,30 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
-// ── LLM caller — Haiku primary, Gemini fallback ──────────────────────────────
+// ── LLM caller — the shared platform seam (PLATFORM_AI_API_KEY) ──────────────
+// Was a bespoke Haiku→Gemini pair reading ANTHROPIC_API_KEY/GEMINI_API_KEY
+// directly. Now routes through platformChat like the rest of the codebase, so
+// swapping provider or model is an env change (PLATFORM_AI_*), not a code edit.
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function callHaiku(system, user) {
-  const key   = process.env.ANTHROPIC_API_KEY;
-  const model = process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001";
-  if (!key) throw new Error("ANTHROPIC_API_KEY not set");
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method:  "POST",
-      signal:  AbortSignal.timeout(30000),
-      headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({
-        model, max_tokens: 256,
-        system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
-        messages: [{ role: "user", content: user }],
-      }),
-    });
-    if (res.status === 429 || res.status >= 500) { await sleep(8000 * (attempt + 1)); continue; }
-    if (!res.ok) throw new Error(`Haiku HTTP ${res.status}`);
-    const data  = await res.json();
-    const text  = data.content?.[0]?.text?.trim() || "";
-    const clean = text.replace(/^```(?:json)?\s*/m, "").replace(/\s*```\s*$/m, "").trim();
-    const start = clean.search(/\{/);
-    return JSON.parse(start >= 0 ? clean.slice(start) : clean);
-  }
-  throw new Error("Haiku: exhausted retries");
-}
-
-async function callGemini(system, user) {
-  const key   = process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY_2;
-  const model = process.env.GEMINI_LITE_MODEL || "gemini-2.5-flash-lite";
-  if (!key) throw new Error("GEMINI_API_KEY not set");
-  const prompt = `${system}\n\n${user}`;
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
-    { method: "POST", signal: AbortSignal.timeout(30000),
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 256 } }) },
-  );
-  if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
-  const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
-  const clean = text.replace(/^```(?:json)?\s*/m, "").replace(/\s*```\s*$/m, "").trim();
-  const start = clean.search(/\{/);
-  return JSON.parse(start >= 0 ? clean.slice(start) : clean);
-}
-
-async function callLLM(system, user) {
-  try { return await callHaiku(system, user); } catch {
-    return await callGemini(system, user);
-  }
+async function callLLM(system, user, opts = {}) {
+  return jsonChat({
+    // "standard", not "cheap", on purpose. This is a durable corpus-wide write
+    // that drives dashboard ranking, and the maturity prompt is ~120 lines of
+    // boundary rules. Measured on 8 real sources: the cheap tier spends ~63
+    // output tokens (no reasoning) vs standard's ~873, and systematically
+    // under-classifies. Whole-corpus delta is ~$3.60 — worth it, once.
+    tier:      "standard",
+    system,
+    user,
+    schema:    opts.schema,
+    // The maturity prompt is ~2k tokens and Gemini 2.5 thinking tokens count
+    // against the cap — too small a budget returns empty text, which used to
+    // silently degrade every source to the deterministic fallback. The answer
+    // itself is ~80 tokens; the rest of this budget is headroom for thinking.
+    maxTokens: 3072,
+    timeoutMs: 60000,
+  });
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -98,25 +71,40 @@ async function main() {
   if (DRY_RUN) console.log("  --dry-run: no writes to DB");
   console.log("═".repeat(60) + "\n");
 
-  // Build query
-  let q = supabase
-    .from("sources")
-    .select("id,title,url,publisher,source_type,main_category,short_summary,analyst_brief,intelligence")
-    .eq("validation_status", "pass")
-    .not("main_category", "is", null)
-    .not("main_category", "eq", "unclear_or_adjacent")
-    .order("date_published", { ascending: false });
+  // Build query. PostgREST caps a single response at 1000 rows, so this pages
+  // explicitly with .range() — without it a >1000-row corpus is silently
+  // truncated and the tail is never classified, with no error to signal it.
+  const PAGE = 500;
+  const baseQuery = () => {
+    let q = supabase
+      .from("sources")
+      .select("id,title,url,publisher,source_type,main_category,short_summary,analyst_brief,intelligence")
+      .eq("validation_status", "pass")
+      .not("main_category", "is", null)
+      .not("main_category", "eq", "unclear_or_adjacent")
+      .order("date_published", { ascending: false })
+      .order("id", { ascending: true });   // tiebreak — stable paging on duplicate dates
 
-  if (!FORCE) {
-    // Only sources missing maturity_level
-    q = q.is("intelligence->>maturity_level", null);
+    if (!FORCE) {
+      // Only sources missing maturity_level
+      q = q.is("intelligence->>maturity_level", null);
+    }
+    if (CATEGORY) q = q.eq("main_category", CATEGORY);
+    return q;
+  };
+
+  const sources = [];
+  for (let from = 0; ; from += PAGE) {
+    const want = LIMIT ? Math.min(PAGE, LIMIT - sources.length) : PAGE;
+    if (want <= 0) break;
+    const { data: page, error } = await baseQuery().range(from, from + want - 1);
+    if (error) { console.error("DB error:", error.message); process.exit(1); }
+    if (!page?.length) break;
+    sources.push(...page);
+    if (page.length < want) break;
   }
-  if (CATEGORY) q = q.eq("main_category", CATEGORY);
-  if (LIMIT)    q = q.limit(LIMIT);
 
-  const { data: sources, error } = await q;
-  if (error) { console.error("DB error:", error.message); process.exit(1); }
-  if (!sources?.length) { console.log("No sources to classify."); return; }
+  if (!sources.length) { console.log("No sources to classify."); return; }
 
   console.log(`${sources.length} sources to classify\n`);
 

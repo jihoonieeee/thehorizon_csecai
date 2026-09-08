@@ -11,7 +11,7 @@ The intended audience is cybersecurity professionals, policy analysts, and decis
 - Backend: Vercel serverless functions in /api (Node.js ESM)
 - Database: Supabase (PostgreSQL) via @supabase/supabase-js with service role key
 - File storage: Vercel Blob for snapshot JSON archives
-- LLM: Pipeline uses Gemini via `llmRouter.js` (gated by `LLM_ONLY_GEMINI=1`). Chatbot uses GovTech AI Platform (`platform_ai` provider) via `platformProvider.js` — `gemini-2.5-flash` for cheap calls (planner/selector/verifier), `azure.claude-sonnet-5` for synthesis. Swappable via `PLATFORM_AI_*` env vars — see `lib/llm/platformProvider.js`.
+- LLM: Everything runs on the GovTech AI Platform via one key, `PLATFORM_AI_API_KEY`. Pipeline goes through `llmRouter.js` with `LLM_PROVIDER_ORDER=platform` on `gpt-5.4` (`PLATFORM_PIPELINE_MODEL`) for every task. Chatbot and operational scripts go through `platformProvider.js` on abstract tiers — `gemini-2.5-flash-lite` for cheap calls (planner/selector/verifier), `azure.claude-sonnet-5` for synthesis. Swappable via `PLATFORM_AI_*` / `PLATFORM_MODEL_*` env vars — see `lib/llm/platformProvider.js`.
 - Deployment: Vercel Hobby plan (12 serverless function limit)
 - Scheduling: GitHub Actions — **three** separate workflows:
     - `pipeline-connectors.yml` — L1–L3 RSS/API ingest (04:00 / 16:00 / 20:00 UTC)
@@ -34,15 +34,17 @@ WEB_DISCOVERY_ENABLED=1 — opt-in switch for the Layer 1B/1C web-discovery bran
 WEB_DISCOVERY_PROVIDER — optional: force tavily | serpapi | anthropic
 
 LLM routing env vars (set in .env and CI workflow env: blocks):
-PLATFORM_AI_API_KEY       — GovTech AI Platform key (x-api-key auth); used by the chatbot
+PLATFORM_AI_API_KEY       — GovTech AI Platform key (x-api-key auth); the single key for pipeline + chatbot + scripts
 PLATFORM_AI_PROVIDER=platform_ai     — chatbot provider: platform_ai | gemini | anthropic (default: platform_ai)
 PLATFORM_API_BASE_URL     — GovTech platform base URL (default: https://api-public.ai.tech.gov.sg)
+PLATFORM_PIPELINE_MODEL   — model llmRouter uses for ALL pipeline tasks (default: gpt-5.4). Not tiered.
 PLATFORM_MODEL_CHEAP      — override cheap-tier model (default: gemini-2.5-flash-lite)
-PLATFORM_MODEL_STANDARD   — override standard-tier model (default: gemini-2.5-flash)
+PLATFORM_MODEL_STANDARD   — override standard-tier model (default: gemini-2.5-flash). Currently unused: no call site asks for this tier.
 PLATFORM_MODEL_SYNTHESIS  — override synthesis-tier model (default: azure.claude-sonnet-5)
-LLM_ONLY_GEMINI=1         — hard lock: forces ALL chatbot+pipeline calls to Gemini; must NOT be set when using platform_ai
-LLM_PROVIDER_ORDER=gemini — pipeline router provider order (does not affect chatbot)
-GEMINI_API_KEY            — used by pipeline (llmRouter) and as chatbot fallback when PLATFORM_AI_PROVIDER=gemini
+LLM_ONLY_GEMINI=1         — hard lock: forces ALL chatbot+pipeline calls to Gemini; must NOT be set when using platform_ai (currently unset)
+LLM_PROVIDER_ORDER=platform — pipeline router provider order (does not affect chatbot)
+GEMINI_API_KEY            — chatbot fallback when PLATFORM_AI_PROVIDER=gemini; also required by the llmDiscoveryConnector,
+                            which needs Gemini's google_search grounding tool and cannot use the platform seam
 LLM_DAILY_TOKEN_BUDGET    — router budget guard (500K connectors/arXiv, 2M classify)
 AGENT_TEST_TOKEN          — dev-only auth bypass for chatbot QA harness (never in prod)
 

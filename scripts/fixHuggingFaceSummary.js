@@ -6,25 +6,12 @@
  */
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
+import { jsonChat } from "../lib/llm/jsonChat.js";
 
-async function callAnthropic({ system, user, model, maxTokens = 600 }) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({
-      model: model || process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: "user", content: user }],
-    }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(`Anthropic HTTP ${res.status}: ${JSON.stringify(data).slice(0, 200)}`);
-  const text = data.content?.[0]?.text || "";
-  const m = text.match(/\{[\s\S]*\}/);
-  return m ? JSON.parse(m[0]) : null;
+// Routes through the shared platform seam (PLATFORM_AI_API_KEY) rather than a
+// vendor key. The `model` argument is gone: pick a tier, set the model in env.
+async function callAnthropic({ system, user, maxTokens = 2048 }) {
+  return jsonChat({ tier: "cheap", system, user, maxTokens, timeoutMs: 60000 });
 }
 
 const supabase = createClient(
@@ -56,8 +43,7 @@ Requirements:
 
 Return JSON: {"short_summary": "...", "analyst_brief": "..."}`,
   task: "regenerate_summary",
-  model: process.env.ANTHROPIC_HAIKU_MODEL || "claude-haiku-4-5-20251001",
-  maxTokens: 600,
+  maxTokens: 2048,
 });
 
 console.log("Generated summaries:");

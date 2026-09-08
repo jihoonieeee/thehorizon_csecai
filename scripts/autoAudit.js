@@ -24,6 +24,7 @@ import { createClient } from "@supabase/supabase-js";
 import { computeImportance } from "../lib/pipeline/scoring/importance.js";
 import { deterministicMaturity } from "../lib/pipeline/scoring/maturityLevel.js";
 import { PRIMARY_TAGS } from "../lib/pipeline/understand/taxonomy.js";
+import { jsonChat } from "../lib/llm/jsonChat.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT        = path.resolve(__dirname, "..");
@@ -45,8 +46,7 @@ const CLI_BATCH   = parseInt(getArg("--batch", "0"), 10) || null;
 
 const BATCH_SIZE  = 5;
 const WINDOW_SIZE = 200;
-const GEMINI_MODEL   = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+// Model + key now resolve inside platformProvider.js from PLATFORM_AI_* env.
 
 const CANONICAL_TAG_IDS = new Set(PRIMARY_TAGS.map(t => t.id));
 
@@ -94,37 +94,17 @@ function saveProgress(p) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Routes through the shared platform seam (PLATFORM_AI_API_KEY). Retry/backoff
+// on 429/503 lives in platformProvider.js, so it is not repeated here.
 async function callGemini(systemPrompt, userPrompt, schema) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-
-  const body = {
-    contents: [{ parts: [{ text: `${systemPrompt}\n\n---\n\n${userPrompt}` }] }],
-    generationConfig: { temperature: 0, responseMimeType: "application/json", responseSchema: schema },
-  };
-
-  for (let attempt = 0; attempt <= 2; attempt++) {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-      try { return JSON.parse(text); }
-      catch { return JSON.parse(text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim()); }
-    }
-
-    const bodyText = await res.text().catch(() => "");
-    if ((res.status === 429 || res.status === 503) && attempt < 2) {
-      const wait = res.status === 503 ? 20000 + attempt * 15000 : 10000 + attempt * 8000;
-      process.stdout.write(` [${res.status}, waiting ${wait / 1000}s]\n`);
-      await sleep(wait);
-      continue;
-    }
-    throw new Error(`Gemini ${res.status}: ${bodyText.slice(0, 200)}`);
-  }
+  return jsonChat({
+    tier:      "cheap",
+    system:    systemPrompt,
+    user:      userPrompt,
+    schema,
+    maxTokens: 4096,
+    timeoutMs: 90000,
+  });
 }
 
 // ── Risk score (matches auditCorpus.js) ───────────────────────────────────────
@@ -450,7 +430,7 @@ function prependBatchToLog(section) {
 // ── Main loop ─────────────────────────────────────────────────────────────────
 
 async function main() {
-  if (!GEMINI_API_KEY) { console.error("ERROR: GEMINI_API_KEY not set"); process.exit(1); }
+  if (!process.env.PLATFORM_AI_API_KEY) { console.error("ERROR: PLATFORM_AI_API_KEY not set"); process.exit(1); }
 
   const prog = loadProgress();
   let page      = CLI_PAGE  ?? prog.page;
@@ -458,7 +438,7 @@ async function main() {
   let totalDone = prog.totalDone ?? 0;
   let runCount  = 0;
 
-  console.log(`\n  The Horizon — Auto Corpus Audit  [Gemini ${GEMINI_MODEL}]`);
+  console.log(`\n  The Horizon — Auto Corpus Audit`);
   console.log(`  Resuming from page ${page}, batch ${batch}  (${totalDone} batches done previously)`);
   if (DRY_RUN) console.log("  DRY RUN — no writes");
   console.log();

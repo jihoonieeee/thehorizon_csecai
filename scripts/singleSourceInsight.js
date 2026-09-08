@@ -25,19 +25,14 @@ const CAT    = getArg("--category", "llm_threats");
 const APPEND = hasFlag("--append");   // add to the card's existing insights instead of replacing
 if (!SRC_ID || !WINKEY) { console.error("need --id and --window-key"); process.exit(1); }
 
+import { jsonChat } from "../lib/llm/jsonChat.js";
+
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-async function callAnthropic({ system, user, maxTokens = 2000 }) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6", max_tokens: maxTokens, system, messages: [{ role: "user", content: user }] }),
-  });
-  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const j = await res.json();
-  const t = (j.content?.[0]?.text || "").replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-  const m = t.match(/\{[\s\S]*\}/);
-  return JSON.parse(m ? m[0] : t);
+// Routes through the shared platform seam (PLATFORM_AI_API_KEY). This is an
+// insight-generation call, so it asks for the synthesis tier.
+async function callAnthropic({ system, user, maxTokens = 4096 }) {
+  return jsonChat({ tier: "synthesis", system, user, maxTokens, timeoutMs: 120000 });
 }
 
 async function main() {
