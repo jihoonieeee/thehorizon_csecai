@@ -1030,62 +1030,89 @@ export function SourcesPage() {
         </div>
       )}
 
-      {/* Row 1 — the two graded facets side by side: reading label + evidence maturity.
-          Each group wraps as a unit, so on a narrow viewport they stack instead of
-          interleaving chips from different scales. */}
+      {/* Importance tier filter chips */}
+      {/* Categorical label filter — critical / important / supporting / archive */}
       <div className="hz-tier-filter-row">
-        <div className="hz-tier-group">
-          <span className="hz-tag-filter-label">Label</span>
-          <div className="hz-tier-chips">
-            {LABEL_ORDER.map(lb => {
-              const m = LABEL_META[lb];
-              const n = labelCounts[lb] || 0;
-              const on = labelFilter === lb;
-              if (!n && !on) return null;
-              return (
-                <button key={lb}
-                  className={`hz-tier-chip${on ? " active" : ""}`}
-                  style={on ? { background: m.color, borderColor: m.color, color: "#fff" } : { color: m.color, borderColor: `${m.color}55` }}
-                  onClick={() => { setLabelFilter(on ? null : lb); setPage(1); setExpandedId(null); }}>
-                  {m.short}<span className="hz-tier-chip-count">{n}</span>
-                </button>
-              );
-            })}
-            {labelFilter && <button className="hz-tag-clear" onClick={() => { setLabelFilter(null); setPage(1); }}>Clear</button>}
-          </div>
-        </div>
-
-        <span className="hz-tier-group-sep" aria-hidden="true" />
-
-        <div className="hz-tier-group">
-          <span className="hz-tag-filter-label">Importance</span>
-          <div className="hz-tier-chips">
-            {TIER_ORDER.filter(t => tierCounts[t] || tierFilter === t).map(t => {
-              const m = TIER_META[t];
-              const on = tierFilter === t;
-              return (
-                <button
-                  key={t}
-                  className={`hz-tier-chip${on ? " active" : ""}`}
-                  style={on ? { background: m.color, borderColor: m.color, color: "#fff" }
-                            : { color: m.color, borderColor: `${m.color}55` }}
-                  onClick={() => { setTierFilter(on ? null : t); setPage(1); setExpandedId(null); }}
-                  title={m.label}
-                >
-                  {m.short}<span className="hz-tier-chip-count">{tierCounts[t] || 0}</span>
-                </button>
-              );
-            })}
-            {tierFilter && (
-              <button className="hz-tag-clear" onClick={() => { setTierFilter(null); setPage(1); }}>Clear</button>
-            )}
-          </div>
+        <span className="hz-tag-filter-label">Label</span>
+        <div className="hz-tier-chips">
+          {LABEL_ORDER.map(lb => {
+            const m = LABEL_META[lb];
+            const n = labelCounts[lb] || 0;
+            const on = labelFilter === lb;
+            if (!n && !on) return null;
+            return (
+              <button key={lb}
+                className={`hz-tier-chip${on ? " active" : ""}`}
+                style={on ? { background: m.color, borderColor: m.color, color: "#fff" } : { color: m.color, borderColor: `${m.color}55` }}
+                onClick={() => { setLabelFilter(on ? null : lb); setPage(1); setExpandedId(null); }}>
+                {m.short}<span className="hz-tier-chip-count">{n}</span>
+              </button>
+            );
+          })}
+          {labelFilter && <button className="hz-tag-clear" onClick={() => { setLabelFilter(null); setPage(1); }}>Clear</button>}
         </div>
       </div>
 
-      {/* Row 2 — search + sort, then the saved/flagged/report facets and the count.
-          These are boolean "view" toggles rather than graded scales, so they sit
-          with the search controls instead of with the chip scales above. */}
+      <div className="hz-tier-filter-row">
+        <span className="hz-tag-filter-label">Importance</span>
+        <div className="hz-tier-chips">
+          {TIER_ORDER.filter(t => tierCounts[t] || tierFilter === t).map(t => {
+            const m = TIER_META[t];
+            const on = tierFilter === t;
+            return (
+              <button
+                key={t}
+                className={`hz-tier-chip${on ? " active" : ""}`}
+                style={on ? { background: m.color, borderColor: m.color, color: "#fff" }
+                          : { color: m.color, borderColor: `${m.color}55` }}
+                onClick={() => { setTierFilter(on ? null : t); setPage(1); setExpandedId(null); }}
+                title={m.label}
+              >
+                {m.short}<span className="hz-tier-chip-count">{tierCounts[t] || 0}</span>
+              </button>
+            );
+          })}
+          {tierFilter && (
+            <button className="hz-tag-clear" onClick={() => { setTierFilter(null); setPage(1); }}>Clear</button>
+          )}
+        </div>
+      </div>
+
+      {/* Saved / flagged / report facets — own row so the importance chips stay readable */}
+      <div className="hz-tier-filter-row">
+        <span className="hz-tag-filter-label">Show</span>
+        <div className="hz-tier-chips">
+          {/* Starred filter — count reflects the other active filters (e.g. starred
+              WITHIN the current category + label), so the facets compose. */}
+          <button
+            className={`hz-tier-chip hz-star-chip${starredOnly ? " active" : ""}`}
+            onClick={() => { setStarredOnly(v => !v); setPage(1); setExpandedId(null); }}
+            title="Show only starred sources (count reflects the other active filters)"
+          >
+            ★ Starred{starredCount ? <span className="hz-tier-chip-count">{starredCount}</span> : null}
+          </button>
+          {/* Flagged filter — admin only */}
+          {isAdmin && (
+            <button
+              className={`hz-tier-chip hz-flag-chip${flaggedOnly ? " active" : ""}`}
+              onClick={() => { setFlaggedOnly(v => !v); setPage(1); setExpandedId(null); }}
+              title="Show only flagged sources (needs review) — count reflects the other active filters"
+            >
+              🚩 Flagged{flaggedCount ? <span className="hz-tier-chip-count">{flaggedCount}</span> : null}
+            </button>
+          )}
+          {/* Reports filter — digest parent reports + their child findings. */}
+          <button
+            className={`hz-tier-chip hz-report-chip${reportsOnly ? " active" : ""}`}
+            onClick={() => { setReportsOnly(v => !v); setPage(1); setExpandedId(null); }}
+            title="Show only long reports and their extracted findings"
+          >
+            📄 Reports{reportsCount ? <span className="hz-tier-chip-count">{reportsCount}</span> : null}
+          </button>
+        </div>
+      </div>
+
+      {/* Search + sort + result count */}
       <div className="hz-sources-filters">
         <input
           className="hz-search-input"
@@ -1104,42 +1131,6 @@ export function SourcesPage() {
               onClick={() => { setSortBy("ingested"); setPage(1); }}>Ingested</button>
           )}
         </div>
-
-        <span className="hz-tier-group-sep" aria-hidden="true" />
-
-        <div className="hz-tier-group">
-          <span className="hz-tag-filter-label">Show</span>
-          <div className="hz-tier-chips">
-            {/* Starred filter — count reflects the other active filters (e.g. starred
-                WITHIN the current category + label), so the facets compose. */}
-            <button
-              className={`hz-tier-chip hz-star-chip${starredOnly ? " active" : ""}`}
-              onClick={() => { setStarredOnly(v => !v); setPage(1); setExpandedId(null); }}
-              title="Show only starred sources (count reflects the other active filters)"
-            >
-              ★ Starred{starredCount ? <span className="hz-tier-chip-count">{starredCount}</span> : null}
-            </button>
-            {/* Flagged filter — admin only */}
-            {isAdmin && (
-              <button
-                className={`hz-tier-chip hz-flag-chip${flaggedOnly ? " active" : ""}`}
-                onClick={() => { setFlaggedOnly(v => !v); setPage(1); setExpandedId(null); }}
-                title="Show only flagged sources (needs review) — count reflects the other active filters"
-              >
-                🚩 Flagged{flaggedCount ? <span className="hz-tier-chip-count">{flaggedCount}</span> : null}
-              </button>
-            )}
-            {/* Reports filter — digest parent reports + their child findings. */}
-            <button
-              className={`hz-tier-chip hz-report-chip${reportsOnly ? " active" : ""}`}
-              onClick={() => { setReportsOnly(v => !v); setPage(1); setExpandedId(null); }}
-              title="Show only long reports and their extracted findings"
-            >
-              📄 Reports{reportsCount ? <span className="hz-tier-chip-count">{reportsCount}</span> : null}
-            </button>
-          </div>
-        </div>
-
         <span className="hz-sources-count">
           {loading ? "Loading…" : `${filtered.filter(s => !s.parent_source_id).length.toLocaleString()} source${filtered.filter(s => !s.parent_source_id).length !== 1 ? "s" : ""}`}
           {activeTab !== "all" && (
