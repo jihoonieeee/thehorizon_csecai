@@ -679,10 +679,12 @@ export function OverviewPage() {
   const [showThreatLegend,  setShowThreatLegend]  = useState(true);
   const timerRef = useRef(null);
 
-  const load = useCallback((w) => {
+  // `fresh` bypasses the API's insight cache — passed only by the refresh button,
+  // so routine loads and window switches still hit the cache.
+  const load = useCallback((w, fresh = false) => {
     setLoading(true);
     setError(null);
-    fetchOverview(w, token)
+    fetchOverview(w, token, fresh)
       .then(d => { setData(d); setLoading(false); setLastFetch(new Date()); })
       .catch(e => { setError(e.message); setLoading(false); });
   }, [token]);
@@ -746,7 +748,7 @@ export function OverviewPage() {
           </div>
           <button
             className="hz-overview-refresh-btn"
-            onClick={() => load(win)}
+            onClick={() => load(win, true)}
             disabled={loading}
             title="Refresh now"
           >

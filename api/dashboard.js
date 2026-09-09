@@ -186,10 +186,14 @@ const INSIGHT_TTL_MS = 30 * 60 * 1000;
 // ── Insight reader — dashboard_insights table ─────────────────────────────────
 // Reads from the table written by scripts/generateDashboardInsights.js.
 // Falls back to the most recent prior period of the same window type.
-async function getInsights(win, windowKey) {
+// `fresh` skips the cache read (the result still refreshes the entry). Nothing
+// invalidates this cache when the pipeline writes new rows — it only ages out —
+// so an explicit refresh from the UI would otherwise be served stale content for
+// up to INSIGHT_TTL_MS after a regeneration.
+async function getInsights(win, windowKey, fresh = false) {
   const cacheKey = `insights:${win}:${windowKey}`;
   const cached = _insightCache.get(cacheKey);
-  if (cached && Date.now() - cached.at < INSIGHT_TTL_MS) return cached.data;
+  if (!fresh && cached && Date.now() - cached.at < INSIGHT_TTL_MS) return cached.data;
 
   const empty = { byCategory: {}, fromLabel: null, stale: false };
 
@@ -339,8 +343,12 @@ export default async function handler(req, res) {
     const period = getCompletedPeriodWindow(win);
     const { key: windowKey, label: windowLabel, date_from: from, date_to: to } = period;
 
+    // ?fresh=1 — sent by the dashboard's explicit refresh button so a manual
+    // refresh reflects a just-completed regeneration instead of the cached copy.
+    const fresh = req.query?.fresh === "1";
+
     const { byCategory: categoryInsightData, fromLabel: insightFromLabel, stale: insightsStale } =
-      await getInsights(win, windowKey);
+      await getInsights(win, windowKey, fresh);
 
     // Period meta — top_sources and snapshot, from the dashboard_insights _period_meta row
     let periodMeta = null;

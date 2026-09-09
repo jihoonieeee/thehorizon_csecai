@@ -14,9 +14,12 @@ function authHeader(token) {
  * Fetch overview data for a given time window.
  * @param {"week"|"month"|"quarter"} win
  * @param {string} [token] Supabase session token
+ * @param {boolean} [fresh] Bypass the API's 30-minute insight cache. Set only for
+ *   an explicit user refresh — routine loads should use the cache.
  */
-export async function fetchOverview(win = "quarter", token) {
-  const res = await fetch(`${BASE}/dashboard?window=${encodeURIComponent(win)}`, {
+export async function fetchOverview(win = "quarter", token, fresh = false) {
+  const url = `${BASE}/dashboard?window=${encodeURIComponent(win)}${fresh ? "&fresh=1" : ""}`;
+  const res = await fetch(url, {
     cache: "no-store",
     headers: authHeader(token),
   });
