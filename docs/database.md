@@ -59,7 +59,7 @@ Primary table. One row per unique article/advisory/paper.
 | `trust_tier` | text | primary/high/medium/low/curated/unknown |
 | `tags` | text[] | Taxonomy tags (TAI01..AE10) + "defensive" |
 | `source_family` | text | Routing family for L5 extraction |
-| `reading_value` | text | essential/recommended/analyst/background |
+| `reading_value` | text | essential/recommended/informative/background |
 | `validation_status` | text | pass/review/reject/null |
 | `layer3_status` | text | pass/reject (authoritative "already classified" flag) |
 | `claim_extraction_status` | text | success/irrelevant/null |

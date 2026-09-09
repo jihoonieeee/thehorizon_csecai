@@ -43,8 +43,8 @@ const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_R
 const PATCHES = [
   {
     url_fragment: "arxiv.org/abs/2607.14651",  // MemPoison
-    correct: "analyst",
-    reason:  "Memory poisoning in LLM agents is a known attack class (variant of indirect prompt injection / data poisoning). Paper introduces a taxonomy and benchmark for a known class, not a new attack class. research_only + adds_technical_detail → analyst.",
+    correct: "informative",
+    reason:  "Memory poisoning in LLM agents is a known attack class (variant of indirect prompt injection / data poisoning). Paper introduces a taxonomy and benchmark for a known class, not a new attack class. research_only + adds_technical_detail → informative.",
   },
   {
     url_fragment: "arxiv.org/abs/2607.14493",  // Context Contamination
@@ -73,8 +73,8 @@ const PATCHES = [
   },
   {
     url_fragment: "arxiv.org/abs/2604.01438",  // ClawSafety
-    correct: "analyst",
-    reason:  "Benchmark paper (CLAWSAFETY) with 120 adversarial test scenarios for testing AI agents against prompt injection in elevated-privilege contexts. The primary deliverable is a benchmark/evaluation framework, not an offensive finding. Known attack class (prompt injection in AI agents). research_only + adds_technical_detail → analyst.",
+    correct: "informative",
+    reason:  "Benchmark paper (CLAWSAFETY) with 120 adversarial test scenarios for testing AI agents against prompt injection in elevated-privilege contexts. The primary deliverable is a benchmark/evaluation framework, not an offensive finding. Known attack class (prompt injection in AI agents). research_only + adds_technical_detail → informative.",
   },
   {
     url_fragment: "arxiv.org/abs/2604.08407",  // Your Agent Is Mine

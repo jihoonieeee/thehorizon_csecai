@@ -206,6 +206,10 @@ End-to-end pipeline order for a manual run:
      node scripts/generateSlides.js --window month [--out output/deck.pptx]
 
 Other useful scripts:
+  node scripts/relabelReadingValues.js --dry-run --sample 80  — re-score reading_value against
+                                                        lib/prompts/scoring/reading-value.md
+                                                        (run after editing that rubric; every
+                                                        live run writes a rollback backup)
   node scripts/importCuratedExcel.js <path-to-xlsx>   — import sources from Excel
   node scripts/importCuratedPdfs.js <dir>             — import PDFs via Anthropic Files API
   node scripts/auditSourceLinks.js                    — check URL liveness, report dead links

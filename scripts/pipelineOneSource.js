@@ -36,7 +36,7 @@ const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_R
 const llmFn = (sys, usr, opts) => callLLM(sys, usr, opts);
 
 const OFFENSIVE_CATS = ["traditional_ai_threats","llm_threats","agentic_ai_threats","ai_enabled_threats"];
-const READING_FROM_IMP = { realized:"essential", proven:"recommended", research:"analyst", reference:"analyst", noise:"background" };
+const READING_FROM_IMP = { realized:"essential", proven:"recommended", research:"informative", reference:"informative", noise:"background" };
 
 const W = 70;
 const HR = "─".repeat(W);

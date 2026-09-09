@@ -34,8 +34,8 @@ function deterministicReadingValue(source) {
   if (imp.tier === "noise")    return "background";
   if (imp.tier === "realized") return "essential";
   if (imp.tier === "proven")   return source.source_type === "threat_intelligence" ? "essential" : "recommended";
-  if (imp.tier === "research") return "analyst";
-  return "analyst";
+  if (imp.tier === "research") return "informative";
+  return "informative";
 }
 
 const args    = process.argv.slice(2);
@@ -73,7 +73,7 @@ async function main() {
   console.log(`  ${data.length} sources to assess\n`);
 
   let assessed = 0, skipped = 0, failed = 0;
-  const counts = { essential: 0, recommended: 0, analyst: 0, background: 0 };
+  const counts = { essential: 0, recommended: 0, informative: 0, background: 0 };
 
   for (let i = 0; i < data.length; i += CONC) {
     const batch = data.slice(i, i + CONC);
@@ -119,7 +119,7 @@ async function main() {
   process.stdout.write("\n");
   console.log(`\n${"─".repeat(60)}`);
   console.log(`  Assessed: ${assessed}  |  Skipped/no-rv: ${skipped}  |  Errors: ${failed}`);
-  console.log(`  Reading values:  essential:${counts.essential}  recommended:${counts.recommended}  analyst:${counts.analyst}  background:${counts.background}`);
+  console.log(`  Reading values:  essential:${counts.essential}  recommended:${counts.recommended}  informative:${counts.informative}  background:${counts.background}`);
   if (DRY_RUN) console.log(`\n  (dry-run — no writes performed)`);
 }
 

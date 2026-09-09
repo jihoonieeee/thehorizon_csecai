@@ -56,8 +56,8 @@ const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_R
 const READING_FROM_IMPORTANCE = {
   realized:  "essential",
   proven:    "recommended",
-  research:  "analyst",
-  reference: "analyst",
+  research:  "informative",
+  reference: "informative",
   noise:     "background",
 };
 
@@ -249,7 +249,7 @@ async function renderSource(s, idx, total, evidenceData) {
   // ── 4. Reading value ──────────────────────────────────────────────────────
   p("");
   p(`  ${HR}`);
-  p(`  4. READING VALUE  (background→analyst→recommended→essential)`);
+  p(`  4. READING VALUE  (background→informative→recommended→essential)`);
   p(`  ${HR}`);
   p(`  STORED     : ${stReading || "NOT SET"}`);
   p(`  EXPECTED   : ${expReading}  (from importance=${expImport.tier})`);

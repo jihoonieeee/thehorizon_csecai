@@ -123,7 +123,7 @@ Filterable source list.
 
 **Notes:**
 - `count` excludes child sources (parent_source_id set); represents parent-level items.
-- `label` mirrors `reading_value` (essential/recommended/analyst/background); falls back from the top-level column to `intelligence.reading_value` for backward compat.
+- `label` mirrors `reading_value` (essential/recommended/informative/background); falls back from the top-level column to `intelligence.reading_value` for backward compat.
 - `starred` column requires migration 013 to be applied; degrades gracefully if missing.
 - All `reject` status sources are excluded. Child sources (digest findings) are included.
 

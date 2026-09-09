@@ -103,7 +103,7 @@ intelligence.importance = imp;
 
 ## Dimension 4 — Reading Value
 
-`background → analyst → recommended → essential`
+`background → informative → recommended → essential`
 
 **Expected mapping from importance:**
 
@@ -111,15 +111,15 @@ intelligence.importance = imp;
 |------------|----------------------|
 | realized | essential |
 | proven | recommended |
-| research | **analyst (default)** |
-| reference | analyst |
+| research | **informative (default)** |
+| reference | informative |
 | noise | background |
 
-**Research paper upgrades** — the LLM may upgrade `analyst → recommended` or `recommended → essential`. Evaluate each upgrade:
+**Research paper upgrades** — the LLM may upgrade `informative → recommended` or `recommended → essential`. Evaluate each upgrade against `lib/prompts/scoring/reading-value.md`:
 
-- `analyst → recommended`: Accept only if significance is `landmark` AND the paper introduces a genuinely new attack class or cross-domain novel combination. A more efficient technique within a known attack class stays `analyst`.
-- `recommended → essential`: Accept only if significance is `landmark` AND the finding changes the threat model (defenders must add a new threat, not just update a known one).
-- If unsure, **downgrade to analyst**. It is easier to upgrade later than to inflate the corpus.
+- `informative → recommended`: Accept only if the paper demonstrates a significant technique variant with a **working attack** AND the rationale names a **prioritisation consequence** — it lowers attack cost/skill/access, raises success rate or scale, defeats a mitigation defenders rely on, or extends a known attack to a boundary treated as out of reach. `first_of_kind` novelty is not required. Benchmarks, taxonomies, surveys, and efficiency refinements with no named consequence stay `informative`.
+- `recommended → essential`: Accept only under Branch A (new attack class + threat-model change + working demonstration). Research-only work cannot reach `essential` via Branch B — Branch B requires confirmed real-world adversary use.
+- If unsure, **downgrade to informative**. It is easier to upgrade later than to inflate the corpus.
 
 **Audit check:** If stored ≠ expected, evaluate whether the upgrade is justified and note it as an S10 acceptance or correct it.
 
@@ -129,10 +129,10 @@ intelligence.importance = imp;
 
 `landmark → notable → incremental → noise`
 
-Only populated for `source_type=research_finding` sources with `reading_value ≥ analyst`. If NOT SET, it means the significance scoring pass hasn't run.
+Only populated for `source_type=research_finding` sources with `reading_value ≥ informative`. If NOT SET, it means the significance scoring pass hasn't run.
 
 - Significance is **orthogonal to reading_value** — it ranks within a tier, it does not automatically justify upgrading the tier.
-- `landmark` ≠ `essential`. A landmark paper in a known attack class is still `analyst`.
+- `landmark` ≠ `essential`. A landmark paper in a known attack class is still `informative`.
 
 ---
 
@@ -241,7 +241,7 @@ For each displayed evidence item:
 |---|---------|--------|
 | S15 | `AE05` applied to malware targeting AI / worms exploiting AI agents | Prompt fixed; monitor every batch |
 | S17 | `TAI01` used as generic secondary on ML attack papers (inversion/extraction/MIA) | Prompt fixed; monitor |
-| S10 | Research paper `reading_value` upgrades beyond `analyst` without landmark+new-class justification | Prompt fixed; still needs manual check |
+| S10 | Research paper `reading_value` upgrades beyond `informative` without landmark+new-class justification | Prompt fixed; still needs manual check |
 | S4 | `is_digest: true` on long single articles (arXiv, press releases) | detectDigest.js fixed; check IS_REPORT flag |
 | ASI03 | Non-canonical suffix `ASI03_prompt_injection` — canonical is `ASI03_identity_privilege_abuse` | Fixed in prompt + DB |
 | AE08 vs AE05 | `AE08` (orchestration) applied when AI merely wrote one script (`AE05`) | No prompt fix yet; check manually |

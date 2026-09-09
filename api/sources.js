@@ -237,15 +237,17 @@ export default async function handler(req, res) {
       count: (data || []).filter(s => !s.parent_source_id).length,
       sources: (data || []).map(s => {
         const mech = s.intelligence?.mechanism_classification || null;
-        const { intelligence, collected_date, reading_value: rv, ...rest } = s;
+        const { intelligence, collected_date, reading_value: _rv, ...rest } = s;
         return {
           ...rest,
           date_collected: collected_date || null,
-          label: rv ?? readingValueOf(s) ?? null,
+          // Both go through readingValueOf so legacy "analyst" rows normalise to
+          // "informative" — the raw column would bypass the alias mid-migration.
+          label: readingValueOf(s) ?? null,
           short_summary:  s.short_summary || s.analyst_brief || null,
           analyst_brief:  s.analyst_brief || null,
           // Editorial audience fit — set by Layer 3 LLM.
-          reading_value:  readingValueOf(s) ?? null,       // essential|recommended|analyst|background
+          reading_value:  readingValueOf(s) ?? null,       // essential|recommended|informative|background
           // Threat lifecycle — set by Layer 4 / maturity scorer.
           maturity:       maturityOf(s),                   // research|validated|observed|operational
           is_report:      s.is_digest === true,

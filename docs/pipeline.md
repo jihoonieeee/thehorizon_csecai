@@ -241,13 +241,15 @@ scored first; the remainder fills from the oldest unscored backlog.
 
 Three deterministic writes (no LLM) for every newly classified source:
 
-**`reading_value`** — `essential / recommended / analyst / background`
-Derived from importance tier:
+**`reading_value`** — `essential / recommended / informative / background`
+Authoritative definitions live in `lib/prompts/scoring/reading-value.md`; Layer 3 assigns the
+value by LLM against that rubric. This L4e path is the deterministic fallback for sources
+that bypassed L3 (the L4b understand path), derived from importance tier:
 - `realized` tier → essential
 - `proven` tier + `threat_intelligence` source type → essential
 - `proven` tier (other) → recommended
 - `noise` tier → background
-- everything else → analyst
+- everything else → informative
 
 **`intelligence.importance`** — the full importance object, recomputed from current source
 state. See `lib/pipeline/scoring/importance.js` for the tier-derivation logic.

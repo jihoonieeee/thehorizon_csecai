@@ -22,7 +22,7 @@ if (!IDS.length) { console.error("Usage: node classifyAndAudit.js <id1> [id2...]
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const MATURITY_LEVELS = ["research","validated","observed","operational"];
-const READING_FROM_IMP = { realized:"essential", proven:"recommended", research:"analyst", reference:"analyst", noise:"background" };
+const READING_FROM_IMP = { realized:"essential", proven:"recommended", research:"informative", reference:"informative", noise:"background" };
 
 const W = 70;
 const HR  = "─".repeat(W);

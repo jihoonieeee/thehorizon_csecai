@@ -138,7 +138,7 @@ async function runScoringPass(sources) {
           : (imp.tier === "proven" && s.source_type === "threat_intelligence") ? "essential"
           : imp.tier === "proven"                                           ? "recommended"
           : imp.tier === "noise"                                            ? "background"
-          : "analyst";
+          : "informative";
         rvCount++;
       }
 

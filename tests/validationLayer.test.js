@@ -321,12 +321,12 @@ await test("distribution_recommendation flows from unified L3 call to enriched o
 
 await test("distribution_recommendation defaults derived from reading_value when LLM omits the field", async () => {
   // Use source_type=incident so the research-gate hard reject does not apply.
-  // The test verifies the distribution defaults logic for analyst reading_value.
+  // The test verifies the distribution defaults logic for informative reading_value.
   const l3 = { ...CENTRAL_L3, source_type: "incident" };
   delete l3.distribution_recommendation;
-  l3.reading_value = "analyst";
+  l3.reading_value = "informative";
   const r = await validateAndTypeSource(mkSource(), { llmFn: mkLlm(l3), skipUrlCheck: true });
-  // analyst → no dashboard/newsletter, but analyst_library
+  // informative → no dashboard/newsletter, but analyst_library
   assert.equal(r.distribution_recommendation?.overview_dashboard, false);
   assert.equal(r.distribution_recommendation?.email_newsletter,   false);
   assert.equal(r.distribution_recommendation?.analyst_library,    true);

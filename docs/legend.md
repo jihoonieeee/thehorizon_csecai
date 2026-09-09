@@ -7,21 +7,27 @@ Every source in The Horizon carries multiple labels assigned at different pipeli
 ## 1. Reading Value
 
 **Field:** `reading_value`  
-**Set by:** Layer 3 unified LLM call (`lib/prompts/validation/layer3.md`)  
-**Question answered:** Who should read this source? Is it dashboard or newsletter material?
+**Set by:** Layer 3 unified LLM call (`lib/prompts/validation/layer3.md`), using the shared rubric in `lib/prompts/scoring/reading-value.md`  
+**Question answered:** How much does this source change what a threat team knows or does?
 
-Reading value is the primary editorial triage signal. It is independent of threat severity, maturity, and publisher prestige — a theoretical paper introducing a new attack surface may be `essential` while a confirmed in-the-wild CVE may be `analyst`.
+Reading value is the primary editorial triage signal. It is independent of threat severity, maturity, and publisher prestige — a theoretical paper introducing a new attack surface may be `essential` while a confirmed in-the-wild CVE may be `informative`.
 
-| Value | Audience | Criteria |
+| Value | Definition | Examples |
 |---|---|---|
-| `essential` | Senior leadership, board, policymakers | Changes the threat model, invalidates a trusted assumption, establishes a new attack surface, documents the first confirmed operational use of a major capability, or introduces a canonical framework leadership will repeatedly reference. A CISO cites this in a board deck. |
-| `recommended` | Security-aware professionals, threat analysts | Materially changes prioritisation within a known attack surface through a new technique, meaningful measurement, confirmed adversary adoption, strong multi-incident synthesis, or a highly reusable case study. Goes in the weekly threat brief. |
-| `analyst` | Security engineers and practitioners | Technically useful detail, implementation mechanics, incremental research, or corroborating coverage that improves practitioner understanding but does not change strategic posture. The team reads it; leadership sees the summary. |
-| `background` | Reference only | Adjacent guidance, generic commentary, aggregations, policy context, defensive advice, or sources that add no distinct intelligence beyond stronger existing coverage. File away. |
+| `essential` | Materially changes the strategic understanding of the threat landscape, or establishes a significant development not previously evidenced. | The first confirmed adversary use of a consequential AI capability; authoritative evidence of a new class of threat; a landmark framework likely to shape security practice; a multi-government advisory signalling a significant shift in strategic posture. |
+| `recommended` | Materially changes prioritisation or understanding within an established threat area. | A significant technique variant supported by concrete evidence; first confirmed adversary adoption of a known technique; synthesis revealing a pattern across multiple incidents; a substantive case study demonstrating measurable impact. |
+| `informative` | Provides substantive technical or operational value, but does not materially change strategic understanding or prioritisation. | Implementation mechanics; exploit details; incremental research on a well-understood technique; technical validation; a vulnerability advisory without evidence of exploitation. Practitioners typically benefit from the source directly, while leadership can rely on its key findings. |
+| `background` | Provides contextual or supplementary information without materially adding to the current understanding of the threat. | Adjacent policy or guidance; general defensive advice; commentary without new evidence; derivative reporting; sources substantially duplicating stronger existing coverage. |
+
+**The two dividing lines:**
+- `recommended` vs `informative` is **materiality, not quality** — after reading it, would a threat team re-rank a risk, a mitigation, or a monitoring priority? If nothing gets re-ranked, it is `informative` however good it is.
+- `essential` vs `recommended` is **scope** — `essential` moves the picture of the landscape; `recommended` sharpens the picture inside a threat area already on the map.
 
 **Hard rules:**
-- Thin body text (<~300 chars): capped at `analyst` regardless of title language. The title is not evidence.
-- Defensive-primary sources (vendor tooling docs, architecture guides, how-to hardening): `analyst` or `background` even if they describe attacks as context.
+- Thin body text (<~300 chars): capped at `informative` regardless of title language. The title is not evidence.
+- Defensive-primary sources (vendor tooling docs, architecture guides, how-to hardening): `informative` or `background` even if they describe attacks as context.
+- Research-only work (lab demo, no real-world exploitation) defaults to `informative`. It reaches `recommended` only when it demonstrates a significant technique variant with a working attack AND names a prioritisation consequence (lowers attack cost/skill, raises success rate or scale, defeats a relied-on mitigation, or extends a known attack to a boundary defenders treated as out of reach). Benchmarks, taxonomies, surveys, and efficiency refinements stay `informative`.
+- `essential` has two independent branches: **(A)** first-of-kind or first-operational novelty that changes the threat model, or **(B)** the first credible public evidence of something the field could not previously evidence — the first confirmed adversary use of a consequential capability, a genuinely new threat class with a working demonstration, or a canonical framework / multi-government posture statement. Branch B does not require a new attack class.
 
 ### Worked examples and signals
 
@@ -31,9 +37,9 @@ scannable; the definitions above remain the authoritative criteria.
 
 | Value | Examples | Signals |
 |---|---|---|
-| `essential` | GTIG's first confirmed AI-generated zero-day in a real operation. OWASP LLM Top 10 initial release. Five Eyes statement on frontier AI cyber risk. | Confirms something the field considered theoretical; establishes a new attack class; landmark framework or multi-government advisory that reshapes strategic posture. |
-| `recommended` | GTIG quarterly AI threat report with new adversary TTPs. CrowdStrike on first observed AI-generated phishing at scale. HiddenLayer HuggingFace malware incident. | New TTP variant backed by concrete evidence; first confirmed adversary adoption of a known technique; named incident with measurable impact; shifts how you weight a known risk. |
-| `analyst` | Vulnerability advisory for a vLLM SSRF. arXiv paper with only an abstract available. Third journalist writeup of a known incident. | CVE or advisory with no exploitation evidence; implementation mechanics; 2nd or 3rd coverage of a known story; incremental research on a well-mapped technique. |
+| `essential` | GTIG's first confirmed AI-generated zero-day in a real operation. A named state actor poisoning npm packages specifically so AI coding agents select them. OWASP LLM Top 10 initial release. Five Eyes statement on frontier AI cyber risk. | Confirms something the field considered theoretical; first credible public evidence of adversary use of a consequential capability; establishes a new attack class; landmark framework or multi-government advisory that reshapes strategic posture. |
+| `recommended` | GTIG quarterly AI threat report with new adversary TTPs. CrowdStrike on the fourth observed AI-generated phishing campaign at scale. HiddenLayer HuggingFace malware incident. A paper demonstrating a technique variant that materially lowers attack cost. | New TTP variant backed by concrete evidence; further confirmed adoption of a capability already evidenced; named incident with measurable impact; shifts how you weight a known risk. |
+| `informative` | Vulnerability advisory for a vLLM SSRF. arXiv paper with only an abstract available. Benchmark or taxonomy over a known attack class. Third journalist writeup of a known incident. | CVE or advisory with no exploitation evidence; implementation mechanics; 2nd or 3rd coverage of a known story; incremental research or evaluation work on a well-mapped technique. |
 | `background` | Generic "AI threats are rising" editorial. AWS implementation guide for multi-tenant agents. Defensive IR playbook with no new offensive findings. | Defensive or hardening content only; policy/governance without offensive findings; generic editorial; adds nothing beyond what better sources already cover. |
 
 ---
@@ -48,7 +54,7 @@ scannable; the definitions above remain the authoritative criteria.
 |---|---|
 | `overview_dashboard` | `essential`, or `recommended` that is timely, not duplicate, and represents a distinct development in a major threat category during the current reporting window |
 | `email_newsletter` | `essential` or `recommended` AND the finding is readable without engineering background AND actionable or awareness-raising for a non-specialist — never thin-text, defensive-primary, PoC mechanics, or academic benchmarks |
-| `analyst_library` | Any `essential`, `recommended`, or `analyst` source — all substantive sources go here |
+| `analyst_library` | Any `essential`, `recommended`, or `informative` source — all substantive sources go here |
 
 ---
 
@@ -211,6 +217,6 @@ evidence_origin    — claim provenance:  "who produced the underlying evidence?
 
 None of these dimensions is a function of any other. A source can be:
 - `essential` + `research` maturity (first-of-kind theoretical paper)
-- `analyst` + `operational` maturity (routine CVE for a known exploited class)
+- `informative` + `operational` maturity (routine CVE for a known exploited class)
 - `recommended` + `secondary_reporting` origin (well-sourced journalist synthesis)
 - `background` + `primary` trust (authoritative defensive guidance with no offensive finding)

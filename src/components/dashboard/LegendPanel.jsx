@@ -18,13 +18,13 @@ const MATURITY = [
 
 const READING_VALUE = [
   { key: "essential",   color: "#b91c1c", bg: "#fee2e2",  label: "Essential",
-    desc: "Changes the threat model or establishes something the field had not seen before — the first confirmed adversary use of a major AI capability, a landmark framework leadership will repeatedly reference, or a multi-government advisory declaring a shift in strategic posture." },
+    desc: "Materially changes the strategic understanding of the threat landscape or establishes a significant development not previously evidenced. Examples include the first confirmed adversary use of a consequential AI capability, authoritative evidence of a new class of threat, a landmark framework likely to shape security practice, or a multi-government advisory signalling a significant shift in strategic posture." },
   { key: "recommended", color: "#c2410c", bg: "#ffedd5",  label: "Recommended",
-    desc: "Materially changes prioritisation within a known attack surface — a new technique variant backed by concrete evidence, the first confirmed adversary adoption of a known technique, a synthesis across multiple incidents, or a named case study with measurable impact." },
-  { key: "analyst",     color: "#475569", bg: "#e2e8f0",  label: "Analyst",
-    desc: "Technically useful for practitioners but does not change strategic posture — implementation mechanics, incremental research on a well-mapped technique, exploit detail, or an advisory with no evidence of exploitation. Leadership sees the summary rather than reading the source directly." },
+    desc: "Materially changes prioritisation or understanding within an established threat area. Examples include a significant technique variant supported by concrete evidence, first confirmed adversary adoption of a known technique, synthesis revealing a pattern across multiple incidents, or a substantive case study demonstrating measurable impact." },
+  { key: "informative", color: "#475569", bg: "#e2e8f0",  label: "Informative",
+    desc: "Provides substantive technical or operational value but does not materially change strategic understanding or prioritisation. Examples include implementation mechanics, exploit details, incremental research on a well-understood technique, technical validation, or a vulnerability advisory without evidence of exploitation. Typically, practitioners may benefit from the source directly, while leadership can rely on its key findings." },
   { key: "background",  color: "#94a3b8", bg: "#f1f5f9",  label: "Background",
-    desc: "Adjacent guidance, policy context, defensive advice, or generic commentary carrying no distinct offensive intelligence, including sources that add nothing beyond stronger existing coverage." },
+    desc: "Provides contextual or supplementary information without materially adding to the current understanding of the threat. Examples include adjacent policy or guidance, general defensive advice, commentary without new evidence, derivative reporting, or sources substantially duplicating stronger existing coverage." },
 ];
 
 const CATEGORIES = [

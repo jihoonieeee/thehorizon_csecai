@@ -8,6 +8,11 @@ Each issue is recorded here on discovery and marked when resolved. Source-level 
 
 ## Legend
 
+> **Vocabulary note (Sept 2026):** entries below predating the reading-value rename use
+> `analyst`, which is now `informative`. The definitions also changed at the same time —
+> see `docs/legend.md` and `lib/prompts/scoring/reading-value.md`. Historical entries are
+> left as written; do not read them as current calibration.
+
 **Status:** `open` | `fixed` | `wontfix` | `investigating`
 **Type:** `classification` | `taxonomy` | `date` | `maturity` | `reading_value` | `evidence` | `trust` | `data_integrity` | `systemic`
 

@@ -59,7 +59,7 @@ async function dispatchNewsletterWorkflow(window) {
 // Maturity-first ranking for "top sources" — operational > observed > validated > research,
 // then trust tier, then recency.
 const TRUST_ORDER = { primary: 4, high: 3, medium: 2, low: 1, unknown: 0 };
-const READING_ORDER = { essential: 40, recommended: 30, analyst: 20, background: 10 };
+const READING_ORDER = { essential: 40, recommended: 30, informative: 20, analyst: 20, background: 10 };
 function rankSource(s) {
   const level = maturityOf(s);
   const rv = s.reading_value ?? "background";

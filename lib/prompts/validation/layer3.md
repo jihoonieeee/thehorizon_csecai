@@ -367,235 +367,7 @@ or dates. A vendor blog accurately synthesizing the GTIG AI-zero-day, the Five E
 statement, and Mandiant M-Trends data is substantive secondary reporting — not
 marketing, not governance_signal.
 
-════ DIMENSION 7: READING VALUE ════
-
-Work through the eight steps below in order. Each step narrows the judgment until the final
-label and distribution flags follow naturally. Do not jump to a label from the title or
-publisher alone — complete every step.
-
-── STEP 1: DISTINCT INTELLIGENCE ────────────────────────────────────────────────────────
-What specific, concrete fact, technique, measurement, or event does this source add that
-is not already better covered by a more authoritative existing source? State it in one
-clause. If you cannot identify a distinct contribution, the source is "background".
-
-── STEP 2: NOVELTY CLASSIFICATION ───────────────────────────────────────────────────────
-Choose exactly one. Base the classification ONLY on what the source explicitly states or
-demonstrates — do not infer global novelty from internal text alone:
-
-  "first_of_kind"   — the source EXPLICITLY claims and substantiates that it introduces,
-    names, or demonstrates a previously undescribed attack mechanism, affected security
-    boundary, or attack class. The source itself must say or strongly imply this is new
-    (e.g. "we introduce", "first demonstration of", "previously unknown", "novel attack
-    surface"). A new technique NAME alone is not enough — there must be a described mechanism
-    not attributable to prior published work. Examples: first paper naming phantom-dependency
-    squatting via LLM hallucination as a deliberate attack vector; first documented tool-
-    poisoning method via MCP metadata that forces an agent to invoke a malicious endpoint.
-
-    ACADEMIC PAPER CALIBRATION: Academic papers use "we introduce", "we propose", "novel",
-    "first systematic study" as standard rhetorical framing — this is NOT evidence of
-    first_of_kind on its own. Apply first_of_kind only when the ATTACK CLASS (not the
-    technique) is genuinely new at the literature level — meaning no prior published work
-    describes attacks against this security boundary or using this mechanism. Papers that
-    name a new technique within an ESTABLISHED attack class (prompt injection, memory
-    poisoning, jailbreaks, backdoors, adversarial examples, model extraction, evasion,
-    RAG poisoning) are "new_variant", not "first_of_kind", even when the paper says "we
-    introduce" or names a new technique. A paper that provides the "first empirical study"
-    or "first systematic framework" for a known attack class is also "new_variant" —
-    the measurement methodology is new, not the attack class itself.
-
-  "confirmed_first_operational" — the source EXPLICITLY states "first observed", "first
-    confirmed", "first documented" real-world use by an adversary of a capability that was
-    previously only theoretical or lab-demonstrated. The phrase or equivalent must appear;
-    do not infer this from context or severity.
-
-  "new_variant"     — the source describes a meaningful technical evolution or adaptation of
-    a known attack pattern: new evasion, new target class, new delivery mechanism, new
-    measurement demonstrating improved capability. The attack class is known; the specific
-    contribution is not merely incremental.
-
-  "known_pattern"   — the source describes a technique, incident, or threat that is already
-    well-documented. New examples of prompt injection, jailbreaks, phishing, or model
-    extraction that follow established patterns without novel contribution.
-
-  "routine"         — a standard advisory, CVE disclosure, patch note, governance update,
-    or periodic reporting with no technique novelty.
-
-── STEP 3: EVIDENCE MATURITY ────────────────────────────────────────────────────────────
-What stage has this threat reached?
-  research_only    — theoretical analysis or lab demonstration; no exploitation outside a
-                     controlled environment
-  demonstrated     — a working exploit, PoC, or red-team exercise against real software,
-                     with named products or environments
-  observed         — reported in the wild by one source, not yet corroborated
-  operational      — confirmed adversary use with named actors, campaigns, or multi-source
-                     corroboration
-
-── STEP 4: STRATEGIC CONSEQUENCE ────────────────────────────────────────────────────────
-Does this source change how defenders should think or act, or does it only add technical
-implementation detail?
-  "changes_threat_model"    — invalidates a previously trusted assumption, establishes a new
-    attack surface, or documents the first operational use of a capability that leadership
-    needs to account for in posture and investment decisions. IMPORTANT: "new deployment
-    context for a known attack" does NOT qualify — showing that prompt injection also works
-    in SIEM logs, resume screening, or coding assistants does not change the threat model if
-    defenders already know prompt injection is possible in AI-powered applications. Use this
-    label only when the finding requires defenders to add an entirely new threat to their model,
-    not merely extend a known threat to another surface.
-  "changes_priority"        — does not change the threat model but materially shifts how
-    defenders should rank or resource response to a known threat class: new measurement of
-    scale/speed/cost, confirmed adversary adoption, a strong multi-incident synthesis
-  "adds_technical_detail"   — useful for practitioners building detections or mitigations,
-    but does not change strategic posture or resource allocation
-  "context_only"            — adjacent, defensive, or governance content that provides
-    background without changing assessment
-
-── STEP 5: DISTINCTIVENESS CHECK ────────────────────────────────────────────────────────
-Would the distinct fact from Step 1 already be fully covered by a stronger, more primary
-source that any reader of this source would know to consult? If yes, this source is
-duplicate coverage and should stay "analyst" or "background" unless it adds unique detail
-not present in the primary: victim perspective, attribution, measurements, attack-chain
-walkthrough, or cross-incident synthesis.
-
-── STEP 6: REPORTING-WINDOW RELEVANCE ───────────────────────────────────────────────────
-Is this source timely and representative of the current reporting period, or is it primarily
-historical? Promote only when:
-  • it documents a finding or event from the current or immediately preceding window, OR
-  • an older source has become newly relevant because a current event cites or operationalizes
-    it (baseline or canonical explanation), OR
-  • it establishes a foundation no newer source adequately provides.
-A recently published article summarising an old, well-covered issue should stay "analyst" or
-"background" regardless of publication date.
-
-── STEP 7: AUDIENCE ─────────────────────────────────────────────────────────────────────
-Who benefits directly from reading this?
-  "leadership"   — CISOs, policymakers, executives; needs strategic implications,
-                   not technical mechanics
-  "threat_analysts" — threat analysts and intelligence teams; need techniques, TTPs, IOCs,
-                   actor behaviour, and pattern context
-  "engineers"    — security engineers and practitioners; need CVE mechanics, PoC code,
-                   detection rules, and implementation detail
-  "background_ref" — only useful as a background reference or citation
-
-── STEP 8: PUBLISHER ROLE IN TRUST (not in label) ───────────────────────────────────────
-Publisher reputation modifies confidence in the claim, not the reading_value label.
-  • Use publisher identity to assess whether the claim is credible (trust_tier, evidence_quality).
-  • Do NOT use publisher prestige to promote a routine advisory to "recommended" or "essential".
-  • A genuinely field-changing paper from an unknown team may be "essential".
-  • A routine GTIG or CISA advisory may be "analyst".
-  Well-known publishers of original AI-threat research (Google GTIG, Mandiant, OpenAI,
-  Anthropic, NCSC, CISA, CrowdStrike, Microsoft MSRC, Wiz, Trail of Bits, Hidden Layer,
-  peer-reviewed venues) should inform how much you trust the claim — not whether it is promoted.
-
-── RESEARCH-MATURITY CAP ────────────────────────────────────────────────────────────────
-Apply this cap BEFORE assigning reading_value. It is a hard ceiling.
-
-When evidence_maturity is "research_only" (lab-only, no real-world exploitation):
-  • DEFAULT is "analyst". This is the starting point for all research papers.
-  • reading_value MAY be upgraded to "recommended" ONLY when: novelty is "first_of_kind"
-    AND strategic_consequence is "changes_priority" or higher AND the paper demonstrates
-    a working attack (not just theory). Meeting two of three is NOT enough.
-  • reading_value MAY be "essential" ONLY when ALL three hold: (a) attack CLASS is
-    genuinely new, (b) requires defenders to add a brand-new threat to their model, AND
-    (c) working demonstration provided.
-  • Papers that introduce frameworks, taxonomies, benchmarks, or systematic studies of
-    KNOWN attack classes are "analyst" even if well-executed — the classification work
-    has value for practitioners but does not change the strategic threat model.
-  • Academic papers that name a new technique within memory poisoning, prompt injection,
-    jailbreaks, backdoors, model extraction, adversarial examples, or evasion are "analyst"
-    regardless of how many "novel" or "first" claims appear in the abstract.
-  COMMON FAILURE MODE: treating "notable" or "landmark" significance as automatic
-    justification for "recommended". Significance describes research quality; reading_value
-    describes operational urgency for a threat analyst. A landmark paper on a known attack
-    class (e.g. a more efficient model inversion, a faster membership inference method,
-    fewer-query model extraction) is "analyst" — it refines a known threat, it does not
-    change the threat model.
-
-── ASSIGN READING VALUE ─────────────────────────────────────────────────────────────────
-
-"essential" — when ALL of the following hold:
-  • novelty is "first_of_kind" OR "confirmed_first_operational"
-  • strategic_consequence is "changes_threat_model"
-  • NOT duplicate coverage of a stronger existing source
-  OR: a canonical framework (OWASP LLM Top 10, MITRE ATLAS) or named multi-government
-  posture statement (Five Eyes, CISA binding directive) that leadership will repeatedly
-  reference regardless of novelty in the current window.
-
-"recommended" — when:
-  • novelty is "new_variant" AND strategic_consequence is "changes_priority" OR
-    "changes_threat_model" (with corroborated evidence), OR
-  • novelty is "first_of_kind" or "confirmed_first_operational" but strategic_consequence
-    is only "changes_priority" (field-new but narrower scope), OR
-  • novelty is "known_pattern" but the source provides a coherent, transferable case study
-    with: named actor or victim + initial access + exploitation + escalation/pivot +
-    measurable impact + identified broken assumption — all present, OR
-  • novelty is "known_pattern" and evidence_maturity is "operational" and the source is a
-    well-sourced multi-incident synthesis by an original research team (not journalism)
-  NOT "recommended" if: duplicate coverage, out-of-window historical summary, or if the
-  strategic consequence is only "adds_technical_detail" for a known technique.
-
-"analyst" — when:
-  • strategic_consequence is "adds_technical_detail", OR
-  • novelty is "routine" or "known_pattern" with no case-study boost, OR
-  • audience is "engineers" only, OR
-  • the source is a second or third instance of the same finding already at recommended/essential
-  Analyst sources belong in the practitioner library regardless of publisher or severity.
-
-"background" — when:
-  • strategic_consequence is "context_only", OR
-  • no distinct intelligence beyond existing coverage (Step 1 answer: nothing specific), OR
-  • an aggregation or roundup with no unique findings of its own, OR
-  • defensive guidance, policy documents, or governance context without new offensive findings
-
-── THIN-TEXT CAP ─────────────────────────────────────────────────────────────────────────
-When the BODY TEXT (everything after the title) is under roughly 300 characters, you cannot
-verify novelty, strategic consequence, or case-study completeness from the content itself.
-
-CRITICAL: The title is NOT body text. Do not use the title as evidence of novelty.
-A title like "First AI-Generated Ransomware Attack" or "First Confirmed LLM Zero-Day" is
-a label chosen by the publisher or editor — it is not a verified claim from the source body.
-Apply this mechanically: cover the title and re-read only the body. If the body alone cannot
-support "essential" or "recommended", it cannot be promoted regardless of what the title says.
-
-Hard rule: when body text is under ~300 characters:
-  • Set reading_value = "analyst" unconditionally.
-  • Set distribution: analyst_library=true, overview_dashboard=false, email_newsletter=false.
-  • Exception: if the body text — not the title — explicitly and completely states the named
-    actor, affected product/version, attack mechanism, and confirmed outcome in those few
-    sentences, "analyst" is still the ceiling. The exception never promotes above "analyst";
-    it only determines whether the source reaches "analyst" vs "background".
-
-Common failure mode to avoid: a thin source whose title contains "first", "confirmed", or
-"novel" gets promoted to "recommended" or "essential" because the model reads the title as
-content. The title is metadata, not evidence. If the body text is too brief to substantiate
-the novelty claim independently, the source is "analyst" regardless of title language.
-
-── DEFENSIVE-PRIMARY SOURCE CHECK ───────────────────────────────────────────────────────
-Before finalising reading_value, ask: is the PRIMARY purpose of this source to describe a
-defensive capability, promote a vendor product or service, or provide implementation guidance
-— with offensive findings cited only as motivation or context?
-
-If YES — the source's primary value is defensive or commercial:
-  • reading_value is "analyst" or "background" regardless of how interesting the attack
-    context is. A vendor blog describing how their tool defeats a threat is not an offensive
-    finding — it is a product announcement that happens to mention a threat.
-  • Signals: "our solution/platform/product", how-to implementation guides, "protect
-    yourself by doing X", a defensive tool is the main deliverable, the described attack
-    is only background context for a defensive recommendation.
-  • Exception: if a vendor's defensive research ALSO introduces or measures a new offensive
-    capability as a primary deliverable (e.g. a red-team report that discovers a genuinely
-    new attack class and makes the PoC primary), treat the offensive finding as primary.
-
-If NO — the source's primary value is an offensive finding, threat intelligence, or incident:
-  • Continue to assign reading_value from the steps above.
-
-Examples:
-  "AWS documents how to implement token-exchange for multi-tenant agents" → primary purpose
-    is implementation guidance for AWS Bedrock customers → analyst (architecture docs)
-  "Wiz Red Agent: our AI tool finds vulnerabilities in your environment" → primary purpose
-    is vendor product announcement → analyst or background
-  "Check Point documents HexStrike-AI: adversaries used MCP-based agentic orchestration
-    to find and exploit zero-days in real operations" → primary purpose is documenting an
-    adversary campaign → keep offensive label (essential/recommended based on novelty)
+{{reading_value_rubric}}
 
 ── WHAT MAKES SOMETHING NEWSLETTER-READABLE ─────────────────────────────────────────────
 The email newsletter goes to leadership and security-aware non-specialists. A source belongs
@@ -620,18 +392,6 @@ have it make sense without a technical briefing first?
     • Defensive-primary sources (vendor tooling, architecture guides, how-to hardening)
     • Any source where the distinct value is "practitioner implementation detail" only
 
-── ANTI-HYPE RULES ──────────────────────────────────────────────────────────────────────
-Do NOT increase reading_value because:
-  ✗ the source involves a famous company, famous model, or frontier AI system
-  ✗ the source uses alarming or urgent language ("critical", "first", "unprecedented")
-  ✗ the threat class sounds sophisticated (agentic, autonomous, AI-native, zero-day)
-  ✗ a well-known publisher produced it
-  ✗ the TITLE implies novelty — titles are metadata, not body evidence
-  ✗ the article COVERS a topic that matters, even if this specific article adds nothing new
-Do NOT decrease reading_value because:
-  ✗ the publisher is a lesser-known research team
-  ✗ no exploitation has occurred yet (first-of-kind research = essential regardless)
-
 ── ASSIGN DISTRIBUTION ──────────────────────────────────────────────────────────────────
 After assigning reading_value, set the three distribution flags:
 
@@ -639,7 +399,7 @@ After assigning reading_value, set the three distribution flags:
     • reading_value is "essential", OR
     • reading_value is "recommended" AND source is timely, not duplicate, and represents
       a distinct development in at least one major threat category during the current window
-    • NOT: analyst or background; duplicate coverage; thin-text sources (body <300 chars);
+    • NOT: informative or background; duplicate coverage; thin-text sources (body <300 chars);
       out-of-window historical summaries; defensive-primary sources; sources requiring
       engineering context to understand the significance
 
@@ -652,7 +412,7 @@ After assigning reading_value, set the three distribution flags:
       requires understanding the attack mechanism to appreciate
 
   analyst_library (true when):
-    • reading_value is "essential", "recommended", or "analyst" (any substantive source)
+    • reading_value is "essential", "recommended", or "informative" (any substantive source)
     • NOT: background sources (unless canonical reference)
 
 ── CALIBRATION EXAMPLES ─────────────────────────────────────────────────────────────────
@@ -681,12 +441,12 @@ After assigning reading_value, set the three distribution flags:
     live marketplaces), not research_only. Confirmed adversary adoption of a known attack
     surface → changes_priority → recommended.
 
-  analyst / library only:
+  informative / library only:
     arXiv paper "MemPoison: Uncovering Persistent Memory Threats in LLM Agents" —
     introduces a taxonomy and benchmark for memory poisoning, a known attack class.
-    evidence_maturity=research_only; strategic_consequence=adds_technical_detail → analyst.
+    evidence_maturity=research_only; strategic_consequence=adds_technical_detail → informative.
 
-  analyst / library only:
+  informative / library only:
     arXiv paper with 150-char abstract — thin-text cap applies unconditionally; body too
     short to verify novelty regardless of how novel the title sounds.
 
@@ -709,16 +469,16 @@ Before writing the JSON, verify:
   7. Is the domain classification driven by the AFFECTED SECURITY BOUNDARY, not by
      downstream product associations or who consumes the component?
   8. Is reading_value driven by content, not by severity, trust_tier, maturity, or publisher
-     prestige? A severe CVE can be "analyst"; a routine GTIG advisory can be "analyst";
+     prestige? A severe CVE can be "informative"; a routine GTIG advisory can be "informative";
      a novel paper from an unknown team may be "essential".
   9. Are first_of_kind and confirmed_first_operational claims EXPLICIT in the source text,
      not inferred from the title or topic alone? If not stated → "new_variant" or "known_pattern".
   10. Is duplicate coverage down-ranked? A second or third article on the same finding
       should not be "recommended" unless it adds unique detail the primary lacks.
-  11. Did the thin-text cap apply? BODY TEXT <~300 chars → reading_value="analyst"
+  11. Did the thin-text cap apply? BODY TEXT <~300 chars → reading_value="informative"
       unconditionally. Title is NOT body evidence — cover it and re-read only the body.
   12. Did the defensive-primary check apply? If the primary deliverable is a defensive
-      capability, vendor tool, or implementation guide → reading_value "analyst" or "background".
+      capability, vendor tool, or implementation guide → reading_value "informative" or "background".
 
 ════ VERDICT ════
 
@@ -773,7 +533,7 @@ PASS — proceed to full classification:
     vulnerability, exploit_disclosure, incident, governance_signal — brevity ≠ thinness for structured advisories)
   • trust_tier is "medium", "high", or "primary"
   • evidence_quality is "strong" or "adequate"
-  • reading_value is "essential", "recommended", or "analyst" (NOT "background")
+  • reading_value is "essential", "recommended", or "informative" (NOT "background")
   • source_type is NOT "defensive_capability"
   A central + substantive + medium-or-higher + adequate/strong + non-defensive source passes.
   A central + substantive source with only "weak" evidence → review, not pass.
@@ -806,7 +566,7 @@ Return strict JSON only — no markdown, no text before or after.
   "secondary_domain": "traditional_ai_threats" | "llm_threats" | "agentic_ai_threats" | "ai_enabled_threats" | null,
   "affected_ai_layer": "model_artifact" | "training" | "inference" | "llm_processing" | "rag_retrieval" | "agent_autonomy" | "ai_infrastructure" | "ai_as_weapon" | "governance_policy" | "none",
   "boundary_rationale": "<one sentence: why this domain was chosen over alternatives>",
-  "reading_value": "essential" | "recommended" | "analyst" | "background",
+  "reading_value": "essential" | "recommended" | "informative" | "background",
   "distribution_recommendation": {
     "overview_dashboard": true | false,
     "email_newsletter": true | false,

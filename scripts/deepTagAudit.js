@@ -233,12 +233,12 @@ READING VALUE
 Importance from source_type:
   incident / threat_intelligence / adversary_adoption_signal → realized → essential
   exploit_disclosure / capability_demonstration → proven → recommended (essential if source_type=threat_intelligence)
-  research_finding / benchmark_evaluation → research → analyst (DEFAULT for all research papers)
-  governance_signal (primary/curated publisher) → reference → analyst
+  research_finding / benchmark_evaluation → research → informative (DEFAULT for all research papers)
+  governance_signal (primary/curated publisher) → reference → informative
   vulnerability (no active exploitation language) → noise → background
   vulnerability (with "exploited in the wild" / "actively exploited") → realized → essential
 
-RESEARCH-MATURITY CAP: ALL research papers default to "analyst". Upgrade to "recommended" ONLY when: first-of-kind attack CLASS (not just new technique within established class) AND changes strategic threat model AND working demonstration. Papers with new techniques within known attack classes (prompt injection, jailbreaks, backdoors, model extraction, adversarial evasion, etc.) = analyst even if the paper claims "novel" or "first".
+RESEARCH-MATURITY CAP: ALL research papers default to "informative". Upgrade to "recommended" ONLY when: first-of-kind attack CLASS (not just new technique within established class) AND changes strategic threat model AND working demonstration. Papers with new techniques within known attack classes (prompt injection, jailbreaks, backdoors, model extraction, adversarial evasion, etc.) = informative even if the paper claims "novel" or "first".
 `.trim();
 
 const SYSTEM_PROMPT = `You are a senior AI threat intelligence database auditor performing a deep accuracy audit.

@@ -208,7 +208,7 @@ After relevance and coverage, rank competing sources using:
 2. Primary evidence — original disclosures, incident reports, advisories, telemetry, papers
 3. Maturity fit — for incident questions: operational/observed; for research: research is appropriate
 4. Trust tier — primary > high > medium > low
-5. Reading value — essential > recommended > analyst > background
+5. Reading value — essential > recommended > informative > background
 6. Detail — prefer sources naming systems, actors, CVEs, dates, mechanisms, or measurements
 7. Recency — apply only after the correct time field is satisfied. Exception for trend/current queries: when query_type is `trend_analysis` or temporal_intent is `current` or `recent`, move recency to second priority (after Directness) and prefer sources from the last 90 days when all else is equal.
 

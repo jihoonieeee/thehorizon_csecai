@@ -53,8 +53,8 @@ const CANONICAL_TAG_IDS = new Set(PRIMARY_TAGS.map(t => t.id));
 const READING_FROM_IMPORTANCE = {
   realized:  "essential",
   proven:    "recommended",
-  research:  "analyst",
-  reference: "analyst",
+  research:  "informative",
+  reference: "informative",
   noise:     "background",
 };
 
@@ -229,7 +229,7 @@ Importance tier from source_type:
 
 Reading value from importance:
   realized → essential | proven → recommended | proven + source_type=threat_intelligence → essential
-  research / reference → analyst (DEFAULT for all research papers)
+  research / reference → informative (DEFAULT for all research papers)
   noise → background
 
 Maturity level from source_type:
