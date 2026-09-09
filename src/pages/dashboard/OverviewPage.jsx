@@ -873,8 +873,13 @@ export function OverviewPage() {
         </>
       )}
 
-      {/* Threat maturity + priority legend — reference material, kept at the foot */}
-      <ThreatLegend open={showThreatLegend} onToggle={() => setShowThreatLegend(v => !v)} />
+      {/* Threat maturity + priority legend — reference material, kept at the foot.
+          Gated on `data` like every other block: the legend is static, so without
+          the gate it renders on the first paint and pops in alone while the rest
+          of the page is still fetching. */}
+      {data && (
+        <ThreatLegend open={showThreatLegend} onToggle={() => setShowThreatLegend(v => !v)} />
+      )}
         
       {/* Maturity side panel — fixed drawer, overlays everything */}
       {maturitySelection && (() => {
