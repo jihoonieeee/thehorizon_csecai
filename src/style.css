@@ -2803,6 +2803,33 @@ a:hover { text-decoration: underline; }
 
 .hz-tier-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 
+/* A labelled facet group (Label / Importance / Show). Groups sit side by side on
+   one row and wrap as whole units, so chips from two different scales never
+   interleave on the same line. */
+.hz-tier-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Hairline between adjacent groups on the same row. */
+.hz-tier-group-sep {
+  flex: 0 0 auto;
+  width: 1px;
+  align-self: stretch;
+  min-height: 18px;
+  margin: 0 6px;
+  background: var(--border);
+}
+
+/* Below this width the paired groups no longer fit side by side, so let each one
+   take a full row and drop the separators rather than leaving them stranded. */
+@media (max-width: 1180px) {
+  .hz-tier-group { flex: 1 0 100%; }
+  .hz-tier-group-sep { display: none; }
+}
+
 .hz-tier-chip {
   display: inline-flex;
   align-items: center;
