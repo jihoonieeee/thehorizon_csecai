@@ -152,7 +152,7 @@ Every source is classified into one offensive category. Sources not clearly offe
 
 | Category | What it covers |
 |---|---|
-| **Traditional AI Threats** | Attacks *on* ML models — data poisoning, model extraction, adversarial evasion, backdoors, membership inference. The model is the victim. |
+| **Traditional AI Threats** | Attacks *on* ML models, model artifacts and supply chains, training data, or inference behaviour — data poisoning, model extraction, adversarial evasion, backdoors, membership inference. The model is the victim. |
 | **LLM Threats** | LLM-specific attacks — prompt injection, jailbreaks, RAG poisoning, data/prompt leakage, guardrail bypass, inference-server vulnerabilities (vLLM, LiteLLM). |
 | **Agentic AI Threats** | Attacks exploiting AI agent autonomy — malicious plugins/skills, MCP and tool-call abuse, agent supply-chain poisoning, hijacking agent reasoning or memory. |
 | **AI-Enabled Threats** | AI as the attacker's tool — AI-generated malware, deepfake fraud, AI-assisted phishing, voice cloning, LLM-as-C2, nation-state AI tradecraft. |

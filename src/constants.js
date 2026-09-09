@@ -17,7 +17,7 @@ export const CATEGORY_LABELS = {
 
 export const CATEGORY_DESCRIPTIONS = {
   traditional_ai_threats:
-    "Threats to AI/ML models, data, training pipelines, and model supply chains.",
+    "Attacks on ML models, model artifacts, supply chains, training data, and inference behavior.",
   llm_threats:
     "Prompt injection, jailbreaks, RAG risks, data leakage, and LLM application security.",
   agentic_ai_threats:

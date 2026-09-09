@@ -23,7 +23,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { getCompletedPeriodWindow } from "../lib/time/reportingWindow.js";
 import { requireAuth, requireAdmin, roleOf } from "../lib/api/requireAuth.js";
-import { computeEvidenceMaturity, deriveConfidence } from "../lib/dashboard/evidenceMaturity.js";
+import { computeEvidenceMaturity } from "../lib/dashboard/evidenceMaturity.js";
 import { truncateAtWord } from "../lib/utils/truncate.js";
 import { maturityOf, MATURITY_RANK } from "../lib/pipeline/scoring/maturityLevel.js";
 import { loadNewsletter } from "../lib/storage/newsletterStore.js";

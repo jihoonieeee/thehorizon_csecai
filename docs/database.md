@@ -68,7 +68,7 @@ Primary table. One row per unique article/advisory/paper.
 | `category_reason` | text | "Manual override (dashboard)" for edited sources |
 
 **Main category values:**
-- `traditional_ai_threats` — attacks on ML models
+- `traditional_ai_threats` — attacks on ML models, artifacts, supply chains, training data, inference
 - `llm_threats` — LLM-specific attacks
 - `agentic_ai_threats` — AI agent abuse
 - `ai_enabled_threats` — AI used as attack tool

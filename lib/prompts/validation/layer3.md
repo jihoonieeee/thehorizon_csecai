@@ -75,13 +75,14 @@ Set boundary_rationale to a single sentence explaining why this domain was chose
 Set secondary_domain if the finding spans a second domain meaningfully; otherwise null.
 
 ── TRADITIONAL AI THREATS ─────────────────────────────────────────────────────
-Target: ML model weights, training data, checkpoints, model artifacts, embeddings,
-provenance systems, or learning processes.
+Target: ML model weights, training data, checkpoints, model artifacts, model supply
+chains, embeddings, provenance systems, learning processes, or inference behavior.
 DETERMINISM TEST: Would this attack remain essentially identical if the target were a
 recommender system, CNN, or diffusion model instead of an LLM? If YES → traditional_ai_threats.
 Includes: data poisoning, model extraction/theft, evasion, adversarial examples, backdoors,
 membership inference, watermark removal, model inversion.
 NOT here: Attacks that specifically require language processing → LLM threats.
+Attacks that require autonomous agent action → Agentic.
 
 ── LLM THREATS ────────────────────────────────────────────────────────────────
 Exploited surface: prompt processing, context interpretation, retrieval, alignment,

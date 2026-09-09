@@ -10,7 +10,7 @@ Ask first: Is AI the **TARGET** or the **WEAPON**?
 
 ## Category Discriminators (memorise these)
 
-**traditional_ai_threats** — attacker exploits a CLASSICAL ML model (classifier, detector, recommender, RL policy) AS A MACHINE LEARNING ARTIFACT: its weights, training data, inference path, or supply chain. The model outputs a label/score/decision, NOT free-form language.
+**traditional_ai_threats** — attacker exploits a CLASSICAL ML model (classifier, detector, recommender, RL policy) AS A MACHINE LEARNING ARTIFACT: its weights, model artifacts and supply chain, training data, or inference behavior. The model outputs a label/score/decision, NOT free-form language — the attack does not depend on language-model-specific mechanisms or autonomous agents.
 
 **llm_threats** — attacker exploits an LLM AS AN INSTRUCTION-FOLLOWING LANGUAGE SYSTEM: prompts, context, guardrails, RAG, embeddings, model output surface. The harm stays in the model's response or data — no autonomous action taken.
 

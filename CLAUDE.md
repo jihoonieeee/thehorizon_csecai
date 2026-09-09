@@ -126,7 +126,7 @@ Key columns on sources:
 Four offensive categories only (no defensive/governance category). Defensive or
 out-of-scope content falls to unclear_or_adjacent.
 
-traditional_ai_threats — attacks on ML models: data poisoning, model extraction, evasion, backdoors, adversarial examples
+traditional_ai_threats — attacks on ML models, model artifacts and supply chains, training data, or inference behavior: data poisoning, model extraction, evasion, backdoors, adversarial examples
 llm_threats — LLM-specific: prompt injection, jailbreaks, RAG poisoning, data leakage, guardrail bypass
 agentic_ai_threats — AI agents and tool use: MCP risks, autonomous agent abuse, coding agent vulnerabilities
 ai_enabled_threats — AI as an attack tool: deepfakes, AI phishing, AI malware, voice cloning, disinformation

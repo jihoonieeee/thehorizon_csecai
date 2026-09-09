@@ -29,7 +29,7 @@ const READING_VALUE = [
 
 const CATEGORIES = [
   { color: "#3583C9", name: "Traditional AI Threats",
-    desc: "Attacks on ML models themselves — data poisoning, model extraction, adversarial evasion, backdoors, membership inference." },
+    desc: "Attacks on ML models, model artifacts and supply chains, training data, or inference behavior — data poisoning, model extraction, adversarial evasion, backdoors, membership inference." },
   { color: "#9C62A7", name: "LLM Threats",
     desc: "LLM-specific attacks — prompt injection, jailbreaks, RAG poisoning, data/prompt leakage, guardrail bypass, inference-server vulnerabilities." },
   { color: "#19BC9D", name: "Agentic AI Threats",

@@ -415,7 +415,7 @@ function ThreatLegend({ open, onToggle }) {
 
 const CAT_DESCRIPTIONS = {
   traditional_ai_threats:
-    "Attacks against machine learning models, training data, or inference behavior that do not depend on language models, prompts, or autonomous agents.",
+    "Attacks against machine learning models, model artifacts and supply chains, training data, or inference behavior that do not depend on language-model-specific mechanisms or autonomous agents.",
   llm_threats:
     "Attacks against an LLM's prompts, context, retrieval, outputs, alignment, or model ecosystem where the harm remains within the model or its responses rather than autonomous actions.",
   agentic_ai_threats:

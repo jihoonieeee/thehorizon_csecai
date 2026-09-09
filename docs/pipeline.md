@@ -49,7 +49,7 @@ Every source is assigned to exactly one:
 
 | Category | What it covers |
 |---|---|
-| `traditional_ai_threats` | Attacks on ML models: data poisoning, model extraction, evasion, adversarial examples |
+| `traditional_ai_threats` | Attacks on ML models, model artifacts and supply chains, training data, or inference behavior: data poisoning, model extraction, evasion, adversarial examples |
 | `llm_threats` | LLM-specific attacks: prompt injection, jailbreaks, RAG poisoning, guardrail bypass |
 | `agentic_ai_threats` | Autonomous AI agents: MCP risks, tool abuse, coding agent vulnerabilities |
 | `ai_enabled_threats` | AI as a weapon: deepfakes, AI phishing, AI malware, disinformation |

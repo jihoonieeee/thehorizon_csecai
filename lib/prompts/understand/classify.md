@@ -611,8 +611,9 @@ Use these EXACT tag IDs. For each tag: read the WHAT (definition), EXAMPLES (con
 instances), and BELONGS WHEN (criteria), then apply the ✗ NOT discriminators to rule
 out neighbouring tags. Assign the single primary_tag that names the core threat.
 
-── traditional_ai_threats ── ML-level attacks on classical (non-LLM) models, data,
-   pipelines, or supply chain. NOT prompt-level. NOT agentic.
+── traditional_ai_threats ── ML-level attacks on classical (non-LLM) models, model
+   artifacts, data, pipelines, supply chain, or inference behavior. NOT prompt-level.
+   NOT agentic.
 
   TAI01_data_poisoning
     WHAT: The attacker manipulates INPUTS TO THE TRAINING PROCESS — training data,
