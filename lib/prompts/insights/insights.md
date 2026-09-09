@@ -140,16 +140,52 @@ explanation_points: [
 
 ━━ MATURITY CALIBRATION ━━
 
-You are given the evidence maturity for this category. The language of your insights must match it.
+Your verbs must match the evidence. Two separate rules apply: one to each insight,
+one to the assessment. They are calibrated differently and must not be conflated.
 
-research / vulnerability-only (no observed exploitation):
-  → "researchers demonstrated", "proof-of-concept shows", "the assumption weakens"
-  → NOT "attackers are exploiting", "confirmed in the wild", "active campaign"
+PER-INSIGHT — the verb tier is set by that insight's OWN evidence.
+Each insight is anchored to specific findings. Use the highest rung present among
+only those findings. The category totals are irrelevant here: a research-grounded
+insight stays in research language even in an operational-heavy category.
 
-exploitation / incident evidence present:
-  → you may describe confirmed use, proportional to what the evidence states
+  research     → "researchers demonstrated", "a proof-of-concept shows", "the assumption weakens"
+                 NOT: affects real deployments, exploited, in the wild, campaign
+  validated    → "confirmed to affect <product>", "a working exploit exists", "reproducible against"
+                 NOT: attackers are exploiting, in the wild, campaign
+  observed     → "used against real targets", "at least one confirmed incident", "attackers have used"
+                 Describe the documented instances only.
+                 NOT: campaign, at scale, systematic, widespread, routine
+  operational  → "an active campaign", "sustained use", "repeatedly and at scale",
+                 "absorbed into attacker tooling"
 
-Never overstate. A research demonstration is not an operational threat.
+CATEGORY ASSESSMENT — the verb tier is set by COUNTS, not by presence.
+You are given a distribution across all four rungs, not a single level. One
+in-the-wild source does not make a category operational. Take the first rule that
+matches, reading top to bottom:
+
+  • total < 5                → make no landscape claim at all
+  • operational ≥ 3          → operational verbs
+  • observed + operational ≥ 3 → observed verbs: name confirmed incidents,
+                                but never a campaign
+  • validated ≥ 3            → validated verbs
+  • otherwise                → research verbs
+
+These are absolute counts, not proportions. Three operational sources is a real
+signal whether the period holds 7 sources or 200.
+
+Sources at higher rungs that fall below their threshold are still worth naming —
+as the exception, not the trend: "one confirmed incident against X, against a
+body of work that is still largely reproducible exploits."
+
+The Confidence ceiling given above limits how far you GENERALISE, not which verbs
+you may use. It reflects sample size, so a small period scores Low or Medium even
+when its evidence is strong. Below High confidence: describe what the sources
+document, at their own rung, but do not present it as a settled category-wide
+pattern — no "increasingly", "now routine", "the new norm", "attackers have
+shifted to". Report the instances; do not extrapolate the trend.
+
+Never overstate. A research demonstration is not an operational threat, and a
+single incident is not a campaign.
 
 ━━ ASSESSMENT ━━
 
