@@ -1075,6 +1075,13 @@ export function SourcesPage() {
           {tierFilter && (
             <button className="hz-tag-clear" onClick={() => { setTierFilter(null); setPage(1); }}>Clear</button>
           )}
+        </div>
+      </div>
+
+      {/* Saved / flagged / report facets — own row so the importance chips stay readable */}
+      <div className="hz-tier-filter-row">
+        <span className="hz-tag-filter-label">Show</span>
+        <div className="hz-tier-chips">
           {/* Starred filter — count reflects the other active filters (e.g. starred
               WITHIN the current category + label), so the facets compose. */}
           <button
