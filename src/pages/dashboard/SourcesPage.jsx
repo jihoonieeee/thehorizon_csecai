@@ -73,8 +73,6 @@ const TIER_ORDER = ["operational", "observed", "validated", "research"];
 
 // Reading value — essential/recommended/informative/background.
 // Null until scripts/labelSources.js backfill runs on the corpus.
-// "analyst" is the pre-rename value; the API normalises it to "informative", so
-// nothing here needs a legacy key.
 const LABEL_META = {
   essential:   { short: "Essential",   color: "#b91c1c", bg: "#fee2e2" },
   recommended: { short: "Recommended", color: "#c2410c", bg: "#ffedd5" },

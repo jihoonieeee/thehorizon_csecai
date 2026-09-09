@@ -408,9 +408,10 @@ BODY TEXT:
 
 ## Notes
 
-- `informative` replaced the former `analyst` level (Sept 2026). Legacy rows are migrated by
-  `scripts/relabelReadingValues.js`; read paths alias `analyst` → `informative` during the
-  migration window.
+- `informative` replaced the former `analyst` level (Sept 2026). The corpus was fully
+  migrated by `scripts/relabelReadingValues.js` in the same change; no row carries the old
+  value and no read path aliases it. Historical entries in `docs/database_audit.md` predate
+  the rename.
 - The rubric deliberately excludes the distribution flags (`overview_dashboard`,
   `email_newsletter`, `analyst_library`) — those are Layer 3 routing decisions and stay in
   `layer3.md`, which is the only consumer that emits them.

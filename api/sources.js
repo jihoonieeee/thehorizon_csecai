@@ -241,8 +241,8 @@ export default async function handler(req, res) {
         return {
           ...rest,
           date_collected: collected_date || null,
-          // Both go through readingValueOf so legacy "analyst" rows normalise to
-          // "informative" — the raw column would bypass the alias mid-migration.
+          // `label` is the legacy field name for reading_value; both read through
+          // readingValueOf so the intelligence-jsonb fallback applies to each.
           label: readingValueOf(s) ?? null,
           short_summary:  s.short_summary || s.analyst_brief || null,
           analyst_brief:  s.analyst_brief || null,

@@ -63,8 +63,6 @@ const CHECKPOINT = getArg("--checkpoint", "output/reading-value-checkpoint.jsonl
 const ROLLBACK   = getArg("--rollback", null);
 
 const VALID = ["essential", "recommended", "informative", "background"];
-// Pre-rename value: rows written before the analyst→informative migration.
-const LEGACY = { analyst: "informative" };
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -125,7 +123,7 @@ async function loadSources() {
 function stratify(rows, n) {
   const buckets = new Map();
   for (const r of rows) {
-    const k = LEGACY[r.reading_value] ?? r.reading_value ?? "unlabelled";
+    const k = r.reading_value ?? "unlabelled";
     if (!buckets.has(k)) buckets.set(k, []);
     buckets.get(k).push(r);
   }
@@ -157,7 +155,7 @@ function buildSignals(s) {
     `maturity=${intel.maturity_level || "?"}`,
     `significance=${intel.significance?.level || "?"}`,
     `is_defensive=${intel.mechanism_classification?.is_defensive ?? intel.is_defensive ?? "?"}`,
-    `current_label=${LEGACY[s.reading_value] ?? s.reading_value ?? "none"}`,
+    `current_label=${s.reading_value ?? "none"}`,
   ];
   return parts.join("  ");
 }
@@ -256,7 +254,7 @@ async function main() {
         const r = await assess(s);
         if (r.skip) { skipped++; return; }
 
-        const before = LEGACY[s.reading_value] ?? s.reading_value ?? "unlabelled";
+        const before = s.reading_value ?? "unlabelled";
         const after  = r.reading_value;
         transitions.set(`${before}→${after}`, (transitions.get(`${before}→${after}`) || 0) + 1);
         counts[after]++;

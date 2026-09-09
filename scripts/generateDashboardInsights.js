@@ -309,8 +309,7 @@ export async function loadWindowSources(from, to) {
     // Load essential+recommended+informative; informative sources are held as a fallback
     // and only merged into a category's pool when that category has fewer than
     // INFORMATIVE_FALLBACK_THRESHOLD essential/recommended sources (see below).
-    // "analyst" is the pre-rename value — kept until the corpus relabel completes.
-    .in("reading_value", ["essential", "recommended", "informative", "analyst"]);
+    .in("reading_value", ["essential", "recommended", "informative"]);
   if (error) throw new Error(error.message);
   return data || [];
 }
