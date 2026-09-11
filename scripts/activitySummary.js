@@ -52,6 +52,10 @@ if (!rows.length) {
   process.exit(0);
 }
 
+// occurred_at is stored in UTC; the whole report reads in SGT (UTC+8).
+const SGT_OFFSET_MS = 8 * 60 * 60 * 1000;
+const sgtIso = (utcIso) => new Date(new Date(utcIso).getTime() + SGT_OFFSET_MS).toISOString();
+
 const tally = (items, key) =>
   items.reduce((acc, r) => { const k = key(r); acc[k] = (acc[k] || 0) + 1; return acc; }, {});
 
@@ -61,8 +65,8 @@ console.log(`\nActivity — last ${days} days (${rows.length} events)\n`);
 
 console.log("Per user:");
 for (const [uid, n] of sorted(tally(rows, (r) => r.user_id))) {
-  const lastSeen = rows.find((r) => r.user_id === uid).occurred_at.slice(0, 16).replace("T", " ");
-  console.log(`  ${labelOf(uid).padEnd(34)} ${String(n).padStart(5)} events   last seen ${lastSeen}`);
+  const lastSeen = sgtIso(rows.find((r) => r.user_id === uid).occurred_at).slice(0, 16).replace("T", " ");
+  console.log(`  ${labelOf(uid).padEnd(34)} ${String(n).padStart(5)} events   last seen ${lastSeen} SGT`);
 }
 
 if (byUser) {
@@ -76,10 +80,10 @@ if (byUser) {
   }
 }
 
-console.log("\nDaily active users:");
+console.log("\nDaily active users (SGT days):");
 const byDay = {};
 for (const r of rows) {
-  const d = r.occurred_at.slice(0, 10);
+  const d = sgtIso(r.occurred_at).slice(0, 10);
   (byDay[d] ||= new Set()).add(r.user_id);
 }
 for (const d of Object.keys(byDay).sort()) {
