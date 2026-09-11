@@ -7,8 +7,10 @@
  * and the most-viewed pages.
  *
  * Usage:
- *   node scripts/activitySummary.js            # last 30 days
+ *   node scripts/activitySummary.js                     # last 30 days
  *   node scripts/activitySummary.js --days 7
+ *   node scripts/activitySummary.js --by-user           # add a per-user page breakdown
+ *   node scripts/activitySummary.js --user melvyn       # only users whose email matches
  */
 
 import "dotenv/config";
@@ -16,12 +18,14 @@ import { createClient } from "@supabase/supabase-js";
 
 const argv = process.argv.slice(2);
 const days = Number(argv[argv.indexOf("--days") + 1]) || 30;
+const userFilter = argv.includes("--user") ? argv[argv.indexOf("--user") + 1]?.toLowerCase() : null;
+const byUser = argv.includes("--by-user") || Boolean(userFilter);
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const since = new Date(Date.now() - days * 86400_000).toISOString();
 
-const { data: rows, error } = await sb
+const { data: allRows, error } = await sb
   .from("user_activity_log")
   .select("user_id, event_type, target_id, occurred_at")
   .gte("occurred_at", since)
@@ -29,7 +33,7 @@ const { data: rows, error } = await sb
 
 if (error) { console.error("Query failed:", error.message); process.exit(1); }
 
-if (!rows.length) {
+if (!allRows.length) {
   console.log(`No activity recorded in the last ${days} days.`);
   process.exit(0);
 }
@@ -37,6 +41,16 @@ if (!rows.length) {
 // Resolve user ids to emails for a readable report.
 const { data: { users = [] } = {} } = await sb.auth.admin.listUsers({ perPage: 200 });
 const emailOf = Object.fromEntries(users.map((u) => [u.id, u.email]));
+const labelOf = (uid) => emailOf[uid] || uid;
+
+const rows = userFilter
+  ? allRows.filter((r) => labelOf(r.user_id).toLowerCase().includes(userFilter))
+  : allRows;
+
+if (!rows.length) {
+  console.log(`No activity in the last ${days} days for users matching "${userFilter}".`);
+  process.exit(0);
+}
 
 const tally = (items, key) =>
   items.reduce((acc, r) => { const k = key(r); acc[k] = (acc[k] || 0) + 1; return acc; }, {});
@@ -48,7 +62,18 @@ console.log(`\nActivity — last ${days} days (${rows.length} events)\n`);
 console.log("Per user:");
 for (const [uid, n] of sorted(tally(rows, (r) => r.user_id))) {
   const lastSeen = rows.find((r) => r.user_id === uid).occurred_at.slice(0, 16).replace("T", " ");
-  console.log(`  ${(emailOf[uid] || uid).padEnd(34)} ${String(n).padStart(5)} events   last seen ${lastSeen}`);
+  console.log(`  ${labelOf(uid).padEnd(34)} ${String(n).padStart(5)} events   last seen ${lastSeen}`);
+}
+
+if (byUser) {
+  console.log("\nPages per user:");
+  for (const [uid] of sorted(tally(rows, (r) => r.user_id))) {
+    const mine = rows.filter((r) => r.user_id === uid);
+    console.log(`\n  ${labelOf(uid)}  (${mine.length} events)`);
+    for (const [t, n] of sorted(tally(mine, (r) => `${r.event_type}:${r.target_id ?? "—"}`))) {
+      console.log(`    ${t.padEnd(44)} ${n}`);
+    }
+  }
 }
 
 console.log("\nDaily active users:");
