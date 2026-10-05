@@ -962,6 +962,44 @@ export function SourcesPage() {
     return Object.entries(c).sort((a, b) => b[1] - a[1]).map(([t]) => t);
   }, [sources]);
 
+  // Export the rows currently passing every filter (date range included) to
+  // .xlsx, newest first. xlsx is loaded on demand so it stays out of the main bundle.
+  const [exporting, setExporting] = useState(false);
+  const exportXlsx = useCallback(async () => {
+    setExporting(true);
+    try {
+      const XLSX = await import("xlsx");
+      const shownDate = s => (s.date_confidence === "low" || s.date_confidence === "none" || !s.date_published)
+        ? (s.date_discovered || "") : s.date_published;
+      const rows = [...filtered]
+        .sort((a, b) => shownDate(b).localeCompare(shownDate(a)))
+        .map(s => ({
+          "Date":            shownDate(s).slice(0, 10),
+          "Date confidence": s.date_confidence || "",
+          "Title":           s.title || "",
+          "Publisher":       s.publisher || "",
+          "Category":        CAT_LABEL_FULL[s.main_category] || s.main_category || "",
+          "Tags":            (s.tags || []).map(tagLabel).join("; "),
+          "Maturity":        TIER_META[s.maturity]?.label || "",
+          "Reading value":   LABEL_META[s.label]?.short || "",
+          "Source type":     s.source_type || "",
+          "Trust":           s.trust_tier || "",
+          "Summary":         s.short_summary || s.summary || "",
+          "URL":             s.url || "",
+        }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws["!cols"] = [12, 14, 60, 24, 22, 40, 12, 14, 16, 10, 80, 50].map(wch => ({ wch }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Sources");
+      const range = shownFrom ? `${shownFrom}_to_${shownTo}` : `all-time_to_${shownTo}`;
+      XLSX.writeFile(wb, `horizon-sources_${range}.xlsx`);
+    } catch (e) {
+      setAdminMsg({ ok: false, text: `Export failed: ${e.message}` });
+    } finally {
+      setExporting(false);
+    }
+  }, [filtered, shownFrom, shownTo]);
+
   const toggleTag = (tag) => {
     setActiveTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
     setPage(1);
@@ -987,6 +1025,14 @@ export function SourcesPage() {
           </button>
           <button className="hz-legend-btn" onClick={() => setShowTaxonomy(true)} title="Taxonomy tag reference">
             ⓘ Taxonomy
+          </button>
+          <button
+            className="hz-legend-btn"
+            onClick={exportXlsx}
+            disabled={loading || exporting || filtered.length === 0}
+            title="Download the sources in this date range (with current filters) as Excel, newest first"
+          >
+            {exporting ? "Exporting…" : "⤓ Export Excel"}
           </button>
         </div>
       </div>
@@ -1198,7 +1244,7 @@ export function SourcesPage() {
         <span className="hz-sources-count">
           {loading ? "Loading…" : `${filtered.filter(s => !s.parent_source_id).length.toLocaleString()} source${filtered.filter(s => !s.parent_source_id).length !== 1 ? "s" : ""}`}
           {activeTab !== "all" && (
-            <span className="hz-sources-count-cat"> in {CAT_LABEL_FULL[activeTab] || activeTab}</span>
+            <> in<span className="hz-sources-count-cat">{CAT_LABEL_FULL[activeTab] || activeTab}</span></>
           )}
         </span>
       </div>
