@@ -2,7 +2,8 @@
  * GET /api/sources — filterable source list with period support.
  *
  * Query params:
- *   period     — YYYY-MM | last-7d | last-30d | last-90d | all-time (default: last-90d)
+ *   period     — YYYY-MM | last-7d | last-30d | last-90d | last-180d | last-365d | custom | all-time (default: all-time)
+ *   from, to   — YYYY-MM-DD inclusive bounds (SGT), used when period=custom
  *   category   — main_category filter
  *   trust_tier — comma-separated trust tiers
  *   search     — text search on title + summary
@@ -42,10 +43,23 @@ const GUEST_CATEGORIES = [
   "traditional_ai_threats", "llm_threats", "agentic_ai_threats", "ai_enabled_threats",
 ];
 
-function periodWindow(period) {
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function periodWindow(period, fromDate, toDate) {
   const now = new Date();
   if (period === "all-time") {
     return { start: null, end: null, label: "All time" };
+  }
+  // Custom range: inclusive YYYY-MM-DD bounds, anchored to SGT midnight like the
+  // reporting windows. Either side may be omitted for an open-ended range.
+  if (period === "custom") {
+    const from = ISO_DATE.test(fromDate || "") ? fromDate : null;
+    const to   = ISO_DATE.test(toDate || "")   ? toDate   : null;
+    const start = from ? new Date(`${from}T00:00:00+08:00`).toISOString() : null;
+    const end   = to
+      ? new Date(new Date(`${to}T00:00:00+08:00`).getTime() + 86400000).toISOString()
+      : null;
+    return { start, end, label: `${from || "…"} to ${to || "…"}` };
   }
   if (period && /^\d{4}-\d{2}$/.test(period)) {
     const [year, month] = period.split("-").map(Number);
@@ -57,9 +71,13 @@ function periodWindow(period) {
   }
   const days = period === "last-7d" ? 7
              : period === "last-30d" ? 30
+             : period === "last-180d" ? 180
+             : period === "last-365d" ? 365
              : 90;
   const label = period === "last-7d" ? "Last 7 days"
               : period === "last-30d" ? "Last 30 days"
+              : period === "last-180d" ? "Last 6 months"
+              : period === "last-365d" ? "Last year"
               : "Last 90 days";
   return {
     start: new Date(Date.now() - days * 86400000).toISOString(),
@@ -162,7 +180,7 @@ export default async function handler(req, res) {
     const tiers   = p.trust_tier ? p.trust_tier.split(",").map(s => s.trim()).filter(Boolean) : [];
     const cap     = p.limit ? Math.min(Math.max(parseInt(p.limit, 10) || 0, 0), HARD_CAP) : HARD_CAP;
 
-    const { start, end, label } = periodWindow(period);
+    const { start, end, label } = periodWindow(period, p.from, p.to);
 
     // Build a fresh filtered query for each page (the builder is single-use).
     // `starred` is included only when the column exists (migration 013) — the flag

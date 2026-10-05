@@ -88,7 +88,8 @@ Only `format=newsletter` is supported.
 Filterable source list.
 
 **Query params:**
-- `period` — `YYYY-MM | last-7d | last-30d | last-90d | all-time` (default: `all-time`)
+- `period` — `YYYY-MM | last-7d | last-30d | last-90d | last-180d | last-365d | custom | all-time` (default: `all-time`)
+- `from`, `to` — `YYYY-MM-DD` inclusive bounds (SGT midnight), used when `period=custom`; either may be omitted
 - `category` — exact `main_category` value
 - `trust_tier` — comma-separated list of tier values
 - `search` — text search on title, publisher, short_summary (ILIKE)

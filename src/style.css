@@ -2740,6 +2740,35 @@ a:hover { text-decoration: underline; }
   box-shadow: 0 0 0 3px var(--accent-dim);
 }
 
+/* Period dropdown + custom date range (Sources page) */
+.hz-period-select,
+.hz-period-date {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.hz-period-select { cursor: pointer; min-width: 140px; }
+.hz-period-select:focus,
+.hz-period-date:focus {
+  border-color: var(--accent-mid);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.hz-period-custom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hz-period-sep {
+  font-size: 0.8125rem;
+  color: var(--text-tertiary);
+}
+
 .hz-sources-table-wrap {
   background: var(--surface);
   border: 1px solid var(--border);

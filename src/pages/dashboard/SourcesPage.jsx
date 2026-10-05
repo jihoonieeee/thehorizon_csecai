@@ -50,10 +50,13 @@ const CAT_LABEL_FULL = {
 const ALL_CATS = Object.keys(CAT_COLOR);
 
 const PERIOD_OPTIONS = [
-  { value: "last-7d",  label: "7 days" },
-  { value: "last-30d", label: "30 days" },
-  { value: "last-90d", label: "90 days" },
-  { value: "all-time", label: "All time" },
+  { value: "last-7d",   label: "7 days" },
+  { value: "last-30d",  label: "30 days" },
+  { value: "last-90d",  label: "90 days" },
+  { value: "last-180d", label: "6 months" },
+  { value: "last-365d", label: "1 year" },
+  { value: "all-time",  label: "All time" },
+  { value: "custom",    label: "Custom range…" },
 ];
 
 const PAGE_SIZE = 50;
@@ -574,6 +577,8 @@ export function SourcesPage() {
   const [showTaxonomy,  setShowTaxonomy]  = useState(false);
   const [bookmarkedIds, setBookmarkedIds] = useState(new Set());
   const [period,      setPeriod]      = useState("all-time");
+  const [customFrom,  setCustomFrom]  = useState("");   // YYYY-MM-DD, used when period === "custom"
+  const [customTo,    setCustomTo]    = useState("");
   const [activeTab,   setActiveTab]   = useState("all");
   const [activeTags,  setActiveTags]  = useState([]);
   const [search,      setSearch]      = useState("");
@@ -604,6 +609,10 @@ export function SourcesPage() {
     // No limit param → the API returns the full filtered corpus (paged past the
     // PostgREST 1000-row cap). All faceting below is done client-side.
     const params = new URLSearchParams({ period });
+    if (period === "custom") {
+      if (customFrom) params.set("from", customFrom);
+      if (customTo)   params.set("to",   customTo);
+    }
     fetch(`/api/sources?${params}`, { headers: { Authorization: `Bearer ${getSessionToken(session)}` } })
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(json => {
@@ -625,7 +634,7 @@ export function SourcesPage() {
     // isAdmin gates what rows are kept above, so a role resolving after mount
     // (session arrives async) must re-run the fetch or the guest view keeps
     // admin-only rows it was built with.
-  }, [period, isAdmin]);
+  }, [period, customFrom, customTo, isAdmin]);
 
   useEffect(() => { loadSources(); }, [loadSources]);
 
@@ -950,17 +959,16 @@ export function SourcesPage() {
           <button className="hz-legend-btn" onClick={() => setShowTaxonomy(true)} title="Taxonomy tag reference">
             ⓘ Taxonomy
           </button>
-          {/* Period pill switcher */}
-          <div className="hz-seg-group">
-            {PERIOD_OPTIONS.map(o => (
-              <button
-                key={o.value}
-                className={`hz-seg-btn${period === o.value ? " active" : ""}`}
-                onClick={() => { setPeriod(o.value); setPage(1); }}
-              >
-                {o.label}
-              </button>
-            ))}
+          {/* Sort switcher */}
+          <div className="hz-seg-group hz-sort-group">
+            <button className={`hz-seg-btn${sortBy === "importance" ? " active" : ""}`}
+              onClick={() => { setSortBy("importance"); setPage(1); }}>Importance</button>
+            <button className={`hz-seg-btn${sortBy === "date" ? " active" : ""}`}
+              onClick={() => { setSortBy("date"); setPage(1); }}>Newest</button>
+            {isAdmin && (
+              <button className={`hz-seg-btn${sortBy === "ingested" ? " active" : ""}`}
+                onClick={() => { setSortBy("ingested"); setPage(1); }}>Ingested</button>
+            )}
           </div>
         </div>
       </div>
@@ -1121,16 +1129,38 @@ export function SourcesPage() {
           value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }}
         />
-        <div className="hz-seg-group hz-sort-group">
-          <button className={`hz-seg-btn${sortBy === "importance" ? " active" : ""}`}
-            onClick={() => { setSortBy("importance"); setPage(1); }}>Importance</button>
-          <button className={`hz-seg-btn${sortBy === "date" ? " active" : ""}`}
-            onClick={() => { setSortBy("date"); setPage(1); }}>Newest</button>
-          {isAdmin && (
-            <button className={`hz-seg-btn${sortBy === "ingested" ? " active" : ""}`}
-              onClick={() => { setSortBy("ingested"); setPage(1); }}>Ingested</button>
-          )}
-        </div>
+        {/* Period dropdown (+ date pickers for a custom range) */}
+        <select
+          className="hz-period-select"
+          value={period}
+          onChange={e => { setPeriod(e.target.value); setPage(1); }}
+          aria-label="Time range"
+        >
+          {PERIOD_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        {period === "custom" && (
+          <div className="hz-period-custom">
+            <input
+              type="date"
+              className="hz-period-date"
+              value={customFrom}
+              max={customTo || undefined}
+              onChange={e => { setCustomFrom(e.target.value); setPage(1); }}
+              aria-label="From date"
+            />
+            <span className="hz-period-sep">to</span>
+            <input
+              type="date"
+              className="hz-period-date"
+              value={customTo}
+              min={customFrom || undefined}
+              onChange={e => { setCustomTo(e.target.value); setPage(1); }}
+              aria-label="To date"
+            />
+          </div>
+        )}
         <span className="hz-sources-count">
           {loading ? "Loading…" : `${filtered.filter(s => !s.parent_source_id).length.toLocaleString()} source${filtered.filter(s => !s.parent_source_id).length !== 1 ? "s" : ""}`}
           {activeTab !== "all" && (
