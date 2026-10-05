@@ -970,8 +970,43 @@ export function SourcesPage() {
                 onClick={() => { setSortBy("ingested"); setPage(1); }}>Ingested</button>
             )}
           </div>
+          {/* Period dropdown */}
+          <select
+            className="hz-period-select"
+            value={period}
+            onChange={e => { setPeriod(e.target.value); setPage(1); }}
+            aria-label="Time range"
+          >
+            {PERIOD_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
         </div>
       </div>
+
+      {/* Custom range date pickers, right-aligned under the header controls */}
+      {period === "custom" && (
+        <div className="hz-period-custom">
+          <span className="hz-period-sep">From</span>
+          <input
+            type="date"
+            className="hz-period-date"
+            value={customFrom}
+            max={customTo || undefined}
+            onChange={e => { setCustomFrom(e.target.value); setPage(1); }}
+            aria-label="From date"
+          />
+          <span className="hz-period-sep">to</span>
+          <input
+            type="date"
+            className="hz-period-date"
+            value={customTo}
+            min={customFrom || undefined}
+            onChange={e => { setCustomTo(e.target.value); setPage(1); }}
+            aria-label="To date"
+          />
+        </div>
+      )}
 
       {showLegend    && <LegendPanel    onClose={() => setShowLegend(false)} />}
       {showTaxonomy  && <TaxonomyPanel  onClose={() => setShowTaxonomy(false)} />}
@@ -1129,38 +1164,6 @@ export function SourcesPage() {
           value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }}
         />
-        {/* Period dropdown (+ date pickers for a custom range) */}
-        <select
-          className="hz-period-select"
-          value={period}
-          onChange={e => { setPeriod(e.target.value); setPage(1); }}
-          aria-label="Time range"
-        >
-          {PERIOD_OPTIONS.map(o => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-        {period === "custom" && (
-          <div className="hz-period-custom">
-            <input
-              type="date"
-              className="hz-period-date"
-              value={customFrom}
-              max={customTo || undefined}
-              onChange={e => { setCustomFrom(e.target.value); setPage(1); }}
-              aria-label="From date"
-            />
-            <span className="hz-period-sep">to</span>
-            <input
-              type="date"
-              className="hz-period-date"
-              value={customTo}
-              min={customFrom || undefined}
-              onChange={e => { setCustomTo(e.target.value); setPage(1); }}
-              aria-label="To date"
-            />
-          </div>
-        )}
         <span className="hz-sources-count">
           {loading ? "Loading…" : `${filtered.filter(s => !s.parent_source_id).length.toLocaleString()} source${filtered.filter(s => !s.parent_source_id).length !== 1 ? "s" : ""}`}
           {activeTab !== "all" && (

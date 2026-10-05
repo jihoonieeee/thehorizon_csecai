@@ -2740,20 +2740,22 @@ a:hover { text-decoration: underline; }
   box-shadow: 0 0 0 3px var(--accent-dim);
 }
 
-/* Period dropdown + custom date range (Sources page) */
+/* Period dropdown + custom date range (Sources page) — sized to match .hz-seg-btn */
 .hz-period-select,
 .hz-period-date {
-  padding: 8px 12px;
+  padding: 6px 12px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: 8px;
   background: var(--surface);
-  color: var(--text-primary);
-  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
   font-family: inherit;
   outline: none;
-  transition: border-color 0.12s, box-shadow 0.12s;
+  transition: border-color 0.12s, box-shadow 0.12s, background 0.1s;
 }
-.hz-period-select { cursor: pointer; min-width: 140px; }
+.hz-period-select { cursor: pointer; }
+.hz-period-select:hover { background: var(--surface-2); color: var(--text-primary); }
 .hz-period-select:focus,
 .hz-period-date:focus {
   border-color: var(--accent-mid);
@@ -2762,7 +2764,9 @@ a:hover { text-decoration: underline; }
 .hz-period-custom {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
+  margin-top: 10px;
 }
 .hz-period-sep {
   font-size: 0.8125rem;
