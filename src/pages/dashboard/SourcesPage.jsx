@@ -56,8 +56,25 @@ const PERIOD_OPTIONS = [
   { value: "last-180d", label: "6 months" },
   { value: "last-365d", label: "1 year" },
   { value: "all-time",  label: "All time" },
-  { value: "custom",    label: "Custom range…" },
+  { value: "custom",    label: "Custom range" },
 ];
+
+// Rolling-window presets in days — mirrors periodWindow() in api/sources.js.
+const PERIOD_DAYS = {
+  "last-7d": 7, "last-30d": 30, "last-90d": 90, "last-180d": 180, "last-365d": 365,
+};
+
+// YYYY-MM-DD in SGT, the timezone the API anchors custom ranges to.
+const sgtDate = (ms) => new Date(ms).toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
+
+// The from/to dates a preset covers, for display in the always-visible date
+// pickers. "all-time" has no lower bound, so its "from" is left blank.
+function presetRange(period) {
+  const now = Date.now();
+  if (period === "all-time") return { from: "", to: sgtDate(now) };
+  const days = PERIOD_DAYS[period] ?? 90;
+  return { from: sgtDate(now - days * 86400000), to: sgtDate(now) };
+}
 
 const PAGE_SIZE = 50;
 
@@ -579,6 +596,9 @@ export function SourcesPage() {
   const [period,      setPeriod]      = useState("all-time");
   const [customFrom,  setCustomFrom]  = useState("");   // YYYY-MM-DD, used when period === "custom"
   const [customTo,    setCustomTo]    = useState("");
+  const preset    = period === "custom" ? null : presetRange(period);
+  const shownFrom = preset ? preset.from : customFrom;
+  const shownTo   = preset ? preset.to   : customTo;
   const [activeTab,   setActiveTab]   = useState("all");
   const [activeTags,  setActiveTags]  = useState([]);
   const [search,      setSearch]      = useState("");
@@ -959,54 +979,8 @@ export function SourcesPage() {
           <button className="hz-legend-btn" onClick={() => setShowTaxonomy(true)} title="Taxonomy tag reference">
             ⓘ Taxonomy
           </button>
-          {/* Sort switcher */}
-          <div className="hz-seg-group hz-sort-group">
-            <button className={`hz-seg-btn${sortBy === "importance" ? " active" : ""}`}
-              onClick={() => { setSortBy("importance"); setPage(1); }}>Importance</button>
-            <button className={`hz-seg-btn${sortBy === "date" ? " active" : ""}`}
-              onClick={() => { setSortBy("date"); setPage(1); }}>Newest</button>
-            {isAdmin && (
-              <button className={`hz-seg-btn${sortBy === "ingested" ? " active" : ""}`}
-                onClick={() => { setSortBy("ingested"); setPage(1); }}>Ingested</button>
-            )}
-          </div>
-          {/* Period dropdown */}
-          <select
-            className="hz-period-select"
-            value={period}
-            onChange={e => { setPeriod(e.target.value); setPage(1); }}
-            aria-label="Time range"
-          >
-            {PERIOD_OPTIONS.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
         </div>
       </div>
-
-      {/* Custom range date pickers, right-aligned under the header controls */}
-      {period === "custom" && (
-        <div className="hz-period-custom">
-          <span className="hz-period-sep">From</span>
-          <input
-            type="date"
-            className="hz-period-date"
-            value={customFrom}
-            max={customTo || undefined}
-            onChange={e => { setCustomFrom(e.target.value); setPage(1); }}
-            aria-label="From date"
-          />
-          <span className="hz-period-sep">to</span>
-          <input
-            type="date"
-            className="hz-period-date"
-            value={customTo}
-            min={customFrom || undefined}
-            onChange={e => { setCustomTo(e.target.value); setPage(1); }}
-            aria-label="To date"
-          />
-        </div>
-      )}
 
       {showLegend    && <LegendPanel    onClose={() => setShowLegend(false)} />}
       {showTaxonomy  && <TaxonomyPanel  onClose={() => setShowTaxonomy(false)} />}
@@ -1164,6 +1138,54 @@ export function SourcesPage() {
           value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }}
         />
+        {/* Sort switcher */}
+        <div className="hz-seg-group hz-sort-group">
+          <button className={`hz-seg-btn${sortBy === "importance" ? " active" : ""}`}
+            onClick={() => { setSortBy("importance"); setPage(1); }}>Importance</button>
+          <button className={`hz-seg-btn${sortBy === "date" ? " active" : ""}`}
+            onClick={() => { setSortBy("date"); setPage(1); }}>Newest</button>
+          {isAdmin && (
+            <button className={`hz-seg-btn${sortBy === "ingested" ? " active" : ""}`}
+              onClick={() => { setSortBy("ingested"); setPage(1); }}>Ingested</button>
+          )}
+        </div>
+        {/* Period dropdown + always-visible date pickers. A preset fills the
+            pickers with the range it covers; editing a date switches to custom,
+            seeded from whatever range was showing. */}
+        <select
+          className="hz-period-select"
+          value={period}
+          onChange={e => {
+            const next = e.target.value;
+            if (next === "custom") { setCustomFrom(shownFrom); setCustomTo(shownTo); }
+            setPeriod(next);
+            setPage(1);
+          }}
+          aria-label="Time range"
+        >
+          {PERIOD_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <div className="hz-period-custom">
+          <input
+            type="date"
+            className="hz-period-date"
+            value={shownFrom}
+            max={shownTo || undefined}
+            onChange={e => { setCustomFrom(e.target.value); setCustomTo(shownTo); setPeriod("custom"); setPage(1); }}
+            aria-label="From date"
+          />
+          <span className="hz-period-sep">to</span>
+          <input
+            type="date"
+            className="hz-period-date"
+            value={shownTo}
+            min={shownFrom || undefined}
+            onChange={e => { setCustomFrom(shownFrom); setCustomTo(e.target.value); setPeriod("custom"); setPage(1); }}
+            aria-label="To date"
+          />
+        </div>
         <span className="hz-sources-count">
           {loading ? "Loading…" : `${filtered.filter(s => !s.parent_source_id).length.toLocaleString()} source${filtered.filter(s => !s.parent_source_id).length !== 1 ? "s" : ""}`}
           {activeTab !== "all" && (

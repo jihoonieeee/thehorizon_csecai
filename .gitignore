@@ -54,3 +54,4 @@ debug/operational_share.jsonl
 
 # local scratch files (batches, caches, id lists)
 scripts/_*
+.env*
