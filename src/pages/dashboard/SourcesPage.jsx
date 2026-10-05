@@ -1030,7 +1030,7 @@ export function SourcesPage() {
             className="hz-legend-btn"
             onClick={exportXlsx}
             disabled={loading || exporting || filtered.length === 0}
-            title="Download the sources in this date range (with current filters) as Excel, newest first"
+            title="Download the sources in this date range (with current filters) as Excel"
           >
             {exporting ? "Exporting…" : "⤓ Export Excel"}
           </button>
