@@ -49,31 +49,39 @@ const CAT_LABEL_FULL = {
 
 const ALL_CATS = Object.keys(CAT_COLOR);
 
+// Calendar-based presets: each ends today and starts on the same date N days or
+// months earlier (e.g. 5 Oct → 5 Jul for "3 months"). Resolved to concrete
+// dates client-side and sent as a custom range, so the date pickers always show
+// exactly what was fetched.
 const PERIOD_OPTIONS = [
-  { value: "last-7d",   label: "7 days" },
-  { value: "last-30d",  label: "30 days" },
-  { value: "last-90d",  label: "90 days" },
-  { value: "last-180d", label: "6 months" },
-  { value: "last-365d", label: "1 year" },
-  { value: "all-time",  label: "All time" },
-  { value: "custom",    label: "Custom range" },
+  { value: "last-7d",  label: "7 days",   days: 7 },
+  { value: "last-1m",  label: "1 month",  months: 1 },
+  { value: "last-3m",  label: "3 months", months: 3 },
+  { value: "last-6m",  label: "6 months", months: 6 },
+  { value: "last-1y",  label: "1 year",   months: 12 },
+  { value: "all-time", label: "All time" },
+  { value: "custom",   label: "Custom range" },
 ];
-
-// Rolling-window presets in days — mirrors periodWindow() in api/sources.js.
-const PERIOD_DAYS = {
-  "last-7d": 7, "last-30d": 30, "last-90d": 90, "last-180d": 180, "last-365d": 365,
-};
 
 // YYYY-MM-DD in SGT, the timezone the API anchors custom ranges to.
 const sgtDate = (ms) => new Date(ms).toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
 
-// The from/to dates a preset covers, for display in the always-visible date
-// pickers. "all-time" has no lower bound, so its "from" is left blank.
+// The from/to dates a preset covers. "all-time" has no lower bound, so its
+// "from" is blank. Month steps clamp to the target month's last day, so
+// 31 Mar minus 1 month is 28/29 Feb rather than rolling over into March.
 function presetRange(period) {
-  const now = Date.now();
-  if (period === "all-time") return { from: "", to: sgtDate(now) };
-  const days = PERIOD_DAYS[period] ?? 90;
-  return { from: sgtDate(now - days * 86400000), to: sgtDate(now) };
+  const to = sgtDate(Date.now());
+  const opt = PERIOD_OPTIONS.find(o => o.value === period);
+  if (!opt || (!opt.days && !opt.months)) return { from: "", to };
+  const [y, m, d] = to.split("-").map(Number);
+  let fromMs;
+  if (opt.days) {
+    fromMs = Date.UTC(y, m - 1, d - opt.days);
+  } else {
+    const lastDay = new Date(Date.UTC(y, m - 1 - opt.months + 1, 0)).getUTCDate();
+    fromMs = Date.UTC(y, m - 1 - opt.months, Math.min(d, lastDay));
+  }
+  return { from: new Date(fromMs).toISOString().slice(0, 10), to };
 }
 
 const PAGE_SIZE = 50;
@@ -628,10 +636,11 @@ export function SourcesPage() {
 
     // No limit param → the API returns the full filtered corpus (paged past the
     // PostgREST 1000-row cap). All faceting below is done client-side.
-    const params = new URLSearchParams({ period });
-    if (period === "custom") {
-      if (customFrom) params.set("from", customFrom);
-      if (customTo)   params.set("to",   customTo);
+    // Every range except all-time goes up as explicit dates (see PERIOD_OPTIONS).
+    const params = new URLSearchParams({ period: period === "all-time" ? "all-time" : "custom" });
+    if (period !== "all-time") {
+      if (shownFrom) params.set("from", shownFrom);
+      if (shownTo)   params.set("to",   shownTo);
     }
     fetch(`/api/sources?${params}`, { headers: { Authorization: `Bearer ${getSessionToken(session)}` } })
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
@@ -654,7 +663,7 @@ export function SourcesPage() {
     // isAdmin gates what rows are kept above, so a role resolving after mount
     // (session arrives async) must re-run the fetch or the guest view keeps
     // admin-only rows it was built with.
-  }, [period, customFrom, customTo, isAdmin]);
+  }, [period, shownFrom, shownTo, isAdmin]);
 
   useEffect(() => { loadSources(); }, [loadSources]);
 
@@ -1452,10 +1461,18 @@ export function SourcesPage() {
         <div className="hz-pagination">
           <button
             className="hz-page-btn"
+            onClick={() => setPage(1)}
+            disabled={page === 1}
+            title="First page"
+          >
+            « First
+          </button>
+          <button
+            className="hz-page-btn"
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={page === 1}
           >
-            ← Prev
+            ‹ Prev
           </button>
           <span className="hz-page-info">
             {page} / {totalPages}
@@ -1468,7 +1485,15 @@ export function SourcesPage() {
             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
           >
-            Next →
+            Next ›
+          </button>
+          <button
+            className="hz-page-btn"
+            onClick={() => setPage(totalPages)}
+            disabled={page === totalPages}
+            title="Last page"
+          >
+            Last »
           </button>
         </div>
       )}

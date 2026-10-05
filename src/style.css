@@ -1768,7 +1768,13 @@ a:hover { text-decoration: underline; }
 }
 
 .hz-page-btn {
-  padding: 5px 14px;
+  /* Fixed height + flex centring so glyphs from fallback fonts can't make one
+     button taller or shift its text baseline. */
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  box-sizing: border-box;
+  padding: 0 14px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface);
