@@ -215,6 +215,10 @@ Other useful scripts:
   node scripts/auditSourceLinks.js                    — check URL liveness, report dead links
   node scripts/auditSourceLinks.js --execute          — purge dead links and URL-variant dupes
   node scripts/understandCorpus.js                    — recovery: re-classify sources with claim_extraction_status=NULL
+  node scripts/syncFrameworkReference.js [--dry-run]  — load the pinned MITRE ATLAS + ATT&CK Enterprise releases
+                                                        (lib/config/frameworkVersions.json) into framework_techniques
+  node scripts/checkFrameworkVersions.js              — report newer MITRE releases; CI (framework-version-check.yml)
+                                                        runs it monthly and opens a version-bump PR
 
 scripts/archive/ — one-time data-fix and superseded scripts (kept for reference)
 

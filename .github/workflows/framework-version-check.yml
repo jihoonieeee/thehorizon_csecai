@@ -1,0 +1,95 @@
+name: MITRE Framework — Version Check
+
+# Monthly check for new MITRE ATLAS / ATT&CK Enterprise releases. If either is
+# newer than the version pinned in lib/config/frameworkVersions.json, opens (or
+# updates) ONE pull request that bumps the pin, with a change report as its body.
+#
+# It never upgrades production by itself: the database only changes when a
+# person merges the PR (framework-sync.yml then runs the sync).
+# See docs/threat-intel-enrichment-plan.md §3.4.
+#
+# Requires the repo setting:
+#   Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"
+
+on:
+  schedule:
+    - cron: '0 2 1 * *'   # 1st of the month, 02:00 UTC (10:00 SGT)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: framework-version-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check for new MITRE releases
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BRANCH: bot/mitre-framework-upgrade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Find newer releases and build change report
+        id: check
+        # Database access is read-only: it counts existing tags on retired techniques.
+        run: node scripts/checkFrameworkVersions.js --write --report "$RUNNER_TEMP/report.md"
+        env:
+          GITHUB_TOKEN:              ${{ github.token }}
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: Run framework tests against the new release
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          if node --test tests/frameworkReference.test.js > "$RUNNER_TEMP/tests.log" 2>&1; then
+            printf '\n## Unit tests: passed\n\n`tests/frameworkReference.test.js` passes against the new release.\n' >> "$RUNNER_TEMP/report.md"
+          else
+            {
+              printf '\n## Unit tests: FAILED\n\n`tests/frameworkReference.test.js` fails against the new release. Fix before merging:\n\n```\n'
+              grep -E '✖|not in|deprecated|malformed' "$RUNNER_TEMP/tests.log" | head -40
+              printf '```\n'
+            } >> "$RUNNER_TEMP/report.md"
+          fi
+
+      - name: Open or update the upgrade PR
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE:    ${{ steps.check.outputs.title }}
+        run: |
+          OPEN_TITLE=$(gh pr list --head "$BRANCH" --state open --json title -q '.[0].title')
+
+          # Same upgrade already open: leave the branch alone so a reviewer's
+          # taxonomy fixes on it are not overwritten. Just refresh the report.
+          if [ "$OPEN_TITLE" = "$TITLE" ]; then
+            gh pr edit "$BRANCH" --body-file "$RUNNER_TEMP/report.md"
+            echo "Upgrade PR already open; report refreshed."
+            exit 0
+          fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add lib/config/frameworkVersions.json lib/config/frameworkTechniqueIndex.json
+          git commit -m "$TITLE"
+          git push --force origin "$BRANCH"
+
+          if [ -n "$OPEN_TITLE" ]; then
+            # An even newer release arrived while an older upgrade PR was open.
+            # The branch was reset to main + the new pin; say so on the PR.
+            gh pr edit "$BRANCH" --title "$TITLE" --body-file "$RUNNER_TEMP/report.md"
+            gh pr comment "$BRANCH" --body "A newer MITRE release was published, so this branch was reset to \`main\` with the new pin (previously: _${OPEN_TITLE}_). Any manual commits on it need to be re-applied."
+          else
+            gh pr create --base main --head "$BRANCH" --title "$TITLE" --body-file "$RUNNER_TEMP/report.md"
+          fi

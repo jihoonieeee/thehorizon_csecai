@@ -1,0 +1,51 @@
+name: MITRE Framework — Sync
+
+# Loads the pinned MITRE ATLAS / ATT&CK Enterprise releases into
+# framework_tactics / framework_techniques (migration 029) and embeds new or
+# changed technique descriptions.
+#
+# Runs when a change to lib/config/frameworkVersions.json lands on main — i.e.
+# when someone merges the upgrade PR opened by framework-version-check.yml.
+# Idempotent: re-running it is always safe.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - lib/config/frameworkVersions.json
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Fetch and parse only (no database writes)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: framework-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync MITRE catalogue
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check pinned refs before touching the database
+        run: node --test tests/frameworkReference.test.js
+
+      - name: Sync catalogue
+        run: node scripts/syncFrameworkReference.js ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
+          PLATFORM_API_BASE_URL:     https://api-public.ai.tech.gov.sg
+          PROXY_URL:                 ${{ secrets.PROXY_URL }}

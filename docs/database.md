@@ -295,6 +295,24 @@ Point-in-time content captures. Unique on `(source_id, content_hash)` — re-ing
 
 ---
 
+## Tables: `framework_tactics`, `framework_techniques`
+
+MITRE ATLAS and ATT&CK Enterprise reference catalogue (migration `029_framework_reference.sql`). Loaded by `scripts/syncFrameworkReference.js` at the versions pinned in `lib/config/frameworkVersions.json`; see `docs/threat-intel-enrichment-plan.md` §3.
+
+| Column (`framework_techniques`) | Notes |
+|---|---|
+| `technique_id` | PK. `AML.T0051`, `AML.T0051.001`, `T1566`, `T1587.001` |
+| `framework` | `atlas` \| `attack` |
+| `tactic_ids` | `AML.TA*` / `TA*` IDs; names in `framework_tactics` |
+| `parent_id` | Set for sub-techniques |
+| `framework_version` | Release the row was last seen in |
+| `deprecated` | Never deleted: revoked/removed techniques stay so old tags resolve. `replaced_by` gives ATT&CK's replacement when known |
+| `embedding` | vector(3072), same model as `sources.embedding`; searched by RPC `match_framework_techniques` |
+
+RLS is enabled with no policies, so the tables are service-role only.
+
+---
+
 ## Indexes / Constraints to Know
 
 - `sources.id` PRIMARY KEY — dedup via upsert

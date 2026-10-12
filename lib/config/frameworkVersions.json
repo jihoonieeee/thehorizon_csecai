@@ -1,0 +1,10 @@
+{
+  "atlas": {
+    "version": "ATLAS-2026.09",
+    "url": "https://raw.githubusercontent.com/mitre-atlas/atlas-data/main/dist/v6/ATLAS-2026.09.yaml"
+  },
+  "attack": {
+    "version": "enterprise-attack-19.2",
+    "url": "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/enterprise-attack/enterprise-attack-19.2.json"
+  }
+}
