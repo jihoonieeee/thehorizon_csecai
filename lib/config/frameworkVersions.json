@@ -6,5 +6,13 @@
   "attack": {
     "version": "enterprise-attack-19.2",
     "url": "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/enterprise-attack/enterprise-attack-19.2.json"
+  },
+  "attack_mobile": {
+    "version": "mobile-attack-19.2",
+    "url": "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/mobile-attack/mobile-attack-19.2.json"
+  },
+  "attack_ics": {
+    "version": "ics-attack-19.2",
+    "url": "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/ics-attack/ics-attack-19.2.json"
   }
 }

@@ -3038,6 +3038,24 @@ a:hover { text-decoration: underline; }
 }
 .hz-src-detail-tag.domain { background: #eef2ff; color: #3730a3; border-color: #c7d2fe; font-weight: 600; }
 
+/* MITRE ATT&CK / ATLAS fields in the expanded source row */
+a.hz-mitre-tag { text-decoration: none; }
+a.hz-mitre-tag:hover { border-color: var(--text-secondary); color: var(--text-primary, inherit); }
+.hz-mitre-muted { font-size: 0.82rem; color: var(--text-secondary); font-style: italic; }
+.hz-mitre-badge {
+  margin-left: 6px;
+  font-size: 0.6rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-transform: none;
+  letter-spacing: 0;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.hz-mitre-badge.reviewed { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+
 .hz-src-detail-rationale {
   display: block;
   font-size: 0.82rem;

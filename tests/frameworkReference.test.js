@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   parseAtlas, parseAttack, parseFrameworkRef, looksLikeMitreRef, cleanDescription, checkTaxonomyRefs,
   diffCatalogues, retiredIds, buildTechniqueIndex, serializeTechniqueIndex,
-  loadPinnedVersions, loadTechniqueIndex,
+  loadPinnedVersions, loadTechniqueIndex, lookupTechnique, CATALOGUE_KEYS,
 } from "../lib/frameworks/mitreCatalogue.js";
 import { PRIMARY_TAGS, SUB_TECHNIQUES } from "../lib/pipeline/understand/taxonomy.js";
 
@@ -15,9 +15,33 @@ import { PRIMARY_TAGS, SUB_TECHNIQUES } from "../lib/pipeline/understand/taxonom
 const index  = loadTechniqueIndex();
 const pinned = loadPinnedVersions();
 
-test("technique index matches the pinned versions", () => {
-  assert.equal(index.atlas.version,  pinned.atlas.version);
-  assert.equal(index.attack.version, pinned.attack.version);
+test("technique index matches the pinned versions, for every catalogue", () => {
+  assert.deepEqual(Object.keys(pinned).sort(), [...CATALOGUE_KEYS].sort());
+  for (const key of CATALOGUE_KEYS) assert.equal(index[key]?.version, pinned[key].version, key);
+});
+
+test("ATT&CK IDs resolve across Enterprise, Mobile and ICS", () => {
+  assert.equal(lookupTechnique(index, "attack", "T1566")?.key, "attack");
+  assert.equal(lookupTechnique(index, "attack", "T1417")?.key, "attack_mobile");
+  assert.equal(lookupTechnique(index, "attack", "T0846")?.key, "attack_ics");
+  assert.equal(lookupTechnique(index, "atlas", "T1417"), null);
+  assert.equal(lookupTechnique(index, "attack", "T9999"), null);
+});
+
+test("parseAttack reads Mobile/ICS kill chains and merges multiple matrices", () => {
+  const ref = id => [{ source_name: "mitre-attack", external_id: id }];
+  const c = parseAttack({ objects: [
+    { type: "x-mitre-matrix", tactic_refs: ["x-mitre-tactic--a"] },
+    { type: "x-mitre-matrix", tactic_refs: ["x-mitre-tactic--a", "x-mitre-tactic--b"] },
+    { type: "x-mitre-tactic", id: "x-mitre-tactic--a", name: "Collection", x_mitre_shortname: "collection", external_references: ref("TA0035") },
+    { type: "x-mitre-tactic", id: "x-mitre-tactic--b", name: "Impact", x_mitre_shortname: "impact", external_references: ref("TA0034") },
+    { type: "attack-pattern", id: "ap--1", name: "Input Capture", external_references: ref("T1417"),
+      kill_chain_phases: [{ kill_chain_name: "mitre-mobile-attack", phase_name: "collection" }] },
+  ] }, "mobile-attack-19.2", "mobile");
+  assert.equal(c.key, "attack_mobile");
+  assert.equal(c.techniques[0].domain, "mobile");
+  assert.deepEqual(c.techniques[0].tactic_ids, ["TA0035"]);
+  assert.deepEqual(c.tactics.map(t => [t.tactic_id, t.position]), [["TA0035", 1], ["TA0034", 2]]);
 });
 
 test("every taxonomy framework_refs MITRE ID exists and is not deprecated", () => {

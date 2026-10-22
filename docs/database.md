@@ -313,6 +313,21 @@ RLS is enabled with no policies, so the tables are service-role only.
 
 ---
 
+## Tables: `source_techniques`, `source_framework_status`
+
+MITRE tags per source (migration `030_source_enrichment.sql`), written by `scripts/enrichSources.js` (L4g). Only passing, classified, non-digest sources are tagged.
+
+- `source_techniques`: one row per (source, technique), with `framework`, `confidence`, the verbatim `quote` supporting it, `rationale` and `framework_version`.
+- `source_framework_status`: exactly one row per (source, framework) once a source is enriched. `status` is `tagged`, `not_applicable` or `none` (shown blank). For `not_applicable`, `na_reason` holds the display text: `N/A (attack on the model)` for ATT&CK, `N/A (adversary use of AI; limited ATLAS coverage)` for ATLAS. **No row means not enriched yet.** `notes.dropped` lists techniques removed by validation.
+
+Both cascade-delete with their source. RLS: service-role only.
+
+Migration `031_attack_domains_and_review_examples.sql` adds:
+- **`domain`** on `framework_techniques` / `framework_tactics`: `enterprise`, `mobile` or `ics` for ATT&CK (null for ATLAS). All three ATT&CK domains share `framework = 'attack'`; their IDs don't collide.
+- **`source_framework_reviews`**: the analysts' reviewed answers, one row per (source, framework). Columns are `outcome` (`tagged` / `not_applicable` / `none`), `technique_ids`, `verdict`, and `review_batch` (e.g. `2026-08`). Loaded by `scripts/importFrameworkReview.js`. The enrich step shows the most similar reviewed sources as examples, via RPC `match_review_examples(source_id, k, batches)`.
+
+---
+
 ## Indexes / Constraints to Know
 
 - `sources.id` PRIMARY KEY — dedup via upsert

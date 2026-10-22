@@ -1,6 +1,6 @@
 name: Pipeline — Classify + Evidence + Insights
 
-# Runs classify (L4), rescrape, evidence (L5), and dashboard insights.
+# Runs classify (L4), rescrape, MITRE tagging (L4g), evidence (L5), and dashboard insights.
 # Fires 90 min after each ingest window opens, giving connectors time to finish
 # even on slow runs (rate-limited fetches, large RSS backlogs).
 #
@@ -33,6 +33,9 @@ on:
       evidence_limit:
         description: 'Max sources for evidence extraction (default 150)'
         default: '150'
+      enrich_limit:
+        description: 'Max sources for MITRE tagging (default 80)'
+        default: '80'
       run_insights:
         description: 'Generate dashboard insights (week|month|quarter|all)'
         type: string
@@ -183,6 +186,34 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           JINA_API_KEY:              ${{ secrets.JINA_API_KEY }}
           TAVILY_API_KEY:            ${{ secrets.TAVILY_API_KEY }}
+
+  # L4g: MITRE ATT&CK + ATLAS tags for newly passed sources (not yet tagged ones
+  # only, newest first). After rescrape so short sources are tagged on their
+  # rescraped text; runs alongside evidence, which does not depend on it.
+  # ~18K tokens per source: 80 × 18K ≈ 1.5M, inside this job's own 2M budget
+  # (the router's budget is per process). Anything left over is picked up by
+  # the next slot, three times a day.
+  enrich:
+    name: L4g MITRE tagging
+    needs: [classify, rescrape]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: always() && needs.classify.result == 'success' && (needs.rescrape.result == 'success' || needs.rescrape.result == 'failure')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Run MITRE tagging (L4g)
+        run: node scripts/enrichSources.js --limit ${{ github.event.inputs.enrich_limit || '80' }}
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
+          PROXY_URL:                 ${{ secrets.PROXY_URL }}
 
   evidence:
     name: L5 Evidence extraction

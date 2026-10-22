@@ -16,7 +16,7 @@ The intended audience is cybersecurity professionals, policy analysts, and decis
 - Scheduling: GitHub Actions — **three** separate workflows:
     - `pipeline-connectors.yml` — L1–L3 RSS/API ingest (04:00 / 16:00 / 20:00 UTC)
     - `pipeline-arxiv.yml`      — arXiv ingest only (04:00 UTC)
-    - `pipeline-classify.yml`   — L4 classify + L5 evidence + insights (05:30 / 17:30 / 21:30 UTC)
+    - `pipeline-classify.yml`   — L4 classify + L4g MITRE tagging + L5 evidence + insights (05:30 / 17:30 / 21:30 UTC)
   Expanded windows on Mondays (7d) and 1st of month (30d). Insights only on weekly/monthly/quarterly triggers.
 
 
@@ -219,6 +219,17 @@ Other useful scripts:
                                                         (lib/config/frameworkVersions.json) into framework_techniques
   node scripts/checkFrameworkVersions.js              — report newer MITRE releases; CI (framework-version-check.yml)
                                                         runs it monthly and opens a version-bump PR
+  node scripts/enrichSources.js --from D --to D [--dry-run] [--review-xlsx F]
+                                                      — L4g: tag passing sources with MITRE ATT&CK + ATLAS techniques
+                                                        (or N/A); writes an Excel review sheet. Needs migration 030.
+                                                        Scheduled in pipeline-classify.yml (--limit 80, untagged only);
+                                                        tags show on the Sources page via POST /api/sources.
+  node scripts/importFrameworkReview.js <reviewed.xlsx> [--batch YYYY-MM]
+                                                      — load analysts' reviewed MITRE answers (migration 031); enrichSources
+                                                        shows the most similar ones as examples (--examples-from to restrict)
+  node scripts/scoreFrameworkReview.js <reviewed.xlsx> [--run new.xlsx]
+                                                      — score MITRE tagging against an analyst-reviewed sheet; use after
+                                                        any change to lib/prompts/understand/map-frameworks.md
 
 scripts/archive/ — one-time data-fix and superseded scripts (kept for reference)
 

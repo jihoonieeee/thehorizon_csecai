@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * syncFrameworkReference.js — load the pinned MITRE ATLAS and ATT&CK Enterprise
- * releases into framework_tactics / framework_techniques (migration 029).
+ * syncFrameworkReference.js — load the pinned MITRE ATLAS and ATT&CK (Enterprise,
+ * Mobile, ICS) releases into framework_tactics / framework_techniques
+ * (migrations 029 + 031).
  *
  * Versions come from lib/config/frameworkVersions.json. To upgrade, change that
  * file (normally via the PR opened by .github/workflows/framework-version-check.yml);
@@ -16,11 +17,11 @@
  *
  * Usage:
  *   node scripts/syncFrameworkReference.js [--dry-run] [--no-embed]
- *                                          [--framework atlas|attack] [--write-index]
+ *                                          [--catalogue atlas|attack|attack_mobile|attack_ics] [--write-index]
  *
  *   --dry-run      fetch + parse only; no database access
  *   --no-embed     skip step 3's embedding calls (rows keep embedding = null)
- *   --framework    sync one framework only
+ *   --catalogue    sync one catalogue only
  *   --write-index  also rewrite lib/config/frameworkTechniqueIndex.json (the
  *                  offline ID snapshot the unit tests check taxonomy refs against)
  */
@@ -28,7 +29,7 @@
 import "dotenv/config";
 import { writeFileSync } from "fs";
 import {
-  FRAMEWORKS, INDEX_PATH, loadPinnedVersions, fetchCatalogue,
+  CATALOGUE_KEYS, INDEX_PATH, loadPinnedVersions, fetchCatalogue,
   contentHash, embedInputFor, buildTechniqueIndex, serializeTechniqueIndex,
 } from "../lib/frameworks/mitreCatalogue.js";
 import {
@@ -40,15 +41,15 @@ const args        = process.argv.slice(2);
 const DRY_RUN     = args.includes("--dry-run");
 const NO_EMBED    = args.includes("--no-embed");
 const WRITE_INDEX = args.includes("--write-index");
-const fwIdx       = args.indexOf("--framework");
+const fwIdx       = args.indexOf("--catalogue");
 const ONLY        = fwIdx >= 0 ? args[fwIdx + 1] : null;
 
-if (ONLY && !FRAMEWORKS.includes(ONLY)) {
-  console.error(`--framework must be one of: ${FRAMEWORKS.join(", ")}`);
+if (ONLY && !CATALOGUE_KEYS.includes(ONLY)) {
+  console.error(`--catalogue must be one of: ${CATALOGUE_KEYS.join(", ")}`);
   process.exit(1);
 }
 if (WRITE_INDEX && ONLY) {
-  console.error("--write-index needs both frameworks; drop --framework");
+  console.error("--write-index needs every catalogue; drop --catalogue");
   process.exit(1);
 }
 
@@ -59,17 +60,18 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function syncFramework(supabase, cat) {
   const now = new Date().toISOString();
   const fw  = cat.framework;
+  const label = cat.key;
 
   // Tactics
   const tacticRows = cat.tactics.map(t => ({ ...t, framework_version: cat.version, deprecated: false, updated_at: now }));
-  const prevTactics = await fetchExistingTacticIds(supabase, fw);
+  const prevTactics = await fetchExistingTacticIds(supabase, fw, cat.domain);
   await upsertTactics(supabase, tacticRows);
   const liveTactics = new Set(tacticRows.map(t => t.tactic_id));
   const goneTactics = [...prevTactics].filter(id => !liveTactics.has(id));
   if (goneTactics.length) await markDeprecated(supabase, "framework_tactics", goneTactics);
 
   // Techniques
-  const existing = await fetchExistingTechniques(supabase, fw);
+  const existing = await fetchExistingTechniques(supabase, fw, cat.domain);
   const rows = cat.techniques.map(t => ({
     ...t, framework_version: cat.version, content_hash: contentHash(t), updated_at: now,
   }));
@@ -85,7 +87,7 @@ async function syncFramework(supabase, cat) {
   const gone = [...existing].filter(([id, r]) => !live.has(id) && !r.deprecated).map(([id]) => id);
   if (gone.length) await markDeprecated(supabase, "framework_techniques", gone);
 
-  console.log(`  ${fw.padEnd(7)} ${cat.version}: ${rows.length} techniques upserted (${added} new, ${changed.length} text changed), `
+  console.log(`  ${label.padEnd(13)} ${cat.version}: ${rows.length} techniques upserted (${added} new, ${changed.length} text changed), `
     + `${gone.length} deprecated as missing; ${tacticRows.length} tactics (${goneTactics.length} deprecated)`);
 }
 
@@ -127,11 +129,11 @@ async function embedMissing(supabase) {
 
 async function main() {
   const pinned = loadPinnedVersions();
-  const targets = ONLY ? [ONLY] : FRAMEWORKS;
+  const targets = ONLY ? [ONLY] : CATALOGUE_KEYS;
 
   console.log(`\n${"═".repeat(60)}`);
   console.log(`  MITRE framework sync${DRY_RUN ? "  [DRY RUN]" : ""}`);
-  for (const fw of targets) console.log(`    ${fw.padEnd(7)} ${pinned[fw].version}`);
+  for (const fw of targets) console.log(`    ${fw.padEnd(13)} ${pinned[fw].version}`);
   console.log(`${"═".repeat(60)}\n`);
 
   const catalogues = [];

@@ -1,6 +1,6 @@
 # Threat Intel Enrichment Plan — MITRE Mapping, Incident Clustering, Threat Actors, Summary Stats
 
-**Status:** Phase 1 MITRE reference data (§3.1, §3.3, §3.4) implemented 2026-10-12; migration 029 not yet applied. §3.2 (threat-actor registry) and Phases 2–4 not started.
+**Status (2026-10-19):** Phase 1 MITRE reference data (§3.1, §3.3, §3.4) done; migrations 029–031 applied. Phase 2 MITRE technique tagging (§4) built and trialled on September and August 2026 (analyst-reviewed); backfilled, scheduled in the classify workflow and shown on the Sources page (2026-10-21). ATT&CK Mobile and ICS added, and the analysts' reviewed answers are used as examples (§4.2 steps 6–7). §3.2 and §5 (threat actors) and Phases 3–4 not started.
 **Date:** 2026-10-05
 
 This plan covers four requested features:
@@ -120,7 +120,7 @@ Pinning means every stored tag can be traced to the exact technique list it was 
 
 ### 3.3 Fill the tag-lookup gaps — implemented
 
-ATLAS refs were added to the ASI and LLM tags in `taxonomy.js` that had only OWASP refs, mapped against `ATLAS-2026.09`. The lookup is the **fallback** for sources where the LLM finds no technique, not the primary method. No LLM prompt uses `framework_refs` (only `allReferenceRecords()` reads it), so this does not change classification.
+ATLAS refs were added to the ASI and LLM tags in `taxonomy.js` that had only OWASP refs, mapped against `ATLAS-2026.09`. The lookup refs are used as extra **candidates** for the LLM in Phase 2 (§4.2). They are not written as tags on their own: when no technique fits, the source is recorded as N/A. No LLM prompt uses `framework_refs` (only `allReferenceRecords()` reads it), so this does not change classification.
 
 These existing refs were wrong and have been fixed. The fixes are still correct in `ATLAS-2026.09`:
 
@@ -157,7 +157,7 @@ Refs added:
 | AE01, AE02, AE04, AE08, AE10 | New AI-specific ATLAS techniques: AML.T0116 Autonomous Reconnaissance (AE01), AML.T0052.000 Spearphishing via Social Engineering LLM (AE02), AML.T0017.001 Autonomous Exploit Development (AE04), AML.T0124 Autonomous Attack Orchestration (AE08), AML.T0088 Generate Deepfakes and AML.T0052.001 Deepfake-Assisted Phishing (AE10) |
 | AE07 Identity abuse | ATT&CK T1684.001 Impersonation |
 
-Some of these are judgement calls: ASI07, ASI08 and ASI10 have no exact ATLAS match. They are low-confidence fallbacks by design, and the Phase 2 eval will show where the LLM path does better.
+Some of these are judgement calls: ASI07, ASI08 and ASI10 have no exact ATLAS match. Because they are only candidates for the LLM, not tags in their own right, an imprecise one costs little.
 
 `tests/frameworkReference.test.js` checks that every MITRE ID in `framework_refs` exists and is not deprecated in the pinned release, using the offline index. That stops a non-existent ID like T1655 from coming back. It cannot catch an ID that exists but names the wrong technique, as TAI05 and TAI06 did; that still needs a person to review.
 
@@ -208,29 +208,99 @@ A separate table rather than an array column, because one source can map to many
 | `source_id` | text FK → sources | |
 | `technique_id` | text FK → framework_techniques | |
 | `framework` | text | `atlas` \| `attack` |
-| `method` | text | `mitre_official` (ATLAS case-study rows) \| `llm` \| `tag_lookup` (fallback) |
+| `method` | text | `mitre_official` (ATLAS case-study rows) \| `llm` |
 | `confidence` | text | `high` \| `medium` \| `low` |
 | `quote` | text null | Supporting verbatim span (LLM method only) |
 | `framework_version` | text | Version tagged against |
 | `created_at` | timestamptz | |
 | PK | (`source_id`, `technique_id`) | |
 
+**`source_framework_status` (new table):** one row per source per framework, so "checked, nothing applies" (N/A) is stored explicitly and is never confused with "not processed yet".
+
+| Column | Type | Notes |
+|---|---|---|
+| `source_id` | text FK → sources | |
+| `framework` | text | `atlas` \| `attack` |
+| `status` | text | `tagged` (≥1 row in `source_techniques`) \| `not_applicable` \| `none` (checked; nothing fits and the N/A rule does not apply, shown blank) |
+| `na_reason` | text null | Set when `not_applicable`; exact display text, see §4.2 |
+| `framework_version` | text | Version checked against |
+| `updated_at` | timestamptz | |
+| PK | (`source_id`, `framework`) | |
+
+A source with no status rows has not been enriched yet.
+
 ### 4.2 How a source gets tagged
 
 1. **ATLAS case-study rows** (only if they're re-ingested; see §10): copy `intelligence.technique_ids` with `method='mitre_official'`. No LLM call.
 2. **All other passing sources:**
-   1. **Candidate retrieval (no LLM).** Cosine-match the source embedding against `framework_techniques.embedding` and take the top ~25 ATLAS and top ~15 ATT&CK candidates. Add the source's tag-lookup refs. This keeps the prompt small even though ATT&CK has 600+ techniques and sub-techniques.
+   1. **Technique lists and hints (no LLM).** The system prompt holds the **full** live ID + name list for both frameworks (905 techniques, about 9k tokens; identical on every call, so the platform can cache it). Separately, the source embedding is matched against `framework_techniques.embedding` (top ~25 ATLAS, ~15 ATT&CK, widened to their parent and sibling sub-techniques, plus the source's taxonomy refs) and those techniques are shown **with descriptions** as "likely relevant" hints.
+      - *Why the full list:* the first trial (3 September sources) used the embedding shortlist alone, and the right answer was often missing from it. For example, AML.T0024.002 Extract AI Model was not offered for a model-distillation campaign, and T1218.007 Msiexec was not offered for an MSI-based infection, so the model picked a wrong nearby technique. With the full list, both came out right. Cost: each call grew from about 9k to about 18k tokens.
    2. **LLM selection.** A new prompt, `lib/prompts/understand/map-frameworks.md`, gets the title, summary, truncated full text, tags and the candidate list. It returns every technique the article actually **describes being used or demonstrated**, each with a confidence and a verbatim quote.
-   3. **Validation in code.** Drop any ID not in `framework_techniques` or marked deprecated. Drop items whose quote isn't found in the text, reusing the quote-grounding approach from evidence extraction.
-   4. **Fallback.** If nothing survives, write the tag-lookup refs with `method='tag_lookup'`, `confidence='low'`.
-3. **ATT&CK scope rule.** ATT&CK candidates are only offered for `ai_enabled_threats` sources and for incident or threat-intel source types. For research papers on LLM, agentic or traditional ML threats, ATLAS only.
+   3. **Validation in code.** Drop any ID not in `framework_techniques`, marked deprecated, or belonging to the other framework. Drop the parent when its own sub-technique is also tagged. Drop items whose quote isn't found in the text, reusing the quote-grounding approach from evidence extraction.
+   4. **Record the outcome per framework** in `source_framework_status`: `tagged`, or `not_applicable` with the reason (rules below). If the LLM call fails, write nothing, so the source is retried on the next run. There is no tag-lookup fallback: `taxonomy.js` refs are only used as extra candidates in step 2.1.
+3. **N/A rules (decided 2026-10-12, matching the analysts' existing threats log):**
+   - **ATT&CK: try every source.** It is N/A only when the attack is on the AI model itself, with no conventional cyber technique involved (for example data poisoning, adversarial evasion, model extraction or a jailbreak on its own). Displayed as exactly `N/A (attack on the model)`. The LLM decides this per source and is given `main_category` as a hint, not as a rule: a prompt injection that leads to code execution or data exfiltration still gets ATT&CK techniques for those steps.
+   - **ATLAS: N/A when no ATLAS technique fits**, because it is adversary use of AI against conventional targets. Displayed as exactly `N/A (adversary use of AI; limited ATLAS coverage)`. Note that ATLAS 2026.07–2026.09 added AI-enabled techniques (AML.T0088 Generate Deepfakes, AML.T0052.000 LLM spearphishing, AML.T0116 Autonomous Reconnaissance, AML.T0124 Autonomous Attack Orchestration and others), so fewer sources will be N/A than in older log entries.
+   - **Otherwise blank.** If no technique fits and that framework's N/A rule does not apply (for example a defensive or policy piece), the cell is left blank (`status = 'none'`).
+   - A source can be tagged in both frameworks, in one only, or N/A in both.
+4. **Granularity and coverage (revised 2026-10-14 after the September review; replaces the 2026-10-12 rule of every technique at sub-technique level):**
+   - Tag only the **key techniques** that define the attack, as the log does: typically 2–5 ATT&CK and 1–3 ATLAS.
+   - Use the **parent technique unless the article explicitly describes the specific sub-technique method**, for example `T1552.001` credentials in files or `AML.T0024.000` membership inference.
+   - Use the **latest MITRE versions**, preferring the long-established techniques the log uses over newer, narrower ones. For example, RAG poisoning is `AML.T0020`, not `AML.T0070`, and agent hijacking is `AML.T0051.001` + `AML.T0053`.
+   - ~~Enterprise ATT&CK only~~ **ATT&CK Enterprise + Mobile + ICS (revised 2026-10-19).** The analysts used Mobile techniques for Android malware and ICS techniques for attacks on industrial systems, so all three domains are loaded. They go in the one ATT&CK column, as in the log, with a `(Mobile)` / `(ICS)` suffix. Mobile is used only when phones or tablets are targeted, ICS only when industrial control or OT systems are targeted, and Enterprise otherwise. IDs never collide across domains, so the tables add a `domain` column (migration 031) and keep the same keys.
+   - The analysts' other conventions are written into the prompt (`lib/prompts/understand/map-frameworks.md`, v3):
+     - `T1588.007` when a human adversary uses AI; `T1587.004` when an AI agent is itself the actor.
+     - ATLAS N/A when AI is only the attacker's tool, including autonomous AI agents attacking systems.
+     - ATLAS is tagged only when an AI system is attacked or abused (jailbreak, API used by malware, AI product vulnerability, AI supply chain).
+4b. **September 2026 trial results.** The analysts reviewed 78 of 95 sources. Prompt v1 was used for the trial. v3 was tuned on 30 of the reviewed sources and checked on the other 48. Scored with `scripts/scoreFrameworkReview.js`:
 
-**Files (proposed):**
+   | 48 held-out sources | v1 | v3 |
+   |---|---|---|
+   | ATT&CK outcome right (tagged / N/A / blank) | 79% | 98% |
+   | ATT&CK technique precision / recall | 13% / 29% | 43% / 43% |
+   | ATLAS outcome right | 70% | 87% |
+   | ATLAS technique precision / recall | 10% / 29% | 47% / 56% |
+
+   Known remaining gap: for some incidents the log applies the same standard set of techniques to every article about that incident, even techniques a given article doesn't mention (e.g. `T1068`, `T1210` for the AI-agent hacking incidents). The model only tags what each article supports with a quote. Addressed by the analyst examples in step 7.
+4c. **August 2026 review** (90 sources, prompt v3): ATT&CK outcome 94%, precision / recall 48% / 45%; ATLAS 90%, 55% / 60%. Two findings:
+   - **The log tags per incident.** About a third of the articles carry their incident's full answer set, including techniques that article doesn't mention. The per-article model scored 55% / 40% on those and 42% / 56% on one-off articles.
+   - **Prompt rules plateaued.** v4 (rules from August) left September's ATT&CK unchanged (44% / 44%) and moved ATLAS from 52% / 65% to 56% / 66%.
+5. **Trial runs before the backfill.** `scripts/enrichSources.js --from YYYY-MM-DD --to YYYY-MM-DD` tags only sources published in that range. With `--review-xlsx FILE` it also writes an Excel review sheet: one row per source, with its ATT&CK and ATLAS columns (IDs and names, or the N/A text, or blank), the quote supporting each technique, its confidence, and empty "Correct?" and "Analyst correction" columns. Analysts' corrections become the hand-labelled eval set (§4.3). The full backfill only runs after a trial range meets the bar.
+6. **ATT&CK version: staying on 19.2 (decided 2026-10-19).** ATT&CK 20.0 was released on 2026-10-13. It adds `T1698` Indirect / `T1699` Direct Prompt Injection, `T1700` AI-Enabled Exfiltration, `T1685.007` Impair Autonomous Defenses and `T1608.007` AI Result Poisoning. Adopting it would change the log's rule that prompt-injection research is `N/A (attack on the model)`. The analysts will decide when the 1 November upgrade PR arrives.
+7. **Learning from the analysts' reviewed answers (built 2026-10-19).**
+   - **Storing the answers.** `scripts/importFrameworkReview.js <reviewed.xlsx>` loads a reviewed sheet's answers into `source_framework_reviews` (migration 031), labelled by review batch (e.g. `2026-08`).
+   - **Examples in the prompt.** For each source, the enrich step shows the analysts' answers for the 4 most similar reviewed sources (RPC `match_review_examples`) as worked examples.
+   - **Carrying an incident's tags.** When an example reports the **same incident**, the model may carry over that example's recorded techniques without a quote (`basis: "example"`). Code checks that each carried ID is in that example's stored answer, and the review sheet shows which reviewed source it came from.
+   - **Fair scoring.** `enrichSources.js --examples-from <batch>` restricts which reviews may serve as examples, so a reviewed month is always scored using the other month's examples.
+   - **Grows with each review.** Every future review that is imported adds examples.
+
+   **Results** (prompt v5 = v4 rules + Mobile/ICS + examples; each month tagged using only the other month's examples):
+
+   | | v3 | v4 | v5 |
+   |---|---|---|---|
+   | **September** (clean test) ATT&CK precision / recall | 44% / 43% | 44% / 44% | **52% / 49%** |
+   | September ATLAS precision / recall | 52% / 65% | 56% / 66% | **57% / 66%** |
+   | September outcome right, ATT&CK / ATLAS | 96% / 89% | 96% / 92% | 96% / 88% |
+   | **August** ATT&CK precision / recall (overstated: v4 rules were tuned on August) | 48% / 45% | — | 66% / 60% |
+   | August ATLAS precision / recall | 55% / 60% | — | 61% / 64% |
+
+   On August, 17 techniques were carried from same-incident September examples. On September, none were carried: the model found most incident techniques with quotes but never judged an August example to be the same incident, even for the Hugging Face articles. That's the safe way to fail (missing tags rather than inventing them). Loosening it would be a possible next tweak, to be checked on a third reviewed month.
+
+**Files (built):**
+- `docs/migrations/030_source_enrichment.sql`: `source_techniques`, `source_framework_status`, RPC `match_techniques_for_source`
 - `lib/pipeline/understand/mapFrameworks.js`: the step
 - `lib/prompts/understand/map-frameworks.md`: the prompt
-- `lib/storage/frameworkStore.js`: reads and writes `framework_techniques` / `source_techniques`
-- `scripts/enrichSources.js [--limit N] [--since-hours N] [--dry-run]`: backfill and manual runs
-- Wire into `.github/workflows/pipeline-classify.yml` after classify, before evidence
+- `lib/storage/frameworkStore.js`: reads and writes `framework_techniques` / `source_techniques` / `source_framework_status`
+- `lib/llm/taskProfiles.js`: task `framework_mapping`
+- `tests/frameworkMapping.test.js`: validation, quote grounding, N/A wording
+
+**Done (2026-10-21):**
+- `scripts/enrichSources.js`: trial ranges, backfill and manual runs. Backfilled: 1,455 of 1,465 eligible sources tagged.
+- Scheduled: the `enrich` job in `.github/workflows/pipeline-classify.yml` runs after classify and rescrape, alongside evidence. It tags up to 80 untagged sources per slot, newest first, within its own 2M-token budget, and stops early if that budget runs out. It fails the job if every call fails.
+- Sources page: the expanded row shows ATT&CK and ATLAS tags. An analyst's reviewed answer is shown in place of the model's. The Excel export has ATT&CK, ATLAS and basis columns (`POST /api/sources`, `lib/frameworks/sourceTags.js`).
+
+**Not yet done:**
+- `scripts/evalFrameworkMapping.js` (§4.3)
 
 **Model:** `routedLLM` with a new task profile in `taskProfiles.js`. Start on the pipeline model (`gpt-5.4`), then test whether the cheap tier matches it on the eval set (§4.3).
 
@@ -240,7 +310,8 @@ MITRE has already tagged each of its 63 case studies with techniques, which make
 - Build each test input from the case study's name, description, actor and target only. **Leave out the technique step labels**, which would give the answers away.
 - Run the LLM path and measure precision and recall against MITRE's technique IDs for that case study.
 - Example: EchoLeak (`AML.CS0059`) has 12 MITRE-tagged steps, from `AML.T0065` LLM Prompt Crafting to `AML.T0025` Exfiltration via Cyber Means. The tag lookup alone would give only `AML.T0051`.
-- Add a hand-labelled sample of ~40 non-ATLAS sources (news, threat intel, arXiv) for ATT&CK and general coverage.
+- Add a hand-labelled sample of ~40 non-ATLAS sources (news, threat intel, arXiv) for ATT&CK and general coverage. Label each with the N/A rules from §4.2 and measure **N/A agreement** as well as precision: a source wrongly marked N/A, or wrongly tagged, counts as an error.
+- The ATLAS case studies only test ATLAS tagging. The ATT&CK N/A rule ("attack on the model") is tested by the hand-labelled sample.
 
 Set a pass bar before the backfill, e.g. precision ≥ 0.8 on the ATLAS set. Tune candidate-K and the prompt until it's met.
 
@@ -418,7 +489,7 @@ I don't have the GovTech platform's per-token rates. The figures below are **tok
 | Item | Per-unit usage (estimate) | Ongoing | One-off backfill |
 |---|---|---|---|
 | Reference sync (embed techniques) | Few hundred technique descriptions | Monthly, negligible | Negligible |
-| L4g enrich (techniques + actors) | ~6–10K input (truncated text + ~40 candidates + instructions), ~500 output, per passing source | One call per newly passed source | Every passing source (on the order of 1,000 at the last corpus audit; confirm with a count) |
+| L4g enrich (techniques) | Measured ~17–20K tokens per source (full technique lists ~9K, article text up to 15K characters, hints). The technique-list prefix is identical on every call, so cached-token pricing applies if the platform supports it |  One call per newly passed source | 1,430 passing, classified, non-digest sources (2026-10-12): about 27M tokens. September trial (95 sources): about 1.8M tokens |
 | ATLAS case-study rows | 0 (MITRE's own IDs) | 0 | 0 |
 | Cluster adjudication | ~400 tokens, cheap tier, borderline pairs only | Small | Small (corpus-wide, borderline only) |
 | Cluster labels | ~300 tokens, cheap tier, per multi-source cluster | Small | Small |
@@ -442,8 +513,8 @@ Phases 2 and 3 can run in parallel once Phase 1 is done. Phase 4 depends on both
 
 ## 10. Open questions (need a decision)
 
-1. ~~**ATT&CK scope:** Enterprise matrix only, or also Mobile/ICS?~~ **Decided 2026-10-12: Enterprise only.** Mobile and ICS can be added later as extra entries in `frameworkVersions.json` if the corpus shows a need.
-2. **Which sources get LLM technique tagging:** all passing sources, or only event-type sources plus the tag-lookup fallback for research? (Recommend all, with ATT&CK restricted as in §4.2.)
+1. ~~**ATT&CK scope:** Enterprise matrix only, or also Mobile/ICS?~~ **Decided 2026-10-12: Enterprise only; revised 2026-10-19: Enterprise + Mobile + ICS** (§4.2 step 4), because the analysts' reviews used Mobile and ICS techniques.
+2. ~~**Which sources get LLM technique tagging?**~~ **Decided 2026-10-12: all passing sources, for both frameworks, following the threats-log convention (§4.2).** ATT&CK is N/A only for attacks on the AI model itself. ATLAS is N/A when no technique fits. N/A is stored explicitly with a reason.
 3. **Clustering scope:** event-type sources only, or also group research papers (e.g. an arXiv paper and its press coverage)? (Recommend event-type first.)
 4. **Month basis for stats:** publication date or event date?
 5. **Country nexus display:** show only actors with medium or high attribution confidence, or show all, labelled "suspected"?
@@ -456,6 +527,7 @@ Phases 2 and 3 can run in parallel once Phase 1 is done. Phase 4 depends on both
 
 | Risk | Mitigation |
 |---|---|
+| LLM marks ATT&CK N/A for an attack that has a conventional step (or tags one that has none) | The N/A rule is spelled out in the prompt with examples. N/A agreement is measured on the hand-labelled sample (§4.3). |
 | LLM over-tags techniques (lists everything vaguely related) | Require a verbatim quote per technique. Prompt says "used or demonstrated", not "related". Precision bar on the ATLAS eval. |
 | Invented technique or actor details | IDs validated against the reference table. Category and country only come from the registry. |
 | Alias gaps leave actors unmatched | Unmatched review queue. Manual registry rows. |

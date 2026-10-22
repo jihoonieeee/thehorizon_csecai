@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * checkFrameworkVersions.js — find newer MITRE ATLAS / ATT&CK Enterprise releases
+ * checkFrameworkVersions.js — find newer MITRE ATLAS / ATT&CK (Enterprise, Mobile, ICS) releases
  * than the ones pinned in lib/config/frameworkVersions.json, and write the change
  * report for the upgrade PR.
  *
@@ -27,8 +27,8 @@
 import "dotenv/config";
 import { writeFileSync, appendFileSync } from "fs";
 import {
-  FRAMEWORKS, VERSIONS_PATH, INDEX_PATH, ATLAS_DIST_API, ATTACK_INDEX,
-  loadPinnedVersions, fetchText, fetchCatalogue, atlasEntry, attackEntry,
+  CATALOGUES, CATALOGUE_KEYS, VERSIONS_PATH, INDEX_PATH, ATLAS_DIST_API, ATTACK_INDEX,
+  loadPinnedVersions, fetchText, fetchCatalogue, atlasEntry, catalogueEntry, versionLabel,
   compareVersions, versionNumber, diffCatalogues, retiredIds,
   buildTechniqueIndex, serializeTechniqueIndex, checkTaxonomyRefs,
 } from "../lib/frameworks/mitreCatalogue.js";
@@ -41,8 +41,8 @@ const REPORT    = repIdx >= 0 ? args[repIdx + 1] : null;
 const fromIdx   = args.indexOf("--from");
 const FROM      = fromIdx >= 0 ? Object.fromEntries(args[fromIdx + 1].split(",").map(kv => kv.split("="))) : {};
 
-const LABEL = { atlas: "MITRE ATLAS", attack: "MITRE ATT&CK Enterprise" };
-const entryFor = { atlas: atlasEntry, attack: attackEntry };
+const LABEL = Object.fromEntries(CATALOGUE_KEYS.map(k => [k, CATALOGUES[k].label]));
+const SHORT = { atlas: "ATLAS", attack: "ATT&CK", attack_mobile: "ATT&CK Mobile", attack_ics: "ATT&CK ICS" };
 
 // ── Release discovery ─────────────────────────────────────────────────────────
 
@@ -66,16 +66,17 @@ async function atlasReleases() {
   return [m[1]];
 }
 
-/** All published Enterprise ATT&CK versions, oldest → newest. */
-async function attackReleases() {
-  const idx = JSON.parse(await fetchText(ATTACK_INDEX));
-  const coll = idx.collections.find(c => c.name === "Enterprise ATT&CK");
-  if (!coll) throw new Error("ATT&CK index.json: no 'Enterprise ATT&CK' collection");
+/** All published versions of one ATT&CK domain (from index.json), oldest → newest. */
+let attackIndex = null;
+async function attackReleases(key) {
+  attackIndex ??= JSON.parse(await fetchText(ATTACK_INDEX));
+  const name = CATALOGUES[key].collection;
+  const coll = attackIndex.collections.find(c => c.name === name);
+  if (!coll) throw new Error(`ATT&CK index.json: no '${name}' collection`);
   return coll.versions.map(v => v.version).sort(compareVersions);
 }
 
-const RELEASES = { atlas: atlasReleases, attack: attackReleases };
-const prefixed = { atlas: v => `ATLAS-${v}`, attack: v => `enterprise-attack-${v}` };
+const releasesFor = key => key === "atlas" ? atlasReleases() : attackReleases(key);
 
 // ── Report ────────────────────────────────────────────────────────────────────
 
@@ -123,9 +124,11 @@ const CHECKLIST = `## Reviewer checklist
 2. If the taxonomy check above lists problems, fix those \`framework_refs\` in
    \`lib/pipeline/understand/taxonomy.js\` on this branch (the unit test
    \`tests/frameworkReference.test.js\` fails until you do).
-3. If many techniques were added, removed or renamed, run the accuracy eval
-   locally (\`node scripts/evalFrameworkMapping.js\`, Phase 2) and check precision
-   still meets the bar. It costs LLM tokens, so CI does not run it.
+3. If techniques that the tagging prompt names (\`lib/prompts/understand/map-frameworks.md\`)
+   were added, removed or renamed, update the prompt on this branch. Then re-tag a
+   reviewed month locally (\`node scripts/enrichSources.js --dry-run --review-xlsx …\`)
+   and score it (\`node scripts/scoreFrameworkReview.js <reviewed.xlsx> --run <new.xlsx>\`).
+   It costs LLM tokens, so CI does not run it.
 4. Merge. \`.github/workflows/framework-sync.yml\` then loads the new release into
    the database. Existing tags keep the version they were made with; re-tagging
    sources on retired techniques is a separate, deliberate step.
@@ -135,26 +138,26 @@ const CHECKLIST = `## Reviewer checklist
 
 async function main() {
   const pinned = loadPinnedVersions();
-  for (const [fw, v] of Object.entries(FROM)) pinned[fw] = entryFor[fw](v);
+  for (const [fw, v] of Object.entries(FROM)) pinned[fw] = catalogueEntry(fw, v);
 
   const plan = {};
-  for (const fw of FRAMEWORKS) {
-    const releases = await RELEASES[fw]();
+  for (const fw of CATALOGUE_KEYS) {
+    const releases = await releasesFor(fw);
     const current  = versionNumber(pinned[fw].version);
     const latest   = releases.at(-1);
     const newer    = compareVersions(latest, current) > 0;
     plan[fw] = {
       current: pinned[fw].version,
-      latest:  prefixed[fw](latest),
+      latest:  versionLabel(fw, latest),
       newer,
-      skipped: releases.filter(v => compareVersions(v, current) > 0 && compareVersions(v, latest) < 0).map(prefixed[fw]),
+      skipped: releases.filter(v => compareVersions(v, current) > 0 && compareVersions(v, latest) < 0).map(v => versionLabel(fw, v)),
     };
-    console.error(`  ${fw.padEnd(7)} pinned ${plan[fw].current}  latest ${plan[fw].latest}  ${newer ? "→ UPGRADE" : "up to date"}`);
+    console.error(`  ${fw.padEnd(13)} pinned ${plan[fw].current}  latest ${plan[fw].latest}  ${newer ? "→ UPGRADE" : "up to date"}`);
   }
 
-  const changed = FRAMEWORKS.filter(fw => plan[fw].newer);
+  const changed = CATALOGUE_KEYS.filter(fw => plan[fw].newer);
   const title = changed.length
-    ? `chore(mitre): upgrade ${changed.map(fw => `${fw === "atlas" ? "ATLAS" : "ATT&CK"} to ${versionNumber(plan[fw].latest)}`).join(", ")}`
+    ? `chore(mitre): upgrade ${changed.map(fw => `${SHORT[fw]} to ${versionNumber(plan[fw].latest)}`).join(", ")}`
     : "";
   if (process.env.GITHUB_OUTPUT) {
     appendFileSync(process.env.GITHUB_OUTPUT, `changed=${changed.length > 0}\ntitle=${title}\n`);
@@ -167,10 +170,10 @@ async function main() {
   const { countSourceTagsUsing } = await import("../lib/storage/frameworkStore.js");
 
   const nextCatalogues = [], sections = [];
-  for (const fw of FRAMEWORKS) {
+  for (const fw of CATALOGUE_KEYS) {
     const prev = await fetchCatalogue(fw, pinned[fw]);
     if (!plan[fw].newer) { nextCatalogues.push(prev); continue; }
-    const next = await fetchCatalogue(fw, entryFor[fw](plan[fw].latest));
+    const next = await fetchCatalogue(fw, catalogueEntry(fw, plan[fw].latest));
     nextCatalogues.push(next);
     const diff = diffCatalogues(prev, next);
     const affected = supabase ? await countSourceTagsUsing(supabase, retiredIds(diff)) : undefined;
@@ -193,7 +196,7 @@ async function main() {
 
   if (WRITE) {
     const updated = loadPinnedVersions();
-    for (const fw of changed) updated[fw] = entryFor[fw](plan[fw].latest);
+    for (const fw of changed) updated[fw] = catalogueEntry(fw, plan[fw].latest);
     writeFileSync(VERSIONS_PATH, JSON.stringify(updated, null, 2) + "\n");
     writeFileSync(INDEX_PATH, serializeTechniqueIndex(nextIndex));
     console.error("  Updated frameworkVersions.json and frameworkTechniqueIndex.json");

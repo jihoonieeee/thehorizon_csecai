@@ -9,6 +9,9 @@
  *   search     — text search on title + summary
  *   limit      — max rows to return (default: all matching, up to HARD_CAP)
  *
+ * POST /api/sources { frameworks: [ids] } — MITRE ATT&CK / ATLAS tags per source
+ * (analyst-reviewed answer first, else the model's); see lib/frameworks/sourceTags.js.
+ *
  * Supabase/PostgREST returns at most 1000 rows per request, so the full result
  * set is assembled by paging through with .range() until exhausted. The corpus
  * is a few thousand rows — small enough to hand the whole (filtered) set to the
@@ -19,6 +22,8 @@ import { createClient } from "@supabase/supabase-js";
 import { maturityOf } from "../lib/pipeline/scoring/maturityLevel.js";
 import { readingValueOf } from "../lib/pipeline/scoring/sourceSignal.js";
 import { requireAuth, roleOf } from "../lib/api/requireAuth.js";
+import { loadSourceTagRows } from "../lib/storage/frameworkStore.js";
+import { buildSourceTags } from "../lib/frameworks/sourceTags.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -162,6 +167,35 @@ export default async function handler(req, res) {
       const { error } = await supabase.from("sources").update(patch).eq("id", id);
       if (error) throw new Error(error.message);
       return res.status(200).json({ ok: true, id, ...patch });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── POST { frameworks: [source ids] } — MITRE ATT&CK / ATLAS tags ────────────
+  // A read, sent as POST so the Excel export can pass thousands of IDs. Kept out
+  // of the GET list (loaded on row expand / export) because quotes would bloat it.
+  if (req.method === "POST") {
+    try {
+      const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+      if (!Array.isArray(body.frameworks)) return res.status(400).json({ error: "frameworks must be an array of source ids" });
+      let ids = [...new Set(body.frameworks.map(id => String(id || "").trim()).filter(Boolean))];
+      if (ids.length > 5000) return res.status(400).json({ error: "at most 5000 ids" });
+
+      // Guests only get tags for rows the GET list would give them.
+      if (!isAdmin && ids.length) {
+        const visible = new Set();
+        for (let i = 0; i < ids.length; i += 200) {
+          const { data, error } = await supabase.from("sources").select("id")
+            .in("id", ids.slice(i, i + 200))
+            .not("validation_status", "eq", "reject")
+            .eq("needs_review", false).in("main_category", GUEST_CATEGORIES);
+          if (error) throw new Error(error.message);
+          for (const r of data) visible.add(r.id);
+        }
+        ids = ids.filter(id => visible.has(id));
+      }
+      return res.status(200).json({ frameworks: buildSourceTags(await loadSourceTagRows(supabase, ids)) });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }

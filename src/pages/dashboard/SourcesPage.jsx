@@ -407,9 +407,42 @@ function AtlasChainPanel({ atlas }) {
   );
 }
 
+// MITRE ATT&CK / ATLAS tags for one framework (shape: lib/frameworks/sourceTags.js).
+// `tags` is undefined while loading; a missing framework means not tagged yet.
+const DOMAIN_SUFFIX = { mobile: " (Mobile)", ics: " (ICS)" };
+function MitreField({ label, f, loading }) {
+  let body;
+  if (loading)       body = <span className="hz-mitre-muted">Loading…</span>;
+  else if (!f)       body = <span className="hz-mitre-muted">Not tagged yet</span>;
+  else if (f.status === "not_applicable") body = <span className="hz-src-detail-v">{f.na_reason}</span>;
+  else if (f.status === "none" || f.techniques.length === 0) body = <span className="hz-mitre-muted">No technique applies</span>;
+  else body = (
+    <span className="hz-src-detail-tags">
+      {f.techniques.map(t => {
+        const text = `${t.id}${t.name ? ` ${t.name}` : ""}${DOMAIN_SUFFIX[t.domain] || ""}`;
+        const tip = [t.confidence && `${t.confidence} confidence`, t.quote && `“${t.quote}”`].filter(Boolean).join(" — ") || t.id;
+        return t.url
+          ? <a key={t.id} className="hz-src-detail-tag hz-mitre-tag" href={t.url} target="_blank" rel="noreferrer" title={tip}>{text}</a>
+          : <span key={t.id} className="hz-src-detail-tag hz-mitre-tag" title={tip}>{text}</span>;
+      })}
+    </span>
+  );
+  return (
+    <div className="hz-src-detail-field">
+      <span className="hz-src-detail-k">
+        {label}
+        {f && !loading && (f.reviewed
+          ? <span className="hz-mitre-badge reviewed" title={f.review_batch ? `Analyst review ${f.review_batch}` : "Analyst-reviewed"}>Analyst-reviewed</span>
+          : <span className="hz-mitre-badge" title="Tagged by the model, not yet reviewed by an analyst">Model-suggested</span>)}
+      </span>
+      {body}
+    </div>
+  );
+}
+
 // Expanded detail — everything an analyst needs to vet the source without opening it.
 // Also hosts the admin controls: edit the publish date and delete the source.
-function SourceDetail({ s, isAdmin, onUpdateDate, onConfirmDate, onDelete, onSaveClassification, onSaveSummary, knownTags, busy }) {
+function SourceDetail({ s, mitre, isAdmin, onUpdateDate, onConfirmDate, onDelete, onSaveClassification, onSaveSummary, knownTags, busy }) {
   const imp  = s.importance || {};
   const mech = s.mechanism || null;
   const full = s.short_summary || "";
@@ -473,6 +506,9 @@ function SourceDetail({ s, isAdmin, onUpdateDate, onConfirmDate, onDelete, onSav
           </span>
         </div>
       )}
+
+      <MitreField label="MITRE ATT&CK" f={mitre?.attack} loading={mitre === undefined} />
+      <MitreField label="MITRE ATLAS"  f={mitre?.atlas}  loading={mitre === undefined} />
 
       {isAdmin && mech?.rationale && (
         <div className="hz-src-detail-field">
@@ -666,6 +702,34 @@ export function SourcesPage() {
   }, [period, shownFrom, shownTo, isAdmin]);
 
   useEffect(() => { loadSources(); }, [loadSources]);
+
+  // ── MITRE ATT&CK / ATLAS tags — fetched per source on expand and in bulk for
+  // the export, then cached (id → { attack?, atlas? }; {} = loaded, none yet).
+  const [mitreTags, setMitreTags] = useState({});
+  const fetchMitre = useCallback(async ids => {
+    if (!ids.length) return {};
+    // Batches of 500 keep each response (quotes included) well under Vercel's 4.5 MB cap.
+    const got = {};
+    for (let i = 0; i < ids.length; i += 500) {
+      const batch = ids.slice(i, i + 500);
+      const r = await fetch("/api/sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getSessionToken(session)}` },
+        body: JSON.stringify({ frameworks: batch }),
+      });
+      if (!r.ok) throw new Error(`MITRE tags: HTTP ${r.status}`);
+      const { frameworks = {} } = await r.json();
+      for (const id of batch) got[id] = frameworks[id] || {};
+    }
+    setMitreTags(prev => ({ ...prev, ...got }));
+    return got;
+  }, [session]);
+
+  useEffect(() => {
+    if (!expandedId || mitreTags[expandedId]) return;
+    // On failure show "not tagged yet" rather than a stuck "Loading…".
+    fetchMitre([expandedId]).catch(() => setMitreTags(prev => ({ ...prev, [expandedId]: {} })));
+  }, [expandedId, mitreTags, fetchMitre]);
 
   // ── Per-user bookmarks — fetch on mount, keyed by session user ───────────────
   useEffect(() => {
@@ -969,6 +1033,11 @@ export function SourcesPage() {
     setExporting(true);
     try {
       const XLSX = await import("xlsx");
+      const missing = filtered.map(s => s.id).filter(id => !mitreTags[id]);
+      const mitre = { ...mitreTags, ...(await fetchMitre(missing)) };
+      // Per framework: reviewed by an analyst or suggested by the model.
+      const mitreBasis = m => [["ATT&CK", m?.attack], ["ATLAS", m?.atlas]]
+        .filter(([, f]) => f).map(([name, f]) => `${name} ${f.reviewed ? "analyst-reviewed" : "model"}`).join("; ");
       const shownDate = s => (s.date_confidence === "low" || s.date_confidence === "none" || !s.date_published)
         ? (s.date_discovered || "") : s.date_published;
       const rows = [...filtered]
@@ -984,11 +1053,14 @@ export function SourcesPage() {
           "Reading value":   LABEL_META[s.label]?.short || "",
           "Source type":     s.source_type || "",
           "Trust":           s.trust_tier || "",
+          "MITRE ATT&CK":    mitre[s.id]?.attack?.text || "",
+          "MITRE ATLAS":     mitre[s.id]?.atlas?.text || "",
+          "MITRE basis":     mitreBasis(mitre[s.id]),
           "Summary":         s.short_summary || s.summary || "",
           "URL":             s.url || "",
         }));
       const ws = XLSX.utils.json_to_sheet(rows);
-      ws["!cols"] = [12, 14, 60, 24, 22, 40, 12, 14, 16, 10, 80, 50].map(wch => ({ wch }));
+      ws["!cols"] = [12, 14, 60, 24, 22, 40, 12, 14, 16, 10, 50, 50, 30, 80, 50].map(wch => ({ wch }));
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Sources");
       const range = shownFrom ? `${shownFrom}_to_${shownTo}` : `all-time_to_${shownTo}`;
@@ -998,7 +1070,7 @@ export function SourcesPage() {
     } finally {
       setExporting(false);
     }
-  }, [filtered, shownFrom, shownTo]);
+  }, [filtered, shownFrom, shownTo, mitreTags, fetchMitre]);
 
   const toggleTag = (tag) => {
     setActiveTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
@@ -1484,7 +1556,7 @@ export function SourcesPage() {
                     {open && (
                       <tr className="hz-src-detail-row">
                         <td colSpan={colSpan}>
-                          <SourceDetail s={s} busy={busyId === s.id}
+                          <SourceDetail s={s} busy={busyId === s.id} mitre={mitreTags[s.id]}
                             isAdmin={accessLevel === "admin"}
                             knownTags={knownTags}
                             onUpdateDate={updateDate} onConfirmDate={confirmDate} onDelete={deleteSource}

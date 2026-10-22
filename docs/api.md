@@ -128,6 +128,23 @@ Filterable source list.
 - `starred` column requires migration 013 to be applied; degrades gracefully if missing.
 - All `reject` status sources are excluded. Child sources (digest findings) are included.
 
+## POST /api/sources
+
+MITRE ATT&CK / ATLAS tags for a set of sources. This is a read: it uses POST so a request can carry many IDs. It is not part of the GET list, which would grow too large with quotes included. The Sources page calls it when a row is expanded, and in batches of 500 for the Excel export.
+
+**Auth:** any signed-in session. A guest only gets tags for sources the guest GET list would return.
+
+**Body:** `{ "frameworks": ["<source id>", ...] }` (max 5000)
+
+**Response:** `{ frameworks: { [source_id]: { attack?, atlas? } } }`. Each framework is
+`{ status, na_reason, reviewed, review_batch, text, techniques: [{ id, name, domain, url, confidence, quote }] }`.
+- An analyst's reviewed answer (`source_framework_reviews`) takes priority over the model's mapping (`reviewed: true`). The model's quote and confidence are kept for any reviewed ID the model also found.
+- `status`: `tagged` | `not_applicable` (`na_reason` holds the log's N/A text) | `none`.
+- If a framework is missing, that source has not been tagged yet. Unknown IDs, or IDs the guest filter removes, are left out.
+- `text` is the single-cell form used in the export, e.g. `T1566 Phishing; T1417 Input Capture (Mobile)`.
+
+Built by `lib/frameworks/sourceTags.js` from `loadSourceTagRows()` in `lib/storage/frameworkStore.js`.
+
 ## PATCH /api/sources?id={id}
 
 Edit source metadata.
