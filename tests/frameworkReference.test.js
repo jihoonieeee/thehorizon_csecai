@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import {
   parseAtlas, parseAttack, parseFrameworkRef, looksLikeMitreRef, cleanDescription, checkTaxonomyRefs,
   diffCatalogues, retiredIds, buildTechniqueIndex, serializeTechniqueIndex,
-  loadPinnedVersions, loadTechniqueIndex, lookupTechnique, CATALOGUE_KEYS,
+  loadPinnedVersions, loadTechniqueIndex, lookupTechnique, CATALOGUE_KEYS, RETIRED_REPLACEMENTS,
 } from "../lib/frameworks/mitreCatalogue.js";
+import { parseAnswerCell } from "../lib/frameworks/reviewSheet.js";
 import { PRIMARY_TAGS, SUB_TECHNIQUES } from "../lib/pipeline/understand/taxonomy.js";
 
 // ── Every MITRE ref in taxonomy.js exists, live, at the pinned release ────────
@@ -46,6 +47,19 @@ test("parseAttack reads Mobile/ICS kill chains and merges multiple matrices", ()
 
 test("every taxonomy framework_refs MITRE ID exists and is not deprecated", () => {
   assert.deepEqual(checkTaxonomyRefs([...PRIMARY_TAGS, ...SUB_TECHNIQUES], index), []);
+});
+
+test("every RETIRED_REPLACEMENTS target is live at the pinned release", () => {
+  const bad = Object.entries(RETIRED_REPLACEMENTS).filter(([, to]) => {
+    const hit = lookupTechnique(index, to.startsWith("AML.") ? "atlas" : "attack", to);
+    return !hit || hit.entry.deprecated;
+  });
+  assert.deepEqual(bad, []);
+});
+
+test("an analyst answer with a deleted ATLAS ID scores as its replacement", () => {
+  assert.deepEqual(parseAnswerCell("atlas", "AML.T0024.002 Extract AI Model\nAML.T0040", index),
+    { outcome: "tagged", ids: ["AML.T0005.001", "AML.T0040"] });
 });
 
 test("checkTaxonomyRefs flags missing, deprecated and malformed refs", () => {

@@ -46,6 +46,15 @@ History:
   hallucination-squatting → T0010.001 + T0011.000; lure hosted on an AI platform
   → N/A; LLM-written malware with safeguards bypassed → T0054. Next clean test:
   July 16–31.
+- 2026-11-02 v7: catalogues upgraded to ATLAS 2026.10 + ATT&CK 20.0. ATLAS 2026.10
+  deleted AML.T0024.000/.001/.002, AML.T0056 and AML.T0057; replacements agreed
+  2026-11-02: membership inference → AML.T0137.000; model inversion →
+  AML.T0137.002; model extraction / distillation → AML.T0005.001 (+ AML.T0144
+  when weights or architecture are recovered); data leaked in a model's reply →
+  AML.T0136 (was T0057); system prompt extraction → AML.T0085.003. Old IDs in
+  analyst answers are translated by RETIRED_REPLACEMENTS (lib/frameworks/mitreCatalogue.js).
+  ATT&CK 20.0's new AI techniques (T1698, T1699, T1700, T1682, T1608.007) are kept
+  out of the log for now, per the analysts' 2026-10-19 decision.
 
 The code that calls this prompt:
 - appends the FULL live technique lists (IDs + names) to the system prompt;
@@ -65,8 +74,8 @@ HOW MANY TECHNIQUES
 - Do not tag techniques that are only mentioned in passing, listed as possible risks, or described as something defenders do.
 
 PARENT OR SUB-TECHNIQUE
-- Use the PARENT technique by default (e.g. T1059, T1566, T1567, T1102, AML.T0018, AML.T0024).
-- Use a sub-technique only when the article explicitly describes that specific method — e.g. credentials read from files (T1552.001), a compromised software package/supply chain (T1195.002), victims pasting a command (T1204.004), PowerShell named (T1059.001), indirect prompt injection via third-party content (AML.T0051.001), membership inference / model inversion / model extraction (AML.T0024.000 / .001 / .002).
+- Use the PARENT technique by default (e.g. T1059, T1566, T1567, T1102, AML.T0018, AML.T0137).
+- Use a sub-technique only when the article explicitly describes that specific method — e.g. credentials read from files (T1552.001), a compromised software package/supply chain (T1195.002), victims pasting a command (T1204.004), PowerShell named (T1059.001), indirect prompt injection via third-party content (AML.T0051.001), membership inference / model inversion / memorized-data extraction (AML.T0137.000 / .002 / .003), model extraction from its outputs (AML.T0005.001).
 - Never tag both a parent and its own sub-technique.
 
 ANALYST EXAMPLES
@@ -99,6 +108,7 @@ MITRE ATT&CK — status and conventions
   - Prompt injection against a real, deployed product that steals data: T1567 exfiltration over web service (+ T1027 when the instructions are hidden). Hidden prompts planted in documents to deceive an AI reviewer: T1036 masquerading.
   - Hardware, side-channel or fault attacks on AI accelerators or AI software: "not_applicable".
   - Model-distillation or extraction campaigns that reach the model through proxy networks or fraudulent / compromised accounts: T1588.007 + T1090 Proxy + T1586 Compromise Accounts (or T1585 Establish Accounts).
+  - Do NOT use ATT&CK's AI techniques T1698 Indirect Prompt Injection, T1699 Direct Prompt Injection, T1700 AI-Enabled Exfiltration, T1682 Query Public AI Services or T1608.007 AI Result Poisoning: the log has not adopted them yet. Follow the conventions above instead.
   - Common choices: T1190 exploit public-facing application; T1210 exploitation of remote services (lateral); T1068 exploitation for privilege escalation; T1552.001 credentials in files / secrets in code, configs or environments; T1567 exfiltration over web service; T1059 command execution; T1595 active scanning; T1090 proxy; T1195.002 software supply chain; T1566 phishing; T1657 financial theft; T1684.001 impersonation.
 - ATT&CK DOMAINS — the "attack" answer may mix Enterprise, Mobile and ICS IDs:
   - Mobile ATT&CK only when the attack targets phones or tablets (Android/iOS malware, malicious mobile apps, mobile banking trojans), e.g. T1417 Input Capture, T1516 Input Injection, T1437 Application Layer Protocol.
@@ -109,8 +119,8 @@ MITRE ATLAS — status and conventions
 - "tagged" ONLY when an AI system is itself attacked or abused:
   - attacks on models: poisoning, backdoors, evasion, extraction, inversion, membership inference, jailbreak, prompt injection
   - an adversary abusing an AI service: the article says the attacker jailbroke or bypassed a commercial model's safeguards to get help (AML.T0054, + AML.T0040); or MALWARE / attacker tooling calls a model's API as part of how it works (AML.T0040, plus AML.T0047 AI-Enabled Product or Service when a public AI product is built into the attack); or scammers / influence operators run their operation through a NAMED AI service or accounts on it (e.g. ChatGPT accounts, LLM chatbots messaging victims) — AML.T0040 (+ AML.T0047)
-  - hardware, side-channel or fault attacks on AI accelerators or AI software: e.g. AML.T0029 Denial of AI Service + AML.T0031 for faults corrupting outputs; AML.T0024.002 + AML.T0057 for leaking model weights or tokens
-  - exploiting a vulnerability or flaw in an AI product or agent — including flaws that let attackers bypass an agent's guardrails, sandbox or command filters, and hijacking AI agents used for defence or security work (AML.T0047, AML.T0053 when via its tools, AML.T0057 when data leaks; for prompt injection into agents see the agent rule below)
+  - hardware, side-channel or fault attacks on AI accelerators or AI software: e.g. AML.T0029 Denial of AI Service + AML.T0031 for faults corrupting outputs; AML.T0144 Recover AI Model Internals for leaking model weights or architecture, AML.T0085.002 for leaking users' prompts or responses
+  - exploiting a vulnerability or flaw in an AI product or agent — including flaws that let attackers bypass an agent's guardrails, sandbox or command filters, and hijacking AI agents used for defence or security work (AML.T0047, AML.T0053 when via its tools, AML.T0136 when data leaks through its replies; for prompt injection into agents see the agent rule below)
   - compromise of the AI supply chain (models, datasets, agent skills/plugins/MCP servers), including attackers registering packages or domains that AI coding tools hallucinate or are tricked into installing (AML.T0010.001 + AML.T0011.000)
   - content crafted to evade or derail AI-based security analysis (an AI malware analyser, detector or classifier): AML.T0015 Evade AI Model + AML.T0051.000 Direct (the attacker authored the input), + AML.T0068 when the injected text is obfuscated
   - malware written with an LLM when the article says the model's safeguards were bypassed or jailbreak prompts were used: AML.T0054
@@ -120,16 +130,17 @@ MITRE ATLAS — status and conventions
   - data, RAG, knowledge-base or memory poisoning → AML.T0020. Add AML.T0051.001 only when the article centres on the poisoned content carrying instructions to the model, and AML.T0031 Erode AI Model Integrity only when it centres on degrading the model's outputs or behaviour. Not AML.T0070 / AML.T0080 / AML.T0099.
   - backdoors (including trigger-based or "sleeper" behaviour) → ALWAYS AML.T0018 (+ AML.T0020 when planted via training or fine-tuning data). Not AML.T0043.004 / AML.T0018.000 / AML.T0018.003.
   - manipulating an agent or model to bias or corrupt its behaviour → AML.T0031, not AML.T0130. Use AML.T0031 only when degrading the model's outputs is the article's MAIN point — never as an add-on to prompt injection, poisoning or backdoor tags.
-  - prompt injection into an AI AGENT (one with tools: coding agents, AI browsers, MCP clients, email or ticket agents) → ALWAYS both AML.T0051.001 + AML.T0053, whether the effect is code execution, data theft or payments. Add AML.T0068 when the injected instructions are hidden or obfuscated, AML.T0054 when the agent's own safety rules or guardrails are bypassed, AML.T0015 when a security filter or scanner is evaded. Not AML.T0086 / AML.T0110 / AML.T0112, and do not add AML.T0025 / AML.T0057 / AML.T0047 to these.
+  - prompt injection into an AI AGENT (one with tools: coding agents, AI browsers, MCP clients, email or ticket agents) → ALWAYS both AML.T0051.001 + AML.T0053, whether the effect is code execution, data theft or payments. Add AML.T0068 when the injected instructions are hidden or obfuscated, AML.T0054 when the agent's own safety rules or guardrails are bypassed, AML.T0015 when a security filter or scanner is evaded. Not AML.T0086 / AML.T0110 / AML.T0112, and do not add AML.T0025 / AML.T0136 / AML.T0047 to these.
   - malicious packages, domains or repositories squatting on names that AI coding tools hallucinate or are tricked into installing → AML.T0010.001 + AML.T0011.000. Not AML.T0060 / AML.T0062.
   - jailbreak papers → AML.T0054 (+ AML.T0068 for obfuscation, AML.T0053 when the target is a function-calling / tool-using model). Do not add AML.T0040 or AML.T0043 by default.
-  - inferring or reconstructing a model or its embeddings through its API → AML.T0024.002 + AML.T0040.
+  - inferring or reconstructing a model or its embeddings through its API → AML.T0005.001 + AML.T0040 (+ AML.T0144 when internals such as weights or architecture are recovered).
   - malicious or compromised agent skills, plugins, packages or MCP servers → AML.T0010.001 + AML.T0053. Not AML.T0010.005 / AML.T0115. When the malicious skill is built to slip past a scanner or reviewer, add AML.T0015.
   - malicious model files or model repositories (e.g. on Hugging Face, unsafe serialisation) → AML.T0010.003 Model (+ AML.T0011.000 Unsafe AI Artifacts when loading it runs code; + AML.T0010.001 when an AI library is the vulnerable part).
-  - data stolen out of a CHATBOT or assistant WITHOUT agent tools through prompt injection (e.g. chat-history theft via rendered links or images) → AML.T0051.001 + AML.T0025 Exfiltration via Cyber Means (+ AML.T0068 when hidden or obfuscated, AML.T0057 when the model leaks the data in its reply). For agents with tools, use the agent rule above instead.
+  - data stolen out of a CHATBOT or assistant WITHOUT agent tools through prompt injection (e.g. chat-history theft via rendered links or images) → AML.T0051.001 + AML.T0025 Exfiltration via Cyber Means (+ AML.T0068 when hidden or obfuscated, AML.T0136 when the model shows the data in its reply). For agents with tools, use the agent rule above instead.
   - backdoors planted in self-evolving agents' skills or memories → AML.T0018 + AML.T0020 + AML.T0010.001.
   - jailbreaks → AML.T0054 (+ AML.T0068 when obfuscation is the method, AML.T0043 when inputs are optimised adversarially; AML.T0015 when the aim is to evade an AI-based detector or classifier).
-  - membership inference → AML.T0024.000; model inversion / data reconstruction → AML.T0024.001; model extraction or distillation → AML.T0024.002; add AML.T0040 when the attack works through black-box query access, AML.T0057 when private data leaks, AML.T0048.004 for real-world IP theft.
+  - membership inference → AML.T0137.000; model inversion / data reconstruction → AML.T0137.002; extracting memorized training data → AML.T0137.003; model extraction or distillation → AML.T0005.001 (+ AML.T0144 when weights or architecture are recovered); add AML.T0040 when the attack works through black-box query access, AML.T0136 when private data leaks in the model's replies, AML.T0048.004 for real-world IP theft.
+  - system prompt or hidden instruction extraction → AML.T0085.003.
 - Do not add AML.T0042 Verify Attack, AML.T0065 LLM Prompt Crafting or AML.T0050 by default — only if the article makes that step the point.
 
 A status of "tagged" must have at least one technique; "not_applicable" and "none" must have an empty techniques list.
