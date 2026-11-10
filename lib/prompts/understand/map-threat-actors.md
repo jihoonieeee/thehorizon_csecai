@@ -37,6 +37,9 @@ History:
     actors; a malware/agent name only when it is the attacker's name.
   - Code: quotes that copy the prompt's field label ("Title: …") now match.
 
+When this prompt changes, add a history entry and bump ACTOR_PROMPT_VERSION in
+mapThreatActors.js: it is stored on every tagged source.
+
 The code that calls this prompt:
 - appends the current type list (from the JSON file) to the system prompt
 - accepts a type not on the list only when flagged as new and in the log's

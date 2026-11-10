@@ -440,6 +440,56 @@ function MitreField({ label, f, loading }) {
   );
 }
 
+// Threats-log actor columns (shape: lib/storage/threatActorStore.js buildSourceActors).
+// `a` is undefined while loading or when the source is not tagged yet. Hovering a
+// value shows the article quote behind it; admins also see the model's reasoning.
+function ThreatActorField({ a, loading, isAdmin }) {
+  if (loading || !a) {
+    return (
+      <div className="hz-src-detail-field">
+        <span className="hz-src-detail-k">Threat actor</span>
+        <span className="hz-mitre-muted">{loading ? "Loading…" : "Not tagged yet"}</span>
+      </div>
+    );
+  }
+  const actorTip = a.named_actors.filter(n => n.quote).map(n => `${n.name}: “${n.quote}”`).join("\n") || undefined;
+  const countryTip = a.countries.map(c => c.basis === "article"
+    ? `${c.country}: “${c.quote}”`
+    : `${c.country}: known attribution of the named group (not stated in the article)`).join("\n") || undefined;
+  return (
+    <>
+      <div className="hz-src-detail-grid">
+        <div className="hz-src-detail-field">
+          <span className="hz-src-detail-k">
+            Threat actor type
+            {a.reviewed
+              ? <span className="hz-mitre-badge reviewed" title={a.reviewed_by ? `Reviewed by ${a.reviewed_by}` : "Analyst-reviewed"}>Analyst-reviewed</span>
+              : <span className="hz-mitre-badge" title={`Tagged by the model (prompt ${a.prompt_version}), not yet reviewed by an analyst`}>Model-suggested</span>}
+          </span>
+          <span className="hz-src-detail-v">{a.type}</span>
+        </div>
+        <div className="hz-src-detail-field">
+          <span className="hz-src-detail-k">Threat actor</span>
+          <span className="hz-src-detail-v" title={actorTip}>{a.actor || "—"}</span>
+        </div>
+        <div className="hz-src-detail-field">
+          <span className="hz-src-detail-k">Country-nexus</span>
+          <span className="hz-src-detail-v" title={countryTip}>{a.country}</span>
+        </div>
+      </div>
+      {isAdmin && (a.rationale || a.flags.length > 0) && (
+        <div className="hz-src-detail-field">
+          <span className="hz-src-detail-k">Why this threat actor</span>
+          <span className="hz-src-detail-v hz-src-detail-rationale">
+            {a.flags.map(f => <span key={f} className="hz-src-conflict" title={f}>⚠ needs checking</span>)}
+            {a.rationale}{a.confidence ? ` (${a.confidence} confidence)` : ""}
+          </span>
+        </div>
+      )}
+    </>
+  );
+}
+
 // Expanded detail — everything an analyst needs to vet the source without opening it.
 // Also hosts the admin controls: edit the publish date and delete the source.
 function SourceDetail({ s, mitre, isAdmin, onUpdateDate, onConfirmDate, onDelete, onSaveClassification, onSaveSummary, knownTags, busy }) {
@@ -509,6 +559,7 @@ function SourceDetail({ s, mitre, isAdmin, onUpdateDate, onConfirmDate, onDelete
 
       <MitreField label="MITRE ATT&CK" f={mitre?.attack} loading={mitre === undefined} />
       <MitreField label="MITRE ATLAS"  f={mitre?.atlas}  loading={mitre === undefined} />
+      <ThreatActorField a={mitre?.actor} loading={mitre === undefined} isAdmin={isAdmin} />
 
       {isAdmin && mech?.rationale && (
         <div className="hz-src-detail-field">
@@ -703,8 +754,9 @@ export function SourcesPage() {
 
   useEffect(() => { loadSources(); }, [loadSources]);
 
-  // ── MITRE ATT&CK / ATLAS tags — fetched per source on expand and in bulk for
-  // the export, then cached (id → { attack?, atlas? }; {} = loaded, none yet).
+  // ── MITRE ATT&CK / ATLAS tags + threat actor — fetched per source on expand and
+  // in bulk for the export, then cached (id → { attack?, atlas?, actor? }; a
+  // missing key once loaded = not tagged yet).
   const [mitreTags, setMitreTags] = useState({});
   const fetchMitre = useCallback(async ids => {
     if (!ids.length) return {};
@@ -718,8 +770,8 @@ export function SourcesPage() {
         body: JSON.stringify({ frameworks: batch }),
       });
       if (!r.ok) throw new Error(`MITRE tags: HTTP ${r.status}`);
-      const { frameworks = {} } = await r.json();
-      for (const id of batch) got[id] = frameworks[id] || {};
+      const { frameworks = {}, actors = {} } = await r.json();
+      for (const id of batch) got[id] = { ...(frameworks[id] || {}), ...(actors[id] ? { actor: actors[id] } : {}) };
     }
     setMitreTags(prev => ({ ...prev, ...got }));
     return got;
@@ -1056,11 +1108,15 @@ export function SourcesPage() {
           "MITRE ATT&CK":    mitre[s.id]?.attack?.text || "",
           "MITRE ATLAS":     mitre[s.id]?.atlas?.text || "",
           "MITRE basis":     mitreBasis(mitre[s.id]),
+          "Threat actor type":  mitre[s.id]?.actor?.type || "",
+          "Threat actor":       mitre[s.id]?.actor?.actor || "",
+          "Country-nexus":      mitre[s.id]?.actor?.country || "",
+          "Threat actor basis": mitre[s.id]?.actor ? (mitre[s.id].actor.reviewed ? "analyst-reviewed" : "model") : "",
           "Summary":         s.short_summary || s.summary || "",
           "URL":             s.url || "",
         }));
       const ws = XLSX.utils.json_to_sheet(rows);
-      ws["!cols"] = [12, 14, 60, 24, 22, 40, 12, 14, 16, 10, 50, 50, 30, 80, 50].map(wch => ({ wch }));
+      ws["!cols"] = [12, 14, 60, 24, 22, 40, 12, 14, 16, 10, 50, 50, 30, 30, 30, 18, 18, 80, 50].map(wch => ({ wch }));
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Sources");
       const range = shownFrom ? `${shownFrom}_to_${shownTo}` : `all-time_to_${shownTo}`;

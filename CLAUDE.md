@@ -228,6 +228,14 @@ Other useful scripts:
   node scripts/importFrameworkReview.js <reviewed.xlsx> [--batch YYYY-MM]
                                                       — load analysts' reviewed MITRE answers (migration 031); enrichSources
                                                         shows the most similar ones as examples (--examples-from to restrict)
+  node scripts/tagThreatActors.js [--from D --to D] [--limit N] [--force | --retag-older] [--dry-run] [--review-xlsx F]
+                                                      — L4g: fill the threats log's Threat Actor Type / Threat Actor /
+                                                        Country-nexus per passing source (prompt lib/prompts/understand/
+                                                        map-threat-actors.md; types in lib/config/threatActorVocabulary.json).
+                                                        Writes source_threat_actors (migration 032); untagged only by default.
+                                                        Scheduled in pipeline-classify.yml's enrich job (--limit 80).
+                                                        Shown on the Sources page via POST /api/sources (`actors`).
+                                                        After a prompt change, bump ACTOR_PROMPT_VERSION and run --retag-older.
   node scripts/scoreFrameworkReview.js <reviewed.xlsx> [--run new.xlsx]
                                                       — score MITRE tagging against an analyst-reviewed sheet; use after
                                                         any change to lib/prompts/understand/map-frameworks.md

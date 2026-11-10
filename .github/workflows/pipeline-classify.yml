@@ -1,6 +1,6 @@
 name: Pipeline — Classify + Evidence + Insights
 
-# Runs classify (L4), rescrape, MITRE tagging (L4g), evidence (L5), and dashboard insights.
+# Runs classify (L4), rescrape, MITRE + threat-actor tagging (L4g), evidence (L5), and dashboard insights.
 # Fires 90 min after each ingest window opens, giving connectors time to finish
 # even on slow runs (rate-limited fetches, large RSS backlogs).
 #
@@ -35,6 +35,9 @@ on:
         default: '150'
       enrich_limit:
         description: 'Max sources for MITRE tagging (default 80)'
+        default: '80'
+      actor_limit:
+        description: 'Max sources for threat-actor tagging (default 80)'
         default: '80'
       run_insights:
         description: 'Generate dashboard insights (week|month|quarter|all)'
@@ -193,11 +196,16 @@ jobs:
   # ~18K tokens per source: 80 × 18K ≈ 1.5M, inside this job's own 2M budget
   # (the router's budget is per process). Anything left over is picked up by
   # the next slot, three times a day.
+  #
+  # Then the threat-actor columns (Threat Actor Type / Threat Actor / Country-nexus),
+  # same eligibility, untagged only. A step in this job rather than its own job
+  # so it does not add parallel load on the platform (it times out under load).
+  # ~4K tokens per source: 80 × 4K ≈ 320K, its own process and budget.
   enrich:
-    name: L4g MITRE tagging
+    name: L4g MITRE + threat-actor tagging
     needs: [classify, rescrape]
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     if: always() && needs.classify.result == 'success' && (needs.rescrape.result == 'success' || needs.rescrape.result == 'failure')
     steps:
       - uses: actions/checkout@v4
@@ -209,6 +217,16 @@ jobs:
 
       - name: Run MITRE tagging (L4g)
         run: node scripts/enrichSources.js --limit ${{ github.event.inputs.enrich_limit || '80' }}
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PLATFORM_AI_API_KEY:       ${{ secrets.PLATFORM_AI_API_KEY }}
+          PROXY_URL:                 ${{ secrets.PROXY_URL }}
+
+      # Runs even if MITRE tagging failed — the two are independent.
+      - name: Run threat-actor tagging (L4g)
+        if: always()
+        run: node scripts/tagThreatActors.js --limit ${{ github.event.inputs.actor_limit || '80' }}
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

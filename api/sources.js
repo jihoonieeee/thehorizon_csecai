@@ -11,6 +11,8 @@
  *
  * POST /api/sources { frameworks: [ids] } — MITRE ATT&CK / ATLAS tags per source
  * (analyst-reviewed answer first, else the model's); see lib/frameworks/sourceTags.js.
+ * The response also carries `actors`: Threat Actor Type / Threat Actor / Country-nexus
+ * per source (analyst override first, else the model's); see lib/storage/threatActorStore.js.
  *
  * Supabase/PostgREST returns at most 1000 rows per request, so the full result
  * set is assembled by paging through with .range() until exhausted. The corpus
@@ -24,6 +26,7 @@ import { readingValueOf } from "../lib/pipeline/scoring/sourceSignal.js";
 import { requireAuth, roleOf } from "../lib/api/requireAuth.js";
 import { loadSourceTagRows } from "../lib/storage/frameworkStore.js";
 import { buildSourceTags } from "../lib/frameworks/sourceTags.js";
+import { loadSourceActorRows, buildSourceActors } from "../lib/storage/threatActorStore.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -172,7 +175,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── POST { frameworks: [source ids] } — MITRE ATT&CK / ATLAS tags ────────────
+  // ── POST { frameworks: [source ids] } — MITRE tags + threat actors ───────────
   // A read, sent as POST so the Excel export can pass thousands of IDs. Kept out
   // of the GET list (loaded on row expand / export) because quotes would bloat it.
   if (req.method === "POST") {
@@ -195,7 +198,11 @@ export default async function handler(req, res) {
         }
         ids = ids.filter(id => visible.has(id));
       }
-      return res.status(200).json({ frameworks: buildSourceTags(await loadSourceTagRows(supabase, ids)) });
+      const [tagRows, actorRows] = await Promise.all([
+        loadSourceTagRows(supabase, ids),
+        loadSourceActorRows(supabase, ids),
+      ]);
+      return res.status(200).json({ frameworks: buildSourceTags(tagRows), actors: buildSourceActors(actorRows) });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }

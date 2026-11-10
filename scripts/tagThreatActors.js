@@ -1,42 +1,59 @@
 #!/usr/bin/env node
 /**
- * tagThreatActors.js — L4g enrich trial: fill the threats log's Threat Actor
- * Type, Threat Actor and Country-nexus columns (lib/pipeline/understand/mapThreatActors.js)
- * and write an Excel sheet for the analysts to review.
- *
- * Trial only: nothing is written to the database. Storage comes after the
- * analysts' review sets the bar, as for MITRE tagging.
+ * tagThreatActors.js — L4g enrich: fill the threats log's Threat Actor Type,
+ * Threat Actor and Country-nexus columns (lib/pipeline/understand/mapThreatActors.js)
+ * and save them to source_threat_actors (docs/migrations/032_source_threat_actors.sql).
  *
  * Eligible: validation_status = pass, classified, not a digest parent — the same
- * sources scripts/enrichSources.js tags.
+ * sources scripts/enrichSources.js tags. Already-tagged sources are skipped
+ * unless --force (all) or --retag-older (those tagged by an older prompt version).
+ * Analysts' overrides (reviewed_* columns) are never touched by a re-tag.
  *
  * Usage:
- *   node scripts/tagThreatActors.js --review-xlsx FILE [--from YYYY-MM-DD] [--to YYYY-MM-DD]
- *                                   [--limit N] [--ids id1,id2]
+ *   node scripts/tagThreatActors.js [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--limit N]
+ *                                   [--ids id1,id2] [--force | --retag-older] [--dry-run]
+ *                                   [--review-xlsx FILE]
  *
- * Example:
- *   node scripts/tagThreatActors.js --from 2026-09-01 --to 2026-09-30 --review-xlsx actors-2026-09.xlsx
+ *   --from / --to   publish-date range, both inclusive
+ *   --limit N       max sources to tag this run (default: all eligible), newest first
+ *   --ids           only these source IDs
+ *   --force         re-tag sources that are already tagged
+ *   --retag-older   re-tag sources tagged by an older prompt version than ACTOR_PROMPT_VERSION
+ *   --dry-run       call the model but write nothing to the database
+ *   --review-xlsx   write an Excel review sheet for the tagged sources in the range:
+ *                   this run's results plus any stored earlier
+ *
+ * Examples:
+ *   node scripts/tagThreatActors.js --limit 80                                   (scheduled run)
+ *   node scripts/tagThreatActors.js --from 2026-07-01 --to 2026-09-30             (backfill)
+ *   node scripts/tagThreatActors.js --from 2026-10-01 --to 2026-10-31 --dry-run --review-xlsx actors-2026-10.xlsx
  */
 
 import "dotenv/config";
 import XLSX from "xlsx";
 import { supabase } from "../lib/storage/supabaseClient.js";
-import { mapSourceToThreatActors } from "../lib/pipeline/understand/mapThreatActors.js";
+import { mapSourceToThreatActors, ACTOR_PROMPT_VERSION } from "../lib/pipeline/understand/mapThreatActors.js";
+import {
+  threatActorTableExists, fetchTaggedActorIds, saveActorMapping, loadSourceActorRows, rowToActors,
+} from "../lib/storage/threatActorStore.js";
 
-const args     = process.argv.slice(2);
-const arg      = name => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
-const FROM     = arg("--from");
-const TO       = arg("--to");
-const LIMIT    = arg("--limit") ? parseInt(arg("--limit"), 10) : Infinity;
-const IDS      = arg("--ids") ? arg("--ids").split(",").map(s => s.trim()).filter(Boolean) : null;
-const XLSX_OUT = arg("--review-xlsx");
+const args        = process.argv.slice(2);
+const arg         = name => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
+const FROM        = arg("--from");
+const TO          = arg("--to");
+const LIMIT       = arg("--limit") ? parseInt(arg("--limit"), 10) : Infinity;
+const IDS         = arg("--ids") ? arg("--ids").split(",").map(s => s.trim()).filter(Boolean) : null;
+const FORCE       = args.includes("--force");
+const RETAG_OLDER = args.includes("--retag-older");
+const DRY_RUN     = args.includes("--dry-run");
+const XLSX_OUT    = arg("--review-xlsx");
 
-const CONCURRENCY = 3;
+// The GovTech platform times out under heavier load; keep this low.
+const CONCURRENCY = 2;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 for (const [flag, v] of [["--from", FROM], ["--to", TO]]) {
   if (v && !DATE_RE.test(v)) { console.error(`${flag} must be YYYY-MM-DD`); process.exit(1); }
 }
-if (!XLSX_OUT) { console.error("--review-xlsx FILE is required (this is a trial: the sheet is the only output)"); process.exit(1); }
 
 const SOURCE_COLS = "id,title,url,publisher,date_published,source_type,main_category,short_summary,summary,full_text";
 
@@ -186,43 +203,72 @@ function writeReviewSheet(file, sources, results) {
 
 async function main() {
   console.log(`\n${"═".repeat(60)}`);
-  console.log("  L4g enrich — threat actor trial (nothing saved to the database)");
+  console.log(`  L4g enrich — threat actors (prompt ${ACTOR_PROMPT_VERSION})${DRY_RUN ? "  [DRY RUN]" : ""}${FORCE ? "  [--force]" : ""}${RETAG_OLDER ? "  [--retag-older]" : ""}`);
   console.log(`  Range: ${FROM || "(start)"} → ${TO || "(end)"}${IDS ? `  ids: ${IDS.length}` : ""}`);
   console.log(`${"═".repeat(60)}\n`);
 
+  const tableExists = await threatActorTableExists(supabase);
+  if (!tableExists && !DRY_RUN) {
+    console.error("  Migration 032 (source_threat_actors) is not applied.\n"
+      + "  Run docs/migrations/032_source_threat_actors.sql in Supabase, or use --dry-run to trial without saving.");
+    process.exit(1);
+  }
+  if (!tableExists) console.log("  Migration 032 not applied — dry run only, nothing stored or read back.");
+
   const eligible = await fetchEligible();
-  const todo = eligible.slice(0, LIMIT);
-  console.log(`  Eligible: ${eligible.length}   to tag now: ${todo.length}\n`);
+  const done = FORCE || !tableExists ? new Set()
+    : await fetchTaggedActorIds(supabase, eligible.map(s => s.id), { promptVersion: RETAG_OLDER ? ACTOR_PROMPT_VERSION : null });
+  const todo = eligible.filter(s => !done.has(s.id)).slice(0, LIMIT);
+  console.log(`  Eligible: ${eligible.length}   already tagged: ${done.size}   to tag now: ${todo.length}\n`);
 
   const results = new Map();
-  let ok = 0, failed = 0, budgetHit = false;
+  let ok = 0, budgetHit = false;
   const noteBudget = msg => { if (/budget exhausted/i.test(String(msg || ""))) budgetHit = true; };
-  await pool(todo, CONCURRENCY, async (s, idx) => {
+  const tagOne = async (s, label) => {
     if (budgetHit) return;
     try {
       const r = await mapSourceToThreatActors(s);
-      if (!r.ok) { failed++; noteBudget(r.error); results.set(s.id, { error: r.error }); console.log(`  ✗ ${s.id.slice(0, 8)} ${r.error}`); return; }
+      if (!r.ok) { noteBudget(r.error); results.set(s.id, { error: r.error }); console.log(`  ✗ ${s.id.slice(0, 8)} ${r.error}`); return; }
+      if (!DRY_RUN) await saveActorMapping(supabase, s.id, r.actors, { promptVersion: ACTOR_PROMPT_VERSION, model: r.model });
       results.set(s.id, { actors: r.actors, model: r.model });
       ok++;
       const a = r.actors;
-      console.log(`  ✓ [${idx + 1}/${todo.length}] ${String(s.title || "").slice(0, 50).padEnd(50)}  ${a.type_status === "listed" ? "" : `[${a.type_status}] `}${a.threat_actor_type} | ${a.threat_actor} | ${a.country_nexus}`);
+      console.log(`  ✓ ${label} ${String(s.title || "").slice(0, 50).padEnd(50)}  ${a.type_status === "listed" ? "" : `[${a.type_status}] `}${a.threat_actor_type} | ${a.threat_actor} | ${a.country_nexus}`);
     } catch (err) {
-      failed++;
       noteBudget(err.message);
       results.set(s.id, { error: err.message });
       console.log(`  ✗ ${s.id.slice(0, 8)} ${err.message}`);
     }
-  });
+  };
+
+  await pool(todo, CONCURRENCY, (s, idx) => tagOne(s, `[${idx + 1}/${todo.length}]`));
+
+  // One retry for failures (mostly platform timeouts), one at a time.
+  const retry = todo.filter(s => results.get(s.id)?.error);
+  if (retry.length && !budgetHit) {
+    console.log(`\n  Retrying ${retry.length} failed source(s)…`);
+    await pool(retry, 1, (s, idx) => tagOne(s, `[retry ${idx + 1}/${retry.length}]`));
+  }
+  const failed = todo.filter(s => results.get(s.id)?.error).length;
 
   console.log(`\n${"─".repeat(60)}`);
-  console.log(`  Tagged: ${ok}   failed: ${failed}`);
-  const done = [...results.values()].map(r => r.actors).filter(Boolean);
-  console.log(`  Named actor: ${done.filter(a => a.named_actors.length).length}   country: ${done.filter(a => a.countries.length).length}   new types proposed: ${done.filter(a => a.type_status === "new").length}`);
-  if (budgetHit) console.log(`  Stopped early: LLM token budget exhausted. ${todo.length - ok - failed} sources not run.`);
+  console.log(`  Tagged this run: ${ok}   failed: ${failed}${DRY_RUN ? "   (dry run — nothing saved)" : ""}`);
+  const tagged = [...results.values()].map(r => r.actors).filter(Boolean);
+  console.log(`  Named actor: ${tagged.filter(a => a.named_actors.length).length}   country: ${tagged.filter(a => a.countries.length).length}   new types proposed: ${tagged.filter(a => a.type_status === "new").length}   needs checking: ${tagged.filter(a => a.flags.length).length}`);
+  if (failed) console.log("  Failed sources have nothing saved and will be retried on the next run.");
+  if (budgetHit) console.log(`  Stopped early: LLM token budget exhausted. ${todo.length - ok - failed} sources left for the next run.`);
+  // Every call failing means the model or platform is down — fail the CI job so it shows.
   if (todo.length && ok === 0) process.exitCode = 1;
 
-  writeReviewSheet(XLSX_OUT, todo, results);
-  console.log(`\n  Review sheet: ${XLSX_OUT} (${todo.length} sources)`);
+  if (XLSX_OUT) {
+    if (tableExists) {
+      const stored = await loadSourceActorRows(supabase, eligible.filter(s => !results.has(s.id)).map(s => s.id));
+      for (const r of stored) results.set(r.source_id, { actors: rowToActors(r), model: r.model });
+    }
+    const sheetSources = eligible.filter(s => results.has(s.id));
+    writeReviewSheet(XLSX_OUT, sheetSources, results);
+    console.log(`\n  Review sheet: ${XLSX_OUT} (${sheetSources.length} sources)`);
+  }
 }
 
 main().catch(err => { console.error(err); process.exit(1); });

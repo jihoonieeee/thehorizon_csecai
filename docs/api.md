@@ -130,7 +130,7 @@ Filterable source list.
 
 ## POST /api/sources
 
-MITRE ATT&CK / ATLAS tags for a set of sources. This is a read: it uses POST so a request can carry many IDs. It is not part of the GET list, which would grow too large with quotes included. The Sources page calls it when a row is expanded, and in batches of 500 for the Excel export.
+MITRE ATT&CK / ATLAS tags and threat-actor columns for a set of sources. This is a read: it uses POST so a request can carry many IDs. It is not part of the GET list, which would grow too large with quotes included. The Sources page calls it when a row is expanded, and in batches of 500 for the Excel export.
 
 **Auth:** any signed-in session. A guest only gets tags for sources the guest GET list would return.
 
@@ -144,6 +144,13 @@ MITRE ATT&CK / ATLAS tags for a set of sources. This is a read: it uses POST so 
 - `text` is the single-cell form used in the export, e.g. `T1566 Phishing; T1417 Input Capture (Mobile)`.
 
 Built by `lib/frameworks/sourceTags.js` from `loadSourceTagRows()` in `lib/storage/frameworkStore.js`.
+
+The response also has `actors: { [source_id]: { type, actor, country, reviewed, reviewed_by, reviewed_at, named_actors, countries, confidence, rationale, flags, prompt_version, tagged_at } }`: the threats log's Threat Actor Type, Threat Actor and Country-nexus.
+- Per column, an analyst override (`reviewed_type` / `reviewed_actor` / `reviewed_country`) takes priority over the model's value. `reviewed` is true when any column is overridden.
+- `named_actors` is `[{ name, aliases, quote }]`; `countries` is `[{ country, basis: "article" | "known_attribution", quote }]` (the quotes are the evidence); `flags` lists where the columns disagree ("needs checking").
+- A missing source has not been tagged yet. Same guest filtering as `frameworks`.
+
+Built by `buildSourceActors()` from `loadSourceActorRows()` in `lib/storage/threatActorStore.js` (table `source_threat_actors`, migration 032).
 
 ## PATCH /api/sources?id={id}
 
