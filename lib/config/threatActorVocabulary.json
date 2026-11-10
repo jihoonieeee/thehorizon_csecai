@@ -1,0 +1,42 @@
+{
+  "_note": "Threats log actor columns, in the analysts' own wording (revised 2026-11-04). Add new values here; lib/config/threatActors.js reads this file. The model may propose a type that is not listed — the review sheet flags it — and an approved one is added here.",
+  "actor_types": [
+    "AI system (no human attacker)",
+    "Cybercriminal",
+    "Nation-state",
+    "Researcher",
+    "Vendor research/evaluation",
+    "Unattributed",
+    "N/A"
+  ],
+  "_note_combined": "Types that may be joined with \"; \" (at most two), e.g. \"Nation-state; Cybercriminal\". Only these types name groups in the Threat Actor column.",
+  "attacker_types": [
+    "Nation-state",
+    "Cybercriminal"
+  ],
+  "no_attacker_type_prefixes": [
+    "AI system",
+    "N/A",
+    "Researcher",
+    "Vendor research"
+  ],
+  "_note_actor_values": "Threat Actor value for each type when there is nothing more specific. Attacker types list named groups (up to max_named_actors, more → \"Multiple\"), otherwise \"Unattributed\" — no descriptions. AI system takes a short description of the model(s); Vendor research/evaluation may take a description of the AI tool or model studied.",
+  "actor_value_by_type": {
+    "Nation-state": "Unattributed",
+    "Cybercriminal": "Unattributed",
+    "Nation-state; Cybercriminal": "Unattributed",
+    "Unattributed": "Unattributed",
+    "Researcher": "N/A (research)",
+    "Vendor research/evaluation": "N/A (vendor research)",
+    "N/A": "N/A"
+  },
+  "max_named_actors": 10,
+  "actor_placeholders": [
+    "Unattributed",
+    "APT actors (unattributed)",
+    "Multiple",
+    "N/A",
+    "N/A (research)",
+    "N/A (vendor research)"
+  ]
+}
