@@ -1409,6 +1409,79 @@ a:hover { text-decoration: underline; }
   opacity: 0.85;
 }
 
+/* ── Top 10 TTPs (MITRE ATLAS + ATT&CK) ───────────────────────────────────── */
+.hz-ttp { display: flex; flex-direction: column; gap: 10px; }
+
+.hz-ttp-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.hz-ttp-filter { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.hz-ttp-filter-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+}
+.hz-ttp-select {
+  min-width: 180px;
+  max-width: 100%;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.hz-ttp-clear {
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.hz-ttp-clear:hover { color: var(--text-primary); border-color: var(--border-hover); }
+
+.hz-ttp-meta { font-size: 0.74rem; color: var(--text-tertiary); }
+
+.hz-ttp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.hz-ttp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.hz-ttp-row { display: flex; align-items: center; gap: 10px; }
+.hz-ttp-rank {
+  flex-shrink: 0;
+  width: 18px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.hz-ttp-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.hz-ttp-name { font-size: 0.76rem; color: var(--text-secondary); line-height: 1.3; }
+.hz-ttp-id { font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; text-decoration: none; }
+a.hz-ttp-id:hover { text-decoration: underline; }
+.hz-ttp-bar { height: 4px; background: var(--surface-2); border-radius: 2px; overflow: hidden; }
+.hz-ttp-bar span { display: block; height: 100%; border-radius: 2px; opacity: 0.75; }
+.hz-ttp-count {
+  flex-shrink: 0;
+  min-width: 24px;
+  text-align: right;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Header timeframe + stale-insight note */
 .hz-overview-daterange { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
 .hz-overview-stale-note {

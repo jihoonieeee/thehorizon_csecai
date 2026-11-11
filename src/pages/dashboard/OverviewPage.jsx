@@ -664,6 +664,136 @@ function TagDrilldownPanel({ tag, category, tagSources, onClose }) {
   );
 }
 
+// ── Top 10 TTPs (MITRE ATLAS + ATT&CK) with actor / country filters ───────────
+// Counts are the number of sources in the period tagged with each technique
+// (sub-techniques counted as tagged, not rolled up into their parent). The API
+// sends one row per source; filtering and counting happen here, so changing a
+// filter is instant.
+
+const TTP_TOP_N = 10;
+
+// Count values across rows; returns [[value, count]] sorted by count desc.
+function tally(values) {
+  const m = new Map();
+  for (const v of values) m.set(v, (m.get(v) || 0) + 1);
+  return [...m.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])));
+}
+
+function TtpFilter({ label, value, options, onChange }) {
+  return (
+    <label className="hz-ttp-filter">
+      <span className="hz-ttp-filter-label">{label}</span>
+      <select className="hz-ttp-select" value={value} onChange={e => onChange(e.target.value)}>
+        <option value="">All</option>
+        {options.map(([v, n]) => (
+          <option key={v} value={v}>{v} ({n})</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function TtpList({ title, ranked, techniques, color }) {
+  const max = ranked[0]?.[1] || 1;
+  return (
+    <div className="hz-taxonomy-cat">
+      <div className="hz-taxonomy-cat-head" style={{ borderColor: color }}>
+        <span className="hz-taxonomy-cat-name" style={{ color }}>{title}</span>
+      </div>
+      {ranked.length === 0 ? (
+        <p className="hz-overview-empty">No techniques tagged for this selection.</p>
+      ) : (
+        <ol className="hz-ttp-list">
+          {ranked.map(([id, n], i) => {
+            const t = techniques[id] || {};
+            const suffix = t.domain === "mobile" ? " (Mobile)" : t.domain === "ics" ? " (ICS)" : "";
+            return (
+              <li key={id} className="hz-ttp-row" title={`${n} source${n !== 1 ? "s" : ""} tagged ${id}`}>
+                <span className="hz-ttp-rank">{i + 1}</span>
+                <div className="hz-ttp-body">
+                  <div className="hz-ttp-name">
+                    {t.url
+                      ? <a href={t.url} target="_blank" rel="noopener noreferrer" className="hz-ttp-id">{id}</a>
+                      : <span className="hz-ttp-id">{id}</span>}
+                    {" "}{t.name || ""}{suffix}
+                  </div>
+                  <div className="hz-ttp-bar">
+                    <span style={{ width: `${(n / max) * 100}%`, background: color }} />
+                  </div>
+                </div>
+                <span className="hz-ttp-count">{n}</span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+function TopTtps({ stats }) {
+  const [type,    setType]    = useState("");
+  const [actor,   setActor]   = useState("");
+  const [country, setCountry] = useState("");
+
+  const rows       = stats?.sources    || [];
+  const techniques = stats?.techniques || {};
+
+  // The tagger spells some groups inconsistently ("JadePuffer" / "JADEPUFFER"):
+  // group names case-insensitively and show the most common spelling.
+  const actorKey = (name) => name.toLowerCase();
+  const actorLabel = new Map();
+  for (const [name] of tally(rows.flatMap(r => r.actors))) {
+    if (!actorLabel.has(actorKey(name))) actorLabel.set(actorKey(name), name);
+  }
+  const actorsOf = (r) => [...new Set(r.actors.map(a => actorLabel.get(actorKey(a))))];
+
+  // Options list every value in the period; the selected one stays listed even
+  // if a window change leaves it with no sources.
+  const withSelected = (opts, sel) =>
+    sel && !opts.some(([v]) => v === sel) ? [[sel, 0], ...opts] : opts;
+  const typeOptions    = withSelected(tally(rows.flatMap(r => r.types)), type);
+  const actorOptions   = withSelected(tally(rows.flatMap(actorsOf)), actor);
+  const countryOptions = withSelected(tally(rows.flatMap(r => r.countries)), country);
+
+  const filtered = rows.filter(r =>
+    (!type    || r.types.includes(type)) &&
+    (!actor   || actorsOf(r).includes(actor)) &&
+    (!country || r.countries.includes(country)));
+
+  const topAtlas  = tally(filtered.flatMap(r => r.atlas)).slice(0, TTP_TOP_N);
+  const topAttack = tally(filtered.flatMap(r => r.attack)).slice(0, TTP_TOP_N);
+  const anyFilter = type || actor || country;
+  const cov = stats?.coverage;
+
+  if (!stats) return <p className="hz-overview-empty">MITRE technique data is unavailable for this period.</p>;
+
+  return (
+    <div className="hz-ttp">
+      <div className="hz-ttp-filters">
+        <TtpFilter label="Threat actor type" value={type}    options={typeOptions}    onChange={setType} />
+        <TtpFilter label="Threat actor"      value={actor}   options={actorOptions}   onChange={setActor} />
+        <TtpFilter label="Country-nexus"     value={country} options={countryOptions} onChange={setCountry} />
+        {anyFilter && (
+          <button className="hz-ttp-clear" onClick={() => { setType(""); setActor(""); setCountry(""); }}>
+            Clear filters
+          </button>
+        )}
+      </div>
+      <div className="hz-ttp-meta">
+        {filtered.length} source{filtered.length !== 1 ? "s" : ""}{anyFilter ? " match" : ""}
+        {cov && cov.mitre_tagged < cov.total && (
+          <> · {cov.total - cov.mitre_tagged} of {cov.total} sources not yet MITRE-tagged</>
+        )}
+      </div>
+      <div className="hz-ttp-grid">
+        <TtpList title="Top 10 MITRE ATLAS"   ranked={topAtlas}  techniques={techniques} color="#9C62A7" />
+        <TtpList title="Top 10 MITRE ATT&CK" ranked={topAttack} techniques={techniques} color="#dc2626" />
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function OverviewPage() {
@@ -889,6 +1019,17 @@ export function OverviewPage() {
               onClose={() => setTagSelection(null)}
             />
           )}
+        </>
+      )}
+
+      {/* Top 10 TTPs — MITRE ATLAS + ATT&CK, filterable by actor / country */}
+      {data && (
+        <>
+          <div className="hz-overview-section-title">
+            Top 10 TTPs
+            <span className="hz-overview-section-note">sources per MITRE technique · filter by threat actor or country-nexus</span>
+          </div>
+          <TopTtps stats={data.ttp_stats} />
         </>
       )}
 

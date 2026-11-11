@@ -28,6 +28,8 @@ import { truncateAtWord } from "../lib/utils/truncate.js";
 import { maturityOf, MATURITY_RANK } from "../lib/pipeline/scoring/maturityLevel.js";
 import { loadNewsletter } from "../lib/storage/newsletterStore.js";
 import { isAcademicUrl } from "../lib/config/academicHosts.js";
+import { buildSourceTags } from "../lib/frameworks/sourceTags.js";
+import { buildSourceActors } from "../lib/storage/threatActorStore.js";
 
 const GH_OWNER             = "landonzhao";
 const GH_REPO              = "thehorizon";
@@ -173,6 +175,118 @@ async function selectAll(buildQuery) {
     if (data.length < PAGE) break;
   }
   return rows;
+}
+
+// ── Top TTPs: MITRE techniques + threat actors per source ─────────────────────
+// Feeds the Overview "Top 10 TTPs" section. Returns one compact row per source
+// (its ATLAS / ATT&CK technique IDs, actor types, named actors, countries) so
+// the page can filter by actor / country and re-count in the browser without
+// another request. Tag rules match the Sources page: an analyst's reviewed
+// answer wins over the model's (buildSourceTags / buildSourceActors).
+// The tables are read here directly rather than via lib/storage/frameworkStore.js,
+// which pulls in the YAML catalogue loader the serverless function doesn't need.
+
+const ID_CHUNK = 200;
+
+function isMissingTableError(error) {
+  return error?.code === "42P01" || error?.code === "PGRST205" ||
+    /relation .* does not exist|could not find the table/i.test(error?.message || "");
+}
+
+// Rows of `table` whose `key` is in `ids`. A missing table (migration not
+// applied) reads as no rows, so the section degrades to empty, not an error.
+async function readByIds(table, cols, key, ids) {
+  const rows = [];
+  for (let i = 0; i < ids.length; i += ID_CHUNK) {
+    const { data, error } = await supabase.from(table).select(cols).in(key, ids.slice(i, i + ID_CHUNK));
+    if (error) {
+      if (isMissingTableError(error)) return rows;
+      throw new Error(`${table} read: ${error.message}`);
+    }
+    rows.push(...data);
+  }
+  return rows;
+}
+
+// Threat Actor values that are not a named group (lib/config/threatActorVocabulary.json).
+const ACTOR_PLACEHOLDERS = new Set(["Unattributed", "APT actors (unattributed)", "Multiple"]);
+// Only these types name real attacker groups; other types' Threat Actor value is
+// a description (e.g. the AI system involved), not an actor to filter by.
+const ATTACKER_TYPES = new Set(["Nation-state", "Cybercriminal"]);
+// Country-nexus values that are not a country.
+const COUNTRY_PLACEHOLDERS = new Set(["Unknown", "N/A"]);
+
+const splitList = (v) => String(v || "").split(";").map(x => x.trim()).filter(Boolean);
+
+async function buildTtpStats(ids) {
+  const [statuses, techniques, reviews, actorRows] = await Promise.all([
+    readByIds("source_framework_status",  "source_id,framework,status,na_reason", "source_id", ids),
+    readByIds("source_techniques",        "source_id,framework,technique_id",      "source_id", ids),
+    readByIds("source_framework_reviews", "source_id,framework,outcome,technique_ids", "source_id", ids),
+    readByIds("source_threat_actors",
+      "source_id,threat_actor_type,threat_actor,country_nexus,reviewed_type,reviewed_actor,reviewed_country",
+      "source_id", ids),
+  ]);
+
+  // Technique names; a sub-technique displays as "Parent: Child".
+  const catalogue = new Map();
+  const loadCatalogue = async (techIds) => {
+    for (const t of await readByIds("framework_techniques", "technique_id,name,framework,domain,url,parent_id", "technique_id", techIds)) {
+      catalogue.set(t.technique_id, t);
+    }
+  };
+  await loadCatalogue([...new Set([...techniques.map(t => t.technique_id), ...reviews.flatMap(r => r.technique_ids || [])])]);
+  await loadCatalogue([...new Set([...catalogue.values()].map(t => t.parent_id).filter(p => p && !catalogue.has(p)))]);
+  const fullName = (t) => {
+    const parent = t.parent_id && catalogue.get(t.parent_id);
+    return parent ? `${parent.name}: ${t.name}` : t.name;
+  };
+
+  const tags   = buildSourceTags({ statuses, techniques, reviews, catalogue: new Map() });
+  const actors = buildSourceActors(actorRows);
+
+  const used = new Set();
+  const rows = ids.map(id => {
+    const t = tags[id] || {};
+    const a = actors[id];
+    const types = splitList(a?.type);
+    const atlas  = (t.atlas?.techniques  || []).map(x => x.id);
+    const attack = (t.attack?.techniques || []).map(x => x.id);
+    for (const x of [...atlas, ...attack]) used.add(x);
+    return {
+      id,
+      atlas,
+      attack,
+      mitre_tagged: !!(t.atlas || t.attack),
+      actor_tagged: !!a,
+      types,
+      actors: types.some(x => ATTACKER_TYPES.has(x))
+        ? splitList(a?.actor).filter(x => !ACTOR_PLACEHOLDERS.has(x))
+        : [],
+      countries: splitList(a?.country).filter(x => !COUNTRY_PLACEHOLDERS.has(x)),
+    };
+  });
+
+  const techniqueInfo = {};
+  for (const id of used) {
+    const t = catalogue.get(id);
+    techniqueInfo[id] = {
+      name:      t ? fullName(t) : id,
+      framework: t?.framework || (id.startsWith("AML.") ? "atlas" : "attack"),
+      domain:    t?.domain || null,
+      url:       t?.url || null,
+    };
+  }
+
+  return {
+    sources:    rows,
+    techniques: techniqueInfo,
+    coverage: {
+      total:        rows.length,
+      mitre_tagged: rows.filter(r => r.mitre_tagged).length,
+      actor_tagged: rows.filter(r => r.actor_tagged).length,
+    },
+  };
 }
 
 // ISO week label: "Jun 9"
@@ -622,6 +736,17 @@ export default async function handler(req, res) {
     // Zero-count cells render as empty — analysts see the full taxonomy.
     const activeTags = TAGS;
 
+    // ── 6. Top TTPs (MITRE ATLAS + ATT&CK) by threat actor / country ─────────
+    // Same source set as every other block (`parents`: research toggle, guest
+    // category allow-list, child sources excluded). Non-critical: a failure
+    // leaves the section empty rather than failing the whole dashboard.
+    let ttpStats = null;
+    try {
+      ttpStats = await buildTtpStats(parents.map(s => s.id));
+    } catch (err) {
+      console.error("[dashboard] ttp stats error:", err.message);
+    }
+
     return res.status(200).json({
       window:        win,
       window_key:    windowKey,
@@ -656,6 +781,7 @@ export default async function handler(req, res) {
         defense:       tagDefense,  // per-tag/category count of defensive sources
         sources:       tagSources,  // attack sources only — matches by_category
       },
+      ttp_stats: ttpStats,          // { sources[], techniques{}, coverage } or null
     });
 
   } catch (err) {
