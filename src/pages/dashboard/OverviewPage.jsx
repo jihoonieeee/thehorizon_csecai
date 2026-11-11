@@ -692,12 +692,24 @@ export function OverviewPage() {
 
   // `fresh` bypasses the API's insight cache — passed only by the refresh button,
   // so routine loads and window switches still hit the cache.
+  // Only the most recent request may update the page. Switching window and then
+  // the research toggle in quick succession puts two requests in flight; if the
+  // older one finished last it overwrote the newer result, so the page showed
+  // data that didn't match the selected buttons.
+  const requestSeq = useRef(0);
   const load = useCallback((w, fresh = false) => {
+    const seq = ++requestSeq.current;
     setLoading(true);
     setError(null);
     fetchOverview(w, token, fresh, hideResearch)
-      .then(d => { setData(d); setLoading(false); setLastFetch(new Date()); })
-      .catch(e => { setError(e.message); setLoading(false); });
+      .then(d => {
+        if (seq !== requestSeq.current) return;
+        setData(d); setLoading(false); setLastFetch(new Date());
+      })
+      .catch(e => {
+        if (seq !== requestSeq.current) return;
+        setError(e.message); setLoading(false);
+      });
   }, [token, hideResearch]);
 
   // Initial load, window change and research toggle
