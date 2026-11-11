@@ -17,8 +17,8 @@ function authHeader(token) {
  * @param {boolean} [fresh] Bypass the API's 30-minute insight cache. Set only for
  *   an explicit user refresh — routine loads should use the cache.
  */
-export async function fetchOverview(win = "quarter", token, fresh = false) {
-  const url = `${BASE}/dashboard?window=${encodeURIComponent(win)}${fresh ? "&fresh=1" : ""}`;
+export async function fetchOverview(win = "quarter", token, fresh = false, excludeResearch = false) {
+  const url = `${BASE}/dashboard?window=${encodeURIComponent(win)}${fresh ? "&fresh=1" : ""}${excludeResearch ? "&exclude_research=1" : ""}`;
   const res = await fetch(url, {
     cache: "no-store",
     headers: authHeader(token),

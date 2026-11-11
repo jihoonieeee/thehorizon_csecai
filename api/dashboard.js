@@ -347,6 +347,15 @@ export default async function handler(req, res) {
     // refresh reflects a just-completed regeneration instead of the cached copy.
     const fresh = req.query?.fresh === "1";
 
+    // ?exclude_research=1 — Overview "Hide research" toggle. Drops every source at
+    // the Research rung of the maturity ladder (maturityOf), so the page shows only
+    // validated / observed / operational items — i.e. the recent news. Applied to
+    // `parents` and the trend rows, so every count on the page derives from the
+    // same filtered set. The generated category insights are NOT re-filtered: they
+    // are pre-written by generateDashboardInsights.js over the full period.
+    const excludeResearch = req.query?.exclude_research === "1";
+    const keepByMaturity  = (s) => !excludeResearch || maturityOf(s) !== "research";
+
     const { byCategory: categoryInsightData, fromLabel: insightFromLabel, stale: insightsStale } =
       await getInsights(win, windowKey, fresh);
 
@@ -384,7 +393,8 @@ export default async function handler(req, res) {
     // api/sources.js so the two pages report the same total.
     const parents   = all.filter(s =>
       !s.parent_source_id &&
-      (isAdminCaller || CATEGORIES.some(c => c.key === s.main_category)));
+      (isAdminCaller || CATEGORIES.some(c => c.key === s.main_category)) &&
+      keepByMaturity(s));
     const total      = parents.length;
     const highTrust  = parents.filter(s => ["primary","high"].includes(s.trust_tier)).length;
 
@@ -459,10 +469,12 @@ export default async function handler(req, res) {
 
     // Paginated for the same 1000-row-cap reason — the 12-month annual trend
     // spans the whole corpus and would otherwise lose the oldest buckets.
-    const trendRows = await selectAll(() => {
+    // The maturity fields are selected only so the research filter can run;
+    // `maturity_level` is pulled out of the jsonb rather than the whole column.
+    const trendRowsRaw = await selectAll(() => {
       const q = supabase
         .from("sources")
-        .select("date_published,main_category")
+        .select("date_published,main_category,source_type,title,short_summary,maturity_level:intelligence->>maturity_level")
         .gte("date_published", trendFrom.toISOString().slice(0, 10))
         .eq("validation_status", "pass")
         .eq("needs_review", false)
@@ -473,6 +485,8 @@ export default async function handler(req, res) {
       if (useMonthlyBuckets) q.lte("date_published", "2026-06-30");
       return q;
     });
+    const trendRows = trendRowsRaw.filter(s =>
+      keepByMaturity({ ...s, intelligence: { maturity_level: s.maturity_level } }));
 
     const weekLabels = [];
     const byCategory = {};
@@ -520,9 +534,13 @@ export default async function handler(req, res) {
     // produced the analysis. Fallback (no insights yet / no key): deterministic
     // importance rank (realized > proven > research, then trust, then recency),
     // which already beats the old "high-trust + newest-first" heuristic.
-    const topSourcesJustified = Array.isArray(periodMeta?.top_sources) && periodMeta.top_sources.length > 0;
+    // The editor's list is pre-generated over the whole period, so with the
+    // research filter on, its research-rung picks are dropped here.
+    const editorPicks = (Array.isArray(periodMeta?.top_sources) ? periodMeta.top_sources : [])
+      .filter(s => !excludeResearch || (s.maturity ?? s._maturity) !== "research");
+    const topSourcesJustified = editorPicks.length > 0;
     const topIncidents = topSourcesJustified
-      ? periodMeta.top_sources.map(s => ({
+      ? editorPicks.map(s => ({
           title: cleanTitle(s.title), url: s.url, publisher: s.publisher, date: s.date,
           category: s.category, trust_tier: s.trust_tier || "unknown",
           maturity: s.maturity ?? s._maturity ?? null,
@@ -593,6 +611,7 @@ export default async function handler(req, res) {
       window_label:  windowLabel,
       date_from:     from,
       date_to:       to,
+      exclude_research: excludeResearch,
       summary: {
         total,
         high_trust: highTrust,

@@ -62,6 +62,8 @@ const WINDOW_NOUN = { week: "Week", month: "Month", quarter: "Quarter" };
 
 const REFRESH_MS = 5 * 60 * 1000; // 5 minutes
 
+const HIDE_RESEARCH_KEY = "hz-overview-hide-research";
+
 // ── Sparkline ──────────────────────────────────────────────────────────────────
 
 function Sparkline({ values, color, width = 90, height = 32 }) {
@@ -677,19 +679,28 @@ export function OverviewPage() {
   const [tagSelection,      setTagSelection]      = useState(null); // { tag, category }
   const [maturitySelection, setMaturitySelection] = useState(null); // { category, level }
   const [showThreatLegend,  setShowThreatLegend]  = useState(true);
+  // Hide sources at the Research rung of the maturity ladder, leaving the
+  // validated/observed/operational news. Remembered per browser (best-effort).
+  const [hideResearch, setHideResearch] = useState(() => {
+    try { return localStorage.getItem(HIDE_RESEARCH_KEY) === "1"; } catch { return false; }
+  });
   const timerRef = useRef(null);
+
+  useEffect(() => {
+    try { localStorage.setItem(HIDE_RESEARCH_KEY, hideResearch ? "1" : "0"); } catch { /* storage blocked */ }
+  }, [hideResearch]);
 
   // `fresh` bypasses the API's insight cache — passed only by the refresh button,
   // so routine loads and window switches still hit the cache.
   const load = useCallback((w, fresh = false) => {
     setLoading(true);
     setError(null);
-    fetchOverview(w, token, fresh)
+    fetchOverview(w, token, fresh, hideResearch)
       .then(d => { setData(d); setLoading(false); setLastFetch(new Date()); })
       .catch(e => { setError(e.message); setLoading(false); });
-  }, [token]);
+  }, [token, hideResearch]);
 
-  // Initial load and window change
+  // Initial load, window change and research toggle
   useEffect(() => {
     load(win);
     setTagSelection(null);
@@ -724,7 +735,7 @@ export function OverviewPage() {
               {data.date_from && data.date_to
                 ? `${data.date_from} → ${data.date_to}, SGT`
                 : data.window_label}
-              {" · "}{shownTotal} sources
+              {" · "}{shownTotal} sources{data.exclude_research ? " (research hidden)" : ""}
               {lastFetch && (
                 <span className="hz-overview-refresh-ts">
                   {" "}· {lastFetch.toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" })}
@@ -735,6 +746,20 @@ export function OverviewPage() {
           {loading && <p className="hz-page-sub">Loading…</p>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div className="hz-seg-group" title="Research = sources at the Research rung of the threat maturity ladder (lab, simulation or benchmark work with no real-world use)">
+            <button
+              className={`hz-seg-btn${!hideResearch ? " active" : ""}`}
+              onClick={() => setHideResearch(false)}
+            >
+              All sources
+            </button>
+            <button
+              className={`hz-seg-btn${hideResearch ? " active" : ""}`}
+              onClick={() => setHideResearch(true)}
+            >
+              Exclude research
+            </button>
+          </div>
           <div className="hz-seg-group">
             {WINDOWS.map(o => (
               <button
