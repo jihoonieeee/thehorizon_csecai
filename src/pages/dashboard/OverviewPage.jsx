@@ -693,7 +693,7 @@ function TtpFilter({ label, value, options, onChange }) {
   );
 }
 
-function TtpList({ title, ranked, techniques, color }) {
+function TtpList({ title, ranked, techniques, color, selected, onSelect }) {
   const max = ranked[0]?.[1] || 1;
   return (
     <div className="hz-taxonomy-cat">
@@ -707,13 +707,23 @@ function TtpList({ title, ranked, techniques, color }) {
           {ranked.map(([id, n], i) => {
             const t = techniques[id] || {};
             const suffix = t.domain === "mobile" ? " (Mobile)" : t.domain === "ics" ? " (ICS)" : "";
+            const active = selected === id;
             return (
-              <li key={id} className="hz-ttp-row" title={`${n} source${n !== 1 ? "s" : ""} tagged ${id}`}>
+              <li key={id}
+                className={`hz-ttp-row clickable${active ? " active" : ""}`}
+                style={active ? { borderColor: color } : undefined}
+                title={`View the ${n} source${n !== 1 ? "s" : ""} tagged ${id}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => onSelect(active ? null : id)}
+                onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(active ? null : id); } }}
+              >
                 <span className="hz-ttp-rank">{i + 1}</span>
                 <div className="hz-ttp-body">
                   <div className="hz-ttp-name">
                     {t.url
-                      ? <a href={t.url} target="_blank" rel="noopener noreferrer" className="hz-ttp-id">{id}</a>
+                      ? <a href={t.url} target="_blank" rel="noopener noreferrer" className="hz-ttp-id"
+                          title={`Open ${id} on the MITRE site`} onClick={e => e.stopPropagation()}>{id}</a>
                       : <span className="hz-ttp-id">{id}</span>}
                     {" "}{t.name || ""}{suffix}
                   </div>
@@ -731,10 +741,56 @@ function TtpList({ title, ranked, techniques, color }) {
   );
 }
 
+// Sources behind one technique in the current filter — same look as the
+// Taxonomy coverage drilldown.
+function TtpDrilldown({ id, technique, rows, onClose }) {
+  const name = technique?.name || "";
+  return (
+    <div className="hz-tag-drilldown">
+      <div className="hz-tag-drilldown-header">
+        <div>
+          <span className="hz-tag-drilldown-title">{id}{name ? ` ${name}` : ""}</span>
+          <span className="hz-tag-drilldown-count"> · {rows.length} source{rows.length !== 1 ? "s" : ""}</span>
+        </div>
+        <button className="hz-tag-drilldown-close" onClick={onClose} title="Close">✕</button>
+      </div>
+      {rows.length === 0 ? (
+        <p className="hz-overview-empty">No sources for this technique with the current filters.</p>
+      ) : (
+        <ul className="hz-tag-drilldown-list">
+          {rows.map(s => {
+            const color = CAT_COLOR[s.category] || "#64748b";
+            return (
+              <li key={s.id} className="hz-tag-drilldown-row">
+                <span className="hz-incident-dot" style={{ background: color }} />
+                <div className="hz-tag-drilldown-body">
+                  <div className="hz-tag-drilldown-src-title">
+                    {s.url
+                      ? <a href={s.url} target="_blank" rel="noopener noreferrer">{s.title || s.url}</a>
+                      : (s.title || "Untitled")}
+                  </div>
+                  <div className="hz-incident-meta">
+                    {s.publisher && <span className="hz-incident-publisher">{s.publisher}</span>}
+                    {s.date && <span className="hz-incident-date">{s.date}</span>}
+                    {s.category && (
+                      <span className="hz-incident-cat" style={{ color }}>{CAT_LABEL[s.category] || s.category}</span>
+                    )}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function TopTtps({ stats }) {
   const [type,    setType]    = useState("");
   const [actor,   setActor]   = useState("");
   const [country, setCountry] = useState("");
+  const [selectedTtp, setSelectedTtp] = useState(null); // technique id
 
   const rows       = stats?.sources    || [];
   const techniques = stats?.techniques || {};
@@ -787,9 +843,21 @@ function TopTtps({ stats }) {
         )}
       </div>
       <div className="hz-ttp-grid">
-        <TtpList title="Top 10 MITRE ATLAS"   ranked={topAtlas}  techniques={techniques} color="#9C62A7" />
-        <TtpList title="Top 10 MITRE ATT&CK" ranked={topAttack} techniques={techniques} color="#dc2626" />
+        <TtpList title="Top 10 MITRE ATLAS"   ranked={topAtlas}  techniques={techniques} color="#9C62A7"
+          selected={selectedTtp} onSelect={setSelectedTtp} />
+        <TtpList title="Top 10 MITRE ATT&CK" ranked={topAttack} techniques={techniques} color="#dc2626"
+          selected={selectedTtp} onSelect={setSelectedTtp} />
       </div>
+      {selectedTtp && (
+        <TtpDrilldown
+          id={selectedTtp}
+          technique={techniques[selectedTtp]}
+          rows={filtered
+            .filter(r => r.atlas.includes(selectedTtp) || r.attack.includes(selectedTtp))
+            .sort((a, b) => (b.date || "").localeCompare(a.date || ""))}
+          onClose={() => setSelectedTtp(null)}
+        />
+      )}
     </div>
   );
 }

@@ -218,7 +218,9 @@ const COUNTRY_PLACEHOLDERS = new Set(["Unknown", "N/A"]);
 
 const splitList = (v) => String(v || "").split(";").map(x => x.trim()).filter(Boolean);
 
-async function buildTtpStats(ids) {
+async function buildTtpStats(sources) {
+  const ids = sources.map(s => s.id);
+  const byId = new Map(sources.map(s => [s.id, s]));
   const [statuses, techniques, reviews, actorRows] = await Promise.all([
     readByIds("source_framework_status",  "source_id,framework,status,na_reason", "source_id", ids),
     readByIds("source_techniques",        "source_id,framework,technique_id",      "source_id", ids),
@@ -253,8 +255,15 @@ async function buildTtpStats(ids) {
     const atlas  = (t.atlas?.techniques  || []).map(x => x.id);
     const attack = (t.attack?.techniques || []).map(x => x.id);
     for (const x of [...atlas, ...attack]) used.add(x);
+    const src = byId.get(id) || {};
     return {
       id,
+      // Display fields for the click-through source list.
+      title:     cleanTitle(src.title),
+      url:       src.url || null,
+      publisher: src.publisher || null,
+      date:      src.date_published?.slice(0, 10) || null,
+      category:  src.main_category || null,
       atlas,
       attack,
       mitre_tagged: !!(t.atlas || t.attack),
@@ -742,7 +751,7 @@ export default async function handler(req, res) {
     // leaves the section empty rather than failing the whole dashboard.
     let ttpStats = null;
     try {
-      ttpStats = await buildTtpStats(parents.map(s => s.id));
+      ttpStats = await buildTtpStats(parents);
     } catch (err) {
       console.error("[dashboard] ttp stats error:", err.message);
     }

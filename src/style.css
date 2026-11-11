@@ -1456,7 +1456,19 @@ a:hover { text-decoration: underline; }
 }
 
 .hz-ttp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.hz-ttp-row { display: flex; align-items: center; gap: 10px; }
+.hz-ttp-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px;
+  margin: 0 -6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+.hz-ttp-row.clickable { cursor: pointer; }
+.hz-ttp-row.clickable:hover { background: var(--surface-2); }
+.hz-ttp-row.active { background: var(--surface-2); border-width: 1.5px; }
+.hz-ttp-row.active .hz-ttp-name { color: var(--text-primary); font-weight: 600; }
 .hz-ttp-rank {
   flex-shrink: 0;
   width: 18px;
