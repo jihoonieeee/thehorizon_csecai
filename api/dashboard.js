@@ -405,6 +405,18 @@ export default async function handler(req, res) {
       if (catMap[s.main_category]) catMap[s.main_category].push(s);
     }
 
+    // Research filter vs the pre-generated insights: an insight is dropped when
+    // every cited source it can be matched to (by URL, against this window's
+    // sources) sits at the Research rung. Insights with any non-research or
+    // unmatched citation are kept — unmatched means we can't tell, so don't hide.
+    const normUrl = (u) => String(u || "").trim().replace(/\/+$/, "").toLowerCase();
+    const maturityByUrl = new Map();
+    if (excludeResearch) for (const s of all) maturityByUrl.set(normUrl(s.url), maturityOf(s));
+    const isResearchOnlyInsight = (ins) => {
+      const levels = (ins.cited_sources || []).map(cs => maturityByUrl.get(normUrl(cs.source_url)));
+      return levels.length > 0 && levels.every(l => l === "research");
+    };
+
     const categories = CATEGORIES.map(c => {
       const srcs = catMap[c.key];
       const top  = dedupByFamily(srcs.map(rankSource).sort(byRankThenRecency)).slice(0, 5).map(s => ({
@@ -421,6 +433,17 @@ export default async function handler(req, res) {
       // Evidence maturity computed LIVE over the same source set the card counts.
       const maturity = computeEvidenceMaturity(srcs);
       const ci       = categoryInsightData[c.key] || null;
+
+      // With research hidden: drop research-only insights. The one-line assessment
+      // summarises the whole period, so it goes too once any insight was dropped
+      // (it likely leans on that research) or the category has no sources left.
+      let insights   = ci?.insights   || [];
+      let assessment = ci?.assessment || null;
+      if (excludeResearch) {
+        const kept = srcs.length ? insights.filter(ins => !isResearchOnlyInsight(ins)) : [];
+        if (kept.length < insights.length || !srcs.length) assessment = null;
+        insights = kept;
+      }
 
       // Per-maturity-level source lists for drilldown (capped at 30 per level).
       const ranked = srcs.map(rankSource).sort(byRankThenRecency);
@@ -450,8 +473,8 @@ export default async function handler(req, res) {
         evidence_maturity: maturity,
         maturity_sources:  maturitySources,
 
-        assessment:        ci?.assessment         || null,
-        insights:          ci?.insights          || [],
+        assessment,
+        insights,
         coverage_gaps:     ci?.coverage_gaps     || [],
         insights_from:     ci ? insightFromLabel : null,
         insights_stale:    ci ? insightsStale    : false,
