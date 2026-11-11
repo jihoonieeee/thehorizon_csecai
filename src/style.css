@@ -1449,6 +1449,18 @@ a:hover { text-decoration: underline; }
 
 .hz-ttp-meta { font-size: 0.74rem; color: var(--text-tertiary); }
 
+.hz-ttp-more {
+  margin-top: 8px;
+  padding: 0;
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.hz-ttp-more:hover { color: var(--text-primary); }
+
 .hz-ttp-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));

@@ -693,7 +693,17 @@ function TtpFilter({ label, value, options, onChange }) {
   );
 }
 
-function TtpList({ title, ranked, techniques, color, selected, onSelect }) {
+// `all` is every technique with its count, sorted by count desc. The list shows
+// the top TTP_TOP_N, but never splits a tie: everything tied with 10th place is
+// included (beyond the 10th, behind a "show more" link), and tied techniques
+// share a rank (1, 2, 2, 4…) so the order within a tie doesn't read as a ranking.
+function TtpList({ title, all, techniques, color, selected, onSelect }) {
+  const [showTied, setShowTied] = useState(false);
+  const cutoff = all.length > TTP_TOP_N ? all[TTP_TOP_N - 1][1] : 0;
+  const withTies = all.filter(([, n]) => n >= cutoff);
+  const extraTied = withTies.length - Math.min(withTies.length, TTP_TOP_N);
+  const ranked = showTied ? withTies : withTies.slice(0, TTP_TOP_N);
+  const rankOf = (n) => 1 + all.filter(([, m]) => m > n).length;
   const max = ranked[0]?.[1] || 1;
   return (
     <div className="hz-taxonomy-cat">
@@ -704,7 +714,7 @@ function TtpList({ title, ranked, techniques, color, selected, onSelect }) {
         <p className="hz-overview-empty">No techniques tagged for this selection.</p>
       ) : (
         <ol className="hz-ttp-list">
-          {ranked.map(([id, n], i) => {
+          {ranked.map(([id, n]) => {
             const t = techniques[id] || {};
             const suffix = t.domain === "mobile" ? " (Mobile)" : t.domain === "ics" ? " (ICS)" : "";
             const active = selected === id;
@@ -718,7 +728,10 @@ function TtpList({ title, ranked, techniques, color, selected, onSelect }) {
                 onClick={() => onSelect(active ? null : id)}
                 onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(active ? null : id); } }}
               >
-                <span className="hz-ttp-rank">{i + 1}</span>
+                <span className="hz-ttp-rank"
+                  title={all.filter(([, m]) => m === n).length > 1 ? `Tied with other techniques at ${n}` : undefined}>
+                  {rankOf(n)}
+                </span>
                 <div className="hz-ttp-body">
                   <div className="hz-ttp-name">
                     {t.url
@@ -736,6 +749,13 @@ function TtpList({ title, ranked, techniques, color, selected, onSelect }) {
             );
           })}
         </ol>
+      )}
+      {extraTied > 0 && (
+        <button className="hz-ttp-more" onClick={() => setShowTied(v => !v)}>
+          {showTied
+            ? "Show top 10 only"
+            : `Show ${extraTied} more tied at ${cutoff} source${cutoff !== 1 ? "s" : ""}`}
+        </button>
       )}
     </div>
   );
@@ -817,8 +837,9 @@ function TopTtps({ stats }) {
     (!actor   || actorsOf(r).includes(actor)) &&
     (!country || r.countries.includes(country)));
 
-  const topAtlas  = tally(filtered.flatMap(r => r.atlas)).slice(0, TTP_TOP_N);
-  const topAttack = tally(filtered.flatMap(r => r.attack)).slice(0, TTP_TOP_N);
+  // Full counts; TtpList takes the top 10 and keeps ties at the cut-off.
+  const allAtlas  = tally(filtered.flatMap(r => r.atlas));
+  const allAttack = tally(filtered.flatMap(r => r.attack));
   const anyFilter = type || actor || country;
   const cov = stats?.coverage;
 
@@ -843,9 +864,9 @@ function TopTtps({ stats }) {
         )}
       </div>
       <div className="hz-ttp-grid">
-        <TtpList title="Top 10 MITRE ATLAS"   ranked={topAtlas}  techniques={techniques} color="#9C62A7"
+        <TtpList title="Top 10 MITRE ATLAS"   all={allAtlas}  techniques={techniques} color="#9C62A7"
           selected={selectedTtp} onSelect={setSelectedTtp} />
-        <TtpList title="Top 10 MITRE ATT&CK" ranked={topAttack} techniques={techniques} color="#dc2626"
+        <TtpList title="Top 10 MITRE ATT&CK" all={allAttack} techniques={techniques} color="#dc2626"
           selected={selectedTtp} onSelect={setSelectedTtp} />
       </div>
       {selectedTtp && (
