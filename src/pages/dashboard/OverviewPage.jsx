@@ -679,8 +679,8 @@ export function OverviewPage() {
   const [tagSelection,      setTagSelection]      = useState(null); // { tag, category }
   const [maturitySelection, setMaturitySelection] = useState(null); // { category, level }
   const [showThreatLegend,  setShowThreatLegend]  = useState(true);
-  // Hide sources at the Research rung of the maturity ladder, leaving the
-  // validated/observed/operational news. Remembered per browser (best-effort).
+  // Hide academic papers (by publishing site — lib/config/academicHosts.js),
+  // leaving the news. Remembered per browser (best-effort).
   const [hideResearch, setHideResearch] = useState(() => {
     try { return localStorage.getItem(HIDE_RESEARCH_KEY) === "1"; } catch { return false; }
   });
@@ -735,7 +735,7 @@ export function OverviewPage() {
               {data.date_from && data.date_to
                 ? `${data.date_from} → ${data.date_to}, SGT`
                 : data.window_label}
-              {" · "}{shownTotal} sources{data.exclude_research ? " (research hidden)" : ""}
+              {" · "}{shownTotal} sources{data.exclude_research ? " (academic research hidden)" : ""}
               {lastFetch && (
                 <span className="hz-overview-refresh-ts">
                   {" "}· {lastFetch.toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" })}
@@ -746,7 +746,7 @@ export function OverviewPage() {
           {loading && <p className="hz-page-sub">Loading…</p>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div className="hz-seg-group" title="Research = sources at the Research rung of the threat maturity ladder (lab, simulation or benchmark work with no real-world use)">
+          <div className="hz-seg-group" title="Academic research = papers published on academic sites (arXiv, conference proceedings, journals)">
             <button
               className={`hz-seg-btn${!hideResearch ? " active" : ""}`}
               onClick={() => setHideResearch(false)}
@@ -757,7 +757,7 @@ export function OverviewPage() {
               className={`hz-seg-btn${hideResearch ? " active" : ""}`}
               onClick={() => setHideResearch(true)}
             >
-              Exclude research
+              Exclude academic research
             </button>
           </div>
           <div className="hz-seg-group">

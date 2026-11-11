@@ -27,6 +27,7 @@ import { computeEvidenceMaturity } from "../lib/dashboard/evidenceMaturity.js";
 import { truncateAtWord } from "../lib/utils/truncate.js";
 import { maturityOf, MATURITY_RANK } from "../lib/pipeline/scoring/maturityLevel.js";
 import { loadNewsletter } from "../lib/storage/newsletterStore.js";
+import { isAcademicUrl } from "../lib/config/academicHosts.js";
 
 const GH_OWNER             = "landonzhao";
 const GH_REPO              = "thehorizon";
@@ -347,14 +348,14 @@ export default async function handler(req, res) {
     // refresh reflects a just-completed regeneration instead of the cached copy.
     const fresh = req.query?.fresh === "1";
 
-    // ?exclude_research=1 — Overview "Hide research" toggle. Drops every source at
-    // the Research rung of the maturity ladder (maturityOf), so the page shows only
-    // validated / observed / operational items — i.e. the recent news. Applied to
-    // `parents` and the trend rows, so every count on the page derives from the
-    // same filtered set. The generated category insights are NOT re-filtered: they
-    // are pre-written by generateDashboardInsights.js over the full period.
+    // ?exclude_research=1 — Overview "Exclude academic research" toggle. Drops
+    // every source hosted on an academic site (arXiv, NDSS, Nature… — see
+    // lib/config/academicHosts.js), leaving the news. Host, not source_type or
+    // maturity_level, because neither label reliably means "academic paper".
+    // Applied to `parents`, the trend rows, the editor's top picks and the
+    // pre-generated insights, so everything on the page reflects the same filter.
     const excludeResearch = req.query?.exclude_research === "1";
-    const keepByMaturity  = (s) => !excludeResearch || maturityOf(s) !== "research";
+    const keepSource      = (s) => !excludeResearch || !isAcademicUrl(s.url);
 
     const { byCategory: categoryInsightData, fromLabel: insightFromLabel, stale: insightsStale } =
       await getInsights(win, windowKey, fresh);
@@ -394,7 +395,7 @@ export default async function handler(req, res) {
     const parents   = all.filter(s =>
       !s.parent_source_id &&
       (isAdminCaller || CATEGORIES.some(c => c.key === s.main_category)) &&
-      keepByMaturity(s));
+      keepSource(s));
     const total      = parents.length;
     const highTrust  = parents.filter(s => ["primary","high"].includes(s.trust_tier)).length;
 
@@ -406,15 +407,10 @@ export default async function handler(req, res) {
     }
 
     // Research filter vs the pre-generated insights: an insight is dropped when
-    // every cited source it can be matched to (by URL, against this window's
-    // sources) sits at the Research rung. Insights with any non-research or
-    // unmatched citation are kept — unmatched means we can't tell, so don't hide.
-    const normUrl = (u) => String(u || "").trim().replace(/\/+$/, "").toLowerCase();
-    const maturityByUrl = new Map();
-    if (excludeResearch) for (const s of all) maturityByUrl.set(normUrl(s.url), maturityOf(s));
+    // every source it cites is an academic paper. One non-academic citation keeps it.
     const isResearchOnlyInsight = (ins) => {
-      const levels = (ins.cited_sources || []).map(cs => maturityByUrl.get(normUrl(cs.source_url)));
-      return levels.length > 0 && levels.every(l => l === "research");
+      const cited = ins.cited_sources || [];
+      return cited.length > 0 && cited.every(cs => isAcademicUrl(cs.source_url));
     };
 
     const categories = CATEGORIES.map(c => {
@@ -434,7 +430,7 @@ export default async function handler(req, res) {
       const maturity = computeEvidenceMaturity(srcs);
       const ci       = categoryInsightData[c.key] || null;
 
-      // With research hidden: drop research-only insights. The one-line assessment
+      // With academic research hidden: drop insights citing only papers. The one-line assessment
       // summarises the whole period, so it goes too once any insight was dropped
       // (it likely leans on that research) or the category has no sources left.
       let insights   = ci?.insights   || [];
@@ -492,12 +488,11 @@ export default async function handler(req, res) {
 
     // Paginated for the same 1000-row-cap reason — the 12-month annual trend
     // spans the whole corpus and would otherwise lose the oldest buckets.
-    // The maturity fields are selected only so the research filter can run;
-    // `maturity_level` is pulled out of the jsonb rather than the whole column.
+    // `url` is selected only so the academic-research filter can run.
     const trendRowsRaw = await selectAll(() => {
       const q = supabase
         .from("sources")
-        .select("date_published,main_category,source_type,title,short_summary,maturity_level:intelligence->>maturity_level")
+        .select("date_published,main_category,url")
         .gte("date_published", trendFrom.toISOString().slice(0, 10))
         .eq("validation_status", "pass")
         .eq("needs_review", false)
@@ -508,8 +503,7 @@ export default async function handler(req, res) {
       if (useMonthlyBuckets) q.lte("date_published", "2026-06-30");
       return q;
     });
-    const trendRows = trendRowsRaw.filter(s =>
-      keepByMaturity({ ...s, intelligence: { maturity_level: s.maturity_level } }));
+    const trendRows = trendRowsRaw.filter(keepSource);
 
     const weekLabels = [];
     const byCategory = {};
@@ -558,9 +552,9 @@ export default async function handler(req, res) {
     // importance rank (realized > proven > research, then trust, then recency),
     // which already beats the old "high-trust + newest-first" heuristic.
     // The editor's list is pre-generated over the whole period, so with the
-    // research filter on, its research-rung picks are dropped here.
+    // research filter on, its academic-paper picks are dropped here.
     const editorPicks = (Array.isArray(periodMeta?.top_sources) ? periodMeta.top_sources : [])
-      .filter(s => !excludeResearch || (s.maturity ?? s._maturity) !== "research");
+      .filter(keepSource);
     const topSourcesJustified = editorPicks.length > 0;
     const topIncidents = topSourcesJustified
       ? editorPicks.map(s => ({
