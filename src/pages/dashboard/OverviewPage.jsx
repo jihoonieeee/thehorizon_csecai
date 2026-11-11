@@ -735,7 +735,7 @@ export function OverviewPage() {
               {data.date_from && data.date_to
                 ? `${data.date_from} → ${data.date_to}, SGT`
                 : data.window_label}
-              {" · "}{shownTotal} sources{data.exclude_research ? " (academic research hidden)" : ""}
+              {" · "}{shownTotal} sources
               {lastFetch && (
                 <span className="hz-overview-refresh-ts">
                   {" "}· {lastFetch.toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" })}
